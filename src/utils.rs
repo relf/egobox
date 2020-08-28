@@ -1,4 +1,5 @@
-use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use approx::abs_diff_eq;
+use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 
 pub fn normalize(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -60,11 +61,29 @@ pub fn constant(
     Array2::<f64>::zeros((n_obs, 1))
 }
 
-// pub fn squared_exponential(thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-//                            d: &ArrayBase<impl Data<Elem = f64>, Ix2>)
-// ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
-//     let r = Array2::zeros((d.shape()[0], 1));
-//     let n_features = d.shape()[1];
+pub fn reduced_likelihood(
+    thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+    d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) {
+    let res = f64::MIN;
+    let nugget = 10. * f64::EPSILON;
+
+    // let r = squared_exponential(thetas, d)
+    ()
+}
+
+pub fn squared_exponential(
+    thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+    d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
+    let (n_obs, n_features) = (d.shape()[0], d.shape()[1]);
+    let mut r = Array2::zeros((n_obs, 1));
+
+    let t = thetas.view().into_shape((1, n_features)).unwrap();
+    let m = (d * &t).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+    r.slice_mut(s![.., 0]).assign(&m);
+    r
+}
 
 //     let mut i = 0;
 //     let n_limit = 10000;
@@ -130,5 +149,25 @@ mod tests {
         let (actual0, actual1) = l1_cross_distances(&xt);
         assert_eq!(expected.0, actual0);
         assert_eq!(expected.1, actual1);
+    }
+
+    #[test]
+    fn test_squared_exponential() {
+        let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
+        let (d, _) = l1_cross_distances(&xt);
+        let res = squared_exponential(&arr1(&[0.1]), &d);
+        let expected = array![
+            [0.9323938199059483],
+            [0.8607079764250578],
+            [0.7788007830714049],
+            [0.7046880897187134],
+            [0.9231163463866358],
+            [0.835270211411272],
+            [0.7557837414557255],
+            [0.9048374180359595],
+            [0.8187307530779818],
+            [0.9048374180359595]
+        ];
+        abs_diff_eq!(res[[4, 0]], expected[[4, 0]], epsilon = 1e-2);
     }
 }
