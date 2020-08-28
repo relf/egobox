@@ -1,5 +1,4 @@
-use approx::abs_diff_eq;
-use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray::{s, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 
 pub fn normalize(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -68,7 +67,7 @@ pub fn reduced_likelihood(
     let res = f64::MIN;
     let nugget = 10. * f64::EPSILON;
 
-    // let r = squared_exponential(thetas, d)
+    let r = squared_exponential(thetas, d);
     ()
 }
 
@@ -80,31 +79,17 @@ pub fn squared_exponential(
     let mut r = Array2::zeros((n_obs, 1));
 
     let t = thetas.view().into_shape((1, n_features)).unwrap();
-    let m = (d * &t).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+    let d2 = d.mapv(|v| v * v);
+    let m = (d2 * &t).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
     r.slice_mut(s![.., 0]).assign(&m);
     r
 }
 
-//     let mut i = 0;
-//     let n_limit = 10000;
-
-//     while i * nb_limit <= d.shape()[0] {
-//         r.slice_mut(s![i * nb_limit .. (i + 1) * nb_limit, 0]).assign(exp(
-//             -np.sum(
-//                 theta.reshape(1, n_features) * d.slice(s![i * nb_limit .. (i + 1) * nb_limit, ..])  ,
-//                 axis=1,
-//             )
-//         )
-//         i += 1
-//     }
-
-//     r
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::array;
+    use approx::abs_diff_eq;
+    use ndarray::{arr1, array};
 
     #[test]
     fn test_normalize() {
@@ -153,21 +138,36 @@ mod tests {
 
     #[test]
     fn test_squared_exponential() {
-        let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
+        let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let (d, _) = l1_cross_distances(&xt);
         let res = squared_exponential(&arr1(&[0.1]), &d);
+        println!("{:?}", res);
+        // without squared fix as in SMT 0.5.2
+        // let expected = array![
+        //     [0.9323938199059483],
+        //     [0.8607079764250578],
+        //     [0.7788007830714049],
+        //     [0.7046880897187134],
+        //     [0.9231163463866358],
+        //     [0.835270211411272],
+        //     [0.7557837414557255],
+        //     [0.9048374180359595],
+        //     [0.8187307530779818],
+        //     [0.9048374180359595]
+        // ];
+        // with squared fix
         let expected = array![
-            [0.9323938199059483],
-            [0.8607079764250578],
-            [0.7788007830714049],
-            [0.7046880897187134],
-            [0.9231163463866358],
-            [0.835270211411272],
-            [0.7557837414557255],
+            [0.336552878364737],
+            [0.5352614285189903],
+            [0.7985162187593771],
+            [0.9753099120283326],
+            [0.9380049995307295],
+            [0.7232502423798424],
+            [0.4565760496233148],
             [0.9048374180359595],
-            [0.8187307530779818],
+            [0.6703200460356393],
             [0.9048374180359595]
         ];
-        abs_diff_eq!(res[[4, 0]], expected[[4, 0]], epsilon = 1e-2);
+        assert!(abs_diff_eq!(res[[4, 0]], expected[[4, 0]], epsilon = 1e-6));
     }
 }
