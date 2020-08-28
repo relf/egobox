@@ -1,10 +1,10 @@
 fn main() {
     use ndarray::array;
-    let mut xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
-    let mut yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
+    let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
+    let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
 
-    // println!("{:?}", kriging::utils::normalize(&mut xt));
-    println!("{:?}", kriging::utils::l1_cross_distances(&xt));
+    println!("{:?}", kriging::utils::normalize(&xt));
+    // println!("{:?}", kriging::utils::l1_cross_distances(&xt));
 
     // let gp = GaussianProcess::default(xt, yt);
 
