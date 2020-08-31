@@ -95,7 +95,7 @@ pub fn train(
 
     let distances = DistanceMatrix::new(&xnorm);
 
-    reduced_likelihood(&arr1(&[0.1]), &distances);
+    reduced_likelihood(&arr1(&[0.01]), &distances);
 
     (xnorm, ynorm, distances)
 }
@@ -103,19 +103,25 @@ pub fn train(
 pub fn reduced_likelihood(
     thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     distances: &DistanceMatrix,
-) {
+) -> (ArrayBase<impl Data<Elem = f64>, Ix2>) {
     let res = f64::MIN;
     let nugget = 10. * f64::EPSILON;
 
     let r = squared_exponential(thetas, &distances.d);
+    println!("DDDDD {:?} THETAS {:?}", distances.d, thetas);
+    println!("rrrrrr {:?}", r);
+
     let mut R: Array2<f64> = Array2::eye(distances.n_obs);
     for (i, ij) in distances.d_indices.outer_iter().enumerate() {
         R[[ij[0], ij[1]]] = r[[i, 0]];
         R[[ij[1], ij[0]]] = r[[i, 0]];
     }
+    println!("RRRRR {:?}", &R);
     let C = R.cholesky(UPLO::Lower).unwrap();
-    let Ft = C.solve_triangular(UPLO::Lower, Diag::Unit, &distances.f);
-
+    let Ft = C.solve_triangular(UPLO::Lower, Diag::NonUnit, &distances.f);
+    println!("{:?}", &C);
+    println!("{:?}", &distances.f);
+    println!("FFFFTTTTT {:?}", &Ft);
     // # Get generalized least squares solution
     // Ft = linalg.solve_triangular(C, self.F, lower=True)
     // Q, G = linalg.qr(Ft, mode="economic")
@@ -143,7 +149,7 @@ pub fn reduced_likelihood(
     // # elements of its Cholesky decomposition C
     // detR = (np.diag(C) ** (2.0 / self.nt)).prod()
 
-    ()
+    (C)
 }
 
 #[cfg(test)]
@@ -151,17 +157,31 @@ mod tests {
     use super::*;
     use ndarray::array;
 
-    #[test]
-    fn test_kriging_fit() {
-        let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
-        let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
-        let kriging = Kriging::fit(&xt, &yt);
-    }
+    // #[test]
+    // fn test_kriging_fit() {
+    //     let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
+    //     let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
+    //     let kriging = Kriging::fit(&xt, &yt);
+    // }
 
     #[test]
-    fn test_train() {
+    fn test_reduced_likelihood() {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
-        train(&xt, &yt);
+        let xnorm = NormalizedMatrix::new(&xt);
+        let distances = DistanceMatrix::new(&xnorm);
+        let (C) = reduced_likelihood(&arr1(&[0.01]), &distances);
+        let expectedC = 
+            array![[1.0, 0.0, 0.0, 0.0, 0.0],
+            [0.9974877605580126, 0.07083902552238376, 0.0, 0.0, 0.0],
+            [0.9885161407188499, 0.1508662574804237, 0.008672479008999145, 0.0, 0.0],
+            [0.9684250479962548, 0.24722219638844298, 0.0321021196409536, 0.0018883699011518966, 0.0],
+            [0.9390514487564239, 0.33682559354693586, 0.06830490304103372, 0.008072558118420513, 0.0004124878125062375]];
+        let expectedFt =
+            array![[1.0],
+            [0.035464059866176435],
+            [0.7072406041817856],
+            [0.05482333748840767],
+            [0.6128247876983186]];
     }
 }

@@ -53,7 +53,7 @@ pub fn constant(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
     let n_obs = x.shape()[0];
-    Array2::<f64>::zeros((n_obs, 1))
+    Array2::<f64>::ones((n_obs, 1))
 }
 
 pub fn squared_exponential(
@@ -65,7 +65,7 @@ pub fn squared_exponential(
 
     let t = thetas.view().into_shape((1, n_features)).unwrap();
     let d2 = d.mapv(|v| v * v);
-    let m = (d2 * &t).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+    let m = (d2 * t).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
     r.slice_mut(s![.., 0]).assign(&m);
     r
 }
@@ -125,7 +125,7 @@ mod tests {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let (d, _) = l1_cross_distances(&xt);
         let res = squared_exponential(&arr1(&[0.1]), &d);
-        // without squared fix as in SMT 0.5.2
+        // without squared
         // let expected = array![
         //     [0.9323938199059483],
         //     [0.8607079764250578],
@@ -138,7 +138,7 @@ mod tests {
         //     [0.8187307530779818],
         //     [0.9048374180359595]
         // ];
-        // with squared fix
+        // with squared in squared_exponential
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],
