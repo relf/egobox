@@ -1,7 +1,7 @@
-extern crate ndarray;
-extern crate ndarray_linalg;
-extern crate openblas_src; 
-use crate::kriging;
+//extern crate ndarray;
+//extern crate ndarray_linalg;
+//extern crate openblas_src; 
+//use crate::kriging;
 
 fn main() {
     use ndarray::array;

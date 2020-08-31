@@ -1,6 +1,6 @@
-extern crate ndarray;
-extern crate ndarray_linalg;
-extern crate openblas_src; 
+//extern crate ndarray;
+//extern crate ndarray_linalg;
+//extern crate openblas_src; 
 
 pub mod utils;
 
