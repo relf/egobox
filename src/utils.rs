@@ -9,10 +9,6 @@ pub fn normalize(
 ) {
     let x_mean = x.mean_axis(Axis(0)).unwrap();
     let x_std = x.std_axis(Axis(0), 1.);
-
-    println!("{:?}", x);
-    println!("{:?}", x_mean.broadcast(x.shape()).unwrap());
-
     let xnorm = (x - &x_mean) / &x_std;
 
     (xnorm, x_mean, x_std)
@@ -60,17 +56,6 @@ pub fn constant(
     Array2::<f64>::zeros((n_obs, 1))
 }
 
-pub fn reduced_likelihood(
-    thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-    d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-) {
-    let res = f64::MIN;
-    let nugget = 10. * f64::EPSILON;
-
-    let r = squared_exponential(thetas, d);
-    ()
-}
-
 pub fn squared_exponential(
     thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -94,7 +79,6 @@ mod tests {
     #[test]
     fn test_normalize() {
         let x = array![[1., 2.], [3., 4.]];
-        println!("{:?}", normalize(&x));
         let (xnorm, mean, std) = normalize(&x);
         assert_eq!(xnorm.shape()[0], 2);
         assert_eq!(xnorm.shape()[1], 2);
@@ -141,7 +125,6 @@ mod tests {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let (d, _) = l1_cross_distances(&xt);
         let res = squared_exponential(&arr1(&[0.1]), &d);
-        println!("{:?}", res);
         // without squared fix as in SMT 0.5.2
         // let expected = array![
         //     [0.9323938199059483],

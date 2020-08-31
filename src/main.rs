@@ -1,3 +1,8 @@
+extern crate ndarray;
+extern crate ndarray_linalg;
+extern crate openblas_src; 
+use crate::kriging;
+
 fn main() {
     use ndarray::array;
     let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];

@@ -5,9 +5,8 @@ authors = ["relf <remi.lafage@onera.fr>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 ndarray = "0.13"
+ndarray-linalg = { version = "0.12", features = ["openblas"] }
 ndarray-stats = "0.3"
-ndarray-linalg = "0.12"
 approx = "0.3"
