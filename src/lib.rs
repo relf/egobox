@@ -103,6 +103,18 @@ pub fn train(
     (xnorm, ynorm, distances)
 }
 
+pub fn optimize_hyperparameters(
+    thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+    distances: &DistanceMatrix,
+    ynorm: &NormalizedMatrix,
+) {
+    let base: f64 = 10.;
+    let likelihood = |log10t: &Array1<f64>| -> f64 {
+        let r = reduced_likelihood(&log10t.mapv(|v| base.powf(v)), &distances, &ynorm).unwrap();
+        r.value
+    };
+}
+
 #[derive(Debug)]
 pub struct ReducedLikelihood {
     value: f64,
