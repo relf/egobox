@@ -4,9 +4,12 @@
 
 pub mod utils;
 
-use ndarray::{arr1, s, Array1, Array2, ArrayBase, Data, Ix1, Ix2};
+use std::collections::HashMap;
+use ndarray::{arr1, arr2, s, Array1, Array2, ArrayBase, Data, Ix1, Ix2};
 use ndarray_linalg::cholesky::*;
 use ndarray_linalg::triangular::*;
+use ndarray_linalg::qr::*;
+use ndarray_linalg::svd::*;
 use utils::{constant, l1_cross_distances, normalize, squared_exponential};
 
 pub struct NormalizedMatrix {
@@ -95,7 +98,7 @@ pub fn train(
 
     let distances = DistanceMatrix::new(&xnorm);
 
-    reduced_likelihood(&arr1(&[0.01]), &distances);
+    reduced_likelihood(&arr1(&[0.01]), &distances, &ynorm);
 
     (xnorm, ynorm, distances)
 }
@@ -103,8 +106,10 @@ pub fn train(
 pub fn reduced_likelihood(
     thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     distances: &DistanceMatrix,
-) -> (ArrayBase<impl Data<Elem = f64>, Ix2>) {
+    ynorm: &NormalizedMatrix
+) -> (f64, HashMap<String, f64>) {
     let res = f64::MIN;
+    let params = HashMap::new();
     let nugget = 10. * f64::EPSILON;
 
     let r = squared_exponential(thetas, &distances.d);
@@ -118,38 +123,66 @@ pub fn reduced_likelihood(
     }
     println!("RRRRR {:?}", &R);
     let C = R.cholesky(UPLO::Lower).unwrap();
-    let Ft = C.solve_triangular(UPLO::Lower, Diag::NonUnit, &distances.f);
+    let Ft = C.solve_triangular(UPLO::Lower, Diag::NonUnit, &distances.f).unwrap();
+
     println!("{:?}", &C);
     println!("{:?}", &distances.f);
     println!("FFFFTTTTT {:?}", &Ft);
-    // # Get generalized least squares solution
-    // Ft = linalg.solve_triangular(C, self.F, lower=True)
-    // Q, G = linalg.qr(Ft, mode="economic")
-    // sv = linalg.svd(G, compute_uv=False)
-    // rcondG = sv[-1] / sv[0]
-    // if rcondG < 1e-10:
-    //     # Check F
-    //     sv = linalg.svd(self.F, compute_uv=False)
-    //     condF = sv[0] / sv[-1]
-    //     if condF > 1e15:
-    //         raise Exception(
-    //             "F is too ill conditioned. Poor combination "
-    //             "of regression model and observations."
-    //         )
 
-    //     else:
-    //         # Ft is too ill conditioned, get out (try different theta)
-    //         return reduced_likelihood_function_value, par
+    let (Q, G) = Ft.qr().unwrap();
+    let (_, sv_g, _) = G.svd(false, false).unwrap();
+    let cond_G = sv_g[sv_g.len()-1] / sv_g[0];
+    if cond_G < 1e-10 {
+        let (_, sv_f, _) = distances.f.svd(false, false).unwrap();
+        let cond_F = sv_f[0] / sv_f[sv_f.len()-1];
+        if cond_F > 1e15 {
+            panic!("F is too ill conditioned. Poor combination \
+                   of regression model and observations.");
+        } else {
+            // Ft is too ill conditioned, get out (try different theta)
+            return (res, params)
+        }
+    }
 
-    // Yt = linalg.solve_triangular(C, self.y_norma, lower=True)
-    // beta = linalg.solve_triangular(G, np.dot(Q.T, Yt))
-    // rho = Yt - np.dot(Ft, beta)
+    let Yt = C.solve_triangular(UPLO::Lower, Diag::NonUnit, &ynorm.data).unwrap();
+    let beta = G.solve_triangular(UPLO::Upper, Diag::NonUnit, &Q.t().dot(&Yt)).unwrap();
+    let rho = Yt - Ft.dot(&beta);
 
-    // # The determinant of R is equal to the squared product of the diagonal
-    // # elements of its Cholesky decomposition C
-    // detR = (np.diag(C) ** (2.0 / self.nt)).prod()
+    // The determinant of R is equal to the squared product of the diagonal
+    // elements of its Cholesky decomposition C
+    let exp = 2.0 / distances.n_obs as f64;
+    let mut detR = 1.0;
+    for v in C.diag().mapv(|v| v.powf(exp)).iter() {
+        detR *= v;
+    }
 
-    (C)
+    let sigma2 = (rho.map(|v| v.powf(2.))).sum(Axis(0)) / distances.n_obs;
+    // reduced_likelihood_function_value = -sigma2.sum() * detR
+    // par["sigma2"] = sigma2 * self.y_std ** 2.0
+    // par["beta"] = beta
+    // par["gamma"] = linalg.solve_triangular(C.T, rho)
+    // par["C"] = C
+    // par["Ft"] = Ft
+    // par["G"] = G
+
+    // # A particular case when f_min_cobyla fail
+    // if (self.best_iteration_fail is not None) and (
+    //     not np.isinf(reduced_likelihood_function_value)
+    // ):
+
+    //     if reduced_likelihood_function_value > self.best_iteration_fail:
+    //         self.best_iteration_fail = reduced_likelihood_function_value
+    //         self._thetaMemory = np.array(tmp_var)
+
+    // elif (self.best_iteration_fail is None) and (
+    //     not np.isinf(reduced_likelihood_function_value)
+    // ):
+    //     self.best_iteration_fail = reduced_likelihood_function_value
+    //     self._thetaMemory = np.array(tmp_var)
+
+    // return reduced_likelihood_function_value, par
+
+    (res, params)
 }
 
 #[cfg(test)]
@@ -169,8 +202,9 @@ mod tests {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
         let xnorm = NormalizedMatrix::new(&xt);
+        let ynorm = NormalizedMatrix::new(&yt);
         let distances = DistanceMatrix::new(&xnorm);
-        let (C) = reduced_likelihood(&arr1(&[0.01]), &distances);
+        let (C) = reduced_likelihood(&arr1(&[0.01]), &distances, &ynorm);
         let expectedC = 
             array![[1.0, 0.0, 0.0, 0.0, 0.0],
             [0.9974877605580126, 0.07083902552238376, 0.0, 0.0, 0.0],
