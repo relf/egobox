@@ -13,8 +13,8 @@ approx = "0.3"
 
 [target.'cfg(unix)'.dependencies]
 ndarray = { version = "0.13.0", features = ["blas"] }
-blas-src = { version = "0.2.0", default-features = false, features = ["openblas"] }
-openblas-src = { version = "0.6.0", default-features = false, features = ["cblas"] }
+blas-src = { version = "0.4.0", default-features = false, features = ["openblas"] }
+openblas-src = { version = "0.7.0", default-features = false, features = ["cblas"] }
 ndarray-linalg = "0.12"
 ndarray-stats = "0.3"
 approx = "0.3"
