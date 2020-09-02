@@ -1,15 +1,15 @@
 //extern crate ndarray;
 //extern crate ndarray_linalg;
-//extern crate openblas_src; 
+//extern crate openblas_src;
 
 pub mod utils;
 
-use std::collections::HashMap;
-use ndarray::{arr1, arr2, s, Array1, Array2, ArrayBase, Data, Ix1, Ix2};
+use ndarray::{arr1, arr2, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 use ndarray_linalg::cholesky::*;
-use ndarray_linalg::triangular::*;
 use ndarray_linalg::qr::*;
 use ndarray_linalg::svd::*;
+use ndarray_linalg::triangular::*;
+use std::collections::HashMap;
 use utils::{constant, l1_cross_distances, normalize, squared_exponential};
 
 pub struct NormalizedMatrix {
@@ -103,49 +103,58 @@ pub fn train(
     (xnorm, ynorm, distances)
 }
 
+#[derive(Debug)]
+pub struct ReducedLikelihood {
+    value: f64,
+    sigma2: Array1<f64>,
+    beta: Array2<f64>,
+    gamma: Array2<f64>,
+    C: Array2<f64>,
+    Ft: Array2<f64>,
+    G: Array2<f64>,
+}
+
 pub fn reduced_likelihood(
     thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     distances: &DistanceMatrix,
-    ynorm: &NormalizedMatrix
-) -> (f64, HashMap<String, f64>) {
-    let res = f64::MIN;
-    let params = HashMap::new();
+    ynorm: &NormalizedMatrix,
+) -> Option<ReducedLikelihood> {
+    let mut reduced_likelihood = None;
     let nugget = 10. * f64::EPSILON;
 
     let r = squared_exponential(thetas, &distances.d);
-    println!("DDDDD {:?} THETAS {:?}", distances.d, thetas);
-    println!("rrrrrr {:?}", r);
-
     let mut R: Array2<f64> = Array2::eye(distances.n_obs);
     for (i, ij) in distances.d_indices.outer_iter().enumerate() {
         R[[ij[0], ij[1]]] = r[[i, 0]];
         R[[ij[1], ij[0]]] = r[[i, 0]];
     }
-    println!("RRRRR {:?}", &R);
     let C = R.cholesky(UPLO::Lower).unwrap();
-    let Ft = C.solve_triangular(UPLO::Lower, Diag::NonUnit, &distances.f).unwrap();
-
-    println!("{:?}", &C);
-    println!("{:?}", &distances.f);
-    println!("FFFFTTTTT {:?}", &Ft);
-
+    let Ft = C
+        .solve_triangular(UPLO::Lower, Diag::NonUnit, &distances.f)
+        .unwrap();
     let (Q, G) = Ft.qr().unwrap();
     let (_, sv_g, _) = G.svd(false, false).unwrap();
-    let cond_G = sv_g[sv_g.len()-1] / sv_g[0];
+    let cond_G = sv_g[sv_g.len() - 1] / sv_g[0];
     if cond_G < 1e-10 {
         let (_, sv_f, _) = distances.f.svd(false, false).unwrap();
-        let cond_F = sv_f[0] / sv_f[sv_f.len()-1];
+        let cond_F = sv_f[0] / sv_f[sv_f.len() - 1];
         if cond_F > 1e15 {
-            panic!("F is too ill conditioned. Poor combination \
-                   of regression model and observations.");
+            panic!(
+                "F is too ill conditioned. Poor combination \
+                   of regression model and observations."
+            );
         } else {
             // Ft is too ill conditioned, get out (try different theta)
-            return (res, params)
+            return reduced_likelihood;
         }
     }
 
-    let Yt = C.solve_triangular(UPLO::Lower, Diag::NonUnit, &ynorm.data).unwrap();
-    let beta = G.solve_triangular(UPLO::Upper, Diag::NonUnit, &Q.t().dot(&Yt)).unwrap();
+    let Yt = C
+        .solve_triangular(UPLO::Lower, Diag::NonUnit, &ynorm.data)
+        .unwrap();
+    let beta = G
+        .solve_triangular(UPLO::Upper, Diag::NonUnit, &Q.t().dot(&Yt))
+        .unwrap();
     let rho = Yt - Ft.dot(&beta);
 
     // The determinant of R is equal to the squared product of the diagonal
@@ -155,16 +164,24 @@ pub fn reduced_likelihood(
     for v in C.diag().mapv(|v| v.powf(exp)).iter() {
         detR *= v;
     }
-
-    let sigma2 = (rho.map(|v| v.powf(2.))).sum(Axis(0)) / distances.n_obs;
-    // reduced_likelihood_function_value = -sigma2.sum() * detR
-    // par["sigma2"] = sigma2 * self.y_std ** 2.0
-    // par["beta"] = beta
-    // par["gamma"] = linalg.solve_triangular(C.T, rho)
-    // par["C"] = C
-    // par["Ft"] = Ft
-    // par["G"] = G
-
+    println!("detR {:?}", detR);
+    println!("RHO {:?}", rho);
+    let rho_sqr = rho.map(|v| v.powf(2.));
+    println!("RHOSQR {:?}", rho_sqr);
+    let sigma2 = rho_sqr.sum_axis(Axis(0)) / distances.n_obs as f64;
+    println!("SIGMA2 {:?}", sigma2);
+    let reduced_likelihood = ReducedLikelihood {
+        value: -sigma2.sum() * detR,
+        sigma2: sigma2 * ynorm.std.mapv(|v| v.powf(2.0)),
+        beta: beta,
+        gamma: C
+            .t()
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &rho)
+            .unwrap(),
+        C: C,
+        Ft: Ft,
+        G: G,
+    };
     // # A particular case when f_min_cobyla fail
     // if (self.best_iteration_fail is not None) and (
     //     not np.isinf(reduced_likelihood_function_value)
@@ -179,15 +196,14 @@ pub fn reduced_likelihood(
     // ):
     //     self.best_iteration_fail = reduced_likelihood_function_value
     //     self._thetaMemory = np.array(tmp_var)
-
-    // return reduced_likelihood_function_value, par
-
-    (res, params)
+    println!("reduced_likelihood = {:?} ", reduced_likelihood);
+    Some(reduced_likelihood)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::abs_diff_eq;
     use ndarray::array;
 
     // #[test]
@@ -204,18 +220,40 @@ mod tests {
         let xnorm = NormalizedMatrix::new(&xt);
         let ynorm = NormalizedMatrix::new(&yt);
         let distances = DistanceMatrix::new(&xnorm);
-        let (C) = reduced_likelihood(&arr1(&[0.01]), &distances, &ynorm);
-        let expectedC = 
-            array![[1.0, 0.0, 0.0, 0.0, 0.0],
+        let likelihood = reduced_likelihood(&arr1(&[0.01]), &distances, &ynorm).unwrap();
+        let expectedC = array![
+            [1.0, 0.0, 0.0, 0.0, 0.0],
             [0.9974877605580126, 0.07083902552238376, 0.0, 0.0, 0.0],
-            [0.9885161407188499, 0.1508662574804237, 0.008672479008999145, 0.0, 0.0],
-            [0.9684250479962548, 0.24722219638844298, 0.0321021196409536, 0.0018883699011518966, 0.0],
-            [0.9390514487564239, 0.33682559354693586, 0.06830490304103372, 0.008072558118420513, 0.0004124878125062375]];
-        let expectedFt =
-            array![[1.0],
+            [
+                0.9885161407188499,
+                0.1508662574804237,
+                0.008672479008999145,
+                0.0,
+                0.0
+            ],
+            [
+                0.9684250479962548,
+                0.24722219638844298,
+                0.0321021196409536,
+                0.0018883699011518966,
+                0.0
+            ],
+            [
+                0.9390514487564239,
+                0.33682559354693586,
+                0.06830490304103372,
+                0.008072558118420513,
+                0.0004124878125062375
+            ]
+        ];
+        let expectedFt = array![
+            [1.0],
             [0.035464059866176435],
             [0.7072406041817856],
             [0.05482333748840767],
-            [0.6128247876983186]];
+            [0.6128247876983186]
+        ];
+        let expected = -8822.907752408328;
+        assert!(abs_diff_eq!(expected, likelihood.value, epsilon = 1e-6))
     }
 }

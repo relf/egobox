@@ -1,0 +1,14 @@
+[package]
+name = "kriging"
+version = "0.1.0"
+authors = ["relf <remi.lafage@onera.fr>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+ndarray = { version = "0.13.0", features = ["blas"] }
+blas-src = { version = "0.2.0", default-features = false, features = ["openblas"] }
+openblas-src = { version = "0.6.0", default-features = false, features = ["cblas"] }
+ndarray-linalg = "0.12"
+ndarray-stats = "0.3"
+approx = "0.3"
