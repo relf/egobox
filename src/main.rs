@@ -9,7 +9,8 @@ fn main() {
     let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
 
     println!("{:?}", kriging::utils::normalize(&xt));
-    println!("{}", cfg!(unix))
+    println!("{}", cfg!(unix));
+
     // println!("{:?}", kriging::utils::l1_cross_distances(&xt));
 
     // let gp = GaussianProcess::default(xt, yt);
