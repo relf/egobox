@@ -1,22 +1,20 @@
-//extern crate ndarray;
-//extern crate ndarray_linalg;
-//extern crate openblas_src;
-
 pub mod utils;
 
-use ndarray::{arr1, arr2, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray::{arr1, arr2, s, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
+use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
 use ndarray_linalg::qr::*;
 use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
+use ndarray_stats::*;
 use nlopt::*;
 use std::collections::HashMap;
 use utils::{constant, l1_cross_distances, normalize, squared_exponential};
 
 pub struct NormalizedMatrix {
-    data: Array2<f64>,
-    mean: Array1<f64>,
-    std: Array1<f64>,
+    pub data: Array2<f64>,
+    pub mean: Array1<f64>,
+    pub std: Array1<f64>,
 }
 
 impl NormalizedMatrix {
@@ -59,7 +57,10 @@ impl DistanceMatrix {
 }
 
 pub struct Kriging {
-    hyper_parameters: Option<Hyperparameters>,
+    xnorm: NormalizedMatrix,
+    ynorm: NormalizedMatrix,
+    distances: DistanceMatrix,
+    hyper_parameters: Hyperparameters,
 }
 
 impl Kriging {
@@ -67,22 +68,85 @@ impl Kriging {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Kriging {
+        let xnorm = NormalizedMatrix::new(x);
+        let ynorm = NormalizedMatrix::new(y);
+        let distances = DistanceMatrix::new(&xnorm);
+
+        let hyper_parameters =
+            optimize_hyperparameters(&arr1(&[0.01]), &distances, &ynorm).unwrap();
+
         Kriging {
-            hyper_parameters: train(x, y),
+            xnorm,
+            ynorm,
+            distances,
+            hyper_parameters,
         }
     }
-}
 
-pub fn train(
-    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-) -> Option<Hyperparameters> {
-    let xnorm = NormalizedMatrix::new(x);
-    let ynorm = NormalizedMatrix::new(y);
+    pub fn predict_values(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
+        let r = self._compute_correlation(&x);
+        // Compute the regression function
+        let f = constant(x);
+        // Scaled predictor
+        let y_ = &f.dot(&self.hyper_parameters.likelihood.beta)
+            + &r.dot(&self.hyper_parameters.likelihood.gamma);
+        // Predictor
+        &y_ * &self.ynorm.std + &self.ynorm.mean
+    }
 
-    let distances = DistanceMatrix::new(&xnorm);
+    pub fn predict_variances(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
+        let r = self._compute_correlation(&x);
+        let lh = &self.hyper_parameters.likelihood;
 
-    optimize_hyperparameters(&arr1(&[0.01]), &distances, &ynorm)
+        let tr = r.t().to_owned();
+        let rt =
+            lh.C.solve_triangular(UPLO::Lower, Diag::NonUnit, &tr)
+                .unwrap();
+        let lhs = lh.Ft.t().dot(&rt) - constant(x).t();
+        let u =
+            lh.G.t()
+                .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)
+                .unwrap();
+
+        let A = &lh.sigma2;
+        let B = 1.0 - rt.mapv(|v| v * v).sum_axis(Axis(0)) + u.mapv(|v| v * v).sum_axis(Axis(0));
+        let mut MSE = einsum("i,j->ji", &[A, &B])
+            .unwrap()
+            .into_shape((x.shape()[0], 1))
+            .unwrap();
+
+        // Mean Squared Error might be slightly negative depending on
+        // machine precision: force to zero!
+        MSE.mapv(|v| if v < 0. { 0. } else { v })
+    }
+
+    fn _compute_correlation(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
+        let n_obs = x.shape()[0];
+        let n_features = x.shape()[1];
+
+        let xnorm = (x - &self.xnorm.mean) / &self.xnorm.std;
+        let nt = self.xnorm.data.shape()[0];
+        // Get pairwise componentwise L1-distances to the input training set
+        let mut dx: Array2<f64> = Array2::zeros((nt * n_obs, n_features));
+        for (i, xrow) in xnorm.genrows().into_iter().enumerate() {
+            let dxrows = &self.xnorm.data - &xrow.into_shape((1, n_features)).unwrap();
+            let a = i * nt;
+            let b = (i + 1) * nt;
+            dx.slice_mut(s![a..b, ..]).assign(&dxrows);
+        }
+        // Compute the correlation function
+        let r = squared_exponential(&self.hyper_parameters.thetas, &dx);
+        r.into_shape((n_obs, nt)).unwrap()
+    }
 }
 
 pub struct Hyperparameters {
@@ -99,12 +163,9 @@ pub fn optimize_hyperparameters(
     let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
         let thetas =
             Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect()).unwrap();
-        println!("THETAS {:?}", thetas);
         let r = reduced_likelihood(&thetas, &distances, &ynorm).unwrap();
-        println!("{}", -r.value);
         -r.value
     };
-    // println!("NFEATURES {}", distances.n_features);
     let mut optimizer = Nlopt::new(
         Algorithm::Cobyla,
         distances.n_features,
@@ -115,13 +176,11 @@ pub fn optimize_hyperparameters(
 
     for i in 0..theta0s.len() {
         let cstrfn1 = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-            //println!("{} {:?} {}", i, x, f64::log10(100.) - x[i]);
-            // f64::log10(100.) - x[i]
+            // -(f64::log10(100.) - x[i])
             x[i] - 2.
         };
         let cstrfn2 = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-            //println!("{} {:?} {}", i, x, x[i]);
-            // x[i] - f64::log10(1e-6)
+            // -(x[i] - f64::log10(1e-6))
             -x[i] - 6.
         };
         optimizer.add_inequality_constraint(cstrfn1, (), 1e-2);
@@ -137,17 +196,12 @@ pub fn optimize_hyperparameters(
     optimizer.set_maxeval(10 * distances.n_features as u32);
     let resOpt = optimizer.optimize(&mut thetas_vec);
 
-    if let Ok(opt_thetas) = resOpt {
-        println!("{:?}", opt_thetas);
-    }
     if let Err(e) = resOpt {
         println!("{:?}", e);
     }
-    let thetas = arr1(&thetas_vec);
-    Some(Hyperparameters {
-        thetas,
-        likelihood: reduced_likelihood(&arr1(&thetas_vec), &distances, &ynorm).unwrap(),
-    })
+    let thetas = arr1(&thetas_vec).mapv(|v| base.powf(v));
+    let likelihood = reduced_likelihood(&thetas, &distances, &ynorm).unwrap();
+    Some(Hyperparameters { thetas, likelihood })
 }
 
 #[derive(Debug)]
@@ -212,12 +266,8 @@ pub fn reduced_likelihood(
     for v in C.diag().mapv(|v| v.powf(exp)).iter() {
         detR *= v;
     }
-    //println!("detR {:?}", detR);
-    //println!("RHO {:?}", rho);
     let rho_sqr = rho.map(|v| v.powf(2.));
-    //println!("RHOSQR {:?}", rho_sqr);
     let sigma2 = rho_sqr.sum_axis(Axis(0)) / distances.n_obs as f64;
-    //println!("SIGMA2 {:?}", sigma2);
     let reduced_likelihood = ReducedLikelihood {
         value: -sigma2.sum() * detR,
         sigma2: sigma2 * ynorm.std.mapv(|v| v.powf(2.0)),
@@ -230,37 +280,36 @@ pub fn reduced_likelihood(
         Ft: Ft,
         G: G,
     };
-    // # A particular case when f_min_cobyla fail
-    // if (self.best_iteration_fail is not None) and (
-    //     not np.isinf(reduced_likelihood_function_value)
-    // ):
-
-    //     if reduced_likelihood_function_value > self.best_iteration_fail:
-    //         self.best_iteration_fail = reduced_likelihood_function_value
-    //         self._thetaMemory = np.array(tmp_var)
-
-    // elif (self.best_iteration_fail is None) and (
-    //     not np.isinf(reduced_likelihood_function_value)
-    // ):
-    //     self.best_iteration_fail = reduced_likelihood_function_value
-    //     self._thetaMemory = np.array(tmp_var)
-    //println!("reduced_likelihood = {:?} ", reduced_likelihood);
     Some(reduced_likelihood)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::abs_diff_eq;
+    use approx::assert_abs_diff_eq;
     use ndarray::array;
 
-    // #[test]
-    fn test_train() {
+    #[test]
+    fn test_train_and_predict_values() {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
-        let hyparams = train(&xt, &yt).unwrap();
+        let kriging = Kriging::fit(&xt, &yt);
         let expected = 5.62341325;
-        assert!(abs_diff_eq!(expected, hyparams.thetas[0], epsilon = 1e-6));
+        assert_abs_diff_eq!(expected, kriging.hyper_parameters.thetas[0], epsilon = 1e-6);
+        let yvals = kriging.predict_values(&arr2(&[[1.0], [2.1]]));
+        let expected_y = arr2(&[[0.6856779931432053], [1.4484644169993859]]);
+        assert_abs_diff_eq!(expected_y, yvals, epsilon = 1e-6);
+    }
+    #[test]
+    fn test_train_and_predict_variances() {
+        let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
+        let kriging = Kriging::fit(&xt, &yt);
+        let expected = 5.62341325;
+        assert_abs_diff_eq!(expected, kriging.hyper_parameters.thetas[0], epsilon = 1e-6);
+        let yvars = kriging.predict_variances(&arr2(&[[1.0], [2.1]]));
+        let expected_vars = arr2(&[[0.03422835527498675], [0.014105203477142668]]);
+        assert_abs_diff_eq!(expected_vars, yvars, epsilon = 1e-6);
     }
 
     #[test]
@@ -304,7 +353,7 @@ mod tests {
             [0.6128247876983186]
         ];
         let expected = -8822.907752408328;
-        assert!(abs_diff_eq!(expected, likelihood.value, epsilon = 1e-6))
+        assert_abs_diff_eq!(expected, likelihood.value, epsilon = 1e-6);
     }
 
     #[test]

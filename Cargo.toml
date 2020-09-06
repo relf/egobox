@@ -7,16 +7,15 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [target.'cfg(windows)'.dependencies]
 ndarray = "0.13.1"
-ndarray-linalg = { version = "0.12.1", features = ["openblas"] }
-ndarray-stats = "0.3"
-approx = "0.3"
-nlopt = "0.5"
 
 [target.'cfg(unix)'.dependencies]
 ndarray = { version = "0.13.1", features = ["blas"] }
 blas-src = { version = "0.6.0", default-features = false, features = ["openblas"] }
 openblas-src = { version = "0.9.0", default-features = false, features = ["cblas"] }
-ndarray-linalg = "0.12.1"
+
+[dependencies]
+ndarray-linalg = { version = "0.12.1", features = ["openblas"] }
 ndarray-stats = "0.3"
+ndarray_einsum_beta = "0.5"
 approx = "0.3"
 nlopt = "0.5"
