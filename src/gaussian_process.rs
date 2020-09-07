@@ -49,15 +49,15 @@ impl DistanceMatrix {
     }
 }
 
-pub struct Hyperparameters {
-    thetas: Array1<f64>,
+pub struct HyperParamaters {
+    theta: Array1<f64>,
     likelihood: Likelihood,
 }
 
 pub struct GaussianProcess {
     xtrain: NormalizedMatrix,
     ytrain: NormalizedMatrix,
-    hyparams: Hyperparameters,
+    hyper_params: HyperParamaters,
 }
 
 impl GaussianProcess {
@@ -69,13 +69,13 @@ impl GaussianProcess {
         let ytrain = NormalizedMatrix::new(y);
         let distances = DistanceMatrix::new(&xtrain);
 
-        let hyparams =
-            optimize_hyperparameters(&arr1(&[0.01]), &distances, &ytrain).unwrap();
+        let hyper_params =
+            optimize_hyper_parameters(&arr1(&[0.01]), &distances, &ytrain).unwrap();
 
         GaussianProcess {
             xtrain,
             ytrain,
-            hyparams,
+            hyper_params,
         }
     }
 
@@ -87,8 +87,8 @@ impl GaussianProcess {
         // Compute the regression function
         let f = constant(x);
         // Scaled predictor
-        let y_ = &f.dot(&self.hyparams.likelihood.beta)
-            + &r.dot(&self.hyparams.likelihood.gamma);
+        let y_ = &f.dot(&self.hyper_params.likelihood.beta)
+            + &r.dot(&self.hyper_params.likelihood.gamma);
         // Predictor
         &y_ * &self.ytrain.std + &self.ytrain.mean
     }
@@ -98,7 +98,7 @@ impl GaussianProcess {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
         let r = self._compute_correlation(&x);
-        let lh = &self.hyparams.likelihood;
+        let lh = &self.hyper_params.likelihood;
 
         let tr = r.t().to_owned();
         let rt =
@@ -140,21 +140,21 @@ impl GaussianProcess {
             dx.slice_mut(s![a..b, ..]).assign(&dxrows);
         }
         // Compute the correlation function
-        let r = squared_exponential(&self.hyparams.thetas, &dx);
+        let r = squared_exponential(&self.hyper_params.theta, &dx);
         r.into_shape((n_obs, nt)).unwrap()
     }
 }
 
-pub fn optimize_hyperparameters(
-    theta0s: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+pub fn optimize_hyper_parameters(
+    theta0: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     distances: &DistanceMatrix,
     ytrain: &NormalizedMatrix,
-) -> Option<Hyperparameters> {
+) -> Option<HyperParamaters> {
     let base: f64 = 10.;
     let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-        let thetas =
+        let theta =
             Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect()).unwrap();
-        let r = reduced_likelihood(&thetas, &distances, &ytrain).unwrap();
+        let r = reduced_likelihood(&theta, &distances, &ytrain).unwrap();
         -r.value
     };
     let mut optimizer = Nlopt::new(
@@ -165,7 +165,7 @@ pub fn optimize_hyperparameters(
         (),
     );
 
-    for i in 0..theta0s.len() {
+    for i in 0..theta0.len() {
         let cstrfn1 = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
             // -(f64::log10(100.) - x[i])
             x[i] - 2.
@@ -177,16 +177,16 @@ pub fn optimize_hyperparameters(
         optimizer.add_inequality_constraint(cstrfn1, (), 1e-2).unwrap();
         optimizer.add_inequality_constraint(cstrfn2, (), 1e-2).unwrap();
     }
-    let mut thetas_vec = theta0s.mapv(|t| f64::log10(t)).into_raw_vec();
+    let mut theta_vec = theta0.mapv(|t| f64::log10(t)).into_raw_vec();
     optimizer.set_initial_step1(0.5).unwrap();
     optimizer.set_maxeval(10 * distances.n_features as u32).unwrap();
-    let res = optimizer.optimize(&mut thetas_vec);
+    let res = optimizer.optimize(&mut theta_vec);
     if let Err(e) = res {
         println!("{:?}", e);
     }
-    let thetas = arr1(&thetas_vec).mapv(|v| base.powf(v));
-    let likelihood = reduced_likelihood(&thetas, &distances, &ytrain).unwrap();
-    Some(Hyperparameters { thetas, likelihood })
+    let opt_theta = arr1(&theta_vec).mapv(|v| base.powf(v));
+    let likelihood = reduced_likelihood(&opt_theta, &distances, &ytrain).unwrap();
+    Some(HyperParamaters { theta: opt_theta, likelihood })
 }
 
 #[derive(Debug)]
@@ -201,11 +201,11 @@ pub struct Likelihood {
 }
 
 pub fn reduced_likelihood(
-    thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+    theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     distances: &DistanceMatrix,
     ytrain: &NormalizedMatrix,
 ) -> Option<Likelihood> {
-    let r = squared_exponential(thetas, &distances.d);
+    let r = squared_exponential(theta, &distances.d);
     let mut r_mx: Array2<f64> = Array2::eye(distances.n_obs);
     for (i, ij) in distances.d_indices.outer_iter().enumerate() {
         r_mx[[ij[0], ij[1]]] = r[[i, 0]];
@@ -277,7 +277,7 @@ mod tests {
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
         let kriging = GaussianProcess::fit(&xt, &yt);
         let expected = 5.62341325;
-        assert_abs_diff_eq!(expected, kriging.hyparams.thetas[0], epsilon = 1e-6);
+        assert_abs_diff_eq!(expected, kriging.hyper_params.theta[0], epsilon = 1e-6);
         let yvals = kriging.predict_values(&arr2(&[[1.0], [2.1]]));
         let expected_y = arr2(&[[0.6856779931432053], [1.4484644169993859]]);
         assert_abs_diff_eq!(expected_y, yvals, epsilon = 1e-6);
@@ -288,7 +288,7 @@ mod tests {
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
         let kriging = GaussianProcess::fit(&xt, &yt);
         let expected = 5.62341325;
-        assert_abs_diff_eq!(expected, kriging.hyparams.thetas[0], epsilon = 1e-6);
+        assert_abs_diff_eq!(expected, kriging.hyper_params.theta[0], epsilon = 1e-6);
         let yvars = kriging.predict_variances(&arr2(&[[1.0], [2.1]]));
         let expected_vars = arr2(&[[0.03422835527498675], [0.014105203477142668]]);
         assert_abs_diff_eq!(expected_vars, yvars, epsilon = 1e-6);
@@ -307,12 +307,12 @@ mod tests {
     }
 
     #[test]
-    fn test_optimize_hyperparameters() {
+    fn test_optimize_hyper_parameters() {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
         let xtrain = NormalizedMatrix::new(&xt);
         let ytrain = NormalizedMatrix::new(&yt);
         let distances = DistanceMatrix::new(&xtrain);
-        optimize_hyperparameters(&arr1(&[0.01]), &distances, &ytrain);
+        optimize_hyper_parameters(&arr1(&[0.01]), &distances, &ytrain);
     }
 }

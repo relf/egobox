@@ -57,13 +57,13 @@ pub fn constant(
 }
 
 pub fn squared_exponential(
-    thetas: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+    theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
-    let (n_obs, n_features) = (d.shape()[0], d.shape()[1]);
+    let (n_obs, n_features) = (d.nrows(), d.ncols());
     let mut r = Array2::zeros((n_obs, 1));
 
-    let t = thetas.view().into_shape((1, n_features)).unwrap();
+    let t = theta.view().into_shape((1, n_features)).unwrap();
     let d2 = d.mapv(|v| v * v);
     let m = (d2 * t).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
     r.slice_mut(s![.., 0]).assign(&m);
