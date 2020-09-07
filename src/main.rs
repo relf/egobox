@@ -1,4 +1,4 @@
-use likelib::kriging::*;
+use likelib::gaussian_process::*;
 
 fn main() {
     use ndarray::{array, Array};
@@ -9,7 +9,7 @@ fn main() {
     write_npy("xtrain.npy", &xt).expect("Failed to write .npy file");
     write_npy("ytrain.npy", &yt).expect("Failed to write .npy file");
 
-    let krg = Kriging::fit(&xt, &yt);
+    let krg = GaussianProcess::fit(&xt, &yt);
 
     let num = 100;
     let x = Array::linspace(0.0, 4.0, num).into_shape((num, 1)).unwrap();
