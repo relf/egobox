@@ -1,4 +1,4 @@
-use kriging::kriging::*;
+use likelib::kriging::*;
 
 fn main() {
     use ndarray::{array, Array};
