@@ -1,4 +1,21 @@
-use ndarray::{s, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+
+pub struct NormalizedMatrix {
+    pub data: Array2<f64>,
+    pub mean: Array1<f64>,
+    pub std: Array1<f64>,
+}
+
+impl NormalizedMatrix {
+    pub fn new(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> NormalizedMatrix {
+        let (data, mean, std) = normalize(x);
+        NormalizedMatrix {
+            data: data.to_owned(),
+            mean: mean.to_owned(),
+            std: std.to_owned(),
+        }
+    }
+}
 
 pub fn normalize(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,

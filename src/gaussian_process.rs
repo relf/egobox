@@ -1,4 +1,4 @@
-use crate::utils::{constant, l1_cross_distances, normalize, squared_exponential};
+use crate::utils::{constant, l1_cross_distances, squared_exponential, NormalizedMatrix};
 use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
@@ -6,23 +6,6 @@ use ndarray_linalg::qr::*;
 use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
 use nlopt::*;
-
-pub struct NormalizedMatrix {
-    pub data: Array2<f64>,
-    pub mean: Array1<f64>,
-    pub std: Array1<f64>,
-}
-
-impl NormalizedMatrix {
-    pub fn new(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> NormalizedMatrix {
-        let (data, mean, std) = normalize(x);
-        NormalizedMatrix {
-            data: data.to_owned(),
-            mean: mean.to_owned(),
-            std: std.to_owned(),
-        }
-    }
-}
 
 pub struct DistanceMatrix {
     d: Array2<f64>,
@@ -49,6 +32,43 @@ impl DistanceMatrix {
     }
 }
 
+pub struct GaussianProcessConfigBuilder {
+    initial_theta: f64,
+}
+
+impl GaussianProcessConfigBuilder {
+    /// Set initial value for theta hyper parameter.
+    ///
+    /// During training process, the internal optimization
+    /// is started from `initial_theta`.
+    pub fn initial_theta(mut self, initial_theta: f64) -> Self {
+        self.initial_theta = initial_theta;
+        self
+    }
+
+    /// Return an instance of `GaussianProcessConfig` after
+    /// having performed validation checks on all the specified hyper parameters.
+    ///
+    /// **Panics** if any of the validation checks fails.
+    pub fn build(self) -> GaussianProcessConfig {
+        GaussianProcessConfig::build(self.initial_theta)
+    }
+}
+
+pub struct GaussianProcessConfig {
+    initial_theta: f64,
+}
+
+impl GaussianProcessConfig {
+    pub fn new(initial_theta: f64) -> GaussianProcessConfigBuilder {
+        GaussianProcessConfigBuilder { initial_theta }
+    }
+
+    fn build(initial_theta: f64) -> Self {
+        GaussianProcessConfig { initial_theta }
+    }
+}
+
 pub struct HyperParamaters {
     theta: Array1<f64>,
     likelihood: Likelihood,
@@ -69,8 +89,7 @@ impl GaussianProcess {
         let ytrain = NormalizedMatrix::new(y);
         let distances = DistanceMatrix::new(&xtrain);
 
-        let hyper_params =
-            optimize_hyper_parameters(&arr1(&[0.01]), &distances, &ytrain).unwrap();
+        let hyper_params = optimize_hyper_parameters(&arr1(&[0.01]), &distances, &ytrain).unwrap();
 
         GaussianProcess {
             xtrain,
@@ -101,14 +120,16 @@ impl GaussianProcess {
         let lh = &self.hyper_params.likelihood;
 
         let tr = r.t().to_owned();
-        let rt =
-            lh.c_mx.solve_triangular(UPLO::Lower, Diag::NonUnit, &tr)
-                .unwrap();
+        let rt = lh
+            .c_mx
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &tr)
+            .unwrap();
         let lhs = lh.ft_mx.t().dot(&rt) - constant(x).t();
-        let u =
-            lh.g_mx.t()
-                .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)
-                .unwrap();
+        let u = lh
+            .g_mx
+            .t()
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)
+            .unwrap();
 
         let a = &lh.sigma2;
         let b = 1.0 - rt.mapv(|v| v * v).sum_axis(Axis(0)) + u.mapv(|v| v * v).sum_axis(Axis(0));
@@ -174,19 +195,28 @@ pub fn optimize_hyper_parameters(
             // -(x[i] - f64::log10(1e-6))
             -x[i] - 6.
         };
-        optimizer.add_inequality_constraint(cstrfn1, (), 1e-2).unwrap();
-        optimizer.add_inequality_constraint(cstrfn2, (), 1e-2).unwrap();
+        optimizer
+            .add_inequality_constraint(cstrfn1, (), 1e-2)
+            .unwrap();
+        optimizer
+            .add_inequality_constraint(cstrfn2, (), 1e-2)
+            .unwrap();
     }
     let mut theta_vec = theta0.mapv(|t| f64::log10(t)).into_raw_vec();
     optimizer.set_initial_step1(0.5).unwrap();
-    optimizer.set_maxeval(10 * distances.n_features as u32).unwrap();
+    optimizer
+        .set_maxeval(10 * distances.n_features as u32)
+        .unwrap();
     let res = optimizer.optimize(&mut theta_vec);
     if let Err(e) = res {
         println!("{:?}", e);
     }
     let opt_theta = arr1(&theta_vec).mapv(|v| base.powf(v));
     let likelihood = reduced_likelihood(&opt_theta, &distances, &ytrain).unwrap();
-    Some(HyperParamaters { theta: opt_theta, likelihood })
+    Some(HyperParamaters {
+        theta: opt_theta,
+        likelihood,
+    })
 }
 
 #[derive(Debug)]
@@ -269,7 +299,7 @@ pub fn reduced_likelihood(
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use ndarray::{array, arr2};
+    use ndarray::{arr2, array};
 
     #[test]
     fn test_train_and_predict_values() {
