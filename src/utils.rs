@@ -8,62 +8,91 @@ pub struct NormalizedMatrix {
 
 impl NormalizedMatrix {
     pub fn new(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> NormalizedMatrix {
-        let (data, mean, std) = normalize(x);
+        let (data, mean, std) = Self::normalize(x);
         NormalizedMatrix {
             data: data.to_owned(),
             mean: mean.to_owned(),
             std: std.to_owned(),
         }
     }
-}
 
-pub fn normalize(
-    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-) -> (
-    ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ArrayBase<impl Data<Elem = f64>, Ix1>,
-    ArrayBase<impl Data<Elem = f64>, Ix1>,
-) {
-    let x_mean = x.mean_axis(Axis(0)).unwrap();
-    let x_std = x.std_axis(Axis(0), 1.);
-    let xnorm = (x - &x_mean) / &x_std;
-
-    (xnorm, x_mean, x_std)
-}
-
-pub fn l1_cross_distances(
-    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-) -> (
-    ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ArrayBase<impl Data<Elem = usize>, Ix2>,
-) {
-    let n_obs = x.shape()[0];
-    let n_features = x.shape()[1];
-    let n_non_zero_cross_dist = n_obs * (n_obs - 1) / 2;
-    let mut indices = Array2::<usize>::zeros((n_non_zero_cross_dist, 2));
-    let mut d = Array2::zeros((n_non_zero_cross_dist, n_features));
-    let mut ll_1 = 0;
-    for k in 0..(n_obs - 1) {
-        let ll_0 = ll_1;
-        ll_1 = ll_0 + n_obs - k - 1;
-        indices
-            .slice_mut(s![ll_0..ll_1, 0..1])
-            .assign(&Array2::<usize>::from_elem((n_obs - k - 1, 1), k));
-        let init_values = ((k + 1)..n_obs).collect();
-        indices
-            .slice_mut(s![ll_0..ll_1, 1..2])
-            .assign(&Array2::from_shape_vec((n_obs - k - 1, 1), init_values).unwrap());
-
-        let diff = &x
-            .slice(s![k..(k + 1), ..])
-            .broadcast((n_obs - k - 1, n_features))
-            .unwrap()
-            - &x.slice(s![k + 1..n_obs, ..]);
-        d.slice_mut(s![ll_0..ll_1, ..]).assign(&diff);
+    pub fn ncols(&self) -> usize {
+        self.data.ncols()
     }
-    d = d.mapv(f64::abs);
 
-    (d, indices)
+    fn normalize(
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> (
+        ArrayBase<impl Data<Elem = f64>, Ix2>,
+        ArrayBase<impl Data<Elem = f64>, Ix1>,
+        ArrayBase<impl Data<Elem = f64>, Ix1>,
+    ) {
+        let x_mean = x.mean_axis(Axis(0)).unwrap();
+        let x_std = x.std_axis(Axis(0), 1.);
+        let xnorm = (x - &x_mean) / &x_std;
+
+        (xnorm, x_mean, x_std)
+    }
+}
+
+pub struct DistanceMatrix {
+    pub d: Array2<f64>,
+    pub d_indices: Array2<usize>,
+    pub f: Array2<f64>,
+    pub n_obs: usize,
+    pub n_features: usize,
+}
+
+impl DistanceMatrix {
+    pub fn new(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> DistanceMatrix {
+        let (d, d_indices) = Self::_l1_cross_distances(&x);
+        let f = constant(&x);
+        let n_obs = x.nrows();
+        let n_features = x.ncols();
+
+        DistanceMatrix {
+            d: d.to_owned(),
+            d_indices: d_indices.to_owned(),
+            f: f.to_owned(),
+            n_obs,
+            n_features,
+        }
+    }
+
+    fn _l1_cross_distances(
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> (
+        ArrayBase<impl Data<Elem = f64>, Ix2>,
+        ArrayBase<impl Data<Elem = usize>, Ix2>,
+    ) {
+        let n_obs = x.nrows();
+        let n_features = x.ncols();
+        let n_non_zero_cross_dist = n_obs * (n_obs - 1) / 2;
+        let mut indices = Array2::<usize>::zeros((n_non_zero_cross_dist, 2));
+        let mut d = Array2::zeros((n_non_zero_cross_dist, n_features));
+        let mut ll_1 = 0;
+        for k in 0..(n_obs - 1) {
+            let ll_0 = ll_1;
+            ll_1 = ll_0 + n_obs - k - 1;
+            indices
+                .slice_mut(s![ll_0..ll_1, 0..1])
+                .assign(&Array2::<usize>::from_elem((n_obs - k - 1, 1), k));
+            let init_values = ((k + 1)..n_obs).collect();
+            indices
+                .slice_mut(s![ll_0..ll_1, 1..2])
+                .assign(&Array2::from_shape_vec((n_obs - k - 1, 1), init_values).unwrap());
+
+            let diff = &x
+                .slice(s![k..(k + 1), ..])
+                .broadcast((n_obs - k - 1, n_features))
+                .unwrap()
+                - &x.slice(s![k + 1..n_obs, ..]);
+            d.slice_mut(s![ll_0..ll_1, ..]).assign(&diff);
+        }
+        d = d.mapv(f64::abs);
+
+        (d, indices)
+    }
 }
 
 pub fn constant(
@@ -94,17 +123,16 @@ mod tests {
     use ndarray::{arr1, array};
 
     #[test]
-    fn test_normalize() {
+    fn test_normalized_matrix() {
         let x = array![[1., 2.], [3., 4.]];
-        let (xnorm, mean, std) = normalize(&x);
-        assert_eq!(xnorm.shape()[0], 2);
-        assert_eq!(xnorm.shape()[1], 2);
-        assert_eq!(array![2., 3.], mean);
-        assert_eq!(array![f64::sqrt(2.), f64::sqrt(2.)], std);
+        let xnorm = NormalizedMatrix::new(&x);
+        assert_eq!(xnorm.ncols(), 2);
+        assert_eq!(array![2., 3.], xnorm.mean);
+        assert_eq!(array![f64::sqrt(2.), f64::sqrt(2.)], xnorm.std);
     }
 
     #[test]
-    fn test_l1_cross_distances() {
+    fn test_cross_distance_matrix() {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let expected = (
             array![
@@ -132,30 +160,16 @@ mod tests {
                 [3, 4]
             ],
         );
-        let (actual0, actual1) = l1_cross_distances(&xt);
-        assert_eq!(expected.0, actual0);
-        assert_eq!(expected.1, actual1);
+        let dm = DistanceMatrix::new(&xt);
+        assert_eq!(expected.0, dm.d);
+        assert_eq!(expected.1, dm.d_indices);
     }
 
     #[test]
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
-        let (d, _) = l1_cross_distances(&xt);
-        let res = squared_exponential(&arr1(&[0.1]), &d);
-        // without squared
-        // let expected = array![
-        //     [0.9323938199059483],
-        //     [0.8607079764250578],
-        //     [0.7788007830714049],
-        //     [0.7046880897187134],
-        //     [0.9231163463866358],
-        //     [0.835270211411272],
-        //     [0.7557837414557255],
-        //     [0.9048374180359595],
-        //     [0.8187307530779818],
-        //     [0.9048374180359595]
-        // ];
-        // with squared in squared_exponential
+        let dm = DistanceMatrix::new(&xt);
+        let res = squared_exponential(&arr1(&[0.1]), &dm.d);
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],

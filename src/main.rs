@@ -9,7 +9,8 @@ fn main() {
     write_npy("xtrain.npy", &xt).expect("Failed to write .npy file");
     write_npy("ytrain.npy", &yt).expect("Failed to write .npy file");
 
-    let krg = GaussianProcess::fit(&xt, &yt);
+    let config = GaussianProcessConfig::default();
+    let krg = GaussianProcess::fit(config, &xt, &yt);
 
     let num = 100;
     let x = Array::linspace(0.0, 4.0, num).into_shape((num, 1)).unwrap();
