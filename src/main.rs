@@ -1,4 +1,4 @@
-use likelib::gaussian_process::*;
+use likelyopt::gaussian_process::*;
 
 fn main() {
     use ndarray::{array, Array};
