@@ -1,4 +1,5 @@
 use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray_stats::DeviationExt;
 
 pub struct NormalizedMatrix {
     pub data: Array2<f64>,
@@ -116,6 +117,20 @@ pub fn squared_exponential(
     r
 }
 
+pub fn pdist(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array1<f64> {
+    let n = x.nrows();
+    let size: usize = (n - 1) * n / 2;
+    let mut res: Array1<f64> = Array1::zeros(size);
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let a = x.slice(s![i, ..]);
+            let b = x.slice(s![j, ..]);
+            res[i + j - 1] = a.l2_dist(&b).unwrap();
+        }
+    }
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,5 +198,16 @@ mod tests {
             [0.9048374180359595]
         ];
         assert!(abs_diff_eq!(res[[4, 0]], expected[[4, 0]], epsilon = 1e-6));
+    }
+
+    #[test]
+    fn test_pdist() {
+        let x = array![[1., 0., 0.], [0., 1., 0.], [0., 2., 0.]];
+        let expected = array![1.41421356, 2.23606798, 1.];
+        let actual = pdist(&x);
+        println!("{:?}", actual);
+        for i in 0..3 {
+            assert!(abs_diff_eq!(actual[i], expected[i], epsilon = 1e-6));
+        }
     }
 }

@@ -11,3 +11,6 @@ Cargo.lock
 
 # ignore generated .npy
 *.npy
+
+# vscode
+.vscode/
