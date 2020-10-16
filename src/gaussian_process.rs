@@ -268,14 +268,14 @@ pub fn reduced_likelihood(
     let reduced_likelihood = Likelihood {
         value: -sigma2.sum() * det_r,
         sigma2: sigma2 * ytrain.std.mapv(|v| v.powf(2.0)),
-        beta: beta,
+        beta,
         gamma: c_mx
             .t()
             .solve_triangular(UPLO::Upper, Diag::NonUnit, &rho)
             .unwrap(),
-        c_mx: c_mx,
-        ft_mx: ft_mx,
-        g_mx: g_mx,
+        c_mx,
+        ft_mx,
+        g_mx,
     };
     Some(reduced_likelihood)
 }
