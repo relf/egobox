@@ -60,7 +60,7 @@ impl LHS {
                 // See description of PhiP_exchange procedure
                 for j in 0..j_range {
                     l_x.push(lhs_.to_owned());
-                    l_phip.push(self._phip_exchange(&l_x[j], modulo, phip, p));
+                    l_phip.push(self._phip_exchange(&mut l_x[j], modulo, phip, p));
                 }
 
                 let lphip = Array::from_shape_vec((1, l_phip.len()), l_phip);
@@ -120,11 +120,12 @@ impl LHS {
 
     pub fn _phip_exchange(
         &self,
-        mut x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        x: &mut ArrayBase<impl Data<Elem = f64> + ndarray::DataMut, Ix2>,
         k: usize,
         phip: f64,
         p: f64,
     ) -> f64 {
+        // Choose two random rows (points)
         let mut rng = thread_rng();
         let mut i1 = rng.gen_range(0, x.nrows());
         let mut i2 = rng.gen_range(0, x.nrows());
@@ -132,6 +133,7 @@ impl LHS {
             i2 = rng.gen_range(0, x.nrows());
         }
 
+        // Compute new phip
         let mut x_rest = Array2::zeros((x.nrows() - 2, x.ncols()));
         let mut row_i = 0;
         for (i, row) in x.axis_iter(Axis(0)).enumerate() {
@@ -155,6 +157,15 @@ impl LHS {
         let mut res = (d1.mapv(|v| f64::powf(v, -p)) - dist1.mapv(|v| f64::powf(v, -p))).sum();
         res += (d2.mapv(|v| f64::powf(v, -p)) - dist2.mapv(|v| f64::powf(v, -p))).sum();
         res = f64::powf(f64::powf(phip, p) + res, 1. / p);
+
+        // Exchange rows
+        if i2 < i1 {
+            std::mem::swap(&mut i1, &mut i2);
+        }
+        let mut it = x.axis_iter_mut(Axis(0));
+        ndarray::Zip::from(it.nth(i1).unwrap())
+            .and(it.nth(i2 - (i1 + 1)).unwrap())
+            .apply(std::mem::swap);
 
         res
     }
@@ -198,7 +209,7 @@ mod tests {
         let lhs = LHS::new(&xlimits);
         let k = 1;
         let phip = 7.290525742903316;
-        let p0 = array![
+        let mut p0 = array![
             [0.09674143, 0.84426416],
             [0.4810236, 0.15567728],
             [0.90804981, 0.74706188],
@@ -206,7 +217,7 @@ mod tests {
             [0.54482131, 0.30729966]
         ];
         let p = 10.;
-        let res = lhs._phip_exchange(&p0, k, phip, p);
+        let res = lhs._phip_exchange(&mut p0, k, phip, p);
         println!("res={}", res);
     }
 }
