@@ -131,10 +131,36 @@ pub fn pdist(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array1<f64> {
     res
 }
 
+pub fn cdist(
+    xa: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    xb: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) -> Array2<f64> {
+    let ma = xa.nrows();
+    let mb = xb.nrows();
+    let na = xa.ncols();
+    let nb = xb.ncols();
+    if na != nb {
+        panic!(
+            "cdist: operands should have same nb of columns. Found {} and {}",
+            na, nb
+        );
+    }
+    let mut res = Array2::zeros((ma, mb));
+    for i in 0..ma {
+        for j in 0..mb {
+            let a = xa.slice(s![i, ..]);
+            let b = xb.slice(s![j, ..]);
+            res[[i, j]] = a.l2_dist(&b).unwrap();
+        }
+    }
+
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::abs_diff_eq;
+    use approx::assert_abs_diff_eq;
     use ndarray::{arr1, array};
 
     #[test]
@@ -197,7 +223,7 @@ mod tests {
             [0.6703200460356393],
             [0.9048374180359595]
         ];
-        assert!(abs_diff_eq!(res[[4, 0]], expected[[4, 0]], epsilon = 1e-6));
+        assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }
 
     #[test]
@@ -205,9 +231,23 @@ mod tests {
         let x = array![[1., 0., 0.], [0., 1., 0.], [0., 2., 0.]];
         let expected = array![1.41421356, 2.23606798, 1.];
         let actual = pdist(&x);
-        println!("{:?}", actual);
-        for i in 0..3 {
-            assert!(abs_diff_eq!(actual[i], expected[i], epsilon = 1e-6));
-        }
+        assert_abs_diff_eq!(actual, expected, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_cdist() {
+        let a = array![
+            [35.0456, -85.2672],
+            [35.1174, -89.9711],
+            [35.9728, -83.9422],
+            [36.1667, -86.7833]
+        ];
+        let expected = array![
+            [0., 4.7044, 1.6172, 1.8856],
+            [4.7044, 0., 6.0893, 3.3561],
+            [1.6172, 6.0893, 0., 2.8477],
+            [1.8856, 3.3561, 2.8477, 0.]
+        ];
+        assert_abs_diff_eq!(cdist(&a, &a), expected, epsilon = 1e-4);
     }
 }
