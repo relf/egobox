@@ -1,4 +1,5 @@
 use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray_stats::DeviationExt;
 
 pub struct NormalizedMatrix {
     pub data: Array2<f64>,
@@ -116,10 +117,52 @@ pub fn squared_exponential(
     r
 }
 
+pub fn pdist(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array1<f64> {
+    let n = x.nrows();
+    let size: usize = (n - 1) * n / 2;
+    let mut res: Array1<f64> = Array1::zeros(size);
+    let mut k = 0;
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let a = x.slice(s![i, ..]);
+            let b = x.slice(s![j, ..]);
+            res[k] = a.l2_dist(&b).unwrap();
+            k += 1;
+        }
+    }
+    res
+}
+
+pub fn cdist(
+    xa: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    xb: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) -> Array2<f64> {
+    let ma = xa.nrows();
+    let mb = xb.nrows();
+    let na = xa.ncols();
+    let nb = xb.ncols();
+    if na != nb {
+        panic!(
+            "cdist: operands should have same nb of columns. Found {} and {}",
+            na, nb
+        );
+    }
+    let mut res = Array2::zeros((ma, mb));
+    for i in 0..ma {
+        for j in 0..mb {
+            let a = xa.slice(s![i, ..]);
+            let b = xb.slice(s![j, ..]);
+            res[[i, j]] = a.l2_dist(&b).unwrap();
+        }
+    }
+
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::abs_diff_eq;
+    use approx::assert_abs_diff_eq;
     use ndarray::{arr1, array};
 
     #[test]
@@ -182,6 +225,31 @@ mod tests {
             [0.6703200460356393],
             [0.9048374180359595]
         ];
-        assert!(abs_diff_eq!(res[[4, 0]], expected[[4, 0]], epsilon = 1e-6));
+        assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_pdist() {
+        let x = array![[1., 0., 0.], [0., 1., 0.], [0., 2., 0.], [3., 4., 5.]];
+        let expected = array![1.41421356, 2.23606798, 6.70820393, 1., 6.55743852, 6.164414];
+        let actual = pdist(&x);
+        assert_abs_diff_eq!(actual, expected, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_cdist() {
+        let a = array![
+            [35.0456, -85.2672],
+            [35.1174, -89.9711],
+            [35.9728, -83.9422],
+            [36.1667, -86.7833]
+        ];
+        let expected = array![
+            [0., 4.7044, 1.6172, 1.8856],
+            [4.7044, 0., 6.0893, 3.3561],
+            [1.6172, 6.0893, 0., 2.8477],
+            [1.8856, 3.3561, 2.8477, 0.]
+        ];
+        assert_abs_diff_eq!(cdist(&a, &a), expected, epsilon = 1e-4);
     }
 }

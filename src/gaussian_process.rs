@@ -81,10 +81,7 @@ impl GaussianProcess {
         }
     }
 
-    pub fn predict_values(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
+    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
         let r = self._compute_correlation(&x);
         // Compute the regression function
         let f = constant(x);
@@ -95,10 +92,7 @@ impl GaussianProcess {
         &y_ * &self.ytrain.std + &self.ytrain.mean
     }
 
-    pub fn predict_variances(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
+    pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
         let r = self._compute_correlation(&x);
         let lh = &self.hyper_params.likelihood;
 
@@ -181,10 +175,7 @@ impl GaussianProcess {
         })
     }
 
-    fn _compute_correlation(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
+    fn _compute_correlation(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
         let n_obs = x.nrows();
         let n_features = x.ncols();
 
@@ -200,7 +191,7 @@ impl GaussianProcess {
         }
         // Compute the correlation function
         let r = squared_exponential(&self.hyper_params.theta, &dx);
-        r.into_shape((n_obs, nt)).unwrap()
+        r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 }
 
