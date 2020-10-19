@@ -121,11 +121,13 @@ pub fn pdist(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array1<f64> {
     let n = x.nrows();
     let size: usize = (n - 1) * n / 2;
     let mut res: Array1<f64> = Array1::zeros(size);
+    let mut k = 0;
     for i in 0..n {
         for j in (i + 1)..n {
             let a = x.slice(s![i, ..]);
             let b = x.slice(s![j, ..]);
-            res[i + j - 1] = a.l2_dist(&b).unwrap();
+            res[k] = a.l2_dist(&b).unwrap();
+            k += 1;
         }
     }
     res
@@ -228,8 +230,8 @@ mod tests {
 
     #[test]
     fn test_pdist() {
-        let x = array![[1., 0., 0.], [0., 1., 0.], [0., 2., 0.]];
-        let expected = array![1.41421356, 2.23606798, 1.];
+        let x = array![[1., 0., 0.], [0., 1., 0.], [0., 2., 0.], [3., 4., 5.]];
+        let expected = array![1.41421356, 2.23606798, 6.70820393, 1., 6.55743852, 6.164414];
         let actual = pdist(&x);
         assert_abs_diff_eq!(actual, expected, epsilon = 1e-6);
     }
@@ -249,5 +251,11 @@ mod tests {
             [1.8856, 3.3561, 2.8477, 0.]
         ];
         assert_abs_diff_eq!(cdist(&a, &a), expected, epsilon = 1e-4);
+    }
+
+    #[test]
+    fn test_powf() {
+        let p = f64::powf(-3., 0.1);
+        println!("{}", p);
     }
 }
