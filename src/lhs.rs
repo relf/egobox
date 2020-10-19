@@ -47,20 +47,26 @@ impl LHS {
             Some(seed) => StdRng::from_seed([seed; 32]),
         };
         let doe = match &self.kind {
-            LHSKind::Classic => self._normalized_classic_lhs(ns),
+            LHSKind::Classic => self._normalized_classic_lhs(ns, &mut rng),
             LHSKind::Centered => self._normalized_centered_lhs(ns, &mut rng),
             LHSKind::Optimized => {
-                let doe = self._normalized_classic_lhs(ns);
+                let doe = self._normalized_classic_lhs(ns, &mut rng);
                 let nx = self.xlimits.ncols();
                 let outer_loop = cmp::min((1.5 * nx as f64) as usize, 30);
                 let inner_loop = cmp::min(20 * nx, 100);
-                self._maximin_ese(&doe, outer_loop, inner_loop)
+                self._maximin_ese(&doe, outer_loop, inner_loop, &mut rng)
             }
         };
         doe
     }
 
-    fn _maximin_ese(&self, lhs: &Array2<f64>, outer_loop: usize, inner_loop: usize) -> Array2<f64> {
+    fn _maximin_ese(
+        &self,
+        lhs: &Array2<f64>,
+        outer_loop: usize,
+        inner_loop: usize,
+        mut rng: &mut StdRng,
+    ) -> Array2<f64> {
         // hard-coded params
         let j_range = 20;
         let p = 10.;
@@ -88,7 +94,7 @@ impl LHS {
                 // See description of phip_swap procedure
                 for j in 0..j_range {
                     l_x.push(Box::new(lhs_own.to_owned()));
-                    let php = self._phip_swap(&mut l_x[j], modulo, phip, p);
+                    let php = self._phip_swap(&mut l_x[j], modulo, phip, p, &mut rng);
                     l_phip.push(php);
                 }
 
@@ -96,7 +102,6 @@ impl LHS {
                 let k = lphip.argmin().unwrap();
                 let phip_try = lphip[k];
                 // Threshold of acceptance
-                let mut rng = thread_rng();
                 if phip_try - phip <= t * rng.gen::<f64>() {
                     phip = phip_try;
                     n_acpt = n_acpt + 1.;
@@ -137,9 +142,16 @@ impl LHS {
         f64::powf(pdist(lhs).mapv(|v| f64::powf(v, -p)).sum(), 1. / p)
     }
 
-    fn _phip_swap(&self, x: &mut Array2<f64>, k: usize, phip: f64, p: f64) -> f64 {
+    fn _phip_swap(
+        &self,
+        x: &mut Array2<f64>,
+        k: usize,
+        phip: f64,
+        p: f64,
+        rng: &mut StdRng,
+    ) -> f64 {
         // Choose two random rows
-        let mut rng = thread_rng();
+        //let mut rng = thread_rng();
         let i1 = rng.gen_range(0, x.nrows());
         let mut i2 = rng.gen_range(0, x.nrows());
         while i2 == i1 {
@@ -176,11 +188,11 @@ impl LHS {
         res
     }
 
-    fn _normalized_classic_lhs(&self, ns: usize) -> Array2<f64> {
+    fn _normalized_classic_lhs(&self, ns: usize, mut rng: &mut StdRng) -> Array2<f64> {
         let nx = self.xlimits.ncols();
         let cut = Array::linspace(0., 1., ns + 1);
 
-        let u = Array::random((ns, nx), Uniform::new(0., 1.));
+        let u = Array::random_using((ns, nx), Uniform::new(0., 1.), &mut rng);
         let a = cut.slice(s![..ns]).to_owned();
         let b = cut.slice(s![1..(ns + 1)]);
         let mut rdpoints = Array::zeros((ns, nx));
@@ -191,7 +203,6 @@ impl LHS {
             rdpoints.slice_mut(s![.., j]).assign(&val)
         }
         let mut lhs = Array::zeros((ns, nx));
-        let mut rng = thread_rng();
         for j in 0..nx {
             rdpoints.as_slice_mut().unwrap().shuffle(&mut rng);
             let colj = rdpoints.slice(s![.., j]);
@@ -227,15 +238,31 @@ mod tests {
     #[test]
     fn test_lhs() {
         let xlimits = arr2(&[[5, 10], [0, 1]]);
-        let lhs = LHS::new(&xlimits);
-        let doe = lhs.make_samples(5);
+        let lhs = LHS::new(&xlimits).seed(42);
+        let expected = array![
+            [0.7469666483536377, 0.8238500574762035],
+            [0.5101797254970719, 0.017195175833716592],
+            [0.9549501400999194, 0.09563297669359822],
+            [0.485299292483157, 0.485299292483157],
+            [0.017195175833716592, 0.6020438469393489]
+        ];
+        let actual = lhs.make_samples(5);
+        assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
     #[test]
     fn test_classic_lhs() {
         let xlimits = arr2(&[[5, 10], [0, 1]]);
-        let lhs = LHS::new(&xlimits).kind(LHSKind::Classic);
-        let doe = lhs.make_samples(5);
+        let lhs = LHS::new(&xlimits).kind(LHSKind::Classic).seed(42);
+        let expected = array![
+            [0.7469666483536377, 0.8238500574762035],
+            [0.5101797254970719, 0.485299292483157],
+            [0.9549501400999194, 0.09563297669359822],
+            [0.485299292483157, 0.017195175833716592],
+            [0.017195175833716592, 0.6020438469393489]
+        ];
+        let actual = lhs.make_samples(5);
+        assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
     #[test]
@@ -266,6 +293,7 @@ mod tests {
             [0.6500000000000001, 0.6500000000000001]
         ];
         let p = 10.;
-        let res = lhs._phip_swap(&mut p0, k, phip, p);
+        let mut rng = StdRng::from_entropy();
+        lhs._phip_swap(&mut p0, k, phip, p, &mut rng);
     }
 }
