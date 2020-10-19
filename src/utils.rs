@@ -252,10 +252,4 @@ mod tests {
         ];
         assert_abs_diff_eq!(cdist(&a, &a), expected, epsilon = 1e-4);
     }
-
-    #[test]
-    fn test_powf() {
-        let p = f64::powf(-3., 0.1);
-        println!("{}", p);
-    }
 }
