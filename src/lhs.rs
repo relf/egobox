@@ -1,8 +1,8 @@
 use crate::utils::{cdist, pdist};
 use ndarray::{s, Array, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::{
-    rand::rngs::StdRng, rand::seq::SliceRandom, rand::thread_rng, rand::Rng, rand::SeedableRng,
-    rand_distr::Uniform, RandomExt,
+    rand::rngs::StdRng, rand::seq::SliceRandom, rand::Rng, rand::SeedableRng, rand_distr::Uniform,
+    RandomExt,
 };
 use ndarray_stats::QuantileExt;
 use std::cmp;
@@ -31,17 +31,17 @@ impl LHS {
         }
     }
 
-    pub fn seed(mut self, seed: u8) -> LHS {
+    pub fn seed(mut self, seed: u8) -> Self {
         self.seed = Some(seed);
         self
     }
 
-    pub fn kind(mut self, kind: LHSKind) -> LHS {
+    pub fn kind(mut self, kind: LHSKind) -> Self {
         self.kind = kind;
         self
     }
 
-    pub fn make_samples(&self, ns: usize) -> Array2<f64> {
+    pub fn sample(&self, ns: usize) -> Array2<f64> {
         let mut rng = match self.seed {
             None => StdRng::from_entropy(),
             Some(seed) => StdRng::from_seed([seed; 32]),
@@ -246,7 +246,7 @@ mod tests {
             [0.485299292483157, 0.485299292483157],
             [0.017195175833716592, 0.6020438469393489]
         ];
-        let actual = lhs.make_samples(5);
+        let actual = lhs.sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
@@ -261,7 +261,7 @@ mod tests {
             [0.485299292483157, 0.017195175833716592],
             [0.017195175833716592, 0.6020438469393489]
         ];
-        let actual = lhs.make_samples(5);
+        let actual = lhs.sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
@@ -270,7 +270,7 @@ mod tests {
         let xlimits = arr2(&[[5, 10], [0, 1]]);
         let lhs = LHS::new(&xlimits).kind(LHSKind::Centered).seed(42);
         let expected = array![[0.5, 0.5], [0.7, 0.9], [0.9, 0.1], [0.1, 0.7], [0.3, 0.3]];
-        let actual = lhs.make_samples(5);
+        let actual = lhs.sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
