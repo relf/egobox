@@ -6,6 +6,7 @@ use ndarray_rand::{
 };
 use ndarray_stats::QuantileExt;
 use std::cmp;
+use std::time::{Duration, Instant};
 
 enum LHSKind {
     Classic,
@@ -50,8 +51,11 @@ impl LHS {
             LHSKind::Classic => self._normalized_classic_lhs(ns, &mut rng),
             LHSKind::Centered => self._normalized_centered_lhs(ns, &mut rng),
             LHSKind::Optimized => {
+                let start = Instant::now();
                 let doe = self._normalized_classic_lhs(ns, &mut rng);
-                let nx = self.xlimits.ncols();
+                let duration = start.elapsed();
+                println!("Time elapsed in classic LHS is: {:?}", duration);
+                let nx = self.xlimits.nrows();
                 let outer_loop = cmp::min((1.5 * nx as f64) as usize, 30);
                 let inner_loop = cmp::min(20 * nx, 100);
                 self._maximin_ese(&doe, outer_loop, inner_loop, &mut rng)
@@ -85,6 +89,7 @@ impl LHS {
             let mut n_acpt = 0.;
             let mut n_imp = 0.;
 
+            let start = Instant::now();
             for i in 0..inner_loop {
                 let modulo = (i + 1) % nx;
                 let mut l_x: Vec<Box<Array2<f64>>> = Vec::new();
@@ -97,7 +102,6 @@ impl LHS {
                     let php = self._phip_swap(&mut l_x[j], modulo, phip, p, &mut rng);
                     l_phip.push(php);
                 }
-
                 let lphip = Array::from_shape_vec(l_phip.len(), l_phip).unwrap();
                 let k = lphip.argmin().unwrap();
                 let phip_try = lphip[k];
@@ -105,19 +109,26 @@ impl LHS {
                 if phip_try - phip <= t * rng.gen::<f64>() {
                     phip = phip_try;
                     n_acpt = n_acpt + 1.;
-                    lhs_own.assign(&(*l_x[k]));
+                    //lhs_own.assign(&(*l_x[k]));
+                    lhs_own = *l_x[k].to_owned();
 
                     // best plan retained
                     if phip < phip_best {
-                        lhs_best.assign(&lhs_own);
+                        // lhs_best.assign(&lhs_own);
+                        lhs_best = lhs_own.to_owned();
                         phip_best = phip;
                         n_imp = n_imp + 1.;
                     }
                 }
             }
-
-            let p_accpt = n_acpt / inner_loop as f64; // probability of acceptance
-            let p_imp = n_imp / inner_loop as f64; // probability of improvement
+            println!(
+                "Time elapsed in inner loop is: {:?} inner={} jrange={}",
+                start.elapsed(),
+                inner_loop,
+                j_range
+            );
+            let p_accpt = n_acpt / (inner_loop as f64); // probability of acceptance
+            let p_imp = n_imp / (inner_loop as f64); // probability of improvement
 
             if phip_best - phip < tol {
                 if p_accpt >= 0.1 && p_imp < p_accpt {
@@ -133,8 +144,8 @@ impl LHS {
                     t = 0.9 * t
                 }
             }
+            println!("t={}", t);
         }
-
         lhs_best
     }
 
@@ -174,9 +185,9 @@ impl LHS {
         let m2 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i2..i2 + 1, k])).map(|v| v * v);
 
         let mut d1 = dist1.mapv(|v| v * v) - &m1 + &m2;
-        d1 = d1.mapv(|v| f64::sqrt(v));
+        d1 = d1.mapv(f64::sqrt);
         let mut d2 = dist2.mapv(|v| v * v) + &m1 - &m2;
-        d2 = d2.mapv(|v| f64::sqrt(v));
+        d2 = d2.mapv(f64::sqrt);
 
         let mut res = (d1.mapv(|v| f64::powf(v, -p)) - dist1.mapv(|v| f64::powf(v, -p))).sum();
         res += (d2.mapv(|v| f64::powf(v, -p)) - dist2.mapv(|v| f64::powf(v, -p))).sum();
@@ -184,12 +195,11 @@ impl LHS {
 
         // swap points
         x.swap([i1, k], [i2, k]);
-
         res
     }
 
     fn _normalized_classic_lhs(&self, ns: usize, mut rng: &mut StdRng) -> Array2<f64> {
-        let nx = self.xlimits.ncols();
+        let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
         let u = Array::random_using((ns, nx), Uniform::new(0., 1.), &mut rng);
@@ -212,7 +222,7 @@ impl LHS {
     }
 
     pub fn _normalized_centered_lhs(&self, ns: usize, mut rng: &mut StdRng) -> Array2<f64> {
-        let nx = self.xlimits.ncols();
+        let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
         let u = Array::random((ns, nx), Uniform::new(0., 1.));
@@ -234,6 +244,7 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use ndarray::{arr2, array};
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_lhs() {
@@ -248,6 +259,16 @@ mod tests {
         ];
         let actual = lhs.sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_lhs_speed() {
+        let start = Instant::now();
+        let xlimits = arr2(&[[0, 1], [0, 1]]);
+        let lhs = LHS::new(&xlimits);
+        let actual = lhs.sample(1000);
+        let duration = start.elapsed();
+        println!("Time elapsed in optimized LHS is: {:?}", duration);
     }
 
     #[test]
@@ -276,7 +297,7 @@ mod tests {
 
     #[test]
     fn test_phip_swap() {
-        let xlimits = arr2(&[[5, 10], [0, 1]]);
+        let xlimits = arr2(&[[0, 1], [0, 1]]);
         let lhs = LHS::new(&xlimits);
         let k = 1;
         let phip = 7.290525742903316;
@@ -294,6 +315,6 @@ mod tests {
         ];
         let p = 10.;
         let mut rng = StdRng::from_entropy();
-        lhs._phip_swap(&mut p0, k, phip, p, &mut rng);
+        let res = lhs._phip_swap(&mut p0, k, phip, p, &mut rng);
     }
 }
