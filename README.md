@@ -1,7 +1,5 @@
-![tests](https://github.com/relf/likelib/workflows/tests/badge.svg)
+![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)
 
-# likelyopt
+# egobox
 
-_... because the optimum is likely to be there._
-
-Rust library dedicated to Bayesian Optimization freely inspired from algorithms in [SMT](https://github.com/SMTorg/smt). 
+Rust toolbox dedicated to algorithms related to efficient global optimization and freely inspired from [SMT](https://github.com/SMTorg/smt). 

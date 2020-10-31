@@ -1,4 +1,4 @@
-use likelyopt::gaussian_process::*;
+use egobox::gaussian_process::*;
 
 fn main() {
     use ndarray::{array, Array};
