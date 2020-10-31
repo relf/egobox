@@ -141,14 +141,16 @@ impl GaussianProcess {
             Target::Minimize,
             (),
         );
+        let mut index = 0;
         for i in 0..theta0.len() {
+            index = i; // cannot use i in closure directly: it is undefined in closures when compiling in release mode.
             let cstr_low = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
                 // -(x[i] - f64::log10(1e-6))
-                -x[i] - 6.
+                -x[index] - 6.
             };
             let cstr_up = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
                 // -(f64::log10(100.) - x[i])
-                x[i] - 2.
+                x[index] - 2.
             };
 
             optimizer
