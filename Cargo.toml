@@ -4,20 +4,33 @@ version = "0.1.0"
 authors = ["relf <remi.lafage@onera.fr>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[target.'cfg(windows)'.dependencies]
-ndarray = "0.13.1"
+# # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# [target.'cfg(windows)'.dependencies]
+# ndarray = "0.13.1"
 
-[target.'cfg(unix)'.dependencies]
-ndarray = { version = "0.13.1", features = ["blas"] }
-blas-src = { version = "0.6.0", default-features = false, features = ["openblas"] }
-openblas-src = { version = "0.9.0", default-features = false, features = ["cblas"] }
+# [target.'cfg(unix)'.dependencies]
+# ndarray = { version = "0.13.1", features = ["blas"] }
+# blas-src = { version = "0.6.0", default-features = false, features = ["openblas"] }
+# openblas-src = { version = "0.9.0", default-features = false, features = ["cblas"] }
+
+[features]
+default = ["tests-openblas-system"]
+tests-openblas-system = ["openblas-src/system"]
+tests-openblas-build = ["openblas-src/cblas", "openblas-src/lapacke"]
 
 [dependencies]
-ndarray-linalg = { version = "0.12.1", features = ["openblas"] }
+ndarray = { version = "0.13", features = ["rayon", "approx"]}
+ndarray-linalg = "0.12"
 ndarray-stats = "0.3"
-ndarray-npy = "0.6"
 ndarray_einsum_beta = "0.5"
 ndarray-rand = "0.11"
-approx = "0.3"
+ndarray-npy = { version = "0.5", default-features = false }
+linfa-clustering = { version="0.1.0", path="../linfa/linfa-clustering", default-features = false }
 nlopt = "0.5"
+rand_isaac = "0.2"
+
+[dev-dependencies]
+openblas-src = { version = "0.9", default-features = false }
+criterion = "0.3"
+serde_json = "1"
+approx = "0.3"
