@@ -9,12 +9,11 @@ fn main() {
     // write_npy("xtrain.npy", xt).expect("Failed to write .npy file");
     // write_npy("ytrain.npy", yt).expect("Failed to write .npy file");
 
-    let config = GaussianProcessConfig::default();
-    let krg = GaussianProcess::fit(config, &xt, &yt);
+    let gp = GaussianProcess::params().fit(&xt, &yt);
 
     let num = 100;
     let x = Array::linspace(0.0, 4.0, num).into_shape((num, 1)).unwrap();
-    let y = krg.predict_values(&x);
+    let y = gp.predict_values(&x);
     // write_npy("xvalid.npy", x).expect("Failed to write .npy file");
     // write_npy("yvalid.npy", y).expect("Failed to write .npy file");
 }

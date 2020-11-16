@@ -7,11 +7,18 @@ use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
 use nlopt::*;
 
-pub struct GaussianProcessConfigBuilder {
+#[derive(Clone)]
+pub struct GpHyperParams {
     initial_theta: f64,
 }
 
-impl GaussianProcessConfigBuilder {
+impl GpHyperParams {
+    pub fn new() -> GpHyperParams {
+        GpHyperParams {
+            initial_theta: 1e-2,
+        }
+    }
+
     /// Set initial value for theta hyper parameter.
     ///
     /// During training process, the internal optimization
@@ -20,118 +27,26 @@ impl GaussianProcessConfigBuilder {
         self.initial_theta = initial_theta;
         self
     }
-
-    /// Return an instance of `GaussianProcessConfig` after
-    /// having performed validation checks on all the specified hyper parameters.
-    ///
-    /// **Panics** if any of the validation checks fails.
-    pub fn build(self) -> GaussianProcessConfig {
-        GaussianProcessConfig::build(self.initial_theta)
-    }
 }
 
-#[derive(Clone)]
-pub struct GaussianProcessConfig {
-    initial_theta: f64,
-}
-
-impl GaussianProcessConfig {
-    pub fn new(initial_theta: f64) -> GaussianProcessConfigBuilder {
-        GaussianProcessConfigBuilder { initial_theta }
-    }
-
-    pub fn default() -> Self {
-        GaussianProcessConfig {
-            initial_theta: 0.01,
-        }
-    }
-
-    fn build(initial_theta: f64) -> Self {
-        GaussianProcessConfig { initial_theta }
-    }
-}
-
-pub struct HyperParamaters {
-    theta: Array1<f64>,
-    likelihood: Likelihood,
-}
-
-pub struct GaussianProcess {
-    xtrain: NormalizedMatrix,
-    ytrain: NormalizedMatrix,
-    hyper_params: HyperParamaters,
-}
-
-impl GaussianProcess {
+impl GpHyperParams {
     pub fn fit(
-        config: GaussianProcessConfig,
+        self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Self {
+    ) -> GaussianProcess {
         let xtrain = NormalizedMatrix::new(x);
         let ytrain = NormalizedMatrix::new(y);
 
-        let theta0 = Array1::from_elem(xtrain.ncols(), config.initial_theta);
-        let hyper_params = Self::optimize_hyper_parameters(&theta0, &xtrain, &ytrain).unwrap();
-
-        GaussianProcess {
-            xtrain,
-            ytrain,
-            hyper_params,
-        }
-    }
-
-    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        let r = self._compute_correlation(&x);
-        // Compute the regression function
-        let f = constant(x);
-        // Scaled predictor
-        let y_ = &f.dot(&self.hyper_params.likelihood.beta)
-            + &r.dot(&self.hyper_params.likelihood.gamma);
-        // Predictor
-        &y_ * &self.ytrain.std + &self.ytrain.mean
-    }
-
-    pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        let r = self._compute_correlation(&x);
-        let lh = &self.hyper_params.likelihood;
-
-        let tr = r.t().to_owned();
-        let rt = lh
-            .c_mx
-            .solve_triangular(UPLO::Lower, Diag::NonUnit, &tr)
-            .unwrap();
-        let lhs = lh.ft_mx.t().dot(&rt) - constant(x).t();
-        let u = lh
-            .g_mx
-            .t()
-            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)
-            .unwrap();
-
-        let a = &lh.sigma2;
-        let b = 1.0 - rt.mapv(|v| v * v).sum_axis(Axis(0)) + u.mapv(|v| v * v).sum_axis(Axis(0));
-        let mse = einsum("i,j->ji", &[a, &b])
-            .unwrap()
-            .into_shape((x.shape()[0], 1))
-            .unwrap();
-
-        // Mean Squared Error might be slightly negative depending on
-        // machine precision: set to zero in that case
-        mse.mapv(|v| if v < 0. { 0. } else { v })
-    }
-
-    pub fn optimize_hyper_parameters(
-        theta0: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-        xtrain: &NormalizedMatrix,
-        ytrain: &NormalizedMatrix,
-    ) -> Option<HyperParamaters> {
+        let theta0 = Array1::from_elem(xtrain.ncols(), self.initial_theta);
         let x_distances = DistanceMatrix::new(&xtrain.data);
+        let y_train = ytrain.clone();
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
             let theta =
                 Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
                     .unwrap();
-            let r = reduced_likelihood(&theta, &x_distances, &ytrain).unwrap();
+            let r = reduced_likelihood(&theta, &x_distances, &y_train).unwrap();
             -r.value
         };
         let mut optimizer = Nlopt::new(
@@ -171,12 +86,64 @@ impl GaussianProcess {
         }
         let opt_theta = arr1(&theta_vec).mapv(|v| base.powf(v));
         let likelihood = reduced_likelihood(&opt_theta, &x_distances, &ytrain).unwrap();
-        Some(HyperParamaters {
+        GaussianProcess {
             theta: opt_theta,
             likelihood,
-        })
+            xtrain,
+            ytrain,
+        }
+    }
+}
+
+pub struct GaussianProcess {
+    theta: Array1<f64>,
+    likelihood: Likelihood,
+    xtrain: NormalizedMatrix,
+    ytrain: NormalizedMatrix,
+}
+
+impl GaussianProcess {
+    pub fn params() -> GpHyperParams {
+        GpHyperParams::new()
     }
 
+    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+        let r = self._compute_correlation(&x);
+        // Compute the regression function
+        let f = constant(x);
+        // Scaled predictor
+        let y_ = &f.dot(&self.likelihood.beta) + &r.dot(&self.likelihood.gamma);
+        // Predictor
+        &y_ * &self.ytrain.std + &self.ytrain.mean
+    }
+
+    pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+        let r = self._compute_correlation(&x);
+        let lh = &self.likelihood;
+
+        let tr = r.t().to_owned();
+        let rt = lh
+            .c_mx
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &tr)
+            .unwrap();
+        let lhs = lh.ft_mx.t().dot(&rt) - constant(x).t();
+        let u = lh
+            .g_mx
+            .t()
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)
+            .unwrap();
+
+        let a = &lh.sigma2;
+        let b = 1.0 - rt.mapv(|v| v * v).sum_axis(Axis(0)) + u.mapv(|v| v * v).sum_axis(Axis(0));
+        let mse = einsum("i,j->ji", &[a, &b])
+            .unwrap()
+            .into_shape((x.shape()[0], 1))
+            .unwrap();
+
+        // Mean Squared Error might be slightly negative depending on
+        // machine precision: set to zero in that case
+        mse.mapv(|v| if v < 0. { 0. } else { v })
+    }
     fn _compute_correlation(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
         let n_obs = x.nrows();
         let n_features = x.ncols();
@@ -192,7 +159,7 @@ impl GaussianProcess {
             dx.slice_mut(s![a..b, ..]).assign(&dxrows);
         }
         // Compute the correlation function
-        let r = squared_exponential(&self.hyper_params.theta, &dx);
+        let r = squared_exponential(&self.theta, &dx);
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 }
@@ -260,7 +227,7 @@ pub fn reduced_likelihood(
     let sigma2 = rho_sqr.sum_axis(Axis(0)) / x_distances.n_obs as f64;
     let reduced_likelihood = Likelihood {
         value: -sigma2.sum() * det_r,
-        sigma2: sigma2 * ytrain.std.mapv(|v| v.powf(2.0)),
+        sigma2: sigma2 * &ytrain.std.mapv(|v| v.powf(2.0)),
         beta,
         gamma: c_mx
             .t()
@@ -280,14 +247,13 @@ mod tests {
     use ndarray::{arr2, array};
 
     #[test]
-    fn test_train_and_predict_values() {
+    fn test_gp_fit_and_predict() {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
-        let config = GaussianProcessConfig::default();
-        let kriging = GaussianProcess::fit(config, &xt, &yt);
+        let gp = GaussianProcess::params().fit(&xt, &yt);
         let expected = 5.62341325;
-        assert_abs_diff_eq!(expected, kriging.hyper_params.theta[0], epsilon = 1e-6);
-        let yvals = kriging.predict_values(&arr2(&[[1.0], [2.1]]));
+        assert_abs_diff_eq!(expected, gp.theta[0], epsilon = 1e-6);
+        let yvals = gp.predict_values(&arr2(&[[1.0], [2.1]]));
         let expected_y = arr2(&[[0.6856779931432053], [1.4484644169993859]]);
         assert_abs_diff_eq!(expected_y, yvals, epsilon = 1e-6);
     }
@@ -295,11 +261,10 @@ mod tests {
     fn test_train_and_predict_variances() {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
-        let config = GaussianProcessConfig::default();
-        let kriging = GaussianProcess::fit(config, &xt, &yt);
+        let gp = GaussianProcess::params().fit(&xt, &yt);
         let expected = 5.62341325;
-        assert_abs_diff_eq!(expected, kriging.hyper_params.theta[0], epsilon = 1e-6);
-        let yvars = kriging.predict_variances(&arr2(&[[1.0], [2.1]]));
+        assert_abs_diff_eq!(expected, gp.theta[0], epsilon = 1e-6);
+        let yvars = gp.predict_variances(&arr2(&[[1.0], [2.1]]));
         let expected_vars = arr2(&[[0.03422835527498675], [0.014105203477142668]]);
         assert_abs_diff_eq!(expected_vars, yvars, epsilon = 1e-6);
     }

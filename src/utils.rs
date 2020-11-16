@@ -6,6 +6,15 @@ pub struct NormalizedMatrix {
     pub mean: Array1<f64>,
     pub std: Array1<f64>,
 }
+impl Clone for NormalizedMatrix {
+    fn clone(&self) -> NormalizedMatrix {
+        NormalizedMatrix {
+            data: self.data.to_owned(),
+            mean: self.mean.to_owned(),
+            std: self.std.to_owned(),
+        }
+    }
+}
 
 impl NormalizedMatrix {
     pub fn new(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> NormalizedMatrix {
