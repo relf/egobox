@@ -1,4 +1,7 @@
-use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray::{s, Array1, Array2, ArrayBase, ArrayView1, ArrayView2, Axis, Data, Ix1, Ix2};
+use ndarray_linalg::cholesky::*;
+use ndarray_rand::rand_distr::{Distribution, StandardNormal};
+use ndarray_rand::{rand::Rng, RandomExt};
 use ndarray_stats::DeviationExt;
 
 pub struct NormalizedMatrix {
@@ -166,6 +169,31 @@ pub fn cdist(
     }
 
     res
+}
+
+pub struct MultivariateNormal {
+    pub mean: Array1<f64>,
+    pub covariance: Array2<f64>,
+    /// Lower triangular matrix (Cholesky decomposition of the coviariance matrix)
+    lower: Array2<f64>,
+}
+impl MultivariateNormal {
+    pub fn new(mean: &ArrayView1<f64>, covariance: &ArrayView2<f64>) -> Self {
+        let lower = covariance.cholesky(UPLO::Lower).unwrap();
+        MultivariateNormal {
+            mean: mean.to_owned(),
+            covariance: covariance.to_owned(),
+            lower,
+        }
+    }
+}
+impl Distribution<Array1<f64>> for MultivariateNormal {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Array1<f64> {
+        // standard normal distribution
+        let res = Array1::random_using(self.mean.shape()[0], StandardNormal, rng);
+        // use Cholesky decomposition to obtain a sample of our general multivariate normal
+        self.mean.clone() + self.lower.view().dot(&res)
+    }
 }
 
 #[cfg(test)]
