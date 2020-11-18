@@ -1,3 +1,4 @@
+use crate::errors::{GpError, Result};
 use crate::utils::{constant, squared_exponential, DistanceMatrix, NormalizedMatrix};
 use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 use ndarray_einsum_beta::*;
@@ -46,8 +47,16 @@ impl GpHyperParams {
             let theta =
                 Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
                     .unwrap();
-            let r = reduced_likelihood(&theta, &x_distances, &y_train).unwrap();
-            -r.value
+            match reduced_likelihood(&theta, &x_distances, &y_train) {
+                Ok(r) => {
+                    // println!("GP lkh OK: {}", -r.value);
+                    -r.value
+                }
+                Err(err) => {
+                    // println!("GP lkh ERROR: {:?}", err);
+                    f64::INFINITY
+                }
+            }
         };
         let mut optimizer = Nlopt::new(
             Algorithm::Cobyla,
@@ -82,7 +91,7 @@ impl GpHyperParams {
             .unwrap();
         let res = optimizer.optimize(&mut theta_vec);
         if let Err(e) = res {
-            println!("{:?}", e);
+            println!("ERROR OPTIM in GP {:?}", e);
         }
         let opt_theta = arr1(&theta_vec).mapv(|v| base.powf(v));
         let likelihood = reduced_likelihood(&opt_theta, &x_distances, &ytrain).unwrap();
@@ -179,14 +188,16 @@ pub fn reduced_likelihood(
     theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     x_distances: &DistanceMatrix,
     ytrain: &NormalizedMatrix,
-) -> Option<Likelihood> {
+) -> Result<Likelihood> {
+    let nugget = 10.0 * f64::EPSILON;
     let r = squared_exponential(theta, &x_distances.d);
-    let mut r_mx: Array2<f64> = Array2::eye(x_distances.n_obs);
+    let mut r_mx: Array2<f64> = Array2::<f64>::eye(x_distances.n_obs).mapv(|v| (v + v * nugget));
     for (i, ij) in x_distances.d_indices.outer_iter().enumerate() {
         r_mx[[ij[0], ij[1]]] = r[[i, 0]];
         r_mx[[ij[1], ij[0]]] = r[[i, 0]];
     }
-    let c_mx = r_mx.cholesky(UPLO::Lower).unwrap();
+    // println!("r_mx = {:?}", r_mx);
+    let c_mx = r_mx.cholesky(UPLO::Lower)?;
     let ft_mx = c_mx
         .solve_triangular(UPLO::Lower, Diag::NonUnit, &x_distances.f)
         .unwrap();
@@ -198,13 +209,16 @@ pub fn reduced_likelihood(
         let (_, sv_f, _) = x_distances.f.svd(false, false).unwrap();
         let cond_f_mx = sv_f[0] / sv_f[sv_f.len() - 1];
         if cond_f_mx > 1e15 {
-            panic!(
+            return Err(GpError::LikelihoodError(
                 "F is too ill conditioned. Poor combination \
                    of regression model and observations."
-            );
+                    .to_string(),
+            ));
         } else {
             // ft_mx is too ill conditioned, get out (try different theta)
-            return None;
+            return Err(GpError::LikelihoodError(
+                "ft_mx is too ill conditioned, try another theta again".to_string(),
+            ));
         }
     }
 
@@ -237,7 +251,7 @@ pub fn reduced_likelihood(
         ft_mx,
         g_mx,
     };
-    Some(reduced_likelihood)
+    Ok(reduced_likelihood)
 }
 
 #[cfg(test)]
