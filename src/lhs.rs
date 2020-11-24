@@ -266,7 +266,8 @@ mod tests {
         let start = Instant::now();
         let xlimits = arr2(&[[0, 1], [0, 1]]);
         let lhs = LHS::new(&xlimits);
-        let actual = lhs.sample(1000);
+        let n = 10;
+        let actual = lhs.sample(n);
         let duration = start.elapsed();
         println!("Time elapsed in optimized LHS is: {:?}", duration);
     }
