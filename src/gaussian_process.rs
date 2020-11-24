@@ -1,4 +1,4 @@
-use crate::errors::{GpError, Result};
+use crate::errors::{EgoboxError, Result};
 use crate::utils::{constant, squared_exponential, DistanceMatrix, NormalizedMatrix};
 use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 use ndarray_einsum_beta::*;
@@ -209,14 +209,14 @@ pub fn reduced_likelihood(
         let (_, sv_f, _) = x_distances.f.svd(false, false).unwrap();
         let cond_f_mx = sv_f[0] / sv_f[sv_f.len() - 1];
         if cond_f_mx > 1e15 {
-            return Err(GpError::LikelihoodError(
+            return Err(EgoboxError::LikelihoodError(
                 "F is too ill conditioned. Poor combination \
                    of regression model and observations."
                     .to_string(),
             ));
         } else {
             // ft_mx is too ill conditioned, get out (try different theta)
-            return Err(GpError::LikelihoodError(
+            return Err(EgoboxError::LikelihoodError(
                 "ft_mx is too ill conditioned, try another theta again".to_string(),
             ));
         }
