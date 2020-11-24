@@ -1,8 +1,9 @@
+use crate::errors::{EgoboxError, Result};
+use crate::gaussian_mixture::GaussianMixture;
 use crate::gaussian_process::GaussianProcess;
 use crate::utils::MultivariateNormal;
-use linfa_clustering::{
-    dataset::Dataset, dataset::Float, traits::Fit, traits::Predict, GaussianMixtureModel,
-};
+use linfa::{traits::Fit, traits::Predict, Dataset, Float};
+use linfa_clustering::GaussianMixtureModel;
 use ndarray::{arr1, s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_linalg::{Lapack, Scalar};
 use ndarray_rand::rand::{Rng, SeedableRng};
@@ -49,7 +50,7 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> MixtureOfExperts {
+    ) -> Result<MixtureOfExperts> {
         let nx = xt.ncols();
         let data = stack(Axis(1), &[xt.view(), yt.view()]).unwrap();
         let mut xtrain = data.slice(s![.., ..nx]).to_owned();
@@ -62,16 +63,18 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         }
 
         // Cluster inputs
-        let dataset = Dataset::from(xtrain);
+        let dataset = Dataset::from(data);
         let gmm = GaussianMixtureModel::params(self.n_clusters)
+            .with_n_runs(20)
+            .with_reg_covariance(1e-6)
             .with_rng(self.rng.clone())
             .fit(&dataset)
-            .expect("X training data clustering");
+            .expect("Training data clustering");
 
         // Fit GPs on clustered data
         // let dists = self._create_cluster_distributions(&gmm);
         let dataset_clustering = gmm.predict(dataset);
-        let clusters = self.sort_by_cluster(dataset_clustering, ytrain);
+        let clusters = self.sort_by_cluster(dataset_clustering);
         let mut gps = Vec::new();
         for cluster in clusters {
             let xtrain = cluster.slice(s![.., ..nx]);
@@ -79,7 +82,12 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
             gps.push(GaussianProcess::params().fit(&xtrain, &ytrain));
         }
 
-        MixtureOfExperts { gps, gmm }
+        // GMX for prediction
+        let weights = gmm.weights().to_owned();
+        let means = gmm.means().slice(s![.., ..nx]).to_owned();
+        let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
+        let gmx = GaussianMixture::new(weights, means, covariances)?;
+        Ok(MixtureOfExperts { gps, gmx })
     }
 
     fn is_heaviside_optimization_enabled(&self) -> bool {
@@ -89,14 +97,9 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         }
     }
 
-    fn sort_by_cluster(
-        &self,
-        dataset: Dataset<Array2<f64>, Array1<usize>>,
-        y: Array2<f64>,
-    ) -> Vec<Array2<f64>> {
+    fn sort_by_cluster(&self, dataset: Dataset<Array2<f64>, Array1<usize>>) -> Vec<Array2<f64>> {
         let mut res: Vec<Array2<f64>> = Vec::new();
-        let nx = dataset.records.ncols();
-        let ny = y.ncols();
+        let ndim = dataset.records.ncols();
         for n in 0..self.n_clusters {
             let cluster_data_indices: Array1<usize> = dataset
                 .targets
@@ -105,12 +108,11 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
                 .filter_map(|(k, i)| if *i == n { Some(k) } else { None })
                 .collect();
             let nsamples = cluster_data_indices.len();
-            let mut subset = Array2::zeros((nsamples, nx + ny));
+            let mut subset = Array2::zeros((nsamples, ndim));
             Zip::from(subset.genrows_mut())
                 .and(&cluster_data_indices)
                 .apply(|mut r, &k| {
-                    r.slice_mut(s![..nx]).assign(&dataset.records.row(k));
-                    r.slice_mut(s![nx..nx + ny]).assign(&y.row(k));
+                    r.assign(&dataset.records.row(k));
                 });
             res.push(subset);
         }
@@ -155,7 +157,7 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
 
 struct MixtureOfExperts {
     gps: Vec<GaussianProcess>,
-    gmm: GaussianMixtureModel<f64>,
+    gmx: GaussianMixture<f64>,
 }
 
 impl MixtureOfExperts {
@@ -168,7 +170,8 @@ impl MixtureOfExperts {
     }
 
     pub fn _predict_hard(&self, observations: &Array2<f64>) -> Array2<f64> {
-        let clustering = self.gmm.predict(observations);
+        let clustering = self.gmx.predict(observations);
+        println!("clustering records={:?}", &clustering);
         let mut pred = Array2::<f64>::zeros((observations.nrows(), 1));
         Zip::from(pred.genrows_mut())
             .and(observations.genrows())
@@ -206,14 +209,15 @@ mod tests {
 
     #[test]
     fn test_moe() {
-        let mut rng = Isaac64Rng::seed_from_u64(42);
+        let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
+        println!("{:?}", xt);
         let yt = function_test_1d(&xt);
-        let moe = MoeHyperParams::new(3).with_rng(rng).fit(&xt, &yt);
-        let x = array![[0.9]];
-        let y = moe.predict(&x);
+        let moe = MoeHyperParams::new(3)
+            .with_rng(rng)
+            .fit(&xt, &yt)
+            .expect("MOE fitted");
         let obs = Array::linspace(0., 1., 100).insert_axis(Axis(1));
-        println!("obs={:?}", obs);
         let preds = moe.predict(&obs);
         write_npy("obs.npy", obs).expect("obs saved");
         write_npy("preds.npy", preds).expect("pred saved");
