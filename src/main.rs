@@ -1,4 +1,5 @@
 use egobox::gaussian_process::*;
+use egobox::utils::*;
 
 fn main() {
     use ndarray::{array, Array};
@@ -9,11 +10,13 @@ fn main() {
     // write_npy("xtrain.npy", xt).expect("Failed to write .npy file");
     // write_npy("ytrain.npy", yt).expect("Failed to write .npy file");
 
-    let gp = GaussianProcess::params().fit(&xt, &yt);
+    let gp = GaussianProcess::<ConstantMean>::params(ConstantMean::new())
+        .fit(&xt, &yt)
+        .expect("GP fit");
 
     let num = 100;
     let x = Array::linspace(0.0, 4.0, num).into_shape((num, 1)).unwrap();
-    let y = gp.predict_values(&x);
+    let y = gp.predict_values(&x).expect("GP prediction");
     // write_npy("xvalid.npy", x).expect("Failed to write .npy file");
     // write_npy("yvalid.npy", y).expect("Failed to write .npy file");
 }

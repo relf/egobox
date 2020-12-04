@@ -1,7 +1,7 @@
-use crate::errors::{EgoboxError, Result};
+use crate::errors::Result;
 use crate::gaussian_mixture::GaussianMixture;
 use crate::gaussian_process::GaussianProcess;
-use crate::utils::MultivariateNormal;
+use crate::utils::{ConstantMean, MultivariateNormal};
 use linfa::{traits::Fit, traits::Predict, Dataset, Float};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{arr1, s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
@@ -79,7 +79,11 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         for cluster in clusters {
             let xtrain = cluster.slice(s![.., ..nx]);
             let ytrain = cluster.slice(s![.., nx..nx + 1]);
-            gps.push(GaussianProcess::params().fit(&xtrain, &ytrain));
+            gps.push(
+                GaussianProcess::<ConstantMean>::params(ConstantMean::new())
+                    .fit(&xtrain, &ytrain)
+                    .expect("GP fit error"),
+            );
         }
 
         // GMX for prediction
@@ -156,7 +160,7 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
 }
 
 struct MixtureOfExperts {
-    gps: Vec<GaussianProcess>,
+    gps: Vec<GaussianProcess<ConstantMean>>,
     gmx: GaussianMixture<f64>,
 }
 
@@ -165,11 +169,11 @@ impl MixtureOfExperts {
         MoeHyperParams::new(n_clusters)
     }
 
-    pub fn predict(&self, x: &Array2<f64>) -> Array2<f64> {
+    pub fn predict(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
         self._predict_hard(x)
     }
 
-    pub fn _predict_hard(&self, observations: &Array2<f64>) -> Array2<f64> {
+    pub fn _predict_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(observations);
         println!("clustering records={:?}", &clustering);
         let mut pred = Array2::<f64>::zeros((observations.nrows(), 1));
@@ -177,9 +181,14 @@ impl MixtureOfExperts {
             .and(observations.genrows())
             .and(&clustering)
             .apply(|mut y, x, &c| {
-                y.assign(&self.gps[c].predict_values(&x.insert_axis(Axis(1))).row(0));
+                y.assign(
+                    &self.gps[c]
+                        .predict_values(&x.insert_axis(Axis(1)))
+                        .unwrap()
+                        .row(0),
+                );
             });
-        pred
+        Ok(pred)
     }
 }
 
@@ -218,7 +227,7 @@ mod tests {
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict(&obs);
+        let preds = moe.predict(&obs).expect("MOE prediction");
         write_npy("obs.npy", obs).expect("obs saved");
         write_npy("preds.npy", preds).expect("pred saved");
     }

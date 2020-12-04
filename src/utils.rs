@@ -51,7 +51,7 @@ impl NormalizedMatrix {
 pub struct DistanceMatrix {
     pub d: Array2<f64>,
     pub d_indices: Array2<usize>,
-    pub f: Array2<f64>,
+    //pub f: Array2<f64>,
     pub n_obs: usize,
     pub n_features: usize,
 }
@@ -59,14 +59,14 @@ pub struct DistanceMatrix {
 impl DistanceMatrix {
     pub fn new(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> DistanceMatrix {
         let (d, d_indices) = Self::_l1_cross_distances(&x);
-        let f = constant(&x);
+        //let f = constant(&x);
         let n_obs = x.nrows();
         let n_features = x.ncols();
 
         DistanceMatrix {
             d: d.to_owned(),
             d_indices: d_indices.to_owned(),
-            f: f.to_owned(),
+            //f: f.to_owned(),
             n_obs,
             n_features,
         }
@@ -105,6 +105,26 @@ impl DistanceMatrix {
         d = d.mapv(f64::abs);
 
         (d, indices)
+    }
+}
+
+pub trait RegressionModel {
+    fn eval(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64>;
+}
+
+#[derive(Clone)]
+pub struct ConstantMean();
+
+impl RegressionModel for ConstantMean {
+    fn eval(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+        let n_obs = x.shape()[0];
+        Array2::<f64>::ones((n_obs, 1))
+    }
+}
+
+impl ConstantMean {
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
