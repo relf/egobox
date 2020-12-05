@@ -1,3 +1,4 @@
+extern crate openblas_src;
 use egobox::gaussian_process::*;
 use egobox::utils::*;
 
