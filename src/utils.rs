@@ -117,8 +117,7 @@ pub struct ConstantMean();
 
 impl RegressionModel for ConstantMean {
     fn eval(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        let n_obs = x.shape()[0];
-        Array2::<f64>::ones((n_obs, 1))
+        Array2::<f64>::ones((x.nrows(), 1))
     }
 }
 
@@ -128,25 +127,37 @@ impl ConstantMean {
     }
 }
 
-pub fn constant(
-    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
-    let n_obs = x.shape()[0];
-    Array2::<f64>::ones((n_obs, 1))
+pub trait CorrelationModel {
+    fn eval(
+        &self,
+        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Array2<f64>;
 }
 
-pub fn squared_exponential(
-    theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-    d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-) -> ArrayBase<impl Data<Elem = f64>, Ix2> {
-    let (n_obs, n_features) = (d.nrows(), d.ncols());
-    let mut r = Array2::zeros((n_obs, 1));
+#[derive(Clone)]
+pub struct SquaredExponentialKernel();
 
-    let t = theta.view().into_shape((1, n_features)).unwrap();
-    let d2 = d.mapv(|v| v * v);
-    let m = (d2 * t).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
-    r.slice_mut(s![.., 0]).assign(&m);
-    r
+impl CorrelationModel for SquaredExponentialKernel {
+    fn eval(
+        &self,
+        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Array2<f64> {
+        let (n_obs, n_features) = (d.nrows(), d.ncols());
+        let mut r = Array2::zeros((n_obs, 1));
+        let t = theta.view().into_shape((1, n_features)).unwrap();
+        let d2 = d.mapv(|v| v * v);
+        let m = (d2 * t).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+        r.slice_mut(s![.., 0]).assign(&m);
+        r
+    }
+}
+
+impl SquaredExponentialKernel {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
 pub fn pdist(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array1<f64> {
@@ -269,7 +280,7 @@ mod tests {
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let dm = DistanceMatrix::new(&xt);
-        let res = squared_exponential(&arr1(&[0.1]), &dm.d);
+        let res = SquaredExponentialKernel::new().eval(&arr1(&[0.1]), &dm.d);
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],
@@ -288,6 +299,7 @@ mod tests {
     #[test]
     fn test_pdist() {
         let x = array![[1., 0., 0.], [0., 1., 0.], [0., 2., 0.], [3., 4., 5.]];
+        #[allow(clippy::approx_constant)]
         let expected = array![1.41421356, 2.23606798, 6.70820393, 1., 6.55743852, 6.164414];
         let actual = pdist(&x);
         assert_abs_diff_eq!(actual, expected, epsilon = 1e-6);

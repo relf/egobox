@@ -1,11 +1,10 @@
 use crate::errors::Result;
 use crate::gaussian_mixture::GaussianMixture;
 use crate::gaussian_process::GaussianProcess;
-use crate::utils::{ConstantMean, MultivariateNormal};
-use linfa::{traits::Fit, traits::Predict, Dataset, Float};
+use crate::utils::{ConstantMean, MultivariateNormal, SquaredExponentialKernel};
+use linfa::{traits::Fit, traits::Predict, Dataset};
 use linfa_clustering::GaussianMixtureModel;
-use ndarray::{arr1, s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
-use ndarray_linalg::{Lapack, Scalar};
+use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
@@ -80,9 +79,12 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
             let xtrain = cluster.slice(s![.., ..nx]);
             let ytrain = cluster.slice(s![.., nx..nx + 1]);
             gps.push(
-                GaussianProcess::<ConstantMean>::params(ConstantMean::new())
-                    .fit(&xtrain, &ytrain)
-                    .expect("GP fit error"),
+                GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
+                    ConstantMean::new(),
+                    SquaredExponentialKernel::new(),
+                )
+                .fit(&xtrain, &ytrain)
+                .expect("GP fit error"),
             );
         }
 
@@ -160,7 +162,7 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
 }
 
 struct MixtureOfExperts {
-    gps: Vec<GaussianProcess<ConstantMean>>,
+    gps: Vec<GaussianProcess<ConstantMean, SquaredExponentialKernel>>,
     gmx: GaussianMixture<f64>,
 }
 

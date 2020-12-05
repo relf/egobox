@@ -6,7 +6,7 @@ use ndarray_rand::{
 };
 use ndarray_stats::QuantileExt;
 use std::cmp;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 enum LHSKind {
     Classic,
@@ -108,7 +108,7 @@ impl LHS {
                 // Threshold of acceptance
                 if phip_try - phip <= t * rng.gen::<f64>() {
                     phip = phip_try;
-                    n_acpt = n_acpt + 1.;
+                    n_acpt += 1.;
                     //lhs_own.assign(&(*l_x[k]));
                     lhs_own = *l_x[k].to_owned();
 
@@ -117,7 +117,7 @@ impl LHS {
                         // lhs_best.assign(&lhs_own);
                         lhs_best = lhs_own.to_owned();
                         phip_best = phip;
-                        n_imp = n_imp + 1.;
+                        n_imp += 1.;
                     }
                 }
             }
@@ -132,17 +132,15 @@ impl LHS {
 
             if phip_best - phip < tol {
                 if p_accpt >= 0.1 && p_imp < p_accpt {
-                    t = 0.8 * t
-                } else if p_accpt >= 0.1 && p_imp == p_accpt {
+                    t *= 0.8
+                } else if p_accpt >= 0.1 && (p_imp - p_accpt).abs() < f64::EPSILON {
                 } else {
-                    t = t / 0.8
+                    t /= 0.8
                 }
+            } else if p_accpt <= 0.1 {
+                t /= 0.7
             } else {
-                if p_accpt <= 0.1 {
-                    t = t / 0.7
-                } else {
-                    t = 0.9 * t
-                }
+                t *= 0.9
             }
             println!("t={}", t);
         }
@@ -244,7 +242,7 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use ndarray::{arr2, array};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_lhs() {

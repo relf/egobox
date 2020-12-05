@@ -10,9 +10,12 @@ fn main() {
     // write_npy("xtrain.npy", xt).expect("Failed to write .npy file");
     // write_npy("ytrain.npy", yt).expect("Failed to write .npy file");
 
-    let gp = GaussianProcess::<ConstantMean>::params(ConstantMean::new())
-        .fit(&xt, &yt)
-        .expect("GP fit");
+    let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
+        ConstantMean::new(),
+        SquaredExponentialKernel::new(),
+    )
+    .fit(&xt, &yt)
+    .expect("GP fit");
 
     let num = 100;
     let x = Array::linspace(0.0, 4.0, num).into_shape((num, 1)).unwrap();
