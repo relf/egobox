@@ -159,26 +159,26 @@ impl SquaredExponentialKernel {
     }
 }
 
-pub fn pdist(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array1<f64> {
-    let n = x.nrows();
-    let size: usize = (n - 1) * n / 2;
-    let mut res: Array1<f64> = Array1::zeros(size);
+pub fn pdist<F: Float>(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array1<F> {
+    let nrows = x.nrows();
+    let size: usize = (nrows - 1) * nrows / 2;
+    let mut res: Array1<F> = Array1::zeros(size);
     let mut k = 0;
-    for i in 0..n {
-        for j in (i + 1)..n {
+    for i in 0..nrows {
+        for j in (i + 1)..nrows {
             let a = x.slice(s![i, ..]);
             let b = x.slice(s![j, ..]);
-            res[k] = a.l2_dist(&b).unwrap();
+            res[k] = F::from(a.l2_dist(&b).unwrap()).unwrap();
             k += 1;
         }
     }
     res
 }
 
-pub fn cdist(
-    xa: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    xb: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-) -> Array2<f64> {
+pub fn cdist<F: Float>(
+    xa: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    xb: &ArrayBase<impl Data<Elem = F>, Ix2>,
+) -> Array2<F> {
     let ma = xa.nrows();
     let mb = xb.nrows();
     let na = xa.ncols();
@@ -194,7 +194,7 @@ pub fn cdist(
         for j in 0..mb {
             let a = xa.slice(s![i, ..]);
             let b = xb.slice(s![j, ..]);
-            res[[i, j]] = a.l2_dist(&b).unwrap();
+            res[[i, j]] = F::from(a.l2_dist(&b).unwrap()).unwrap();
         }
     }
 
