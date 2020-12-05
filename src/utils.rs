@@ -1,16 +1,18 @@
+use linfa::Float;
 use ndarray::{s, Array1, Array2, ArrayBase, ArrayView1, ArrayView2, Axis, Data, Ix1, Ix2};
 use ndarray_linalg::cholesky::*;
 use ndarray_rand::rand_distr::{Distribution, StandardNormal};
 use ndarray_rand::{rand::Rng, RandomExt};
 use ndarray_stats::DeviationExt;
 
-pub struct NormalizedMatrix {
-    pub data: Array2<f64>,
-    pub mean: Array1<f64>,
-    pub std: Array1<f64>,
+pub struct NormalizedMatrix<F: Float> {
+    pub data: Array2<F>,
+    pub mean: Array1<F>,
+    pub std: Array1<F>,
 }
-impl Clone for NormalizedMatrix {
-    fn clone(&self) -> NormalizedMatrix {
+
+impl<F: Float> Clone for NormalizedMatrix<F> {
+    fn clone(&self) -> NormalizedMatrix<F> {
         NormalizedMatrix {
             data: self.data.to_owned(),
             mean: self.mean.to_owned(),
@@ -19,8 +21,8 @@ impl Clone for NormalizedMatrix {
     }
 }
 
-impl NormalizedMatrix {
-    pub fn new(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> NormalizedMatrix {
+impl<F: Float> NormalizedMatrix<F> {
+    pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> NormalizedMatrix<F> {
         let (data, mean, std) = Self::normalize(x);
         NormalizedMatrix {
             data: data.to_owned(),
@@ -34,48 +36,45 @@ impl NormalizedMatrix {
     }
 
     fn normalize(
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> (
-        ArrayBase<impl Data<Elem = f64>, Ix2>,
-        ArrayBase<impl Data<Elem = f64>, Ix1>,
-        ArrayBase<impl Data<Elem = f64>, Ix1>,
+        ArrayBase<impl Data<Elem = F>, Ix2>,
+        ArrayBase<impl Data<Elem = F>, Ix1>,
+        ArrayBase<impl Data<Elem = F>, Ix1>,
     ) {
         let x_mean = x.mean_axis(Axis(0)).unwrap();
-        let x_std = x.std_axis(Axis(0), 1.);
+        let x_std = x.std_axis(Axis(0), F::one());
         let xnorm = (x - &x_mean) / &x_std;
 
         (xnorm, x_mean, x_std)
     }
 }
 
-pub struct DistanceMatrix {
-    pub d: Array2<f64>,
+pub struct DistanceMatrix<F: Float> {
+    pub d: Array2<F>,
     pub d_indices: Array2<usize>,
-    //pub f: Array2<f64>,
     pub n_obs: usize,
     pub n_features: usize,
 }
 
-impl DistanceMatrix {
-    pub fn new(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> DistanceMatrix {
+impl<F: Float> DistanceMatrix<F> {
+    pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> DistanceMatrix<F> {
         let (d, d_indices) = Self::_l1_cross_distances(&x);
-        //let f = constant(&x);
         let n_obs = x.nrows();
         let n_features = x.ncols();
 
         DistanceMatrix {
             d: d.to_owned(),
             d_indices: d_indices.to_owned(),
-            //f: f.to_owned(),
             n_obs,
             n_features,
         }
     }
 
     fn _l1_cross_distances(
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> (
-        ArrayBase<impl Data<Elem = f64>, Ix2>,
+        ArrayBase<impl Data<Elem = F>, Ix2>,
         ArrayBase<impl Data<Elem = usize>, Ix2>,
     ) {
         let n_obs = x.nrows();
@@ -102,7 +101,7 @@ impl DistanceMatrix {
                 - &x.slice(s![k + 1..n_obs, ..]);
             d.slice_mut(s![ll_0..ll_1, ..]).assign(&diff);
         }
-        d = d.mapv(f64::abs);
+        d = d.mapv(|v| v.abs());
 
         (d, indices)
     }

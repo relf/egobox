@@ -1,6 +1,6 @@
 use crate::errors::{EgoboxError, Result};
 use crate::utils::{CorrelationModel, DistanceMatrix, NormalizedMatrix, RegressionModel};
-use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
 use ndarray_linalg::qr::*;
@@ -193,9 +193,9 @@ pub struct GaussianProcess<Mean: RegressionModel, Kernel: CorrelationModel> {
     /// Gaussian process internal fitted params
     inner_params: GpInnerParams,
     /// Training inputs
-    xtrain: NormalizedMatrix,
+    xtrain: NormalizedMatrix<f64>,
     /// Training outputs
-    ytrain: NormalizedMatrix,
+    ytrain: NormalizedMatrix<f64>,
 }
 
 impl<Mean: RegressionModel, Kernel: CorrelationModel> GaussianProcess<Mean, Kernel> {
@@ -270,8 +270,8 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GaussianProcess<Mean, Kern
 pub fn reduced_likelihood(
     fx: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     rxx: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    x_distances: &DistanceMatrix,
-    ytrain: &NormalizedMatrix,
+    x_distances: &DistanceMatrix<f64>,
+    ytrain: &NormalizedMatrix<f64>,
 ) -> Result<(f64, GpInnerParams)> {
     // Compute beta weights of the regression model
     let nugget = 10.0 * f64::EPSILON;
