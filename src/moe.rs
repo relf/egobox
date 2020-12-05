@@ -128,7 +128,7 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
     fn _create_cluster_distributions(
         &self,
         gmm: &GaussianMixtureModel<f64>,
-    ) -> Vec<MultivariateNormal> {
+    ) -> Vec<MultivariateNormal<f64>> {
         let means = gmm.means();
         let h = match self.heaviside_factor {
             Some(factor) => factor,

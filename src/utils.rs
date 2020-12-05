@@ -1,9 +1,10 @@
 use linfa::Float;
 use ndarray::{s, Array1, Array2, ArrayBase, ArrayView1, ArrayView2, Axis, Data, Ix1, Ix2};
-use ndarray_linalg::cholesky::*;
+use ndarray_linalg::{cholesky::*, Lapack, Scalar};
 use ndarray_rand::rand_distr::{Distribution, StandardNormal};
 use ndarray_rand::{rand::Rng, RandomExt};
 use ndarray_stats::DeviationExt;
+use std::marker::PhantomData;
 
 pub struct NormalizedMatrix<F: Float> {
     pub data: Array2<F>,
@@ -201,28 +202,30 @@ pub fn cdist<F: Float>(
     res
 }
 
-pub struct MultivariateNormal {
-    pub mean: Array1<f64>,
-    pub covariance: Array2<f64>,
-    /// Lower triangular matrix (Cholesky decomposition of the coviariance matrix)
-    lower: Array2<f64>,
+pub struct MultivariateNormal<F: Float + Scalar + Lapack> {
+    mean: Array1<F>,
+    covariance_chol: Array2<F>,
 }
-impl MultivariateNormal {
-    pub fn new(mean: &ArrayView1<f64>, covariance: &ArrayView2<f64>) -> Self {
-        let lower = covariance.cholesky(UPLO::Lower).unwrap();
+
+impl<F: Float + Scalar + Lapack> MultivariateNormal<F> {
+    pub fn new(mean: &ArrayView1<F>, covariance: &ArrayView2<F>) -> Self {
+        let covariance_chol = covariance.cholesky(UPLO::Lower).unwrap();
         MultivariateNormal {
             mean: mean.to_owned(),
-            covariance: covariance.to_owned(),
-            lower,
+            covariance_chol,
         }
     }
 }
-impl Distribution<Array1<f64>> for MultivariateNormal {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Array1<f64> {
+impl<F: Float + Scalar + Lapack> Distribution<Array1<F>> for MultivariateNormal<F> {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Array1<F> {
         // standard normal distribution
-        let res = Array1::random_using(self.mean.shape()[0], StandardNormal, rng);
+        let res: Array1<f64> = Array1::random_using(self.mean.shape()[0], StandardNormal, rng);
         // use Cholesky decomposition to obtain a sample of our general multivariate normal
-        self.mean.clone() + self.lower.view().dot(&res)
+        self.mean.clone()
+            + self
+                .covariance_chol
+                .view()
+                .dot(&res.mapv(|v| F::from(v).unwrap()))
     }
 }
 
