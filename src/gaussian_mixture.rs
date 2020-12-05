@@ -4,7 +4,7 @@ use linfa::{
     traits::*,
     Float,
 };
-use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix1, Ix2, Ix3, Zip};
+use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
 use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
 use ndarray_stats::QuantileExt;
 
@@ -38,9 +38,9 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
         let precisions = Self::compute_precisions_full(&precisions_chol);
 
         Ok(GaussianMixture {
-            weights: weights,
-            means: means,
-            covariances: covariances,
+            weights,
+            means,
+            covariances,
             precisions,
             precisions_chol,
         })
@@ -167,7 +167,7 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
         self.estimate_log_gaussian_prob(&observations)
     }
 
-    // Compute the log likelihood in case of the gaussian probabilities
+    // Compute the log LikelihoodComputation in case of the gaussian probabilities
     // log(P(X|Mean, Precision)) = -0.5*(d*ln(2*PI)-ln(det(Precision))-(X-Mean)^t.Precision.(X-Mean)
     fn estimate_log_gaussian_prob<D: Data<Elem = F>>(
         &self,

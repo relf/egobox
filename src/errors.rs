@@ -7,8 +7,8 @@ pub type Result<T> = std::result::Result<T, EgoboxError>;
 /// An error when modeling a GMM algorithm
 #[derive(Debug)]
 pub enum EgoboxError {
-    /// When likelihood computation fails
-    LikelihoodError(String),
+    /// When LikelihoodComputation computation fails
+    LikelihoodComputationError(String),
     /// When linear algebra computation fails
     LinalgError(String),
     /// When clustering fails
@@ -18,8 +18,8 @@ pub enum EgoboxError {
 impl Display for EgoboxError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::LikelihoodError(message) => {
-                write!(f, "Likelihood computation error: {}", message)
+            Self::LikelihoodComputationError(message) => {
+                write!(f, "LikelihoodComputation computation error: {}", message)
             }
             Self::LinalgError(message) => write!(f, "Linear Algebra error: {}", message),
             Self::EmptyCluster(message) => write!(f, "Empty cluster: {}", message),
