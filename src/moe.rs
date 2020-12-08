@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use crate::gaussian_mixture::GaussianMixture;
-use crate::gaussian_process::GaussianProcess;
-use crate::utils::{ConstantMean, MultivariateNormal, SquaredExponentialKernel};
+use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
+use crate::utils::MultivariateNormal;
 use linfa::{traits::Fit, traits::Predict, Dataset};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};

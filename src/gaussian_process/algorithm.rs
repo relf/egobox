@@ -1,5 +1,6 @@
 use crate::errors::{EgoboxError, Result};
-use crate::utils::{CorrelationModel, DistanceMatrix, NormalizedMatrix, RegressionModel};
+use crate::gaussian_process::{CorrelationModel, GpHyperParams, RegressionModel};
+use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
@@ -7,153 +8,6 @@ use ndarray_linalg::qr::*;
 use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
 use nlopt::*;
-
-#[derive(Clone)]
-pub struct GpHyperParams<Mean: RegressionModel, Kernel: CorrelationModel> {
-    /// Parameter of the autocorrelation model
-    theta: f64,
-    /// Regression model representing the mean(x)
-    mean: Mean,
-    /// Correlation model representing the spatial correlation between errors at e(x) and e(x')
-    kernel: Kernel,
-    /// Training inputs
-    xtrain: Array2<f64>,
-    /// Training outputs
-    ytrain: Array2<f64>,
-}
-
-impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel> {
-    pub fn new(mean: Mean, kernel: Kernel) -> GpHyperParams<Mean, Kernel> {
-        GpHyperParams {
-            theta: 1e-2,
-            mean,
-            kernel,
-            xtrain: Array2::default((1, 1)),
-            ytrain: Array2::default((1, 1)),
-        }
-    }
-
-    /// Get starting theta value for optimization
-    pub fn initial_theta(&self) -> f64 {
-        self.theta
-    }
-
-    /// Get mean model  
-    pub fn mean(&self) -> &Mean {
-        &self.mean
-    }
-
-    /// Get correlation kernel k(x, x')
-    pub fn kernel(&self) -> &Kernel {
-        &self.kernel
-    }
-
-    /// Set initial value for theta hyper parameter.
-    ///
-    /// During training process, the internal optimization is started from `initial_theta`.
-    pub fn with_initial_theta(mut self, theta: f64) -> Self {
-        self.theta = theta;
-        self
-    }
-
-    /// Set mean.
-    pub fn with_mean(mut self, mean: Mean) -> Self {
-        self.mean = mean;
-        self
-    }
-
-    /// Set kernel.
-    pub fn with_kernel(mut self, kernel: Kernel) -> Self {
-        self.kernel = kernel;
-        self
-    }
-}
-
-impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel> {
-    pub fn fit(
-        self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<GaussianProcess<Mean, Kernel>> {
-        let xtrain = NormalizedMatrix::new(x);
-        let ytrain = NormalizedMatrix::new(y);
-
-        let theta0 = Array1::from_elem(xtrain.ncols(), self.theta);
-        let x_distances = DistanceMatrix::new(&xtrain.data);
-        let fx = self.mean().eval(x);
-        let y_train = ytrain.clone();
-        let base: f64 = 10.;
-        let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-            let theta =
-                Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
-                    .unwrap();
-            let rxx = self.kernel.eval(&theta, &x_distances.d);
-            match reduced_likelihood(&fx, &rxx, &x_distances, &y_train) {
-                Ok(r) => {
-                    // println!("GP lkh OK: {}", -r.value);
-                    -r.0
-                }
-                Err(_) => {
-                    // println!("GP lkh ERROR: {:?}", err);
-                    f64::INFINITY
-                }
-            }
-        };
-
-        let opt_theta;
-        {
-            // block to drop optimizer and allow self.kernel borrowing after
-            let mut optimizer = Nlopt::new(
-                Algorithm::Cobyla,
-                x_distances.n_features,
-                objfn,
-                Target::Minimize,
-                (),
-            );
-            let mut index;
-            for i in 0..theta0.len() {
-                index = i; // cannot use i in closure directly: it is undefined in closures when compiling in release mode.
-                let cstr_low =
-                    |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-                        // -(x[i] - f64::log10(1e-6))
-                        -x[index] - 6.
-                    };
-                let cstr_up = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-                    // -(f64::log10(100.) - x[i])
-                    x[index] - 2.
-                };
-
-                optimizer
-                    .add_inequality_constraint(cstr_low, (), 1e-2)
-                    .unwrap();
-                optimizer
-                    .add_inequality_constraint(cstr_up, (), 1e-2)
-                    .unwrap();
-            }
-            let mut theta_vec = theta0.mapv(f64::log10).into_raw_vec();
-            optimizer.set_initial_step1(0.5).unwrap();
-            optimizer
-                .set_maxeval(10 * x_distances.n_features as u32)
-                .unwrap();
-            let res = optimizer.optimize(&mut theta_vec);
-            if let Err(e) = res {
-                println!("ERROR OPTIM in GP {:?}", e);
-            }
-            opt_theta = arr1(&theta_vec).mapv(|v| base.powf(v));
-        }
-
-        let rxx = self.kernel.eval(&opt_theta, &x_distances.d);
-        let (_, inner_params) = reduced_likelihood(&fx, &rxx, &x_distances, &ytrain)?;
-        Ok(GaussianProcess {
-            theta: opt_theta,
-            mean: self.mean,
-            kernel: self.kernel,
-            inner_params,
-            xtrain,
-            ytrain,
-        })
-    }
-}
 
 pub struct GpInnerParams {
     /// Gaussian process variance
@@ -183,10 +37,11 @@ impl Default for GpInnerParams {
     }
 }
 
+/// Gaussian
 pub struct GaussianProcess<Mean: RegressionModel, Kernel: CorrelationModel> {
     /// Parameter of the autocorrelation model
     theta: Array1<f64>,
-    /// Regression function
+    /// Regression model
     mean: Mean,
     /// Correlation kernel
     kernel: Kernel,
@@ -267,13 +122,100 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GaussianProcess<Mean, Kern
     }
 }
 
+impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel> {
+    pub fn fit(
+        self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<GaussianProcess<Mean, Kernel>> {
+        let xtrain = NormalizedMatrix::new(x);
+        let ytrain = NormalizedMatrix::new(y);
+
+        let theta0 = Array1::from_elem(xtrain.ncols(), self.initial_theta());
+        let x_distances = DistanceMatrix::new(&xtrain.data);
+        println!("x = {:?}", xtrain.data);
+        println!("distances = {:?}", x_distances);
+        let fx = self.mean().eval(x);
+        let y_train = ytrain.clone();
+        let base: f64 = 10.;
+        let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+            let theta =
+                Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
+                    .unwrap();
+            let rxx = self.kernel().eval(&theta, &x_distances.d);
+            match reduced_likelihood(&fx, &rxx, &x_distances, &y_train) {
+                Ok(r) => {
+                    // println!("GP lkh OK: {}", -r.value);
+                    -r.0
+                }
+                Err(_) => {
+                    // println!("GP lkh ERROR: {:?}", err);
+                    f64::INFINITY
+                }
+            }
+        };
+
+        let opt_theta;
+        {
+            // block to drop optimizer and allow self.kernel borrowing after
+            let mut optimizer = Nlopt::new(
+                Algorithm::Cobyla,
+                x_distances.n_features,
+                objfn,
+                Target::Minimize,
+                (),
+            );
+            let mut index;
+            for i in 0..theta0.len() {
+                index = i; // cannot use i in closure directly: it is undefined in closures when compiling in release mode.
+                let cstr_low =
+                    |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+                        // -(x[i] - f64::log10(1e-6))
+                        -x[index] - 6.
+                    };
+                let cstr_up = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+                    // -(f64::log10(100.) - x[i])
+                    x[index] - 2.
+                };
+
+                optimizer
+                    .add_inequality_constraint(cstr_low, (), 1e-2)
+                    .unwrap();
+                optimizer
+                    .add_inequality_constraint(cstr_up, (), 1e-2)
+                    .unwrap();
+            }
+            let mut theta_vec = theta0.mapv(f64::log10).into_raw_vec();
+            optimizer.set_initial_step1(0.5).unwrap();
+            optimizer
+                .set_maxeval(10 * x_distances.n_features as u32)
+                .unwrap();
+            let res = optimizer.optimize(&mut theta_vec);
+            if let Err(e) = res {
+                println!("ERROR OPTIM in GP {:?}", e);
+            }
+            opt_theta = arr1(&theta_vec).mapv(|v| base.powf(v));
+        }
+
+        let rxx = self.kernel().eval(&opt_theta, &x_distances.d);
+        let (_, inner_params) = reduced_likelihood(&fx, &rxx, &x_distances, &ytrain)?;
+        Ok(GaussianProcess {
+            theta: opt_theta,
+            mean: *self.mean(),
+            kernel: *self.kernel(),
+            inner_params,
+            xtrain,
+            ytrain,
+        })
+    }
+}
+
 pub fn reduced_likelihood(
     fx: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     rxx: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     x_distances: &DistanceMatrix<f64>,
     ytrain: &NormalizedMatrix<f64>,
 ) -> Result<(f64, GpInnerParams)> {
-    // Compute beta weights of the regression model
     let nugget = 10.0 * f64::EPSILON;
 
     // Set up R
@@ -347,7 +289,9 @@ pub fn reduced_likelihood(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{ConstantMean, SquaredExponentialKernel};
+    use crate::gaussian_process::{
+        correlation_models::SquaredExponentialKernel, mean_models::ConstantMean,
+    };
     use approx::assert_abs_diff_eq;
     use ndarray::{arr2, array};
 

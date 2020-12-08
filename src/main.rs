@@ -1,6 +1,5 @@
 extern crate openblas_src;
 use egobox::gaussian_process::*;
-use egobox::utils::*;
 
 fn main() {
     use ndarray::{array, Array};
