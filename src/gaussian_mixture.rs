@@ -14,6 +14,7 @@ pub struct GaussianMixture<F: Float> {
     covariances: Array3<F>,
     precisions: Array3<F>,
     precisions_chol: Array3<F>,
+    heaviside_factor: F,
 }
 
 impl<F: Float> Clone for GaussianMixture<F> {
@@ -24,6 +25,7 @@ impl<F: Float> Clone for GaussianMixture<F> {
             covariances: self.covariances.to_owned(),
             precisions: self.precisions.to_owned(),
             precisions_chol: self.precisions_chol.to_owned(),
+            heaviside_factor: self.heaviside_factor,
         }
     }
 }
@@ -43,6 +45,7 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
             covariances,
             precisions,
             precisions_chol,
+            heaviside_factor: F::one(),
         })
     }
 
@@ -62,13 +65,18 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
         &self.precisions
     }
 
-    pub fn centroids(&self) -> &Array2<F> {
-        self.means()
+    pub fn heaviside_factor(&self) -> F {
+        self.heaviside_factor
     }
 
     pub fn predict_proba<D: Data<Elem = F>>(&self, observations: &ArrayBase<D, Ix2>) -> Array2<F> {
         let (_, log_resp) = self.estimate_log_prob_resp(observations);
         log_resp.mapv(|v| v.exp())
+    }
+
+    pub fn with_heaviside_factor(mut self, heaviside_factor: F) -> Self {
+        self.heaviside_factor = heaviside_factor;
+        self
     }
 
     fn estimate_gaussian_parameters<D: Data<Elem = F>>(
@@ -177,12 +185,14 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
         let n_features = observations.ncols();
         let means = self.means();
         let n_clusters = means.nrows();
+        let factor = self.heaviside_factor().powf(F::from(-0.5).unwrap());
+        let precs = &self.precisions_chol * factor;
         // GmmCovarType = full
         // det(precision_chol) is half of det(precision)
-        let log_det = Self::compute_log_det_cholesky_full(&self.precisions_chol, n_features);
+        let log_det = Self::compute_log_det_cholesky_full(&precs, n_features);
         let mut log_prob: Array2<F> = Array::zeros((n_samples, n_clusters));
         Zip::indexed(means.genrows())
-            .and(self.precisions_chol.outer_iter())
+            .and(precs.outer_iter())
             .apply(|k, mu, prec_chol| {
                 let diff = (&observations.to_owned() - &mu).dot(&prec_chol);
                 log_prob
@@ -236,5 +246,37 @@ impl<F: Float + Lapack + Scalar, D: Data<Elem = F>, T: Targets>
     ) -> Dataset<ArrayBase<D, Ix2>, Array1<usize>> {
         let predicted = self.predict(dataset.records());
         dataset.with_targets(predicted)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate openblas_src;
+
+    use super::*;
+    use approx::assert_abs_diff_eq;
+    use ndarray::{array, Array, Array2};
+    use ndarray_npy::write_npy;
+
+    #[test]
+    fn test_gaussian_mixture() {
+        let weights = array![0.5, 0.5];
+        let means = array![[0., 0.], [4., 4.]];
+        let covs = array![[[3., 0.], [0., 3.]], [[3., 0.], [0., 3.]]];
+        let gmix = GaussianMixture::new(weights, means, covs)
+            .expect("Gaussian mixture creation failed")
+            .with_heaviside_factor(0.99);
+        // let obs = array![[0., 0.], [1., 1.], [2., 2.], [3., 3.], [4., 4.]];
+        // let n = 100;
+        let mut obs = Array2::from_elem((101, 2), 0.);
+        Zip::from(obs.genrows_mut())
+            .and(&Array::linspace(0., 4., 101))
+            .apply(|mut o, &v| o.assign(&array![v, v]));
+        let preds = gmix.predict(&obs);
+        println!("preds = {:?}", preds);
+        let probas = gmix.predict_proba(&obs);
+        println!("probas = {:?}", probas);
+        write_npy("probes.npy", obs).expect("probes saved");
+        write_npy("probas.npy", probas).expect("probas saved");
     }
 }
