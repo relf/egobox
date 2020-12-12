@@ -1,5 +1,5 @@
+use super::gaussian_mixture::GaussianMixture;
 use crate::errors::Result;
-use crate::gaussian_mixture::GaussianMixture;
 use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use crate::utils::MultivariateNormal;
 use linfa::{traits::Fit, traits::Predict, Dataset};
@@ -150,12 +150,9 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         quantile: usize,
     ) -> (Array2<f64>, Array2<f64>) {
         let nsamples = data.nrows();
-        let ndim = data.ncols();
         let indices = Array::range(0., nsamples as f32, quantile as f32).mapv(|v| v as usize);
         let data_test = data.select(Axis(0), indices.as_slice().unwrap());
-        let indices2: Vec<usize> = (0..nsamples)
-            .filter_map(|i| if i % quantile == 0 { None } else { Some(i) })
-            .collect();
+        let indices2: Vec<usize> = (0..nsamples).filter(|i| i % quantile == 0).collect();
         let data_train = data.select(Axis(0), &indices2);
         (data_test, data_train)
     }
@@ -175,9 +172,10 @@ impl MixtureOfExperts {
         self._predict_hard(x)
     }
 
+    pub fn _predict_smooth(&self, observations: &Array2<f64>) -> () {}
+
     pub fn _predict_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(observations);
-        println!("clustering records={:?}", &clustering);
         let mut pred = Array2::<f64>::zeros((observations.nrows(), 1));
         Zip::from(pred.genrows_mut())
             .and(observations.genrows())
