@@ -1,6 +1,7 @@
 use super::gaussian_mixture::GaussianMixture;
 use crate::errors::Result;
 use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
+use crate::mixture_of_experts::{MoeHyperParams, Recombination};
 use crate::utils::MultivariateNormal;
 use linfa::{traits::Fit, traits::Predict, Dataset};
 use linfa_clustering::GaussianMixtureModel;
@@ -8,43 +9,7 @@ use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
-enum Recombination {
-    Hard,
-    Smooth,
-}
-
-struct MoeHyperParams<R: Rng + Clone> {
-    n_clusters: usize,
-    recombination: Recombination,
-    heaviside_factor: Option<f64>,
-    rng: R,
-}
-
-impl MoeHyperParams<Isaac64Rng> {
-    pub fn new(n_clusters: usize) -> MoeHyperParams<Isaac64Rng> {
-        Self::new_with_rng(n_clusters, Isaac64Rng::seed_from_u64(42))
-    }
-
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeHyperParams<R2> {
-        MoeHyperParams {
-            n_clusters: self.n_clusters,
-            recombination: self.recombination,
-            heaviside_factor: self.heaviside_factor,
-            rng,
-        }
-    }
-}
-
 impl<R: Rng + Clone> MoeHyperParams<R> {
-    pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeHyperParams<R> {
-        MoeHyperParams {
-            n_clusters,
-            recombination: Recombination::Hard,
-            heaviside_factor: None,
-            rng,
-        }
-    }
-
     fn fit(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -63,10 +28,10 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
 
         // Cluster inputs
         let dataset = Dataset::from(data);
-        let gmm = GaussianMixtureModel::params(self.n_clusters)
+        let gmm = GaussianMixtureModel::params(self.n_clusters())
             .with_n_runs(20)
             .with_reg_covariance(1e-6)
-            .with_rng(self.rng.clone())
+            .with_rng(self.rng().clone())
             .fit(&dataset)
             .expect("Training data clustering");
 
@@ -97,16 +62,13 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
     }
 
     fn is_heaviside_optimization_enabled(&self) -> bool {
-        match self.heaviside_factor {
-            Some(_) => self.n_clusters > 1,
-            None => false,
-        }
+        self.recombination() == Recombination::Smooth && self.n_clusters() > 1
     }
 
     fn sort_by_cluster(&self, dataset: Dataset<Array2<f64>, Array1<usize>>) -> Vec<Array2<f64>> {
         let mut res: Vec<Array2<f64>> = Vec::new();
         let ndim = dataset.records.ncols();
-        for n in 0..self.n_clusters {
+        for n in 0..self.n_clusters() {
             let cluster_data_indices: Array1<usize> = dataset
                 .targets
                 .iter()
@@ -130,13 +92,10 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         gmm: &GaussianMixtureModel<f64>,
     ) -> Vec<MultivariateNormal<f64>> {
         let means = gmm.means();
-        let h = match self.heaviside_factor {
-            Some(factor) => factor,
-            None => 1.0,
-        };
+        let h = self.heaviside_factor();
         let cov = gmm.covariances().mapv(|v| v * h);
         let mut dists = Vec::new();
-        for k in 0..self.n_clusters {
+        for k in 0..self.n_clusters() {
             let meansk = means.slice(s![k, ..]);
             let covk = cov.slice(s![k, .., ..]);
             let mvn = MultivariateNormal::new(&meansk, &covk);
@@ -201,6 +160,7 @@ mod tests {
     use ndarray_npy::write_npy;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
+    use rand_isaac::Isaac64Rng;
 
     fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
         let mut y = Array2::zeros(x.dim());
