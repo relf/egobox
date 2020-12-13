@@ -69,7 +69,7 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
         self.heaviside_factor
     }
 
-    pub fn predict_proba<D: Data<Elem = F>>(&self, observations: &ArrayBase<D, Ix2>) -> Array2<F> {
+    pub fn predict_probas<D: Data<Elem = F>>(&self, observations: &ArrayBase<D, Ix2>) -> Array2<F> {
         let (_, log_resp) = self.estimate_log_prob_resp(observations);
         log_resp.mapv(|v| v.exp())
     }
@@ -274,7 +274,7 @@ mod tests {
             .apply(|mut o, &v| o.assign(&array![v, v]));
         let preds = gmix.predict(&obs);
         println!("preds = {:?}", preds);
-        let probas = gmix.predict_proba(&obs);
+        let probas = gmix.predict_probas(&obs);
         println!("probas = {:?}", probas);
         write_npy("probes.npy", obs).expect("probes saved");
         write_npy("probas.npy", probas).expect("probas saved");

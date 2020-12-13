@@ -31,7 +31,7 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         let gmm = GaussianMixtureModel::params(self.n_clusters())
             .with_n_runs(20)
             .with_reg_covariance(1e-6)
-            .with_rng(self.rng().clone())
+            .with_rng(self.rng())
             .fit(&dataset)
             .expect("Training data clustering");
 
@@ -58,7 +58,12 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         let means = gmm.means().slice(s![.., ..nx]).to_owned();
         let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
         let gmx = GaussianMixture::new(weights, means, covariances)?;
-        Ok(MixtureOfExperts { gps, gmx })
+        Ok(MixtureOfExperts {
+            recombination: self.recombination(),
+            heaviside_factor: self.heaviside_factor(),
+            gps,
+            gmx,
+        })
     }
 
     fn is_heaviside_optimization_enabled(&self) -> bool {
@@ -118,6 +123,8 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
 }
 
 struct MixtureOfExperts {
+    recombination: Recombination,
+    heaviside_factor: f64,
     gps: Vec<GaussianProcess<ConstantMean, SquaredExponentialKernel>>,
     gmx: GaussianMixture<f64>,
 }
@@ -127,19 +134,51 @@ impl MixtureOfExperts {
         MoeHyperParams::new(n_clusters)
     }
 
-    pub fn predict(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
-        self._predict_hard(x)
+    pub fn nb_clusters(&self) -> usize {
+        self.gps.len()
     }
 
-    pub fn _predict_smooth(&self, observations: &Array2<f64>) -> () {}
+    pub fn recombination(&self) -> Recombination {
+        self.recombination
+    }
+
+    pub fn heaviside_factor(&self) -> f64 {
+        self.heaviside_factor
+    }
+
+    pub fn predict(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        match self.recombination {
+            Recombination::Hard => self._predict_hard(x),
+            Recombination::Smooth => self._predict_smooth(x),
+        }
+    }
+
+    pub fn _predict_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+        let probas = self.gmx.predict_probas(observations);
+        let mut preds = Array1::<f64>::zeros(observations.nrows());
+
+        Zip::from(&mut preds)
+            .and(observations.genrows())
+            .and(probas.genrows())
+            .par_apply(|y, x, p| {
+                let obs = x.clone().insert_axis(Axis(0));
+                let subpreds: Array1<f64> = self
+                    .gps
+                    .iter()
+                    .map(|gp| gp.predict_values(&obs).unwrap()[[0, 0]])
+                    .collect();
+                *y = (subpreds * p).sum();
+            });
+        Ok(preds.insert_axis(Axis(1)))
+    }
 
     pub fn _predict_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(observations);
-        let mut pred = Array2::<f64>::zeros((observations.nrows(), 1));
-        Zip::from(pred.genrows_mut())
+        let mut preds = Array2::<f64>::zeros((observations.nrows(), 1));
+        Zip::from(preds.genrows_mut())
             .and(observations.genrows())
             .and(&clustering)
-            .apply(|mut y, x, &c| {
+            .par_apply(|mut y, x, &c| {
                 y.assign(
                     &self.gps[c]
                         .predict_values(&x.insert_axis(Axis(1)))
@@ -147,7 +186,7 @@ impl MixtureOfExperts {
                         .row(0),
                 );
             });
-        Ok(pred)
+        Ok(preds)
     }
 }
 
@@ -177,10 +216,9 @@ mod tests {
     }
 
     #[test]
-    fn test_moe() {
+    fn test_moe_hard() {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        println!("{:?}", xt);
         let yt = function_test_1d(&xt);
         let moe = MoeHyperParams::new(3)
             .with_rng(rng)
@@ -188,7 +226,34 @@ mod tests {
             .expect("MOE fitted");
         let obs = Array::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict(&obs).expect("MOE prediction");
+        assert_abs_diff_eq!(
+            0.39 * 0.39, // 0.1521
+            moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
+            epsilon = 1e-6
+        );
         write_npy("obs.npy", obs).expect("obs saved");
-        write_npy("preds.npy", preds).expect("pred saved");
+        write_npy("preds.npy", preds).expect("preds saved");
+    }
+
+    #[test]
+    fn test_moe_smooth() {
+        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
+        let yt = function_test_1d(&xt);
+        let moe = MoeHyperParams::new(3)
+            .with_recombination(Recombination::Smooth)
+            .with_heaviside_factor(0.5)
+            .with_rng(rng)
+            .fit(&xt, &yt)
+            .expect("MOE fitted");
+        let obs = Array::linspace(0., 1., 100).insert_axis(Axis(1));
+        let preds = moe.predict(&obs).expect("MOE prediction");
+        assert_abs_diff_eq!(
+            0.92310107,
+            moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
+            epsilon = 1e-6
+        );
+        write_npy("obs_smooth.npy", obs).expect("obs saved");
+        write_npy("preds_smooth.npy", preds).expect("preds saved");
     }
 }

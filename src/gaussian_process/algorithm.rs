@@ -133,8 +133,6 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
 
         let theta0 = Array1::from_elem(xtrain.ncols(), self.initial_theta());
         let x_distances = DistanceMatrix::new(&xtrain.data);
-        println!("x = {:?}", xtrain.data);
-        println!("distances = {:?}", x_distances);
         let fx = self.mean().eval(x);
         let y_train = ytrain.clone();
         let base: f64 = 10.;
