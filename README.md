@@ -1,4 +1,4 @@
-![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)
+[![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
 
 # egobox
 
