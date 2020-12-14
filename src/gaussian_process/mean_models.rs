@@ -14,7 +14,7 @@ impl RegressionModel for ConstantMean {
 }
 
 impl ConstantMean {
-    pub fn new() -> Self {
+    pub fn default() -> Self {
         Self {}
     }
 }

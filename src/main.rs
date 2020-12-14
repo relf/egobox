@@ -11,8 +11,8 @@ fn main() {
     // write_npy("ytrain.npy", yt).expect("Failed to write .npy file");
 
     let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
-        ConstantMean::new(),
-        SquaredExponentialKernel::new(),
+        ConstantMean::default(),
+        SquaredExponentialKernel::default(),
     )
     .fit(&xt, &yt)
     .expect("GP fit");

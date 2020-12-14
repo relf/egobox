@@ -9,6 +9,7 @@ use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
 use nlopt::*;
 
+#[derive(Default)]
 pub struct GpInnerParams {
     /// Gaussian process variance
     sigma2: Array1<f64>,
@@ -22,19 +23,6 @@ pub struct GpInnerParams {
     ft: Array2<f64>,
     /// R upper triangle matrix of QR decomposition of the matrix Ft
     ft_qr_r: Array2<f64>,
-}
-
-impl Default for GpInnerParams {
-    fn default() -> Self {
-        Self {
-            sigma2: Array1::zeros(1),
-            beta: Array2::zeros((1, 1)),
-            gamma: Array2::zeros((1, 1)),
-            r_chol: Array2::zeros((1, 1)),
-            ft: Array2::zeros((1, 1)),
-            ft_qr_r: Array2::zeros((1, 1)),
-        }
-    }
 }
 
 /// Gaussian
@@ -298,8 +286,8 @@ mod tests {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
         let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
-            ConstantMean::new(),
-            SquaredExponentialKernel::new(),
+            ConstantMean::default(),
+            SquaredExponentialKernel::default(),
         )
         .fit(&xt, &yt)
         .expect("GP fit error");
@@ -316,8 +304,8 @@ mod tests {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
         let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
-            ConstantMean::new(),
-            SquaredExponentialKernel::new(),
+            ConstantMean::default(),
+            SquaredExponentialKernel::default(),
         )
         .fit(&xt, &yt)
         .expect("GP fit error");

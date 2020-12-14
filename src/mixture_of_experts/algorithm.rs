@@ -45,8 +45,8 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
             let ytrain = cluster.slice(s![.., nx..nx + 1]);
             gps.push(
                 GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
-                    ConstantMean::new(),
-                    SquaredExponentialKernel::new(),
+                    ConstantMean::default(),
+                    SquaredExponentialKernel::default(),
                 )
                 .fit(&xtrain, &ytrain)
                 .expect("GP fit error"),

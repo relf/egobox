@@ -28,7 +28,7 @@ impl CorrelationModel for SquaredExponentialKernel {
 }
 
 impl SquaredExponentialKernel {
-    pub fn new() -> Self {
+    pub fn default() -> Self {
         Self {}
     }
 }
@@ -44,7 +44,7 @@ mod tests {
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let dm = DistanceMatrix::new(&xt);
-        let res = SquaredExponentialKernel::new().eval(&arr1(&[0.1]), &dm.d);
+        let res = SquaredExponentialKernel::default().eval(&arr1(&[0.1]), &dm.d);
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],
