@@ -8,13 +8,13 @@ use ndarray_stats::QuantileExt;
 use std::cmp;
 use std::time::Instant;
 
-enum LHSKind {
+pub enum LHSKind {
     Classic,
     Centered,
     Optimized,
 }
 
-struct LHS {
+pub struct LHS {
     xlimits: Array2<usize>,
     kind: LHSKind,
     seed: Option<u8>,

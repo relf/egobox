@@ -1,3 +1,3 @@
-pub mod lhs;
+mod lhs;
 
-use lhs::*;
+pub use lhs::*;
