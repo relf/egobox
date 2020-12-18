@@ -1,8 +1,15 @@
-use ndarray::Array2;
+use ndarray::{Array1, Array2};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
 pub trait ObjFn: Fn(&[f64]) -> f64 {}
+impl<T> ObjFn for T where T: Fn(&[f64]) -> f64 {}
+
+#[derive(Debug)]
+pub struct OptimResult {
+    x_opt: Array1<f64>,
+    y_opt: f64,
+}
 
 pub enum QEiStrategy {
     KrigingBeliever,
@@ -23,8 +30,14 @@ pub struct Ego<F: ObjFn, R: Rng> {
     rng: R,
 }
 
+impl<F: ObjFn> Ego<F, Isaac64Rng> {
+    pub fn new(f: F) -> Ego<F, Isaac64Rng> {
+        Self::new_with_rng(f, Isaac64Rng::seed_from_u64(42))
+    }
+}
+
 impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
-    pub fn new(f: F, rng: R) -> Self {
+    pub fn new_with_rng(f: F, rng: R) -> Self {
         Ego {
             n_iter: 10,
             n_start: 10,
@@ -88,7 +101,26 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         }
     }
 
-    pub fn minimize(&self) -> f64 {
-        0.
+    pub fn minimize(&self) -> OptimResult {
+        OptimResult {
+            x_opt: Array1::default(1),
+            y_opt: 0.,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use argmin_testfunctions::rosenbrock;
+
+    #[test]
+    fn test_ego() {
+        fn rosenb(x: &[f64]) -> f64 {
+            rosenbrock(x, 100., 1.)
+        };
+
+        let res = Ego::new(rosenb).minimize();
+        println!("Rosenbrock optim result = {:?}", res);
     }
 }
