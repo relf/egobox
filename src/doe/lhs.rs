@@ -1,10 +1,10 @@
 use crate::utils::{cdist, pdist};
 use ndarray::{s, Array, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::{
-    rand::rngs::StdRng, rand::seq::SliceRandom, rand::Rng, rand::SeedableRng, rand_distr::Uniform,
-    RandomExt,
+    rand::seq::SliceRandom, rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt,
 };
 use ndarray_stats::QuantileExt;
+use rand_isaac::Isaac64Rng;
 use std::cmp;
 use std::time::Instant;
 
@@ -14,27 +14,28 @@ pub enum LHSKind {
     Optimized,
 }
 
-pub struct LHS {
-    xlimits: Array2<usize>,
+pub struct LHS<R: Rng + Clone> {
+    xlimits: Array2<f64>,
     kind: LHSKind,
-    seed: Option<u8>,
+    rng: R,
 }
 
-impl LHS {
-    pub fn new(xlimits: &ArrayBase<impl Data<Elem = usize>, Ix2>) -> Self {
+impl LHS<Isaac64Rng> {
+    pub fn new(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Self {
+        Self::new_with_rng(xlimits, Isaac64Rng::seed_from_u64(42))
+    }
+}
+
+impl<R: Rng + Clone> LHS<R> {
+    pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
         if xlimits.ncols() != 2 {
             panic!("xlimits must have 2 columns (lower, upper)");
         }
         LHS {
             xlimits: xlimits.to_owned(),
             kind: LHSKind::Optimized,
-            seed: None,
+            rng,
         }
-    }
-
-    pub fn seed(mut self, seed: u8) -> Self {
-        self.seed = Some(seed);
-        self
     }
 
     pub fn kind(mut self, kind: LHSKind) -> Self {
@@ -42,12 +43,17 @@ impl LHS {
         self
     }
 
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> LHS<R2> {
+        LHS {
+            xlimits: self.xlimits,
+            kind: self.kind,
+            rng,
+        }
+    }
+
     pub fn sample(&self, ns: usize) -> Array2<f64> {
-        let mut rng = match self.seed {
-            None => StdRng::from_entropy(),
-            Some(seed) => StdRng::from_seed([seed; 32]),
-        };
-        let doe = match &self.kind {
+        let mut rng = self.rng.clone();
+        let mut doe = match &self.kind {
             LHSKind::Classic => self._normalized_classic_lhs(ns, &mut rng),
             LHSKind::Centered => self._normalized_centered_lhs(ns, &mut rng),
             LHSKind::Optimized => {
@@ -61,6 +67,9 @@ impl LHS {
                 self._maximin_ese(&doe, outer_loop, inner_loop, &mut rng)
             }
         };
+        let a = self.xlimits.column(1);
+        let d = &self.xlimits.column(0).to_owned() - &a;
+        doe = doe * d + a;
         doe
     }
 
@@ -69,7 +78,7 @@ impl LHS {
         lhs: &Array2<f64>,
         outer_loop: usize,
         inner_loop: usize,
-        mut rng: &mut StdRng,
+        rng: &mut R,
     ) -> Array2<f64> {
         // hard-coded params
         let j_range = 20;
@@ -99,7 +108,7 @@ impl LHS {
                 // See description of phip_swap procedure
                 for j in 0..j_range {
                     l_x.push(Box::new(lhs_own.to_owned()));
-                    let php = self._phip_swap(&mut l_x[j], modulo, phip, p, &mut rng);
+                    let php = self._phip_swap(&mut l_x[j], modulo, phip, p, rng);
                     l_phip.push(php);
                 }
                 let lphip = Array::from_shape_vec(l_phip.len(), l_phip).unwrap();
@@ -151,14 +160,7 @@ impl LHS {
         f64::powf(pdist(lhs).mapv(|v| f64::powf(v, -p)).sum(), 1. / p)
     }
 
-    fn _phip_swap(
-        &self,
-        x: &mut Array2<f64>,
-        k: usize,
-        phip: f64,
-        p: f64,
-        rng: &mut StdRng,
-    ) -> f64 {
+    fn _phip_swap(&self, x: &mut Array2<f64>, k: usize, phip: f64, p: f64, rng: &mut R) -> f64 {
         // Choose two random rows
         //let mut rng = thread_rng();
         let i1 = rng.gen_range(0, x.nrows());
@@ -196,30 +198,29 @@ impl LHS {
         res
     }
 
-    fn _normalized_classic_lhs(&self, ns: usize, mut rng: &mut StdRng) -> Array2<f64> {
+    fn _normalized_classic_lhs(&self, ns: usize, rng: &mut R) -> Array2<f64> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
-        let u = Array::random_using((ns, nx), Uniform::new(0., 1.), &mut rng);
+        let u = Array::random_using((ns, nx), Uniform::new(0., 1.), rng);
         let a = cut.slice(s![..ns]).to_owned();
         let b = cut.slice(s![1..(ns + 1)]);
+        let c = &b - &a;
         let mut rdpoints = Array::zeros((ns, nx));
         for j in 0..nx {
-            let c = &b - &a;
-            let d = u.slice(s![.., j]).to_owned() * &c;
-            let val = &d + &a;
-            rdpoints.slice_mut(s![.., j]).assign(&val)
+            let d = u.column(j).to_owned() * &c + &a;
+            rdpoints.column_mut(j).assign(&d)
         }
         let mut lhs = Array::zeros((ns, nx));
         for j in 0..nx {
-            rdpoints.as_slice_mut().unwrap().shuffle(&mut rng);
-            let colj = rdpoints.slice(s![.., j]);
-            lhs.slice_mut(s![.., j]).assign(&colj);
+            let mut colj = rdpoints.slice(s![.., j]).to_owned();
+            colj.as_slice_mut().unwrap().shuffle(rng);
+            lhs.column_mut(j).assign(&colj);
         }
         lhs
     }
 
-    pub fn _normalized_centered_lhs(&self, ns: usize, mut rng: &mut StdRng) -> Array2<f64> {
+    pub fn _normalized_centered_lhs(&self, ns: usize, rng: &mut R) -> Array2<f64> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
@@ -228,10 +229,10 @@ impl LHS {
         let b = cut.slice(s![1..(ns + 1)]);
         let mut c = (a + b) / 2.;
         let mut lhs = Array::zeros(u.raw_dim());
-        //let mut rng = thread_rng();
+
         for j in 0..nx {
-            c.as_slice_mut().unwrap().shuffle(&mut rng);
-            lhs.slice_mut(s![.., j]).assign(&c);
+            c.as_slice_mut().unwrap().shuffle(rng);
+            lhs.column_mut(j).assign(&c);
         }
         lhs
     }
@@ -246,58 +247,56 @@ mod tests {
 
     #[test]
     fn test_lhs() {
-        let xlimits = arr2(&[[5, 10], [0, 1]]);
-        let lhs = LHS::new(&xlimits).seed(42);
+        let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![
-            [0.7469666483536377, 0.8238500574762035],
-            [0.5101797254970719, 0.017195175833716592],
-            [0.9549501400999194, 0.09563297669359822],
-            [0.485299292483157, 0.485299292483157],
-            [0.017195175833716592, 0.6020438469393489]
+            [9.529012065390592, 0.7501017996171474],
+            [5.328628661104205, 0.263722994415054],
+            [6.207914396957061, 0.8443641533423626],
+            [8.271960129557709, 0.02969642071371703],
+            [7.588272879378793, 0.4475080605957672]
         ];
-        let actual = lhs.sample(5);
+        let actual = LHS::new(&xlimits).sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
     #[test]
     fn test_lhs_speed() {
         let start = Instant::now();
-        let xlimits = arr2(&[[0, 1], [0, 1]]);
-        let lhs = LHS::new(&xlimits);
+        let xlimits = arr2(&[[0., 1.], [0., 1.]]);
         let n = 10;
-        let actual = lhs.sample(n);
+        let actual = LHS::new(&xlimits).sample(n);
         let duration = start.elapsed();
         println!("Time elapsed in optimized LHS is: {:?}", duration);
     }
 
     #[test]
     fn test_classic_lhs() {
-        let xlimits = arr2(&[[5, 10], [0, 1]]);
-        let lhs = LHS::new(&xlimits).kind(LHSKind::Classic).seed(42);
+        let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![
-            [0.7469666483536377, 0.8238500574762035],
-            [0.5101797254970719, 0.485299292483157],
-            [0.9549501400999194, 0.09563297669359822],
-            [0.485299292483157, 0.017195175833716592],
-            [0.017195175833716592, 0.6020438469393489]
+            [9.529012065390592, 0.7501017996171474],
+            [5.328628661104205, 0.263722994415054],
+            [6.207914396957061, 0.4475080605957672],
+            [8.271960129557709, 0.02969642071371703],
+            [7.588272879378793, 0.8443641533423626]
         ];
-        let actual = lhs.sample(5);
+        let actual = LHS::new(&xlimits).kind(LHSKind::Classic).sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
     #[test]
     fn test_centered_lhs() {
-        let xlimits = arr2(&[[5, 10], [0, 1]]);
-        let lhs = LHS::new(&xlimits).kind(LHSKind::Centered).seed(42);
-        let expected = array![[0.5, 0.5], [0.7, 0.9], [0.9, 0.1], [0.1, 0.7], [0.3, 0.3]];
-        let actual = lhs.sample(5);
+        let xlimits = arr2(&[[5., 10.], [0., 1.]]);
+        let expected = array![[9.5, 0.3], [8.5, 0.5], [6.5, 0.1], [5.5, 0.7], [7.5, 0.9]];
+        let actual = LHS::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(0))
+            .kind(LHSKind::Centered)
+            .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
     #[test]
     fn test_phip_swap() {
-        let xlimits = arr2(&[[0, 1], [0, 1]]);
-        let lhs = LHS::new(&xlimits);
+        let xlimits = arr2(&[[0., 1.], [0., 1.]]);
         let k = 1;
         let phip = 7.290525742903316;
         let mut p0 = array![
@@ -313,7 +312,7 @@ mod tests {
             [0.6500000000000001, 0.6500000000000001]
         ];
         let p = 10.;
-        let mut rng = StdRng::from_entropy();
-        let res = lhs._phip_swap(&mut p0, k, phip, p, &mut rng);
+        let mut rng = Isaac64Rng::seed_from_u64(42);
+        let res = LHS::new(&xlimits)._phip_swap(&mut p0, k, phip, p, &mut rng);
     }
 }
