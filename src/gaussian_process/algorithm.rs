@@ -69,14 +69,12 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GaussianProcess<Mean, Kern
         let corr_t = corr.t().to_owned();
         let rt = inners
             .r_chol
-            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t)
-            .unwrap();
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t)?;
         let lhs = inners.ft.t().dot(&rt) - self.mean.eval(x).t();
         let u = inners
             .ft_qr_r
             .t()
-            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)
-            .unwrap();
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)?;
 
         let a = &inners.sigma2;
         let b = 1.0 - rt.mapv(|v| v * v).sum_axis(Axis(0)) + u.mapv(|v| v * v).sum_axis(Axis(0));
@@ -122,14 +120,14 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
         let theta0 = Array1::from_elem(xtrain.ncols(), self.initial_theta());
         let x_distances = DistanceMatrix::new(&xtrain.data);
         let fx = self.mean().eval(x);
-        let y_train = ytrain.clone();
+        let y_t = ytrain.clone();
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
             let theta =
                 Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
                     .unwrap();
             let rxx = self.kernel().eval(&theta, &x_distances.d);
-            match reduced_likelihood(&fx, &rxx, &x_distances, &y_train) {
+            match reduced_likelihood(&fx, &rxx, &x_distances, &y_t) {
                 Ok(r) => {
                     // println!("GP lkh OK: {}", -r.value);
                     -r.0
@@ -239,7 +237,6 @@ pub fn reduced_likelihood(
             ));
         }
     }
-
     let yt = r_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &ytrain.data)?;
     let beta = ft_qr_r.solve_triangular(UPLO::Upper, Diag::NonUnit, &ft_qr_q.t().dot(&yt))?;
 
