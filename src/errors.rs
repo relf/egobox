@@ -13,6 +13,8 @@ pub enum EgoboxError {
     LinalgError(String),
     /// When clustering fails
     EmptyCluster(String),
+    /// When EGO fails
+    EgoError(String),
 }
 
 impl Display for EgoboxError {
@@ -23,6 +25,7 @@ impl Display for EgoboxError {
             }
             Self::LinalgError(message) => write!(f, "Linear Algebra error: {}", message),
             Self::EmptyCluster(message) => write!(f, "Empty cluster: {}", message),
+            Self::EgoError(message) => write!(f, "EGO error: {}", message),
         }
     }
 }
