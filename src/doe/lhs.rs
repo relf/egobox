@@ -6,7 +6,6 @@ use ndarray_rand::{
 use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;
 use std::cmp;
-use std::time::Instant;
 
 pub enum LHSKind {
     Classic,
@@ -57,10 +56,7 @@ impl<R: Rng + Clone> LHS<R> {
             LHSKind::Classic => self._normalized_classic_lhs(ns, &mut rng),
             LHSKind::Centered => self._normalized_centered_lhs(ns, &mut rng),
             LHSKind::Optimized => {
-                let start = Instant::now();
                 let doe = self._normalized_classic_lhs(ns, &mut rng);
-                let duration = start.elapsed();
-                println!("Time elapsed in classic LHS is: {:?}", duration);
                 let nx = self.xlimits.nrows();
                 let outer_loop = cmp::min((1.5 * nx as f64) as usize, 30);
                 let inner_loop = cmp::min(20 * nx, 100);
@@ -98,7 +94,6 @@ impl<R: Rng + Clone> LHS<R> {
             let mut n_acpt = 0.;
             let mut n_imp = 0.;
 
-            let start = Instant::now();
             for i in 0..inner_loop {
                 let modulo = (i + 1) % nx;
                 let mut l_x: Vec<Box<Array2<f64>>> = Vec::new();
@@ -130,12 +125,6 @@ impl<R: Rng + Clone> LHS<R> {
                     }
                 }
             }
-            println!(
-                "Time elapsed in inner loop is: {:?} inner={} jrange={}",
-                start.elapsed(),
-                inner_loop,
-                j_range
-            );
             let p_accpt = n_acpt / (inner_loop as f64); // probability of acceptance
             let p_imp = n_imp / (inner_loop as f64); // probability of improvement
 
@@ -151,7 +140,6 @@ impl<R: Rng + Clone> LHS<R> {
             } else {
                 t *= 0.9
             }
-            println!("t={}", t);
         }
         lhs_best
     }
