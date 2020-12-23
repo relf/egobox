@@ -1,6 +1,7 @@
 use crate::doe::LHS;
 use crate::errors::{EgoboxError, Result};
 use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
+use finitediff::FiniteDiff;
 use libm::erfc;
 use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
@@ -8,7 +9,7 @@ use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
 
-const SQRT_2PI: f64 = 2.5066282746310005024157652848110452530069867406099;
+const SQRT_2PI: f64 = 2.5066282746310007;
 
 pub trait ObjFn: Send + Sync + 'static + Fn(&[f64]) -> f64 {}
 impl<T> ObjFn for T where T: Send + Sync + 'static + Fn(&[f64]) -> f64 {}
@@ -104,7 +105,12 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 
         let sampling = LHS::new(&self.xlimits).with_rng(rng);
 
-        let mut x_data = sampling.sample(self.n_doe);
+        let mut x_data = if let Some(xdoe) = &self.x_doe {
+            xdoe.to_owned()
+        } else {
+            sampling.sample(self.n_doe)
+        };
+
         let mut y_data = self.obj_eval(&x_data);
 
         for k in 0..self.n_iter {
@@ -147,7 +153,9 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         }
 
         let best_index = y_data.argmin().unwrap().0;
-
+        println!("xdata = {:?}", x_data);
+        println!("ydata = {:?}", y_data);
+        println!("true = {:?}", self.obj_eval(&x_data));
         OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
             y_opt: y_data.row(best_index)[0],
@@ -162,11 +170,14 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
-        let obj = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+        let obj = |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+            if let Some(grad) = gradient {
+                let f = |x: &Vec<f64>| -> f64 { -Self::ei(x, &gpr, *f_min) };
+                grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
+            }
             -Self::ei(x, &gpr, *f_min)
         };
-        let mut optimizer =
-            Nlopt::new(Algorithm::Cobyla, x_data.ncols(), obj, Target::Minimize, ());
+        let mut optimizer = Nlopt::new(Algorithm::Slsqp, x_data.ncols(), obj, Target::Minimize, ());
         optimizer
             .set_lower_bounds(self.xlimits.column(0).to_owned().as_slice().unwrap())
             .unwrap();
@@ -263,6 +274,22 @@ mod tests {
     use argmin_testfunctions::rosenbrock;
     use ndarray::array;
     use std::time::Instant;
+
+    #[test]
+    fn test_xsinx() {
+        fn xsinx(x: &[f64]) -> f64 {
+            (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
+        };
+        let now = Instant::now();
+        let res = Ego::new(xsinx, &array![[0.0, 25.0]])
+            .n_iter(6)
+            .x_doe(&array![[0.], [7.], [25.]])
+            .minimize();
+        println!("xsinx optim result = {:?}", res);
+        println!("Elapsed = {:?}", now.elapsed());
+        let expected = array![18.9];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+    }
 
     #[test]
     fn test_rosenbrock_2d() {
