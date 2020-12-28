@@ -63,8 +63,8 @@ impl<R: Rng + Clone> LHS<R> {
                 self._maximin_ese(&doe, outer_loop, inner_loop, &mut rng)
             }
         };
-        let a = self.xlimits.column(1);
-        let d = &self.xlimits.column(0).to_owned() - &a;
+        let a = self.xlimits.column(0);
+        let d = &self.xlimits.column(1).to_owned() - &a;
         doe = doe * d + a;
         doe
     }
@@ -237,11 +237,11 @@ mod tests {
     fn test_lhs() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![
-            [9.529012065390592, 0.7501017996171474],
-            [5.328628661104205, 0.263722994415054],
-            [6.207914396957061, 0.8443641533423626],
-            [8.271960129557709, 0.02969642071371703],
-            [7.588272879378793, 0.4475080605957672]
+            [5.470987934609408, 0.2498982003828526],
+            [9.671371338895796, 0.736277005584946],
+            [8.792085603042938, 0.1556358466576374],
+            [6.728039870442292, 0.970303579286283],
+            [7.411727120621207, 0.5524919394042328]
         ];
         let actual = LHS::new(&xlimits).sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
@@ -261,11 +261,11 @@ mod tests {
     fn test_classic_lhs() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![
-            [9.529012065390592, 0.7501017996171474],
-            [5.328628661104205, 0.263722994415054],
-            [6.207914396957061, 0.4475080605957672],
-            [8.271960129557709, 0.02969642071371703],
-            [7.588272879378793, 0.8443641533423626]
+            [5.470987934609408, 0.2498982003828526],
+            [9.671371338895796, 0.736277005584946],
+            [8.792085603042938, 0.5524919394042328],
+            [6.728039870442292, 0.970303579286283],
+            [7.411727120621207, 0.1556358466576374]
         ];
         let actual = LHS::new(&xlimits).kind(LHSKind::Classic).sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn test_centered_lhs() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
-        let expected = array![[9.5, 0.3], [8.5, 0.5], [6.5, 0.1], [5.5, 0.7], [7.5, 0.9]];
+        let expected = array![[5.5, 0.7], [6.5, 0.5], [8.5, 0.9], [9.5, 0.3], [7.5, 0.1]];
         let actual = LHS::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(0))
             .kind(LHSKind::Centered)
