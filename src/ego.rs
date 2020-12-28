@@ -274,6 +274,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::doe::FullFactorial;
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use ndarray::array;
@@ -301,9 +302,9 @@ mod tests {
             rosenbrock(x, 1., 100.)
         };
         let now = Instant::now();
-        let res = Ego::new(rosenb, &array![[-2., 2.], [-2., 2.]])
-            .n_iter(40)
-            .minimize();
+        let xlimits = array![[-2., 2.], [-2., 2.]];
+        let doe = FullFactorial::new(&xlimits).sample(10);
+        let res = Ego::new(rosenb, &xlimits).x_doe(&doe).n_iter(40).minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];
