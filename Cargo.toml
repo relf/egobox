@@ -25,7 +25,7 @@ linfa-clustering = { version="0.2.1", default-features = false }
 nlopt = "0.5"
 rand_isaac = "0.2"
 libm = "0.2"
-finitediff = { version="0.1", feature = ["ndarray"] }
+finitediff = { version="0.1", features = ["ndarray"] }
 openblas-src = { version = "0.9", default-features = false, features = ["system"] }
 
 [dev-dependencies]
