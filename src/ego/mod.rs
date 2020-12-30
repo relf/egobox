@@ -1,0 +1,3 @@
+mod ego;
+
+use ego::*;
