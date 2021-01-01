@@ -23,7 +23,7 @@ impl<F: Float> Clone for NormalizedMatrix<F> {
 
 impl<F: Float> NormalizedMatrix<F> {
     pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> NormalizedMatrix<F> {
-        let (data, mean, std) = Self::normalize(x);
+        let (data, mean, std) = normalize(x);
         NormalizedMatrix {
             data: data.to_owned(),
             mean: mean.to_owned(),
@@ -34,20 +34,17 @@ impl<F: Float> NormalizedMatrix<F> {
     pub fn ncols(&self) -> usize {
         self.data.ncols()
     }
+}
 
-    fn normalize(
-        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> (
-        ArrayBase<impl Data<Elem = F>, Ix2>,
-        ArrayBase<impl Data<Elem = F>, Ix1>,
-        ArrayBase<impl Data<Elem = F>, Ix1>,
-    ) {
-        let x_mean = x.mean_axis(Axis(0)).unwrap();
-        let x_std = x.std_axis(Axis(0), F::one());
-        let xnorm = (x - &x_mean) / &x_std;
+pub fn normalize<F: Float>(
+    x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+) -> (Array2<F>, Array1<F>, Array1<F>) {
+    let x_mean = x.mean_axis(Axis(0)).unwrap();
+    let mut x_std = x.std_axis(Axis(0), F::one());
+    x_std.mapv_inplace(|v| if v == F::zero() { F::one() } else { v });
+    let xnorm = (x - &x_mean) / &x_std;
 
-        (xnorm, x_mean, x_std)
-    }
+    (xnorm, x_mean, x_std)
 }
 
 #[derive(Debug)]

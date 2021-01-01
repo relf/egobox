@@ -1,4 +1,4 @@
-use ndarray::{s, Array, Array1, Array2, ArrayBase, Data, Ix2, Zip};
+use ndarray::{s, Array, Array1, Array2, ArrayBase, Data, Ix2};
 use ndarray_stats::QuantileExt;
 
 pub struct FullFactorial {

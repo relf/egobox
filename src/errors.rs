@@ -15,6 +15,8 @@ pub enum EgoboxError {
     EmptyCluster(String),
     /// When EGO fails
     EgoError(String),
+    /// When PLS fails
+    PlsError(String),
 }
 
 impl Display for EgoboxError {
@@ -26,6 +28,7 @@ impl Display for EgoboxError {
             Self::LinalgError(message) => write!(f, "Linear Algebra error: {}", message),
             Self::EmptyCluster(message) => write!(f, "Empty cluster: {}", message),
             Self::EgoError(message) => write!(f, "EGO error: {}", message),
+            Self::PlsError(message) => write!(f, "PLS error: {}", message),
         }
     }
 }
