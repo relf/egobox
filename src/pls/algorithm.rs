@@ -325,8 +325,37 @@ mod tests {
             [138., 33., 68.]
         ];
         let start = Instant::now();
-        let pls = Pls::params(3).fit(&x, &y);
+        let pls = Pls::params(3).fit(&x, &y).expect("PLS fitting failed");
         let duration = start.elapsed();
         println!("Time elapsed is: {:?}", duration);
+
+        // The results were checked against scikit-learn 0.24 PlsRegression
+        let expected_x_weights = array![
+            [0.61330704, -0.00443647, 0.78983213],
+            [0.74697144, -0.32172099, -0.58183269],
+            [0.25668686, 0.94682413, -0.19399983]
+        ];
+
+        let expected_x_loadings = array![
+            [0.61470416, -0.24574278, 0.78983213],
+            [0.65625755, -0.14396183, -0.58183269],
+            [0.51733059, 1.00609417, -0.19399983]
+        ];
+
+        let expected_y_weights = array![
+            [-0.32456184, 0.29892183, 0.20316322],
+            [-0.42439636, 0.61970543, 0.19320542],
+            [0.13143144, -0.26348971, -0.17092916]
+        ];
+
+        let expected_y_loadings = array![
+            [-0.32456184, 0.29892183, 0.20316322],
+            [-0.42439636, 0.61970543, 0.19320542],
+            [0.13143144, -0.26348971, -0.17092916]
+        ];
+        assert_abs_diff_eq!(pls.x_weights, expected_x_weights, epsilon = 1e-6);
+        assert_abs_diff_eq!(pls.y_weights, expected_y_weights, epsilon = 1e-6);
+        assert_abs_diff_eq!(pls.x_loadings, expected_x_loadings, epsilon = 1e-6);
+        assert_abs_diff_eq!(pls.y_loadings, expected_y_loadings, epsilon = 1e-6);
     }
 }
