@@ -122,15 +122,15 @@ impl PlsParams {
                 }
             }
 
-            let (_x_weights, _y_weights, n_iter) =
+            let (mut _x_weights, mut _y_weights, n_iter) =
                 self.get_first_singular_vectors_power_method(&xk, &yk);
             n_iters[i] = n_iter;
 
             // svd_flip(x_weights, y_weights)
             let biggest_abs_val_idx = _x_weights.mapv(|v| v.abs()).argmax().unwrap();
-            let sign = _y_weights[biggest_abs_val_idx].signum();
-            _x_weights.mapv(|v| v * sign);
-            _y_weights.mapv(|v| v * sign);
+            let sign: f64 = _x_weights[biggest_abs_val_idx].signum();
+            _x_weights.map_inplace(|v| *v *= sign);
+            _y_weights.map_inplace(|v| *v *= sign);
 
             // compute scores, i.e. the projections of x and Y
             let _x_scores = xk.dot(&_x_weights);
@@ -142,7 +142,7 @@ impl PlsParams {
 
             // regress yk on x_score
             let _y_loadings = _x_scores.dot(&yk) / _x_scores.dot(&_x_scores);
-            yk = yk - outer(&_y_scores, &_y_loadings); // outer product
+            yk = yk - outer(&_x_scores, &_y_loadings); // outer product
 
             x_weights.column_mut(k).assign(&_x_weights);
             y_weights.column_mut(k).assign(&_y_weights);
@@ -260,6 +260,7 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use ndarray::array;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_outer() {
@@ -323,7 +324,9 @@ mod tests {
             [156., 33., 54.],
             [138., 33., 68.]
         ];
+        let start = Instant::now();
         let pls = Pls::params(3).fit(&x, &y);
-        println!("pls = {:?}", pls.unwrap());
+        let duration = start.elapsed();
+        println!("Time elapsed is: {:?}", duration);
     }
 }
