@@ -354,8 +354,82 @@ mod tests {
             [0.13143144, -0.26348971, -0.17092916]
         ];
         assert_abs_diff_eq!(pls.x_weights, expected_x_weights, epsilon = 1e-6);
-        assert_abs_diff_eq!(pls.y_weights, expected_y_weights, epsilon = 1e-6);
         assert_abs_diff_eq!(pls.x_loadings, expected_x_loadings, epsilon = 1e-6);
+        assert_abs_diff_eq!(pls.y_weights, expected_y_weights, epsilon = 1e-6);
         assert_abs_diff_eq!(pls.y_loadings, expected_y_loadings, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_pls_fit_constant_column_Y() {
+        let x = array![
+            [5., 162., 60.],
+            [2., 110., 60.],
+            [12., 101., 101.],
+            [12., 105., 37.],
+            [13., 155., 58.],
+            [4., 101., 42.],
+            [8., 101., 38.],
+            [6., 125., 40.],
+            [15., 200., 40.],
+            [17., 251., 250.],
+            [17., 120., 38.],
+            [13., 210., 115.],
+            [14., 215., 105.],
+            [1., 50., 50.],
+            [6., 70., 31.],
+            [12., 210., 120.],
+            [4., 60., 25.],
+            [11., 230., 80.],
+            [15., 225., 73.],
+            [2., 110., 43.]
+        ];
+        let mut y = array![
+            [191., 36., 50.],
+            [189., 37., 52.],
+            [193., 38., 58.],
+            [162., 35., 62.],
+            [189., 35., 46.],
+            [182., 36., 56.],
+            [211., 38., 56.],
+            [167., 34., 60.],
+            [176., 31., 74.],
+            [154., 33., 56.],
+            [169., 34., 50.],
+            [166., 33., 52.],
+            [154., 34., 64.],
+            [247., 46., 50.],
+            [193., 36., 46.],
+            [202., 37., 62.],
+            [176., 37., 54.],
+            [157., 32., 52.],
+            [156., 33., 54.],
+            [138., 33., 68.]
+        ];
+        let nrows = y.nrows();
+        y.column_mut(0).assign(&Array1::ones(nrows));
+        let pls = Pls::params(3).fit(&x, &y).expect("PLS fitting failed");
+
+        let expected_x_weights = array![
+            [0.6273573, 0.007081799, 0.7786994],
+            [0.7493417, -0.277612681, -0.6011807],
+            [0.2119194, 0.960666981, -0.1794690]
+        ];
+
+        let expected_x_loadings = array![
+            [0.6273512, -0.22464538, 0.7786994],
+            [0.6643156, -0.09871193, -0.6011807],
+            [0.5125877, 1.01407380, -0.1794690]
+        ];
+
+        let expected_y_loadings = array![
+            [0.0000000, 0.0000000, 0.0000000],
+            [-0.4357300, 0.5828479, 0.2174802],
+            [0.1353739, -0.2486423, -0.1810386]
+        ];
+        assert_abs_diff_eq!(pls.x_weights, expected_x_weights, epsilon = 1e-6);
+        assert_abs_diff_eq!(pls.x_loadings, expected_x_loadings, epsilon = 1e-6);
+        // For the PLSRegression with default parameters, y_loadings == y_weights
+        assert_abs_diff_eq!(pls.y_loadings, expected_y_loadings, epsilon = 1e-6);
+        assert_abs_diff_eq!(pls.y_weights, expected_y_loadings, epsilon = 1e-6);
     }
 }
