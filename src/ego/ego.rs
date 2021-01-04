@@ -23,10 +23,10 @@ pub struct OptimResult {
 
 pub enum QEiStrategy {
     KrigingBeliever,
-    KrigingBelieverLowerBound,
-    KrigingBelieverUpperBound,
-    KrigingBelieverRandom,
-    ConstantLiarMinimum,
+    // KrigingBelieverLowerBound,
+    // KrigingBelieverUpperBound,
+    // KrigingBelieverRandom,
+    // ConstantLiarMinimum,
 }
 
 pub struct Ego<F: ObjFn, R: Rng> {

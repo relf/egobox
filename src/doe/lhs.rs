@@ -190,13 +190,13 @@ impl<R: Rng + Clone> LHS<R> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
-        let u = Array::random_using((ns, nx), Uniform::new(0., 1.), rng);
+        let rnd = Array::random_using((ns, nx), Uniform::new(0., 1.), rng);
         let a = cut.slice(s![..ns]).to_owned();
         let b = cut.slice(s![1..(ns + 1)]);
         let c = &b - &a;
         let mut rdpoints = Array::zeros((ns, nx));
         for j in 0..nx {
-            let d = u.column(j).to_owned() * &c + &a;
+            let d = rnd.column(j).to_owned() * &c + &a;
             rdpoints.column_mut(j).assign(&d)
         }
         let mut lhs = Array::zeros((ns, nx));
@@ -252,7 +252,7 @@ mod tests {
         let start = Instant::now();
         let xlimits = arr2(&[[0., 1.], [0., 1.]]);
         let n = 10;
-        let actual = LHS::new(&xlimits).sample(n);
+        let _actual = LHS::new(&xlimits).sample(n);
         let duration = start.elapsed();
         println!("Time elapsed in optimized LHS is: {:?}", duration);
     }
@@ -301,6 +301,6 @@ mod tests {
         ];
         let p = 10.;
         let mut rng = Isaac64Rng::seed_from_u64(42);
-        let res = LHS::new(&xlimits)._phip_swap(&mut p0, k, phip, p, &mut rng);
+        let _res = LHS::new(&xlimits)._phip_swap(&mut p0, k, phip, p, &mut rng);
     }
 }
