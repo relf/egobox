@@ -24,6 +24,12 @@ pub struct Pls {
 }
 
 impl Pls {
+    pub fn weights(&self) -> &Array2<f64> {
+        &self.x_rotations
+    }
+}
+
+impl Pls {
     pub fn params(n_components: usize) -> PlsParams {
         PlsParams::new(n_components)
     }

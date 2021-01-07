@@ -5,6 +5,7 @@ pub trait CorrelationModel: Clone + Copy {
         &self,
         theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64>;
 }
 
@@ -16,13 +17,12 @@ impl CorrelationModel for SquaredExponentialKernel {
         &self,
         theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        let (n_obs, n_features) = (d.nrows(), d.ncols());
-        let mut r = Array2::zeros((n_obs, 1));
-        let t = theta.view().into_shape((1, n_features)).unwrap();
-        let d2 = d.mapv(|v| v * v);
-        let m = (d2 * t).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
-        r.slice_mut(s![.., 0]).assign(&m);
+        let mut r = Array2::zeros((d.nrows(), 1));
+        let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
+        let m = (wd * theta).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+        r.column_mut(0).assign(&m);
         r
     }
 }
@@ -44,7 +44,7 @@ mod tests {
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let dm = DistanceMatrix::new(&xt);
-        let res = SquaredExponentialKernel::default().eval(&arr1(&[0.1]), &dm.d);
+        let res = SquaredExponentialKernel::default().eval(&arr1(&[0.1]), &dm.d, &array![[1.]]);
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],

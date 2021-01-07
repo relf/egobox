@@ -57,7 +57,7 @@ pub struct DistanceMatrix<F: Float> {
 
 impl<F: Float> DistanceMatrix<F> {
     pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> DistanceMatrix<F> {
-        let (d, d_indices) = Self::_l1_cross_distances(&x);
+        let (d, d_indices) = Self::_cross_distances(&x);
         let n_obs = x.nrows();
         let n_features = x.ncols();
 
@@ -69,12 +69,7 @@ impl<F: Float> DistanceMatrix<F> {
         }
     }
 
-    fn _l1_cross_distances(
-        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> (
-        ArrayBase<impl Data<Elem = F>, Ix2>,
-        ArrayBase<impl Data<Elem = usize>, Ix2>,
-    ) {
+    fn _cross_distances(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> (Array2<F>, Array2<usize>) {
         let n_obs = x.nrows();
         let n_features = x.ncols();
         let n_non_zero_cross_dist = n_obs * (n_obs - 1) / 2;
