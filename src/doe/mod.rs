@@ -1,5 +1,5 @@
 mod full_factorial;
 mod lhs;
 
-pub use full_factorial::FullFactorial;
-pub use lhs::LHS;
+pub use full_factorial::*;
+pub use lhs::*;
