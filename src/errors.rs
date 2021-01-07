@@ -17,6 +17,8 @@ pub enum EgoboxError {
     EgoError(String),
     /// When PLS fails
     PlsError(String),
+    /// When a value is invalid
+    InvalidValue(String),
 }
 
 impl Display for EgoboxError {
@@ -29,6 +31,7 @@ impl Display for EgoboxError {
             Self::EmptyCluster(message) => write!(f, "Empty cluster: {}", message),
             Self::EgoError(message) => write!(f, "EGO error: {}", message),
             Self::PlsError(message) => write!(f, "PLS error: {}", message),
+            Self::InvalidValue(message) => write!(f, "Value error: {}", message),
         }
     }
 }
