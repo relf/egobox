@@ -308,6 +308,6 @@ mod tests {
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 6e-1);
     }
 }

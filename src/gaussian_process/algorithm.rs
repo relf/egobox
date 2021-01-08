@@ -2,7 +2,7 @@ use crate::errors::{EgoboxError, Result};
 use crate::gaussian_process::{CorrelationModel, GpHyperParams, RegressionModel};
 use crate::pls::Pls;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
-use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
+use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, DataMut, Ix2};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
 use ndarray_linalg::qr::*;
@@ -137,15 +137,13 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
         let y_t = ytrain.clone();
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-            let t1 = Instant::now();
             let theta =
                 Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
                     .unwrap();
             let rxx = self.kernel().eval(&theta, &x_distances.d, &w_star);
-            match reduced_likelihood(&fx, &rxx, &x_distances, &y_t) {
+            match reduced_likelihood(&fx, rxx, &x_distances, &y_t) {
                 Ok(r) => {
-                    // println!("theta={} lkh={}", theta, -r.0);
-                    println!("like={:?}", t1.elapsed());
+                    println!("theta={} lkh={}", theta, -r.0);
                     -r.0
                 }
                 Err(_) => {
@@ -174,19 +172,17 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
                 };
 
                 optimizer
-                    .add_inequality_constraint(cstr_low, (), 1e-2)
+                    .add_inequality_constraint(cstr_low, (), 2e-4)
                     .unwrap();
                 optimizer
-                    .add_inequality_constraint(cstr_up, (), 1e-2)
+                    .add_inequality_constraint(cstr_up, (), 2e-4)
                     .unwrap();
             }
             let mut theta_vec = theta0.mapv(f64::log10).into_raw_vec();
             optimizer.set_initial_step1(0.5).unwrap();
             optimizer.set_maxeval(10 * theta0.len() as u32).unwrap();
-            optimizer.set_ftol_rel(1e-6).unwrap();
-            let t0 = Instant::now();
+            optimizer.set_ftol_rel(1e-4).unwrap();
             let res = optimizer.optimize(&mut theta_vec);
-            println!("Optim duration = {:?}", t0.elapsed());
             if let Err(e) = res {
                 println!("ERROR OPTIM in GP {:?}", e);
             }
@@ -194,8 +190,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
         }
 
         let rxx = self.kernel().eval(&opt_theta, &x_distances.d, &w_star);
-
-        let (_, inner_params) = reduced_likelihood(&fx, &rxx, &x_distances, &ytrain)?;
+        let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain)?;
         Ok(GaussianProcess {
             theta: opt_theta,
             mean: *self.mean(),
@@ -210,7 +205,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
 
 pub fn reduced_likelihood(
     fx: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    rxx: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    rxx: ArrayBase<impl Data<Elem = f64>, Ix2>,
     x_distances: &DistanceMatrix<f64>,
     ytrain: &NormalizedMatrix<f64>,
 ) -> Result<(f64, GpInnerParams)> {
@@ -221,17 +216,14 @@ pub fn reduced_likelihood(
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
     }
 
-    let t0 = Instant::now();
-
     // R cholesky decomposition
-    let r_chol = r_mx.cholesky(UPLO::Lower)?;
+    let r_chol = r_mx.cholesky_into(UPLO::Lower)?;
 
     // Solve generalized least squared problem
     let ft = r_chol
-        .solve_triangular(UPLO::Lower, Diag::NonUnit, &fx.to_owned())
+        .solve_triangular_into(UPLO::Lower, Diag::NonUnit, fx.to_owned())
         .unwrap();
     let (ft_qr_q, ft_qr_r) = ft.qr().unwrap();
-    println!("time = {:?}", t0.elapsed());
 
     // Check whether we have an ill-conditionned problem
     let (_, sv_qr_r, _) = ft_qr_r.svd(false, false).unwrap();
@@ -253,19 +245,19 @@ pub fn reduced_likelihood(
         }
     }
     let yt = r_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &ytrain.data)?;
-    let beta = ft_qr_r.solve_triangular(UPLO::Upper, Diag::NonUnit, &ft_qr_q.t().dot(&yt))?;
+    let beta = ft_qr_r.solve_triangular_into(UPLO::Upper, Diag::NonUnit, ft_qr_q.t().dot(&yt))?;
 
     let rho = yt - ft.dot(&beta);
+    let rho_sqr = rho.mapv(|v| v * v).sum_axis(Axis(0));
     let gamma = r_chol
         .t()
-        .solve_triangular(UPLO::Upper, Diag::NonUnit, &rho)?;
+        .solve_triangular_into(UPLO::Upper, Diag::NonUnit, rho)?;
 
     // The determinant of R is equal to the squared product of
     // the diagonal elements of its Cholesky decomposition r_chol
     let n_obs: f64 = x_distances.n_obs as f64;
     let logdet = r_chol.diag().mapv(|v| v.log10()).sum() * 2. / n_obs;
     // Reduced likelihood
-    let rho_sqr = rho.map(|v| v * v).sum_axis(Axis(0));
     let sigma2 = rho_sqr / n_obs;
     let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
     Ok((
@@ -297,38 +289,28 @@ mod tests {
 
     #[test]
     fn test_gp_fit_and_predict() {
-        let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
-        let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
         let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
             ConstantMean::default(),
             SquaredExponentialKernel::default(),
         )
+        .with_initial_theta(0.1)
         .fit(&xt, &yt)
         .expect("GP fit error");
-        let expected = 5.62341325;
+        let expected = 1.7782794100389228;
         assert_abs_diff_eq!(expected, gp.theta[0], epsilon = 1e-6);
+
         let yvals = gp
-            .predict_values(&arr2(&[[1.0], [2.1]]))
+            .predict_values(&arr2(&[[1.0], [3.5]]))
             .expect("prediction error");
-        let expected_y = arr2(&[[0.6856779931432053], [1.4484644169993859]]);
-        assert_abs_diff_eq!(expected_y, yvals, epsilon = 1e-6);
-    }
-    #[test]
-    fn test_train_and_predict_variances() {
-        let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
-        let yt = array![[0.0], [1.0], [1.5], [0.5], [1.0]];
-        let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
-            ConstantMean::default(),
-            SquaredExponentialKernel::default(),
-        )
-        .fit(&xt, &yt)
-        .expect("GP fit error");
-        let expected = 5.62341325;
-        assert_abs_diff_eq!(expected, gp.theta[0], epsilon = 1e-6);
+        let expected_y = arr2(&[[1.0], [0.8718355]]);
+        assert_abs_diff_eq!(expected_y, yvals, epsilon = 1e-3);
+
         let yvars = gp
-            .predict_variances(&arr2(&[[1.0], [2.1]]))
+            .predict_variances(&arr2(&[[1.0], [3.5]]))
             .expect("prediction error");
-        let expected_vars = arr2(&[[0.03422835527498675], [0.014105203477142668]]);
+        let expected_vars = arr2(&[[0.], [0.01222532]]);
         assert_abs_diff_eq!(expected_vars, yvars, epsilon = 1e-6);
     }
 
@@ -337,7 +319,9 @@ mod tests {
         let dims = vec![5, 10, 20, 60];
         let nts = vec![100, 300, 400, 800];
 
-        for i in 3..dims.len() {
+        // for i in 3..dims.len() {
+        // for i in 0..dims.len() {
+        for i in 0..1 {
             let dim = dims[i];
             let nt = nts[i];
 

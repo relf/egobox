@@ -229,7 +229,7 @@ mod tests {
         assert_abs_diff_eq!(
             0.39 * 0.39, // 0.1521
             moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
-            epsilon = 1e-6
+            epsilon = 1e-4
         );
         write_npy("obs.npy", obs).expect("obs saved");
         write_npy("preds.npy", preds).expect("preds saved");
