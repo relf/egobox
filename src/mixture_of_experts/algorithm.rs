@@ -36,7 +36,6 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
             .expect("Training data clustering");
 
         // Fit GPs on clustered data
-        // let dists = self._create_cluster_distributions(&gmm);
         let dataset_clustering = gmm.predict(dataset);
         let clusters = self.sort_by_cluster(dataset_clustering);
         let mut gps = Vec::new();
@@ -57,7 +56,8 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         let weights = gmm.weights().to_owned();
         let means = gmm.means().slice(s![.., ..nx]).to_owned();
         let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
-        let gmx = GaussianMixture::new(weights, means, covariances)?;
+        let gmx = GaussianMixture::new(weights, means, covariances)?
+            .with_heaviside_factor(self.heaviside_factor());
         Ok(MixtureOfExperts {
             recombination: self.recombination(),
             heaviside_factor: self.heaviside_factor(),
@@ -90,23 +90,6 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
             res.push(subset);
         }
         res
-    }
-
-    fn _create_cluster_distributions(
-        &self,
-        gmm: &GaussianMixtureModel<f64>,
-    ) -> Vec<MultivariateNormal<f64>> {
-        let means = gmm.means();
-        let h = self.heaviside_factor();
-        let cov = gmm.covariances().mapv(|v| v * h);
-        let mut dists = Vec::new();
-        for k in 0..self.n_clusters() {
-            let meansk = means.slice(s![k, ..]);
-            let covk = cov.slice(s![k, .., ..]);
-            let mvn = MultivariateNormal::new(&meansk, &covk);
-            dists.push(mvn);
-        }
-        dists
     }
 
     fn _extract_part(
@@ -248,12 +231,12 @@ mod tests {
             .expect("MOE fitted");
         let obs = Array::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict(&obs).expect("MOE prediction");
+        write_npy("obs_smooth.npy", obs).expect("obs saved");
+        write_npy("preds_smooth.npy", preds).expect("preds saved");
         assert_abs_diff_eq!(
-            0.92310107,
+            0.859021,
             moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
             epsilon = 1e-6
         );
-        write_npy("obs_smooth.npy", obs).expect("obs saved");
-        write_npy("preds_smooth.npy", preds).expect("preds saved");
     }
 }
