@@ -130,7 +130,6 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
                     let gpr_vals = gpr.predict_values(&xplot).unwrap();
                     let gpr_vars = gpr.predict_variances(&xplot).unwrap();
                     let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min));
-                    println!("ei={:?}", ei);
                     write_npy("ego_x.npy", xplot).expect("xplot saved");
                     write_npy("ego_obj.npy", obj).expect("obj saved");
                     write_npy("ego_gpr.npy", gpr_vals).expect("gp vals saved");
@@ -191,6 +190,8 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
             .set_upper_bounds(self.xlimits.column(1).to_owned().as_slice().unwrap())
             .unwrap();
         optimizer.set_maxeval(200).unwrap();
+        optimizer.set_ftol_rel(1e-4).unwrap();
+        optimizer.set_ftol_abs(1e-4).unwrap();
         let mut success = false;
         let mut n_optim = 1;
         let n_max_optim = 20;
