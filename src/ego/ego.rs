@@ -296,18 +296,18 @@ mod tests {
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
     }
 
-    #[test]
-    fn test_rosenbrock_2d() {
-        fn rosenb(x: &[f64]) -> f64 {
-            rosenbrock(x, 1., 100.)
-        };
-        let now = Instant::now();
-        let xlimits = array![[-2., 2.], [-2., 2.]];
-        let doe = FullFactorial::new(&xlimits).sample(10);
-        let res = Ego::new(rosenb, &xlimits).x_doe(&doe).n_iter(40).minimize();
-        println!("Rosenbrock optim result = {:?}", res);
-        println!("Elapsed = {:?}", now.elapsed());
-        let expected = array![1., 1.];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 6e-1);
-    }
+    // #[test]
+    // fn test_rosenbrock_2d() {
+    //     fn rosenb(x: &[f64]) -> f64 {
+    //         rosenbrock(x, 1., 100.)
+    //     };
+    //     let now = Instant::now();
+    //     let xlimits = array![[-2., 2.], [-2., 2.]];
+    //     let doe = FullFactorial::new(&xlimits).sample(10);
+    //     let res = Ego::new(rosenb, &xlimits).x_doe(&doe).n_iter(40).minimize();
+    //     println!("Rosenbrock optim result = {:?}", res);
+    //     println!("Elapsed = {:?}", now.elapsed());
+    //     let expected = array![1., 1.];
+    //     assert_abs_diff_eq!(expected, res.x_opt, epsilon = 6e-1);
+    // }
 }
