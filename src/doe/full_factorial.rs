@@ -1,7 +1,12 @@
+use crate::doe::traits::SamplingMethod;
 use ndarray::{s, Array, Array1, Array2, ArrayBase, Data, Ix2};
 use ndarray_stats::QuantileExt;
 
+/// The FullFactorial design consists of all possible combinations
+/// of levels for all components within the design space.
 pub struct FullFactorial {
+    /// Sampling space definition as a (nx, 2) matrix
+    /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of a sample x
     xlimits: Array2<f64>,
 }
 
@@ -14,8 +19,16 @@ impl FullFactorial {
             xlimits: xlimits.to_owned(),
         }
     }
+}
 
-    pub fn sample(&self, ns: usize) -> Array2<f64> {
+impl SamplingMethod for FullFactorial {
+    fn sampling_space(&self) -> &Array2<f64> {
+        &self.xlimits
+    }
+
+    fn normalized_sample(&self, ns: usize) -> Array2<f64> {
+        //! the number of level by components is choosen as evenly as possible
+        //!
         let nx = self.xlimits.nrows();
         let weights: Array1<f64> = Array1::ones(nx) / (nx as f64);
         println!("weights = {:?}", weights);
@@ -48,9 +61,6 @@ impl FullFactorial {
             }
             range_repeat *= n;
         }
-        let a = self.xlimits.column(0);
-        let d = &self.xlimits.column(1).to_owned() - &a;
-        doe = doe * d + a;
         doe
     }
 }

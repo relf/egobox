@@ -1,9 +1,14 @@
-use ndarray::{s, Array, Array1, Array2, ArrayBase, Data, Ix2};
+use crate::doe::traits::SamplingMethod;
+use ndarray::{Array, Array2, ArrayBase, Data, Ix2};
 use ndarray_rand::{rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt};
 use rand_isaac::Isaac64Rng;
 
+/// The Random design consists in drawing samples randomly.
 pub struct Random<R: Rng + Clone> {
+    /// Sampling space definition as a (nx, 2) matrix
+    /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of x
     xlimits: Array2<f64>,
+    /// Random generator used for reproducibility (not used in case of Centered LHS)
     rng: R,
 }
 
@@ -30,15 +35,17 @@ impl<R: Rng + Clone> Random<R> {
             rng,
         }
     }
+}
 
-    pub fn sample(&self, ns: usize) -> Array2<f64> {
+impl<R: Rng + Clone> SamplingMethod for Random<R> {
+    fn sampling_space(&self) -> &Array2<f64> {
+        &self.xlimits
+    }
+
+    fn normalized_sample(&self, ns: usize) -> Array2<f64> {
         let mut rng = self.rng.clone();
         let nx = self.xlimits.nrows();
-        let mut doe = Array::random_using((ns, nx), Uniform::new(0., 1.), &mut rng);
-        let a = self.xlimits.column(0);
-        let d = &self.xlimits.column(1).to_owned() - &a;
-        doe = doe * d + a;
-        doe
+        Array::random_using((ns, nx), Uniform::new(0., 1.), &mut rng)
     }
 }
 

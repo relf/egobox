@@ -1,3 +1,4 @@
+use crate::doe::SamplingMethod;
 use crate::utils::{cdist, pdist};
 use ndarray::{s, Array, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::{
@@ -7,25 +8,61 @@ use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;
 use std::cmp;
 
+/// Kinds of Latin Hypercube Design
 pub enum LHSKind {
+    /// sample is choosen randomly within its latin hypercube intervals
     Classic,
+    /// sample is the middle of its latin hypercube intervals
     Centered,
+    /// samples locations is optimized using the Enhanced Stochastic Evolutionary algorithm (ESE)
+    /// See Jin, R. and Chen, W. and Sudjianto, A. (2005), “An efficient algorithm for constructing
+    /// optimal design of computer experiments.” Journal of Statistical Planning and Inference, 134:268-287.
     Optimized,
 }
 
+/// The LHS design is built as follows: each dimension space is divided into ns sections
+/// where ns is the number of sampling points, and one point in selected in each section.
+/// The selection method gives different kind of LHS (see [LHSKind])
 pub struct LHS<R: Rng + Clone> {
+    /// Sampling space definition as a (nx, 2) matrix
+    /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of x
     xlimits: Array2<f64>,
+    /// The requested kind of LHS
     kind: LHSKind,
+    /// Random generator used for reproducibility (not used in case of Centered LHS)
     rng: R,
 }
 
+/// LHS with default random generator set for reproducibility
 impl LHS<Isaac64Rng> {
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Self {
         Self::new_with_rng(xlimits, Isaac64Rng::seed_from_u64(42))
     }
 }
 
+impl<R: Rng + Clone> SamplingMethod for LHS<R> {
+    fn sampling_space(&self) -> &Array2<f64> {
+        &self.xlimits
+    }
+
+    fn normalized_sample(&self, ns: usize) -> Array2<f64> {
+        let mut rng = self.rng.clone();
+        match &self.kind {
+            LHSKind::Classic => self._normalized_classic_lhs(ns, &mut rng),
+            LHSKind::Centered => self._normalized_centered_lhs(ns, &mut rng),
+            LHSKind::Optimized => {
+                let doe = self._normalized_classic_lhs(ns, &mut rng);
+                let nx = self.xlimits.nrows();
+                let outer_loop = cmp::min((1.5 * nx as f64) as usize, 30);
+                let inner_loop = cmp::min(20 * nx, 100);
+                self._maximin_ese(&doe, outer_loop, inner_loop, &mut rng)
+            }
+        }
+    }
+}
+
 impl<R: Rng + Clone> LHS<R> {
+    /// Constructor with given design space and random generator
     pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
         if xlimits.ncols() != 2 {
             panic!("xlimits must have 2 columns (lower, upper)");
@@ -37,36 +74,19 @@ impl<R: Rng + Clone> LHS<R> {
         }
     }
 
+    /// Sets the kind of LHS
     pub fn kind(mut self, kind: LHSKind) -> Self {
         self.kind = kind;
         self
     }
 
+    /// Sets the random generator
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> LHS<R2> {
         LHS {
             xlimits: self.xlimits,
             kind: self.kind,
             rng,
         }
-    }
-
-    pub fn sample(&self, ns: usize) -> Array2<f64> {
-        let mut rng = self.rng.clone();
-        let mut doe = match &self.kind {
-            LHSKind::Classic => self._normalized_classic_lhs(ns, &mut rng),
-            LHSKind::Centered => self._normalized_centered_lhs(ns, &mut rng),
-            LHSKind::Optimized => {
-                let doe = self._normalized_classic_lhs(ns, &mut rng);
-                let nx = self.xlimits.nrows();
-                let outer_loop = cmp::min((1.5 * nx as f64) as usize, 30);
-                let inner_loop = cmp::min(20 * nx, 100);
-                self._maximin_ese(&doe, outer_loop, inner_loop, &mut rng)
-            }
-        };
-        let a = self.xlimits.column(0);
-        let d = &self.xlimits.column(1).to_owned() - &a;
-        doe = doe * d + a;
-        doe
     }
 
     fn _maximin_ese(

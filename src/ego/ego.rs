@@ -1,4 +1,4 @@
-use crate::doe::LHS;
+use crate::doe::{SamplingMethod, LHS};
 use crate::errors::{EgoboxError, Result};
 use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use finitediff::FiniteDiff;
@@ -275,9 +275,8 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::doe::FullFactorial;
     use approx::assert_abs_diff_eq;
-    use argmin_testfunctions::rosenbrock;
+    // use argmin_testfunctions::rosenbrock;
     use ndarray::array;
     use std::time::Instant;
 

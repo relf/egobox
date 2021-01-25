@@ -276,7 +276,7 @@ pub fn reduced_likelihood(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::doe::{FullFactorial, LHSKind, LHS};
+    use crate::doe::{SamplingMethod, LHS};
     use crate::gaussian_process::{
         correlation_models::SquaredExponentialKernel, mean_models::ConstantMean,
     };

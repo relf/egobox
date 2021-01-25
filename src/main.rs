@@ -1,8 +1,8 @@
 // extern crate openblas_src;
 extern crate intel_mkl_src;
-use egobox::doe::{FullFactorial, LHSKind, LHS};
+use egobox::doe::{SamplingMethod, LHS};
 use egobox::gaussian_process::*;
-use ndarray::{arr2, array, Array1, Array2, Zip};
+use ndarray::{array, Array1, Array2, Zip};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
 use rand_isaac::Isaac64Rng;
