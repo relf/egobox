@@ -63,6 +63,13 @@ impl<R: Rng + Clone> SamplingMethod for LHS<R> {
 
 impl<R: Rng + Clone> LHS<R> {
     /// Constructor with given design space and random generator
+    ///
+    /// ### Parameters
+    ///
+    /// `xlimits`: (nx, 2) matrix where nx is the dimension of the sample x and the ith row
+    /// is the interval of the ith component of x.
+    ///
+    /// `rng`: random generator used for Classic and Optimized LHS
     pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
         if xlimits.ncols() != 2 {
             panic!("xlimits must have 2 columns (lower, upper)");
