@@ -16,12 +16,14 @@ edition = "2018"
 [dependencies]
 ndarray = { version = "0.13.1", features = ["rayon", "approx", "blas"]}
 ndarray-linalg = "0.12"
+# ndarray = { version = "0.14", features = ["rayon", "approx", "blas"]}
+# ndarray-linalg = { git = "https://github.com/rust-ndarray/ndarray-linalg.git" }
 ndarray-stats = "0.3"
 ndarray_einsum_beta = "0.5"
 ndarray-rand = "0.11"
 ndarray-npy = { version = "0.5", default-features = false }
-linfa = { version="0.2.1", default-features = false }
-linfa-clustering = { version="0.2.1", default-features = false }
+linfa = { version="0.3.0", default-features = false }
+linfa-clustering = { version="0.3.0", default-features = false }
 nlopt = "0.5.3"
 cobyla = "0.1.2"
 rand_isaac = "0.2"

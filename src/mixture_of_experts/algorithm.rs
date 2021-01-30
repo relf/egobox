@@ -2,11 +2,10 @@ use super::gaussian_mixture::GaussianMixture;
 use crate::errors::Result;
 use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use crate::mixture_of_experts::{MoeHyperParams, Recombination};
-use crate::utils::MultivariateNormal;
-use linfa::{traits::Fit, traits::Predict, Dataset};
+use linfa::{traits::Fit, traits::Predict, DatasetBase};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
-use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray_rand::rand::Rng;
 use rand_isaac::Isaac64Rng;
 
 impl<R: Rng + Clone> MoeHyperParams<R> {
@@ -27,7 +26,7 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         }
 
         // Cluster inputs
-        let dataset = Dataset::from(data);
+        let dataset = DatasetBase::from(data);
         let gmm = GaussianMixtureModel::params(self.n_clusters())
             .with_n_runs(20)
             .with_reg_covariance(1e-6)
@@ -70,7 +69,10 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         self.recombination() == Recombination::Smooth && self.n_clusters() > 1
     }
 
-    fn sort_by_cluster(&self, dataset: Dataset<Array2<f64>, Array1<usize>>) -> Vec<Array2<f64>> {
+    fn sort_by_cluster(
+        &self,
+        dataset: DatasetBase<Array2<f64>, Array1<usize>>,
+    ) -> Vec<Array2<f64>> {
         let mut res: Vec<Array2<f64>> = Vec::new();
         let ndim = dataset.records.ncols();
         for n in 0..self.n_clusters() {
@@ -179,8 +181,9 @@ mod tests {
     extern crate intel_mkl_src;
     use super::*;
     use approx::assert_abs_diff_eq;
-    use ndarray::{arr2, array, Array2, Zip};
+    use ndarray::{array, Array2, Zip};
     use ndarray_npy::write_npy;
+    use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
     use rand_isaac::Isaac64Rng;
@@ -190,7 +193,7 @@ mod tests {
         Zip::from(&mut y).and(x).apply(|yi, &xi| {
             if xi < 0.4 {
                 *yi = xi * xi;
-            } else if xi >= 0.4 && xi < 0.8 {
+            } else if (0.4..0.8).contains(&xi) {
                 *yi = 3. * xi + 1.;
             } else {
                 *yi = f64::sin(10. * xi);

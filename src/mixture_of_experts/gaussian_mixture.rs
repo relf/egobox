@@ -1,6 +1,6 @@
 use crate::errors::{EgoboxError, Result};
 use linfa::{
-    dataset::{Dataset, Targets},
+    dataset::{DatasetBase, Targets},
     traits::*,
     Float,
 };
@@ -237,13 +237,13 @@ impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> Predict<&ArrayBase<D, Ix2>, 
 }
 
 impl<F: Float + Lapack + Scalar, D: Data<Elem = F>, T: Targets>
-    Predict<Dataset<ArrayBase<D, Ix2>, T>, Dataset<ArrayBase<D, Ix2>, Array1<usize>>>
+    Predict<DatasetBase<ArrayBase<D, Ix2>, T>, DatasetBase<ArrayBase<D, Ix2>, Array1<usize>>>
     for GaussianMixture<F>
 {
     fn predict(
         &self,
-        dataset: Dataset<ArrayBase<D, Ix2>, T>,
-    ) -> Dataset<ArrayBase<D, Ix2>, Array1<usize>> {
+        dataset: DatasetBase<ArrayBase<D, Ix2>, T>,
+    ) -> DatasetBase<ArrayBase<D, Ix2>, Array1<usize>> {
         let predicted = self.predict(dataset.records());
         dataset.with_targets(predicted)
     }
