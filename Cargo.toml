@@ -43,4 +43,7 @@ argmin_testfunctions = "0.1"
 
 [workspace]
 
-members = ["doe"]
+members = [
+  "doe", 
+  "pls"
+]
