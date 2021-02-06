@@ -278,7 +278,7 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use ndarray::array;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_outer() {
@@ -378,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pls_fit_constant_column_Y() {
+    fn test_pls_fit_constant_column_y() {
         let x = array![
             [5., 162., 60.],
             [2., 110., 60.],
