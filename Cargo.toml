@@ -14,6 +14,7 @@ edition = "2018"
 # openblas-src = { version = "0.9.0", default-features = false, features = ["cblas"] }
 
 [dependencies]
+doe = { path="doe" }
 ndarray = { version = "0.13.1", features = ["rayon", "approx", "blas"]}
 ndarray-linalg = "0.12"
 # ndarray = { version = "0.14", features = ["rayon", "approx", "blas"]}
@@ -39,9 +40,6 @@ serde_json = "1"
 approx = "0.3"
 argmin_testfunctions = "0.1"
 
-[[bench]]
-name = "lhs" 
-harness = false 
 
 [workspace]
 

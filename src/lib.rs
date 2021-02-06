@@ -1,4 +1,3 @@
-pub mod doe;
 pub mod ego;
 pub mod errors;
 pub mod gaussian_process;

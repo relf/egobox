@@ -178,10 +178,10 @@ impl<R: Rng + Clone> LHS<R> {
     fn _phip_swap(&self, x: &mut Array2<f64>, k: usize, phip: f64, p: f64, rng: &mut R) -> f64 {
         // Choose two random rows
         //let mut rng = thread_rng();
-        let i1 = rng.gen_range(0..x.nrows());
-        let mut i2 = rng.gen_range(0..x.nrows());
+        let i1 = rng.gen_range(0, x.nrows());
+        let mut i2 = rng.gen_range(0, x.nrows());
         while i2 == i1 {
-            i2 = rng.gen_range(0..x.nrows());
+            i2 = rng.gen_range(0, x.nrows());
         }
         // Compute new phip
         let mut x_rest = Array2::zeros((x.nrows() - 2, x.ncols()));
