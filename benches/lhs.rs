@@ -3,7 +3,7 @@ use egobox::doe::{SamplingMethod, LHS};
 use ndarray::arr2;
 
 fn criterion_lhs(c: &mut Criterion) {
-    let sizes = vec![10, 100, 1000];
+    let sizes = vec![10];
 
     let benchmark = ParameterizedBenchmark::new(
         "lhs",

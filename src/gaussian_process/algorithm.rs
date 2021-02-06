@@ -143,7 +143,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
             let rxx = self.kernel().eval(&theta, &x_distances.d, &w_star);
             match reduced_likelihood(&fx, rxx, &x_distances, &y_t) {
                 Ok(r) => {
-                    println!("theta={} lkh={}", theta, -r.0);
+                    // println!("theta={} lkh={}", theta, -r.0);
                     -r.0
                 }
                 Err(_) => {
@@ -319,9 +319,9 @@ mod tests {
         let dims = vec![5, 10, 20, 60];
         let nts = vec![100, 300, 400, 800];
 
-        // for i in 3..dims.len() {
-        // for i in 0..dims.len() {
-        for i in 0..1 {
+        for i in 3..dims.len() {
+            // for i in 0..dims.len() {
+            // for i in 0..1 {
             let dim = dims[i];
             let nt = nts[i];
 

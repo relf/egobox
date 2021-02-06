@@ -7,6 +7,7 @@ mod full_factorial;
 mod lhs;
 mod random;
 mod traits;
+mod utils;
 
 pub use full_factorial::*;
 pub use lhs::*;

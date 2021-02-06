@@ -41,4 +41,8 @@ argmin_testfunctions = "0.1"
 
 [[bench]]
 name = "lhs" 
-harness = false
+harness = false 
+
+[workspace]
+
+members = ["doe"]
