@@ -1,6 +1,7 @@
-use crate::errors::{EgoboxError, Result};
-use crate::gaussian_process::{CorrelationModel, GpHyperParams, RegressionModel};
-use crate::pls::Pls;
+use crate::correlation_models::CorrelationModel;
+use crate::errors::{GpError, Result};
+use crate::hyperparameters::GpHyperParams;
+use crate::mean_models::RegressionModel;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, DataMut, Ix2};
 use ndarray_einsum_beta::*;
@@ -9,6 +10,7 @@ use ndarray_linalg::qr::*;
 use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
 use nlopt::*;
+use pls::Pls;
 use std::time::Instant;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
@@ -232,14 +234,14 @@ pub fn reduced_likelihood(
         let (_, sv_f, _) = &fx.svd(false, false).unwrap();
         let cond_fx = sv_f[0] / sv_f[sv_f.len() - 1];
         if cond_fx > 1e15 {
-            return Err(EgoboxError::LikelihoodComputationError(
+            return Err(GpError::LikelihoodComputationError(
                 "F is too ill conditioned. Poor combination \
                 of regression model and observations."
                     .to_string(),
             ));
         } else {
             // ft is too ill conditioned, get out (try different theta)
-            return Err(EgoboxError::LikelihoodComputationError(
+            return Err(GpError::LikelihoodComputationError(
                 "ft is too ill conditioned, try another theta again".to_string(),
             ));
         }
@@ -275,12 +277,11 @@ pub fn reduced_likelihood(
 
 #[cfg(test)]
 mod tests {
+    extern crate intel_mkl_src;
     use super::*;
-    use crate::doe::{SamplingMethod, LHS};
-    use crate::gaussian_process::{
-        correlation_models::SquaredExponentialKernel, mean_models::ConstantMean,
-    };
+    use crate::{correlation_models::SquaredExponentialKernel, mean_models::ConstantMean};
     use approx::assert_abs_diff_eq;
+    use doe::{SamplingMethod, LHS};
     use ndarray::{arr2, array, Zip};
     use ndarray_npy::{read_npy, write_npy};
     use ndarray_rand::rand::SeedableRng;
@@ -319,9 +320,9 @@ mod tests {
         let dims = vec![5, 10, 20, 60];
         let nts = vec![100, 300, 400, 800];
 
-        for i in 3..dims.len() {
-            // for i in 0..dims.len() {
-            // for i in 0..1 {
+        // for i in 3..dims.len() {
+        // for i in 0..dims.len() {
+        for i in 0..1 {
             let dim = dims[i];
             let nt = nts[i];
 

@@ -1,5 +1,5 @@
-use crate::errors::{EgoboxError, Result};
-use crate::gaussian_process::{CorrelationModel, RegressionModel};
+use crate::errors::{GpError, Result};
+use crate::{CorrelationModel, RegressionModel};
 use ndarray::Array2;
 
 #[derive(Clone)]
@@ -80,7 +80,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
     pub fn validate(&self, xdim: usize) -> Result<()> {
         if let Some(d) = self.kpls_dim {
             if d > xdim {
-                return Err(EgoboxError::InvalidValue(format!(
+                return Err(GpError::InvalidValue(format!(
                     "Dimension reduction {} should be smaller than actual \
                     training input dimensions {}",
                     d, xdim

@@ -45,5 +45,6 @@ argmin_testfunctions = "0.1"
 
 members = [
   "doe", 
-  "pls"
+  "pls",
+  "gaussian_process"
 ]
