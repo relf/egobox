@@ -14,9 +14,9 @@ pub enum GpError {
     LinalgError(String),
     /// When clustering fails
     EmptyCluster(String),
-    /// When EGO fails
-    EgoError(String),
-    /// When PLS fails
+    // /// When EGO fails
+    // EgoError(String),
+    // /// When PLS fails
     PlsError(String),
     /// When a value is invalid
     InvalidValue(String),
@@ -30,7 +30,7 @@ impl Display for GpError {
             }
             Self::LinalgError(message) => write!(f, "Linear Algebra error: {}", message),
             Self::EmptyCluster(message) => write!(f, "Empty cluster: {}", message),
-            Self::EgoError(message) => write!(f, "EGO error: {}", message),
+            // Self::EgoError(message) => write!(f, "EGO error: {}", message),
             Self::PlsError(message) => write!(f, "PLS error: {}", message),
             Self::InvalidValue(message) => write!(f, "Value error: {}", message),
         }

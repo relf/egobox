@@ -1,7 +1,7 @@
 use super::gaussian_mixture::GaussianMixture;
 use crate::errors::Result;
-use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
-use crate::mixture_of_experts::{MoeHyperParams, Recombination};
+use crate::{MoeHyperParams, Recombination};
+use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use linfa::{traits::Fit, traits::Predict, DatasetBase};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
