@@ -1,4 +1,4 @@
-use crate::doe::traits::SamplingMethod;
+use crate::SamplingMethod;
 use ndarray::{Array, Array2, ArrayBase, Data, Ix2};
 use ndarray_rand::{rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt};
 use rand_isaac::Isaac64Rng;

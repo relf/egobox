@@ -1,4 +1,4 @@
-use crate::errors::{EgoboxError, Result};
+use crate::{MoeError, Result};
 use linfa::{
     dataset::{DatasetBase, Targets},
     traits::*,
@@ -86,7 +86,7 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
     ) -> Result<(Array1<F>, Array2<F>, Array3<F>)> {
         let nk = resp.sum_axis(Axis(0));
         if nk.min().unwrap() < &(F::from(10.).unwrap() * F::epsilon()) {
-            return Err(EgoboxError::EmptyCluster(format!(
+            return Err(MoeError::EmptyCluster(format!(
               "Cluster #{} has no more point. Consider decreasing number of clusters or change initialization.",
               nk.argmin().unwrap() + 1
           )));

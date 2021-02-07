@@ -1,4 +1,4 @@
-use ndarray::{s, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 
 pub trait CorrelationModel: Clone + Copy {
     fn eval(

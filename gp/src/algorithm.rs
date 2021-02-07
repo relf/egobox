@@ -1,15 +1,16 @@
-use crate::errors::{EgoboxError, Result};
-use crate::gaussian_process::{CorrelationModel, GpHyperParams, RegressionModel};
-use crate::pls::Pls;
+use crate::correlation_models::CorrelationModel;
+use crate::errors::{GpError, Result};
+use crate::hyperparameters::GpHyperParams;
+use crate::mean_models::RegressionModel;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
-use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, DataMut, Ix2};
+use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
 use ndarray_linalg::qr::*;
 use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
 use nlopt::*;
-use std::time::Instant;
+use pls::Pls;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 const NUGGET: f64 = 100.0 * f64::EPSILON;
@@ -22,9 +23,9 @@ pub struct GpInnerParams {
     beta: Array2<f64>,
     /// Gaussian Process weights
     gamma: Array2<f64>,
-    /// Cholesky decomposition of the correlation matrix [R]
+    /// Cholesky decomposition of the correlation matrix \[R\]
     r_chol: Array2<f64>,
-    /// Solution of the linear equation system : [R] x Ft = y
+    /// Solution of the linear equation system : \[R\] x Ft = y
     ft: Array2<f64>,
     /// R upper triangle matrix of QR decomposition of the matrix Ft
     ft_qr_r: Array2<f64>,
@@ -143,7 +144,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
             let rxx = self.kernel().eval(&theta, &x_distances.d, &w_star);
             match reduced_likelihood(&fx, rxx, &x_distances, &y_t) {
                 Ok(r) => {
-                    println!("theta={} lkh={}", theta, -r.0);
+                    // println!("theta={} lkh={}", theta, -r.0);
                     -r.0
                 }
                 Err(_) => {
@@ -232,14 +233,14 @@ pub fn reduced_likelihood(
         let (_, sv_f, _) = &fx.svd(false, false).unwrap();
         let cond_fx = sv_f[0] / sv_f[sv_f.len() - 1];
         if cond_fx > 1e15 {
-            return Err(EgoboxError::LikelihoodComputationError(
+            return Err(GpError::LikelihoodComputationError(
                 "F is too ill conditioned. Poor combination \
                 of regression model and observations."
                     .to_string(),
             ));
         } else {
             // ft is too ill conditioned, get out (try different theta)
-            return Err(EgoboxError::LikelihoodComputationError(
+            return Err(GpError::LikelihoodComputationError(
                 "ft is too ill conditioned, try another theta again".to_string(),
             ));
         }
@@ -275,12 +276,11 @@ pub fn reduced_likelihood(
 
 #[cfg(test)]
 mod tests {
+    extern crate intel_mkl_src;
     use super::*;
-    use crate::doe::{SamplingMethod, LHS};
-    use crate::gaussian_process::{
-        correlation_models::SquaredExponentialKernel, mean_models::ConstantMean,
-    };
+    use crate::{correlation_models::SquaredExponentialKernel, mean_models::ConstantMean};
     use approx::assert_abs_diff_eq;
+    use doe::{SamplingMethod, LHS};
     use ndarray::{arr2, array, Zip};
     use ndarray_npy::{read_npy, write_npy};
     use ndarray_rand::rand::SeedableRng;
@@ -295,7 +295,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialKernel::default(),
         )
-        .with_initial_theta(0.1)
+        .set_initial_theta(0.1)
         .fit(&xt, &yt)
         .expect("GP fit error");
         let expected = 1.7782794100389228;

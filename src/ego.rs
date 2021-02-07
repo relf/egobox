@@ -1,7 +1,7 @@
-use crate::doe::{SamplingMethod, LHS};
 use crate::errors::{EgoboxError, Result};
-use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
+use doe::{SamplingMethod, LHS};
 use finitediff::FiniteDiff;
+use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use libm::erfc;
 use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix2, Zip};
 use ndarray_npy::write_npy;
@@ -101,9 +101,65 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         }
     }
 
+    fn next_points(
+        &self,
+        x_data: &Array2<f64>,
+        y_data: &Array2<f64>,
+        sampling: &LHS<R>,
+    ) -> (Array2<f64>, Array2<f64>) {
+        let mut x_dat = Array2::zeros((0, x_data.ncols()));
+        let mut y_dat = Array2::zeros((0, y_data.ncols()));
+        for _ in 0..self.n_parallel {
+            let gpr = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
+                ConstantMean::default(),
+                SquaredExponentialKernel::default(),
+            )
+            .fit(&x_data, &y_data)
+            .expect("GP training failure");
+
+            let f_min = y_data.min().unwrap();
+            if false {
+                let xplot = Array::linspace(0., 25., 100).insert_axis(Axis(1));
+                let obj = self.obj_eval(&xplot);
+                let gpr_vals = gpr.predict_values(&xplot).unwrap();
+                let gpr_vars = gpr.predict_variances(&xplot).unwrap();
+                let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min));
+                write_npy("ego_x.npy", xplot).expect("xplot saved");
+                write_npy("ego_obj.npy", obj).expect("obj saved");
+                write_npy("ego_gpr.npy", gpr_vals).expect("gp vals saved");
+                write_npy("ego_gpr_vars.npy", gpr_vars).expect("gp vars saved");
+                write_npy("ego_ei.npy", ei).expect("gp vars saved");
+            }
+
+            match self.find_best_point(&x_data, &y_data, &sampling, &gpr) {
+                Ok(xk) => match self.get_virtual_point(&xk, &y_data, &gpr) {
+                    Ok(yk) => {
+                        y_dat = stack![Axis(0), y_dat, Array2::from_elem((1, 1), yk)];
+                        x_dat = stack![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+                    }
+                    Err(_) => {
+                        // Error while predict at best point: ignore
+                        break;
+                    }
+                },
+                Err(_) => {
+                    // Cannot find best point: ignore
+                    break;
+                }
+            }
+        }
+        (x_dat, y_dat)
+    }
+
+    pub fn suggest(&self, x_data: &Array2<f64>, y_data: &Array2<f64>) -> Array2<f64> {
+        let rng = self.rng.clone();
+        let sampling = LHS::new(&self.xlimits).with_rng(rng);
+        let (x_dat, _) = self.next_points(&x_data, &y_data, &sampling);
+        x_dat
+    }
+
     pub fn minimize(&mut self) -> OptimResult {
         let rng = self.rng.clone();
-
         let sampling = LHS::new(&self.xlimits).with_rng(rng);
 
         let mut x_data = if let Some(xdoe) = &self.x_doe {
@@ -115,43 +171,9 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         let mut y_data = self.obj_eval(&x_data);
 
         for _ in 0..self.n_iter {
-            for _ in 0..self.n_parallel {
-                let gpr = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
-                    ConstantMean::default(),
-                    SquaredExponentialKernel::default(),
-                )
-                .fit(&x_data, &y_data)
-                .expect("GP training failure");
-
-                let f_min = y_data.min().unwrap();
-                if false {
-                    let xplot = Array::linspace(0., 25., 100).insert_axis(Axis(1));
-                    let obj = self.obj_eval(&xplot);
-                    let gpr_vals = gpr.predict_values(&xplot).unwrap();
-                    let gpr_vars = gpr.predict_variances(&xplot).unwrap();
-                    let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min));
-                    write_npy("ego_x.npy", xplot).expect("xplot saved");
-                    write_npy("ego_obj.npy", obj).expect("obj saved");
-                    write_npy("ego_gpr.npy", gpr_vals).expect("gp vals saved");
-                    write_npy("ego_gpr_vars.npy", gpr_vars).expect("gp vars saved");
-                    write_npy("ego_ei.npy", ei).expect("gp vars saved");
-                }
-
-                match self.find_best_point(&x_data, &y_data, &sampling, &gpr) {
-                    Ok(xk) => match self.get_virtual_point(&xk, &y_data, &gpr) {
-                        Ok(yk) => {
-                            y_data = stack![Axis(0), y_data, Array2::from_elem((1, 1), yk)];
-                            x_data = stack![Axis(0), x_data, xk.insert_axis(Axis(0))];
-                        }
-                        Err(_) => {
-                            break;
-                        }
-                    },
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
+            let (x_dat, y_dat) = self.next_points(&x_data, &y_data, &sampling);
+            y_data = stack![Axis(0), y_data, y_dat];
+            x_data = stack![Axis(0), x_data, x_dat];
             let n_par = -(self.n_parallel as i32);
             let x_to_eval = x_data.slice(s![n_par.., ..]);
             let y_actual = self.obj_eval(&x_to_eval);
@@ -167,7 +189,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         }
     }
 
-    pub fn find_best_point(
+    fn find_best_point(
         &self,
         x_data: &Array2<f64>,
         y_data: &Array2<f64>,
@@ -219,7 +241,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         best_x.ok_or_else(|| EgoboxError::EgoError(String::from("Can not find best point")))
     }
 
-    pub fn get_virtual_point(
+    fn get_virtual_point(
         &self,
         xk: &Array1<f64>,
         _y_data: &Array2<f64>,
@@ -232,7 +254,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         Ok(pred + conf * f64::sqrt(var))
     }
 
-    pub fn ei(
+    fn ei(
         x: &[f64],
         gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
         f_min: f64,
@@ -254,15 +276,15 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         }
     }
 
-    pub fn norm_cdf(x: f64) -> f64 {
+    fn norm_cdf(x: f64) -> f64 {
         0.5 * erfc(-x / std::f64::consts::SQRT_2)
     }
 
-    pub fn norm_pdf(x: f64) -> f64 {
+    fn norm_pdf(x: f64) -> f64 {
         (-0.5 * x * x).exp() / SQRT_2PI
     }
 
-    pub fn obj_eval<D: Data<Elem = f64>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+    fn obj_eval<D: Data<Elem = f64>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
         let mut y = Array1::zeros(x.nrows());
         let obj = &self.obj;
         Zip::from(&mut y)
@@ -274,6 +296,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 
 #[cfg(test)]
 mod tests {
+    extern crate intel_mkl_src;
     use super::*;
     use approx::assert_abs_diff_eq;
     // use argmin_testfunctions::rosenbrock;
@@ -294,6 +317,26 @@ mod tests {
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+    }
+
+    #[test]
+    fn test_xsinx_suggestions() {
+        fn xsinx(x: &[f64]) -> f64 {
+            (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
+        };
+        let ego = Ego::new(xsinx, &array![[0.0, 25.0]]);
+
+        let mut x_doe = array![[0.], [7.], [25.]];
+        let mut y_doe = x_doe.mapv(|x| xsinx(&[x]));
+        for i in 0..6 {
+            let x_suggested = ego.suggest(&x_doe, &y_doe);
+            println!("{:?}", x_suggested);
+            x_doe = stack![Axis(0), x_doe, x_suggested];
+            y_doe = x_doe.mapv(|x| xsinx(&[x]));
+        }
+
+        let expected = 18.9;
+        assert_abs_diff_eq!(expected, x_doe[[8, 0]], epsilon = 5e-1);
     }
 
     // #[test]

@@ -1,5 +1,5 @@
-use crate::doe::SamplingMethod;
 use crate::utils::{cdist, pdist};
+use crate::SamplingMethod;
 use ndarray::{s, Array, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::{
     rand::seq::SliceRandom, rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt,
@@ -193,19 +193,21 @@ impl<R: Rng + Clone> LHS<R> {
             }
         }
 
-        let dist1 = cdist(&x.slice(s![i1..i1 + 1, ..]), &x_rest);
-        let dist2 = cdist(&x.slice(s![i2..i2 + 1, ..]), &x_rest);
+        let mut dist1 = cdist(&x.slice(s![i1..i1 + 1, ..]), &x_rest);
+        let mut dist2 = cdist(&x.slice(s![i2..i2 + 1, ..]), &x_rest);
 
         let m1 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i1..i1 + 1, k])).map(|v| v * v);
         let m2 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i2..i2 + 1, k])).map(|v| v * v);
 
         let mut d1 = dist1.mapv(|v| v * v) - &m1 + &m2;
-        d1 = d1.mapv(f64::sqrt);
+        d1.mapv_inplace(|v| f64::powf(v, -p / 2.));
         let mut d2 = dist2.mapv(|v| v * v) + &m1 - &m2;
-        d2 = d2.mapv(f64::sqrt);
+        d2.mapv_inplace(|v| f64::powf(v, -p / 2.));
 
-        let mut res = (d1.mapv(|v| f64::powf(v, -p)) - dist1.mapv(|v| f64::powf(v, -p))).sum();
-        res += (d2.mapv(|v| f64::powf(v, -p)) - dist2.mapv(|v| f64::powf(v, -p))).sum();
+        dist1.mapv_inplace(|v| f64::powf(v, -p));
+        dist2.mapv_inplace(|v| f64::powf(v, -p));
+        let mut res = (d1 - dist1).sum();
+        res += (d2 - dist2).sum();
         res = f64::powf(f64::powf(phip, p) + res, 1. / p);
 
         // swap points

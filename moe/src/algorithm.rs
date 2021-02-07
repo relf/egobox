@@ -1,7 +1,7 @@
 use super::gaussian_mixture::GaussianMixture;
 use crate::errors::Result;
-use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
-use crate::mixture_of_experts::{MoeHyperParams, Recombination};
+use crate::{MoeHyperParams, Recombination};
+use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use linfa::{traits::Fit, traits::Predict, DatasetBase};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
@@ -228,8 +228,8 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let moe = MoeHyperParams::new(3)
-            .with_recombination(Recombination::Smooth)
-            .with_heaviside_factor(0.5)
+            .set_recombination(Recombination::Smooth)
+            .set_heaviside_factor(0.5)
             .with_rng(rng)
             .fit(&xt, &yt)
             .expect("MOE fitted");

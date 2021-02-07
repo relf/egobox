@@ -1,8 +1,8 @@
-use crate::errors::{EgoboxError, Result};
-use crate::utils::normalize;
-use ndarray::{s, Array1, Array2, ArrayBase, Data, Ix1, Ix2, Zip};
+use crate::errors::{PlsError, Result};
+use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, NdFloat, Zip};
 use ndarray_linalg::{svd::*, Scalar};
 use ndarray_stats::QuantileExt;
+use num_traits::cast::FromPrimitive;
 
 #[derive(Debug, Clone)]
 pub struct Pls {
@@ -95,7 +95,7 @@ impl PlsParams {
         // see Wegelin page 25
         let rank_upper_bound = p;
         if 1 > n_components || n_components > rank_upper_bound {
-            return Err(EgoboxError::PlsError(format!(
+            return Err(PlsError::new(format!(
                 "n_components should be in [1, {}], got {}",
                 rank_upper_bound, n_components
             )));
@@ -261,12 +261,24 @@ fn pinv2(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
         .to_owned()
 }
 
+pub fn normalize<F: NdFloat + FromPrimitive>(
+    x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+) -> (Array2<F>, Array1<F>, Array1<F>) {
+    let x_mean = x.mean_axis(Axis(0)).unwrap();
+    let mut x_std = x.std_axis(Axis(0), F::one());
+    x_std.mapv_inplace(|v| if v == F::zero() { F::one() } else { v });
+    let xnorm = (x - &x_mean) / &x_std;
+
+    (xnorm, x_mean, x_std)
+}
+
 #[cfg(test)]
 mod tests {
+    extern crate intel_mkl_src;
     use super::*;
     use approx::assert_abs_diff_eq;
     use ndarray::array;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn test_outer() {
@@ -366,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pls_fit_constant_column_Y() {
+    fn test_pls_fit_constant_column_y() {
         let x = array![
             [5., 162., 60.],
             [2., 110., 60.],

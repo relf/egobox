@@ -1,0 +1,27 @@
+[package]
+name = "moe"
+version = "0.1.0"
+authors = ["relf <remi.lafage@onera.fr>"]
+edition = "2018"
+
+[lib]
+name="moe"
+
+[dependencies]
+doe = { path = "../doe" }
+gp = { path = "../gp" }
+
+ndarray = { version = "0.13.1", features = ["rayon", "approx", "blas"]}
+ndarray-linalg = "0.12"
+intel-mkl-src = { version = "0.5", default-features = false }
+ndarray-stats = "0.3"
+ndarray-rand = "0.11"
+linfa = { version="0.3.0", default-features = false }
+linfa-clustering = { version="0.3.0", default-features = false }
+rand_isaac = "0.2"
+
+[dev-dependencies]
+criterion = "0.3"
+serde_json = "1"
+approx = "0.3"
+ndarray-npy = { version = "0.5", default-features = false }
