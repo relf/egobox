@@ -1,7 +1,7 @@
-use crate::doe::{SamplingMethod, LHS};
 use crate::errors::{EgoboxError, Result};
-use crate::gaussian_process::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
+use doe::{SamplingMethod, LHS};
 use finitediff::FiniteDiff;
+use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use libm::erfc;
 use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix2, Zip};
 use ndarray_npy::write_npy;
@@ -274,6 +274,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 
 #[cfg(test)]
 mod tests {
+    extern crate intel_mkl_src;
     use super::*;
     use approx::assert_abs_diff_eq;
     // use argmin_testfunctions::rosenbrock;

@@ -24,9 +24,9 @@ pub struct GpInnerParams {
     beta: Array2<f64>,
     /// Gaussian Process weights
     gamma: Array2<f64>,
-    /// Cholesky decomposition of the correlation matrix [R]
+    /// Cholesky decomposition of the correlation matrix \[R\]
     r_chol: Array2<f64>,
-    /// Solution of the linear equation system : [R] x Ft = y
+    /// Solution of the linear equation system : \[R\] x Ft = y
     ft: Array2<f64>,
     /// R upper triangle matrix of QR decomposition of the matrix Ft
     ft_qr_r: Array2<f64>,

@@ -1,4 +1,4 @@
-use ndarray_linalg::error::LinalgError;
+use gp::GpError;
 use std::error::Error;
 use std::fmt::{self, Display};
 
@@ -8,29 +8,20 @@ pub type Result<T> = std::result::Result<T, EgoboxError>;
 #[derive(Debug)]
 pub enum EgoboxError {
     /// When LikelihoodComputation computation fails
-    LikelihoodComputationError(String),
-    /// When linear algebra computation fails
-    LinalgError(String),
-    /// When clustering fails
-    EmptyCluster(String),
+    GpError(String),
     /// When EGO fails
     EgoError(String),
     /// When PLS fails
-    PlsError(String),
-    /// When a value is invalid
     InvalidValue(String),
 }
 
 impl Display for EgoboxError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::LikelihoodComputationError(message) => {
-                write!(f, "LikelihoodComputation computation error: {}", message)
+            Self::GpError(message) => {
+                write!(f, "Gaussian process computation error: {}", message)
             }
-            Self::LinalgError(message) => write!(f, "Linear Algebra error: {}", message),
-            Self::EmptyCluster(message) => write!(f, "Empty cluster: {}", message),
             Self::EgoError(message) => write!(f, "EGO error: {}", message),
-            Self::PlsError(message) => write!(f, "PLS error: {}", message),
             Self::InvalidValue(message) => write!(f, "Value error: {}", message),
         }
     }
@@ -38,8 +29,8 @@ impl Display for EgoboxError {
 
 impl Error for EgoboxError {}
 
-impl From<LinalgError> for EgoboxError {
-    fn from(error: LinalgError) -> EgoboxError {
-        EgoboxError::LinalgError(error.to_string())
+impl From<GpError> for EgoboxError {
+    fn from(error: GpError) -> EgoboxError {
+        EgoboxError::GpError(error.to_string())
     }
 }
