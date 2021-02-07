@@ -3,7 +3,7 @@ use crate::errors::{GpError, Result};
 use crate::hyperparameters::GpHyperParams;
 use crate::mean_models::RegressionModel;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
-use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, DataMut, Ix2};
+use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
 use ndarray_linalg::qr::*;
@@ -11,7 +11,6 @@ use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
 use nlopt::*;
 use pls::Pls;
-use std::time::Instant;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 const NUGGET: f64 = 100.0 * f64::EPSILON;
