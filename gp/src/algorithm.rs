@@ -295,7 +295,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialKernel::default(),
         )
-        .with_initial_theta(0.1)
+        .set_initial_theta(0.1)
         .fit(&xt, &yt)
         .expect("GP fit error");
         let expected = 1.7782794100389228;

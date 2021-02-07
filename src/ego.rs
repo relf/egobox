@@ -167,7 +167,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         }
     }
 
-    pub fn find_best_point(
+    fn find_best_point(
         &self,
         x_data: &Array2<f64>,
         y_data: &Array2<f64>,
@@ -219,7 +219,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         best_x.ok_or_else(|| EgoboxError::EgoError(String::from("Can not find best point")))
     }
 
-    pub fn get_virtual_point(
+    fn get_virtual_point(
         &self,
         xk: &Array1<f64>,
         _y_data: &Array2<f64>,
@@ -232,7 +232,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         Ok(pred + conf * f64::sqrt(var))
     }
 
-    pub fn ei(
+    fn ei(
         x: &[f64],
         gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
         f_min: f64,
@@ -254,15 +254,15 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         }
     }
 
-    pub fn norm_cdf(x: f64) -> f64 {
+    fn norm_cdf(x: f64) -> f64 {
         0.5 * erfc(-x / std::f64::consts::SQRT_2)
     }
 
-    pub fn norm_pdf(x: f64) -> f64 {
+    fn norm_pdf(x: f64) -> f64 {
         (-0.5 * x * x).exp() / SQRT_2PI
     }
 
-    pub fn obj_eval<D: Data<Elem = f64>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+    fn obj_eval<D: Data<Elem = f64>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
         let mut y = Array1::zeros(x.nrows());
         let obj = &self.obj;
         Zip::from(&mut y)

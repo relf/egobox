@@ -53,7 +53,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
     /// Set initial value for theta hyper parameter.
     ///
     /// During training process, the internal optimization is started from `initial_theta`.
-    pub fn with_initial_theta(mut self, theta: f64) -> Self {
+    pub fn set_initial_theta(mut self, theta: f64) -> Self {
         self.theta = theta;
         self
     }
@@ -71,7 +71,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
     }
 
     /// Set KPLS.
-    pub fn with_kpls_dim(mut self, kpls_dim: usize) -> Self {
+    pub fn set_kpls_dim(mut self, kpls_dim: usize) -> Self {
         self.kpls_dim = Some(kpls_dim);
         self
     }

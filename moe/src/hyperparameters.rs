@@ -47,17 +47,17 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         self.rng.clone()
     }
 
-    pub fn with_clusters(mut self, n_clusters: usize) -> Self {
+    pub fn set_clusters(mut self, n_clusters: usize) -> Self {
         self.n_clusters = n_clusters;
         self
     }
 
-    pub fn with_recombination(mut self, recombination: Recombination) -> Self {
+    pub fn set_recombination(mut self, recombination: Recombination) -> Self {
         self.recombination = recombination;
         self
     }
 
-    pub fn with_heaviside_factor(mut self, heaviside_factor: f64) -> Self {
+    pub fn set_heaviside_factor(mut self, heaviside_factor: f64) -> Self {
         self.heaviside_factor = heaviside_factor;
         self
     }
