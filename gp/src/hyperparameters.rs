@@ -12,6 +12,8 @@ pub struct GpHyperParams<Mean: RegressionModel, Kernel: CorrelationModel> {
     kernel: Kernel,
     /// Optionally apply dimension reduction (KPLS) or not
     kpls_dim: Option<usize>,
+    /// Optionally apply dimension reduction (KPLS) or not
+    nugget: f64,
     /// Training inputs
     xtrain: Array2<f64>,
     /// Training outputs
@@ -25,6 +27,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
             mean,
             kernel,
             kpls_dim: None,
+            nugget: 100.0 * f64::EPSILON,
             xtrain: Array2::default((1, 1)),
             ytrain: Array2::default((1, 1)),
         }
@@ -50,6 +53,11 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
         &self.kpls_dim
     }
 
+    /// Get number of components used by PLS
+    pub fn nugget(&self) -> f64 {
+        self.nugget
+    }
+
     /// Set initial value for theta hyper parameter.
     ///
     /// During training process, the internal optimization is started from `initial_theta`.
@@ -73,6 +81,14 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
     /// Set KPLS.
     pub fn set_kpls_dim(mut self, kpls_dim: usize) -> Self {
         self.kpls_dim = Some(kpls_dim);
+        self
+    }
+
+    /// Set nugget.
+    ///
+    /// Nugget is used to improve numerical stability
+    pub fn set_nugget(mut self, nugget: f64) -> Self {
+        self.nugget = nugget;
         self
     }
 

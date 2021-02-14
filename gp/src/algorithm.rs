@@ -13,7 +13,6 @@ use nlopt::*;
 use pls::Pls;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
-const NUGGET: f64 = 100.0 * f64::EPSILON;
 
 #[derive(Default)]
 pub struct GpInnerParams {
@@ -142,7 +141,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
                 Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
                     .unwrap();
             let rxx = self.kernel().eval(&theta, &x_distances.d, &w_star);
-            match reduced_likelihood(&fx, rxx, &x_distances, &y_t) {
+            match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
                 Ok(r) => {
                     // println!("theta={} lkh={}", theta, -r.0);
                     -r.0
@@ -191,7 +190,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
         }
 
         let rxx = self.kernel().eval(&opt_theta, &x_distances.d, &w_star);
-        let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain)?;
+        let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
             theta: opt_theta,
             mean: *self.mean(),
@@ -209,9 +208,10 @@ pub fn reduced_likelihood(
     rxx: ArrayBase<impl Data<Elem = f64>, Ix2>,
     x_distances: &DistanceMatrix<f64>,
     ytrain: &NormalizedMatrix<f64>,
+    nugget: f64,
 ) -> Result<(f64, GpInnerParams)> {
     // Set up R
-    let mut r_mx: Array2<f64> = Array2::<f64>::eye(x_distances.n_obs).mapv(|v| (v + v * NUGGET));
+    let mut r_mx: Array2<f64> = Array2::<f64>::eye(x_distances.n_obs).mapv(|v| (v + v * nugget));
     for (i, ij) in x_distances.d_indices.outer_iter().enumerate() {
         r_mx[[ij[0], ij[1]]] = rxx[[i, 0]];
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
