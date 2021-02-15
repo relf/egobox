@@ -3,12 +3,13 @@ use crate::errors::{GpError, Result};
 use crate::hyperparameters::GpHyperParams;
 use crate::mean_models::RegressionModel;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
-use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
+use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
 use ndarray_linalg::qr::*;
 use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
+use ndarray_stats::QuantileExt;
 use nlopt::*;
 use pls::Pls;
 
@@ -153,46 +154,25 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
             }
         };
 
-        let opt_theta;
-        {
-            // block to drop optimizer and allow self.kernel borrowing after
-            let mut optimizer =
-                Nlopt::new(Algorithm::Cobyla, theta0.len(), objfn, Target::Minimize, ());
-            let mut index;
-            for i in 0..theta0.len() {
-                index = i; // cannot use i in closure directly: it is undefined in closures when compiling in release mode.
-                let cstr_low =
-                    |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-                        // -(x[i] - f64::log10(1e-6))
-                        -x[index] - 6.
-                    };
-                let cstr_up = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-                    // -(f64::log10(20.) - x[i])
-                    x[index] - LOG10_20
-                };
+        // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
+        let mut theta0s = Array2::zeros((8, theta0.len()));
+        theta0s.row_mut(0).assign(&theta0);
+        let seeds: Vec<_> = (-5..2).map(f64::from).collect();
+        Zip::from(theta0s.slice_mut(s![1.., ..]).genrows_mut())
+            .and(&seeds)
+            .par_apply(|mut theta, i| theta.assign(&Array1::from_elem(theta0.len(), i + 1.)));
+        // println!("theta0s = {:?}", theta0s);
+        let opt_thetas =
+            theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
+        // println!("opt_theta = {:?}", opt_thetas);
 
-                optimizer
-                    .add_inequality_constraint(cstr_low, (), 2e-4)
-                    .unwrap();
-                optimizer
-                    .add_inequality_constraint(cstr_up, (), 2e-4)
-                    .unwrap();
-            }
-            let mut theta_vec = theta0.mapv(f64::log10).into_raw_vec();
-            optimizer.set_initial_step1(0.5).unwrap();
-            optimizer.set_maxeval(10 * theta0.len() as u32).unwrap();
-            optimizer.set_ftol_rel(1e-4).unwrap();
-            let res = optimizer.optimize(&mut theta_vec);
-            if let Err(e) = res {
-                println!("ERROR OPTIM in GP {:?}", e);
-            }
-            opt_theta = arr1(&theta_vec).mapv(|v| base.powf(v));
-        }
+        let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
+        let opt_theta = &(opt_thetas[opt_index]).0;
 
-        let rxx = self.kernel().eval(&opt_theta, &x_distances.d, &w_star);
+        let rxx = self.kernel().eval(opt_theta, &x_distances.d, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
-            theta: opt_theta,
+            theta: opt_theta.to_owned(),
             mean: *self.mean(),
             kernel: *self.kernel(),
             inner_params,
@@ -200,6 +180,45 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
             xtrain,
             ytrain,
         })
+    }
+}
+
+pub fn optimize_theta<F>(objfn: F, theta0: &Array1<f64>) -> (Array1<f64>, f64)
+where
+    F: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
+{
+    let base: f64 = 10.;
+    // block to drop optimizer and allow self.kernel borrowing after
+    let mut optimizer = Nlopt::new(Algorithm::Cobyla, theta0.len(), objfn, Target::Minimize, ());
+    let mut index;
+    for i in 0..theta0.len() {
+        index = i; // cannot use i in closure directly: it is undefined in closures when compiling in release mode.
+        let cstr_low = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+            // -(x[i] - f64::log10(1e-6))
+            -x[index] - 6.
+        };
+        let cstr_up = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+            // -(f64::log10(20.) - x[i])
+            x[index] - LOG10_20
+        };
+
+        optimizer
+            .add_inequality_constraint(cstr_low, (), 2e-4)
+            .unwrap();
+        optimizer
+            .add_inequality_constraint(cstr_up, (), 2e-4)
+            .unwrap();
+    }
+    let mut theta_vec = theta0.mapv(f64::log10).into_raw_vec();
+    optimizer.set_initial_step1(0.5).unwrap();
+    optimizer.set_maxeval(10 * theta0.len() as u32).unwrap();
+    optimizer.set_ftol_rel(1e-4).unwrap();
+    match optimizer.optimize(&mut theta_vec) {
+        Ok((_, fmin)) => (arr1(&theta_vec).mapv(|v| base.powf(v)), fmin),
+        Err(_e) => {
+            // println!("ERROR OPTIM in GP {:?}", e);
+            (arr1(&theta_vec).mapv(|v| base.powf(v)), f64::INFINITY)
+        }
     }
 }
 
@@ -298,19 +317,19 @@ mod tests {
         .set_initial_theta(0.1)
         .fit(&xt, &yt)
         .expect("GP fit error");
-        let expected = 1.7782794100389228;
+        let expected = 1.701051;
         assert_abs_diff_eq!(expected, gp.theta[0], epsilon = 1e-6);
 
         let yvals = gp
             .predict_values(&arr2(&[[1.0], [3.5]]))
             .expect("prediction error");
-        let expected_y = arr2(&[[1.0], [0.8718355]]);
+        let expected_y = arr2(&[[1.0], [0.869721]]);
         assert_abs_diff_eq!(expected_y, yvals, epsilon = 1e-3);
 
         let yvars = gp
             .predict_variances(&arr2(&[[1.0], [3.5]]))
             .expect("prediction error");
-        let expected_vars = arr2(&[[0.], [0.01222532]]);
+        let expected_vars = arr2(&[[0.], [0.011049]]);
         assert_abs_diff_eq!(expected_vars, yvars, epsilon = 1e-6);
     }
 
