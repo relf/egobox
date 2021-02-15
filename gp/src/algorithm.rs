@@ -3,6 +3,7 @@ use crate::errors::{GpError, Result};
 use crate::hyperparameters::GpHyperParams;
 use crate::mean_models::RegressionModel;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
+use doe::{SamplingMethod, LHS};
 use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
@@ -157,10 +158,16 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
         // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
         let mut theta0s = Array2::zeros((8, theta0.len()));
         theta0s.row_mut(0).assign(&theta0);
-        let seeds: Vec<_> = (-5..2).map(f64::from).collect();
+        let mut xlimits = Array2::zeros((theta0.len(), 2));
+        for mut row in xlimits.genrows_mut() {
+            row.assign(&arr1(&[1e-6, 20.]));
+        }
+        // xlimits.column_mut(0).assign(&Array1::from_elem(theta0.len(), 1e-6));
+        // xlimits.column_mut(1).assign(&Array1::from_elem(theta0.len(), 20.));
+        let seeds = LHS::new(&xlimits).sample(7);
         Zip::from(theta0s.slice_mut(s![1.., ..]).genrows_mut())
-            .and(&seeds)
-            .par_apply(|mut theta, i| theta.assign(&Array1::from_elem(theta0.len(), i + 1.)));
+            .and(seeds.genrows())
+            .par_apply(|mut theta, row| theta.assign(&row));
         // println!("theta0s = {:?}", theta0s);
         let opt_thetas =
             theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
@@ -317,7 +324,7 @@ mod tests {
         .set_initial_theta(0.1)
         .fit(&xt, &yt)
         .expect("GP fit error");
-        let expected = 1.701051;
+        let expected = 1.6699060;
         assert_abs_diff_eq!(expected, gp.theta[0], epsilon = 1e-6);
 
         let yvals = gp
@@ -329,7 +336,7 @@ mod tests {
         let yvars = gp
             .predict_variances(&arr2(&[[1.0], [3.5]]))
             .expect("prediction error");
-        let expected_vars = arr2(&[[0.], [0.011049]]);
+        let expected_vars = arr2(&[[0.], [0.0105914]]);
         assert_abs_diff_eq!(expected_vars, yvars, epsilon = 1e-6);
     }
 
