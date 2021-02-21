@@ -14,6 +14,10 @@ pub enum LHSKind {
     Classic,
     /// sample is the middle of its latin hypercube intervals
     Centered,
+    /// distance between points is maximized
+    Maximin,
+    /// sample is the middle of its latin hypercube intervals and distance between points is maximized
+    CenteredMaximin,
     /// samples locations is optimized using the Enhanced Stochastic Evolutionary algorithm (ESE)
     /// See Jin, R. and Chen, W. and Sudjianto, A. (2005), “An efficient algorithm for constructing
     /// optimal design of computer experiments.” Journal of Statistical Planning and Inference, 134:268-287.
@@ -48,10 +52,12 @@ impl<R: Rng + Clone> SamplingMethod for LHS<R> {
     fn normalized_sample(&self, ns: usize) -> Array2<f64> {
         let mut rng = self.rng.clone();
         match &self.kind {
-            LHSKind::Classic => self._normalized_classic_lhs(ns, &mut rng),
-            LHSKind::Centered => self._normalized_centered_lhs(ns, &mut rng),
+            LHSKind::Classic => self._classic_lhs(ns, &mut rng),
+            LHSKind::Centered => self._centered_lhs(ns, &mut rng),
+            LHSKind::Maximin => self._maximin_lhs(ns, &mut rng, false, 5),
+            LHSKind::CenteredMaximin => self._maximin_lhs(ns, &mut rng, true, 5),
             LHSKind::Optimized => {
-                let doe = self._normalized_classic_lhs(ns, &mut rng);
+                let doe = self._classic_lhs(ns, &mut rng);
                 let nx = self.xlimits.nrows();
                 let outer_loop = cmp::min((1.5 * nx as f64) as usize, 30);
                 let inner_loop = cmp::min(20 * nx, 100);
@@ -215,7 +221,7 @@ impl<R: Rng + Clone> LHS<R> {
         res
     }
 
-    fn _normalized_classic_lhs(&self, ns: usize, rng: &mut R) -> Array2<f64> {
+    fn _classic_lhs(&self, ns: usize, rng: &mut R) -> Array2<f64> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
@@ -237,7 +243,7 @@ impl<R: Rng + Clone> LHS<R> {
         lhs
     }
 
-    pub fn _normalized_centered_lhs(&self, ns: usize, rng: &mut R) -> Array2<f64> {
+    fn _centered_lhs(&self, ns: usize, rng: &mut R) -> Array2<f64> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
@@ -250,6 +256,24 @@ impl<R: Rng + Clone> LHS<R> {
         for j in 0..nx {
             c.as_slice_mut().unwrap().shuffle(rng);
             lhs.column_mut(j).assign(&c);
+        }
+        lhs
+    }
+
+    fn _maximin_lhs(&self, ns: usize, rng: &mut R, centered: bool, n_iter: usize) -> Array2<f64> {
+        let mut max_dist = 0.;
+        let mut lhs = self._classic_lhs(ns, rng);
+        for _ in 0..n_iter {
+            if centered {
+                lhs = self._centered_lhs(ns, rng);
+            } else {
+                lhs = self._classic_lhs(ns, rng);
+            }
+            let d = pdist(&lhs);
+            let d_min = d.min().unwrap();
+            if max_dist < *d_min {
+                max_dist = *d_min
+            }
         }
         lhs
     }
@@ -307,6 +331,17 @@ mod tests {
         let actual = LHS::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(0))
             .kind(LHSKind::Centered)
+            .sample(5);
+        assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_centered_maximin_lhs() {
+        let xlimits = arr2(&[[5., 10.], [0., 1.]]);
+        let expected = array![[9.5, 0.5], [8.5, 0.3], [5.5, 0.7], [6.5, 0.1], [7.5, 0.9]];
+        let actual = LHS::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(0))
+            .kind(LHSKind::CenteredMaximin)
             .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
