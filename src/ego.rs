@@ -1,5 +1,5 @@
 use crate::errors::{EgoboxError, Result};
-use doe::{SamplingMethod, LHS};
+use doe::{LHSKind, SamplingMethod, LHS};
 use finitediff::FiniteDiff;
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use libm::erfc;
@@ -21,6 +21,12 @@ pub struct OptimResult {
     y_opt: f64,
 }
 
+pub enum AcqStrategy {
+    EI,
+    WB2,
+    WB2S,
+}
+
 pub enum QEiStrategy {
     KrigingBeliever,
     // KrigingBelieverLowerBound,
@@ -37,6 +43,7 @@ pub struct Ego<F: ObjFn, R: Rng> {
     pub x_doe: Option<Array2<f64>>,
     pub xlimits: Array2<f64>,
     pub q_ei: QEiStrategy,
+    pub acq: AcqStrategy,
     pub obj: F,
     pub rng: R,
 }
@@ -57,6 +64,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
             x_doe: None,
             xlimits: xlimits.to_owned(),
             q_ei: QEiStrategy::KrigingBeliever,
+            acq: AcqStrategy::EI,
             obj: f,
             rng,
         }
@@ -96,6 +104,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
             x_doe: self.x_doe,
             xlimits: self.xlimits,
             q_ei: self.q_ei,
+            acq: self.acq,
             obj: self.obj,
             rng,
         }
@@ -109,7 +118,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
     ) -> (Array2<f64>, Array2<f64>) {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
-        for _ in 0..self.n_parallel {
+        for i in 0..self.n_parallel {
             let gpr = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
                 ConstantMean::default(),
                 SquaredExponentialKernel::default(),
@@ -117,18 +126,20 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
             .fit(&x_data, &y_data)
             .expect("GP training failure");
 
-            let f_min = y_data.min().unwrap();
-            if false {
+            if i == 0 {
+                let f_min = y_data.min().unwrap();
                 let xplot = Array::linspace(0., 25., 100).insert_axis(Axis(1));
                 let obj = self.obj_eval(&xplot);
                 let gpr_vals = gpr.predict_values(&xplot).unwrap();
                 let gpr_vars = gpr.predict_variances(&xplot).unwrap();
-                let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min));
+                let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min, None));
+                let wb2 = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, None));
                 write_npy("ego_x.npy", xplot).expect("xplot saved");
                 write_npy("ego_obj.npy", obj).expect("obj saved");
                 write_npy("ego_gpr.npy", gpr_vals).expect("gp vals saved");
                 write_npy("ego_gpr_vars.npy", gpr_vars).expect("gp vars saved");
-                write_npy("ego_ei.npy", ei).expect("gp vars saved");
+                write_npy("ego_ei.npy", ei).expect("ei saved");
+                write_npy("ego_wb2.npy", wb2).expect("wb2 saved");
             }
 
             match self.find_best_point(&x_data, &y_data, &sampling, &gpr) {
@@ -153,14 +164,14 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 
     pub fn suggest(&self, x_data: &Array2<f64>, y_data: &Array2<f64>) -> Array2<f64> {
         let rng = self.rng.clone();
-        let sampling = LHS::new(&self.xlimits).with_rng(rng);
+        let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
         let (x_dat, _) = self.next_points(&x_data, &y_data, &sampling);
         x_dat
     }
 
     pub fn minimize(&mut self) -> OptimResult {
         let rng = self.rng.clone();
-        let sampling = LHS::new(&self.xlimits).with_rng(rng);
+        let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
 
         let mut x_data = if let Some(xdoe) = &self.x_doe {
             xdoe.to_owned()
@@ -197,29 +208,47 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
-        let obj = |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+
+        let obj = |x: &[f64], gradient: Option<&mut [f64]>, scale: &mut Option<f64>| -> f64 {
             if let Some(grad) = gradient {
-                let f = |x: &Vec<f64>| -> f64 { -Self::ei(x, &gpr, *f_min) };
+                let f = |x: &Vec<f64>| -> f64 { self.acq_eval(x, &gpr, *f_min, *scale) };
                 grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
             }
-            -Self::ei(x, &gpr, *f_min)
+            self.acq_eval(x, &gpr, *f_min, *scale)
         };
-        let mut optimizer = Nlopt::new(Algorithm::Slsqp, x_data.ncols(), obj, Target::Minimize, ());
-        optimizer
-            .set_lower_bounds(self.xlimits.column(0).to_owned().as_slice().unwrap())
-            .unwrap();
-        optimizer
-            .set_upper_bounds(self.xlimits.column(1).to_owned().as_slice().unwrap())
-            .unwrap();
-        optimizer.set_maxeval(200).unwrap();
-        optimizer.set_ftol_rel(1e-4).unwrap();
-        optimizer.set_ftol_abs(1e-4).unwrap();
+
         let mut success = false;
         let mut n_optim = 1;
         let n_max_optim = 20;
         let mut best_x = None;
 
         while !success && n_optim <= n_max_optim {
+            let scaling_points = sampling.sample(100 * self.xlimits.nrows());
+            let scale_wb2s = Self::compute_wb2s_scale(&scaling_points, &gpr, *f_min);
+
+            if n_optim == -1 {
+                let xplot = Array::linspace(0., 25., 100).insert_axis(Axis(1));
+                let wb2s = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, Some(scale_wb2s)));
+                write_npy("ego_wb2s.npy", wb2s).expect("wb2 saved");
+            }
+
+            let mut optimizer = Nlopt::new(
+                Algorithm::Slsqp,
+                x_data.ncols(),
+                obj,
+                Target::Minimize,
+                Some(scale_wb2s),
+            );
+            optimizer
+                .set_lower_bounds(self.xlimits.column(0).to_owned().as_slice().unwrap())
+                .unwrap();
+            optimizer
+                .set_upper_bounds(self.xlimits.column(1).to_owned().as_slice().unwrap())
+                .unwrap();
+            optimizer.set_maxeval(200).unwrap();
+            optimizer.set_ftol_rel(1e-4).unwrap();
+            optimizer.set_ftol_abs(1e-4).unwrap();
+
             let mut best_opt = f64::INFINITY;
             let x_start = sampling.sample(self.n_start);
 
@@ -258,6 +287,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         x: &[f64],
         gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
         f_min: f64,
+        _scale: Option<f64>,
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = gpr.predict_values(&pt) {
@@ -276,12 +306,63 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         }
     }
 
+    fn wb2s(
+        x: &[f64],
+        gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
+        f_min: f64,
+        scale: Option<f64>,
+    ) -> f64 {
+        let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
+        let ei = Self::ei(x, gpr, f_min, scale);
+        // println!("EI={:?}", ei);
+        let scale = scale.unwrap_or(1.);
+        let wb2s = scale * ei - gpr.predict_values(&pt).unwrap()[[0, 0]];
+        // println!("WB2S={:?}", wb2s);
+        wb2s
+    }
+
+    fn compute_wb2s_scale(
+        x: &Array2<f64>,
+        gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
+        f_min: f64,
+    ) -> f64 {
+        let ratio = 100.; // TODO: make it a parameter
+        let ei_x = x.map_axis(Axis(1), |xi| {
+            Self::ei(&xi.as_slice().unwrap(), gpr, f_min, None)
+        });
+        let i_max = ei_x.argmax().unwrap();
+        let pred_max = gpr
+            .predict_values(&x.row(i_max).insert_axis(Axis(1)))
+            .unwrap()[[0, 0]];
+        let ei_max = ei_x[i_max];
+        println!("EI MAX = {}", ei_max);
+        if ei_max > 0. {
+            ratio * pred_max.abs() / ei_max
+        } else {
+            1.
+        }
+    }
+
     fn norm_cdf(x: f64) -> f64 {
         0.5 * erfc(-x / std::f64::consts::SQRT_2)
     }
 
     fn norm_pdf(x: f64) -> f64 {
         (-0.5 * x * x).exp() / SQRT_2PI
+    }
+
+    fn acq_eval(
+        &self,
+        x: &[f64],
+        gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
+        f_min: f64,
+        scale: Option<f64>,
+    ) -> f64 {
+        match self.acq {
+            AcqStrategy::EI => -Self::ei(x, gpr, f_min, None),
+            AcqStrategy::WB2 => -Self::wb2s(x, gpr, f_min, Some(1.)),
+            AcqStrategy::WB2S => -Self::wb2s(x, gpr, f_min, scale),
+        }
     }
 
     fn obj_eval<D: Data<Elem = f64>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
@@ -328,7 +409,7 @@ mod tests {
 
         let mut x_doe = array![[0.], [7.], [25.]];
         let mut y_doe = x_doe.mapv(|x| xsinx(&[x]));
-        for i in 0..6 {
+        for _i in 0..6 {
             let x_suggested = ego.suggest(&x_doe, &y_doe);
             println!("{:?}", x_suggested);
             x_doe = stack![Axis(0), x_doe, x_suggested];
