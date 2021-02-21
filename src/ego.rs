@@ -21,18 +21,19 @@ pub struct OptimResult {
     y_opt: f64,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AcqStrategy {
     EI,
     WB2,
     WB2S,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum QEiStrategy {
     KrigingBeliever,
-    // KrigingBelieverLowerBound,
-    // KrigingBelieverUpperBound,
-    // KrigingBelieverRandom,
-    // ConstantLiarMinimum,
+    KrigingBelieverLowerBound,
+    KrigingBelieverUpperBound,
+    ConstantLiarMinimum,
 }
 
 pub struct Ego<F: ObjFn, R: Rng> {
@@ -95,6 +96,16 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         self
     }
 
+    pub fn qei_strategy(&mut self, q_ei: QEiStrategy) -> &mut Self {
+        self.q_ei = q_ei;
+        self
+    }
+
+    pub fn acq_strategy(&mut self, acq: AcqStrategy) -> &mut Self {
+        self.acq = acq;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Ego<F, R2> {
         Ego {
             n_iter: self.n_iter,
@@ -132,7 +143,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
                 let obj = self.obj_eval(&xplot);
                 let gpr_vals = gpr.predict_values(&xplot).unwrap();
                 let gpr_vars = gpr.predict_variances(&xplot).unwrap();
-                let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min, None));
+                let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min));
                 let wb2 = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, None));
                 write_npy("ego_x.npy", xplot).expect("xplot saved");
                 write_npy("ego_obj.npy", obj).expect("obj saved");
@@ -273,21 +284,29 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
     fn get_virtual_point(
         &self,
         xk: &Array1<f64>,
-        _y_data: &Array2<f64>,
+        y_data: &Array2<f64>,
         gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
     ) -> Result<f64> {
-        let x = &xk.to_owned().insert_axis(Axis(0));
-        let pred = gpr.predict_values(&x)?[[0, 0]];
-        let var = gpr.predict_variances(&x)?[[0, 0]];
-        let conf = -3.; // Kriging Believer Lower Bound
-        Ok(pred + conf * f64::sqrt(var))
+        if self.q_ei == QEiStrategy::ConstantLiarMinimum {
+            Ok(*y_data.min().unwrap())
+        } else {
+            let x = &xk.to_owned().insert_axis(Axis(0));
+            let pred = gpr.predict_values(&x)?[[0, 0]];
+            let var = gpr.predict_variances(&x)?[[0, 0]];
+            let conf = match self.q_ei {
+                QEiStrategy::KrigingBeliever => 0.,
+                QEiStrategy::KrigingBelieverLowerBound => -3.,
+                QEiStrategy::KrigingBelieverUpperBound => 3.,
+                _ => -1., // never used
+            };
+            Ok(pred + conf * f64::sqrt(var))
+        }
     }
 
     fn ei(
         x: &[f64],
         gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
         f_min: f64,
-        _scale: Option<f64>,
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = gpr.predict_values(&pt) {
@@ -313,7 +332,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         scale: Option<f64>,
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-        let ei = Self::ei(x, gpr, f_min, scale);
+        let ei = Self::ei(x, gpr, f_min);
         // println!("EI={:?}", ei);
         let scale = scale.unwrap_or(1.);
         let wb2s = scale * ei - gpr.predict_values(&pt).unwrap()[[0, 0]];
@@ -327,15 +346,12 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         f_min: f64,
     ) -> f64 {
         let ratio = 100.; // TODO: make it a parameter
-        let ei_x = x.map_axis(Axis(1), |xi| {
-            Self::ei(&xi.as_slice().unwrap(), gpr, f_min, None)
-        });
+        let ei_x = x.map_axis(Axis(1), |xi| Self::ei(&xi.as_slice().unwrap(), gpr, f_min));
         let i_max = ei_x.argmax().unwrap();
         let pred_max = gpr
             .predict_values(&x.row(i_max).insert_axis(Axis(1)))
             .unwrap()[[0, 0]];
         let ei_max = ei_x[i_max];
-        println!("EI MAX = {}", ei_max);
         if ei_max > 0. {
             ratio * pred_max.abs() / ei_max
         } else {
@@ -359,7 +375,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         scale: Option<f64>,
     ) -> f64 {
         match self.acq {
-            AcqStrategy::EI => -Self::ei(x, gpr, f_min, None),
+            AcqStrategy::EI => -Self::ei(x, gpr, f_min),
             AcqStrategy::WB2 => -Self::wb2s(x, gpr, f_min, Some(1.)),
             AcqStrategy::WB2S => -Self::wb2s(x, gpr, f_min, scale),
         }
@@ -399,6 +415,21 @@ mod tests {
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
     }
+
+    // fn test_xsinx() {
+    //     fn xsinx(x: &[f64]) -> f64 {
+    //         (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
+    //     };
+    //     let now = Instant::now();
+    //     let res = Ego::new(xsinx, &array![[0.0, 25.0]])
+    //         .n_iter(6)
+    //         .x_doe(&array![[0.], [7.], [25.]])
+    //         .minimize();
+    //     println!("xsinx optim result = {:?}", res);
+    //     println!("Elapsed = {:?}", now.elapsed());
+    //     let expected = array![18.9];
+    //     assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+    // }
 
     #[test]
     fn test_xsinx_suggestions() {
