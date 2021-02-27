@@ -36,6 +36,12 @@ pub enum QEiStrategy {
     ConstantLiarMinimum,
 }
 
+/// A structure to pass data to objective acquisition function
+struct ObjData {
+    scale: f64,
+    scale_wb2: Option<f64>,
+}
+
 pub struct Ego<F: ObjFn, R: Rng> {
     pub n_iter: usize,
     pub n_start: usize,
@@ -220,12 +226,16 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
-        let obj = |x: &[f64], gradient: Option<&mut [f64]>, scale: &mut Option<f64>| -> f64 {
+        let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData| -> f64 {
+            let ObjData {
+                scale, scale_wb2, ..
+            } = params;
             if let Some(grad) = gradient {
-                let f = |x: &Vec<f64>| -> f64 { self.acq_eval(x, &gpr, *f_min, *scale) };
+                let f =
+                    |x: &Vec<f64>| -> f64 { self.acq_eval(x, &gpr, *f_min, *scale, *scale_wb2) };
                 grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
             }
-            self.acq_eval(x, &gpr, *f_min, *scale)
+            self.acq_eval(x, &gpr, *f_min, *scale, *scale_wb2)
         };
 
         let mut success = false;
@@ -235,11 +245,12 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 
         while !success && n_optim <= n_max_optim {
             let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-            let scale_wb2s = Self::compute_wb2s_scale(&scaling_points, &gpr, *f_min);
+            let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &gpr, *f_min);
+            let scale_obj = self._compute_obj_scale(&scaling_points);
 
             if n_optim == -1 {
                 let xplot = Array::linspace(0., 25., 100).insert_axis(Axis(1));
-                let wb2s = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, Some(scale_wb2s)));
+                let wb2s = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, Some(scale_wb2)));
                 write_npy("ego_wb2s.npy", wb2s).expect("wb2 saved");
             }
 
@@ -248,7 +259,10 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
                 x_data.ncols(),
                 obj,
                 Target::Minimize,
-                Some(scale_wb2s),
+                ObjData {
+                    scale: scale_obj,
+                    scale_wb2: Some(scale_wb2),
+                },
             );
             optimizer
                 .set_lower_bounds(self.xlimits.column(0).to_owned().as_slice().unwrap())
@@ -333,11 +347,8 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         let ei = Self::ei(x, gpr, f_min);
-        // println!("EI={:?}", ei);
         let scale = scale.unwrap_or(1.);
-        let wb2s = scale * ei - gpr.predict_values(&pt).unwrap()[[0, 0]];
-        // println!("WB2S={:?}", wb2s);
-        wb2s
+        scale * ei - gpr.predict_values(&pt).unwrap()[[0, 0]]
     }
 
     fn compute_wb2s_scale(
@@ -359,6 +370,10 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         }
     }
 
+    fn _compute_obj_scale(&self, x: &Array2<f64>) -> f64 {
+        *self.obj_eval(&x).mapv(|v| v.abs()).max().unwrap_or(&1.)
+    }
+
     fn norm_cdf(x: f64) -> f64 {
         0.5 * erfc(-x / std::f64::consts::SQRT_2)
     }
@@ -372,13 +387,15 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
         x: &[f64],
         gpr: &GaussianProcess<ConstantMean, SquaredExponentialKernel>,
         f_min: f64,
-        scale: Option<f64>,
+        scale: f64,
+        scale_wb2: Option<f64>,
     ) -> f64 {
-        match self.acq {
+        let obj = match self.acq {
             AcqStrategy::EI => -Self::ei(x, gpr, f_min),
             AcqStrategy::WB2 => -Self::wb2s(x, gpr, f_min, Some(1.)),
-            AcqStrategy::WB2S => -Self::wb2s(x, gpr, f_min, scale),
-        }
+            AcqStrategy::WB2S => -Self::wb2s(x, gpr, f_min, scale_wb2),
+        };
+        obj / scale
     }
 
     fn obj_eval<D: Data<Elem = f64>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
@@ -415,20 +432,22 @@ mod tests {
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
     }
 
-    // fn test_xsinx() {
-    //     fn xsinx(x: &[f64]) -> f64 {
-    //         (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
-    //     };
-    //     let now = Instant::now();
-    //     let res = Ego::new(xsinx, &array![[0.0, 25.0]])
-    //         .n_iter(6)
-    //         .x_doe(&array![[0.], [7.], [25.]])
-    //         .minimize();
-    //     println!("xsinx optim result = {:?}", res);
-    //     println!("Elapsed = {:?}", now.elapsed());
-    //     let expected = array![18.9];
-    //     assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
-    // }
+    #[test]
+    fn test_xsinx_wb2() {
+        fn xsinx(x: &[f64]) -> f64 {
+            (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
+        };
+        let now = Instant::now();
+        let res = Ego::new(xsinx, &array![[0.0, 25.0]])
+            .n_iter(10)
+            .acq_strategy(AcqStrategy::WB2)
+            .x_doe(&array![[0.], [7.], [25.]])
+            .minimize();
+        println!("xsinx optim result = {:?}", res);
+        println!("Elapsed = {:?}", now.elapsed());
+        let expected = array![18.9];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+    }
 
     #[test]
     fn test_xsinx_suggestions() {
