@@ -1,9 +1,5 @@
 use crate::{MoeError, Result};
-use linfa::{
-    dataset::{DatasetBase, Targets},
-    traits::*,
-    Float,
-};
+use linfa::{dataset::DatasetBase, traits::*, Float};
 use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
 use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
 use ndarray_stats::QuantileExt;
@@ -225,27 +221,14 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
     }
 }
 
-impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> Predict<&ArrayBase<D, Ix2>, Array1<usize>>
+impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictRef<ArrayBase<D, Ix2>, Array1<usize>>
     for GaussianMixture<F>
 {
-    fn predict(&self, observations: &ArrayBase<D, Ix2>) -> Array1<usize> {
+    fn predict_ref(&self, observations: &ArrayBase<D, Ix2>) -> Array1<usize> {
         let (_, log_resp) = self.estimate_log_prob_resp(&observations);
         log_resp
             .mapv(|v| v.exp())
             .map_axis(Axis(1), |row| row.argmax().unwrap())
-    }
-}
-
-impl<F: Float + Lapack + Scalar, D: Data<Elem = F>, T: Targets>
-    Predict<DatasetBase<ArrayBase<D, Ix2>, T>, DatasetBase<ArrayBase<D, Ix2>, Array1<usize>>>
-    for GaussianMixture<F>
-{
-    fn predict(
-        &self,
-        dataset: DatasetBase<ArrayBase<D, Ix2>, T>,
-    ) -> DatasetBase<ArrayBase<D, Ix2>, Array1<usize>> {
-        let predicted = self.predict(dataset.records());
-        dataset.with_targets(predicted)
     }
 }
 

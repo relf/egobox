@@ -4,6 +4,7 @@ use crate::hyperparameters::GpHyperParams;
 use crate::mean_models::RegressionModel;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
+use linfa::{traits::Fit, DatasetBase};
 use ndarray::{arr1, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
@@ -130,7 +131,8 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel
 
         let mut w_star = Array2::eye(x.ncols());
         if let Some(n_components) = self.kpls_dim() {
-            w_star = Pls::params(*n_components).fit(&x, &y)?.weights().to_owned();
+            let ds = DatasetBase::new(x.to_owned(), y.to_owned());
+            w_star = Pls::params(*n_components).fit(&ds)?.weights().to_owned();
         };
 
         let x_distances = DistanceMatrix::new(&xtrain.data);

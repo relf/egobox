@@ -1,90 +1,89 @@
 use crate::errors::{PlsError, Result};
-use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, NdFloat, Zip};
-use ndarray_linalg::{svd::*, Scalar};
+use linfa::{traits::Fit, DatasetBase, Float};
+use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray_linalg::{svd::*, Lapack, Scalar};
 use ndarray_stats::QuantileExt;
-use num_traits::cast::FromPrimitive;
 
 #[derive(Debug, Clone)]
-pub struct Pls {
+pub struct Pls<F: Float> {
     n_components: usize,
-    x_mean: Array1<f64>,
-    x_std: Array1<f64>,
-    y_mean: Array1<f64>,
-    y_std: Array1<f64>,
-    x_weights: Array2<f64>,  // U
-    y_weights: Array2<f64>,  // V
-    x_scores: Array2<f64>,   // xi
-    y_scores: Array2<f64>,   // Omega
-    x_loadings: Array2<f64>, // Gamma
-    y_loadings: Array2<f64>, // Delta
-    x_rotations: Array2<f64>,
-    y_rotations: Array2<f64>,
-    coeffs: Array2<f64>,
+    x_mean: Array1<F>,
+    x_std: Array1<F>,
+    y_mean: Array1<F>,
+    y_std: Array1<F>,
+    x_weights: Array2<F>,  // U
+    y_weights: Array2<F>,  // V
+    x_scores: Array2<F>,   // xi
+    y_scores: Array2<F>,   // Omega
+    x_loadings: Array2<F>, // Gamma
+    y_loadings: Array2<F>, // Delta
+    x_rotations: Array2<F>,
+    y_rotations: Array2<F>,
+    coeffs: Array2<F>,
     n_iters: Array1<usize>,
 }
 
-impl Pls {
-    pub fn weights(&self) -> &Array2<f64> {
+impl<F: Float> Pls<F> {
+    pub fn params(n_components: usize) -> PlsParams<F> {
+        PlsParams::new(n_components)
+    }
+
+    pub fn weights(&self) -> &Array2<F> {
         &self.x_rotations
     }
 }
 
-impl Pls {
-    pub fn params(n_components: usize) -> PlsParams {
-        PlsParams::new(n_components)
-    }
-}
-
 #[derive(Debug, Clone)]
-pub struct PlsParams {
+pub struct PlsParams<F: Float> {
     n_components: usize,
     max_iter: usize,
-    tolerance: f64,
+    tolerance: F,
 }
 
-impl PlsParams {
-    pub fn new(n_components: usize) -> PlsParams {
+impl<F: Float> PlsParams<F> {
+    pub fn new(n_components: usize) -> PlsParams<F> {
         PlsParams {
             n_components,
             max_iter: 500,
-            tolerance: 1e-6,
+            tolerance: F::from(1e-6).unwrap(),
         }
     }
 }
 
-fn center_scale(
-    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+fn center_scale<F: Float>(
+    x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    y: &ArrayBase<impl Data<Elem = F>, Ix2>,
 ) -> (
-    Array2<f64>,
-    Array2<f64>,
-    Array1<f64>,
-    Array1<f64>,
-    Array1<f64>,
-    Array1<f64>,
+    Array2<F>,
+    Array2<F>,
+    Array1<F>,
+    Array1<F>,
+    Array1<F>,
+    Array1<F>,
 ) {
     let (xnorm, x_mean, x_std) = normalize(&x);
     let (ynorm, y_mean, y_std) = normalize(&y);
     (xnorm, ynorm, x_mean, y_mean, x_std, y_std)
 }
 
-fn outer(
-    a: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-    b: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-) -> Array2<f64> {
+fn outer<F: Float>(
+    a: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    b: &ArrayBase<impl Data<Elem = F>, Ix1>,
+) -> Array2<F> {
     let mut outer = Array2::zeros((a.len(), b.len()));
     Zip::from(outer.genrows_mut()).and(a).apply(|mut out, ai| {
-        out.assign(&b.mapv(|v| v * ai));
+        out.assign(&b.mapv(|v| *ai * v));
     });
     outer
 }
 
-impl PlsParams {
-    pub fn fit(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Pls> {
+impl<'a, F: Float + Scalar + Lapack> Fit<'a, Array2<F>, Array2<F>> for PlsParams<F> {
+    type Object = Result<Pls<F>>;
+
+    fn fit(&self, dataset: &DatasetBase<Array2<F>, Array2<F>>) -> Result<Pls<F>> {
+        let x = dataset.records();
+        let y = dataset.targets();
+
         let n = x.nrows();
         let p = x.ncols();
         let q = y.ncols();
@@ -104,18 +103,18 @@ impl PlsParams {
         // Scale (in place)
         let (mut xk, mut yk, x_mean, y_mean, x_std, y_std) = center_scale(&x, &y);
 
-        let mut x_weights = Array2::zeros((p, n_components)); // U
-        let mut y_weights = Array2::zeros((q, n_components)); // V
-        let mut x_scores = Array2::zeros((n, n_components)); // xi
-        let mut y_scores = Array2::zeros((n, n_components)); // Omega
-        let mut x_loadings = Array2::zeros((p, n_components)); // Gamma
-        let mut y_loadings = Array2::zeros((q, n_components)); // Delta
+        let mut x_weights = Array2::<F>::zeros((p, n_components)); // U
+        let mut y_weights = Array2::<F>::zeros((q, n_components)); // V
+        let mut x_scores = Array2::<F>::zeros((n, n_components)); // xi
+        let mut y_scores = Array2::<F>::zeros((n, n_components)); // Omega
+        let mut x_loadings = Array2::<F>::zeros((p, n_components)); // Gamma
+        let mut y_loadings = Array2::<F>::zeros((q, n_components)); // Delta
         let mut n_iters = Array1::zeros(n_components);
 
-        // # This whole thing corresponds to the algorithm in section 4.1 of the
-        // # review from Wegelin. See above for a notation mapping from code to
-        // # paper.
-        let eps = f64::EPSILON;
+        // This whole thing corresponds to the algorithm in section 4.1 of the
+        // review from Wegelin. See above for a notation mapping from code to
+        // paper.
+        let eps = F::epsilon();
         for (i, k) in (0..n_components).enumerate() {
             // Find first left and right singular vectors of the x.T.dot(Y)
             // cross-covariance matrix.
@@ -123,7 +122,7 @@ impl PlsParams {
             // nipals algorithm
             // Replace columns that are all close to zero with zeros
             for mut yj in yk.gencolumns_mut() {
-                if *(yj.mapv(|y| y.abs()).max().unwrap()) < 10. * eps {
+                if *(yj.mapv(|y| y.abs()).max().unwrap()) < F::from(10.).unwrap() * eps {
                     yj.assign(&Array1::zeros(yj.len()));
                 }
             }
@@ -134,7 +133,7 @@ impl PlsParams {
 
             // svd_flip(x_weights, y_weights)
             let biggest_abs_val_idx = _x_weights.mapv(|v| v.abs()).argmax().unwrap();
-            let sign: f64 = _x_weights[biggest_abs_val_idx].signum();
+            let sign: F = _x_weights[biggest_abs_val_idx].signum();
             _x_weights.map_inplace(|v| *v *= sign);
             _y_weights.map_inplace(|v| *v *= sign);
 
@@ -167,7 +166,7 @@ impl PlsParams {
         let y_rotations = y_weights.dot(&pinv2(&y_loadings.t().dot(&y_weights)));
 
         let mut coeffs = x_rotations.dot(&y_loadings.t());
-        coeffs *= &y_std;
+        coeffs = &coeffs * &y_std;
 
         Ok(Pls {
             n_components,
@@ -187,15 +186,17 @@ impl PlsParams {
             n_iters,
         })
     }
+}
 
+impl<F: Float> PlsParams<F> {
     /// Return the first left and right singular vectors of x'Y.
     /// Provides an alternative to the svd(x'Y) and uses the power method instead.
     fn get_first_singular_vectors_power_method(
         &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> (Array1<f64>, Array1<f64>, usize) {
-        let eps = f64::EPSILON;
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        y: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array1<F>, Array1<F>, usize) {
+        let eps = F::epsilon();
 
         let mut y_score = Array1::ones(y.ncols());
         for col in y.t().genrows() {
@@ -206,11 +207,11 @@ impl PlsParams {
         }
 
         // init to big value for first convergence check
-        let mut x_weights_old = Array1::from_elem(x.ncols(), 100.);
+        let mut x_weights_old = Array1::<F>::from_elem(x.ncols(), F::from(100.).unwrap());
 
         let mut n_iter = 1;
-        let mut x_weights = Array1::ones(x.ncols());
-        let mut y_weights = Array1::ones(y.ncols());
+        let mut x_weights = Array1::<F>::ones(x.ncols());
+        let mut y_weights = Array1::<F>::ones(y.ncols());
         while n_iter < self.max_iter {
             x_weights = x.t().dot(&y_score) / y_score.dot(&y_score);
             x_weights /= (x_weights.dot(&x_weights)).sqrt() + eps;
@@ -240,28 +241,30 @@ impl PlsParams {
     }
 }
 
-fn pinv2(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+fn pinv2<F: Float + Scalar + Lapack>(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
     let (opt_u, s, opt_vh) = x.svd(true, true).unwrap();
     let u = opt_u.unwrap();
     let vh = opt_vh.unwrap();
-    let cond = s.max().unwrap() * (x.nrows().max(x.ncols()) as f64) * f64::EPSILON;
+    let cond = F::from(*s.max().unwrap()).unwrap()
+        * F::from(x.nrows().max(x.ncols())).unwrap()
+        * F::epsilon();
 
     let rank = s.fold(0, |mut acc, v| {
-        if v > &cond {
+        if F::from(*v).unwrap() > cond {
             acc += 1
         };
         acc
     });
 
     let mut ucut = u.slice(s![.., ..rank]).to_owned();
-    ucut /= &s.slice(s![..rank]);
+    ucut /= &s.slice(s![..rank]).mapv(|v| F::from(v).unwrap());
     ucut.dot(&vh.slice(s![..rank, ..]))
         .mapv(|v| v.conj())
         .t()
         .to_owned()
 }
 
-pub fn normalize<F: NdFloat + FromPrimitive>(
+pub fn normalize<F: Float>(
     x: &ArrayBase<impl Data<Elem = F>, Ix2>,
 ) -> (Array2<F>, Array1<F>, Array1<F>) {
     let x_mean = x.mean_axis(Axis(0)).unwrap();
@@ -297,6 +300,8 @@ mod tests {
 
     #[test]
     fn test_pls_fit() {
+        //let dataset = linnerud();
+
         //scikit-learn linnerud dataset
         let x = array![
             [5., 162., 60.],
@@ -343,7 +348,8 @@ mod tests {
             [138., 33., 68.]
         ];
         let start = Instant::now();
-        let pls = Pls::params(3).fit(&x, &y).expect("PLS fitting failed");
+        let ds = DatasetBase::new(x, y);
+        let pls = Pls::params(3).fit(&ds).expect("PLS fitting failed");
         let duration = start.elapsed();
         println!("Time elapsed is: {:?}", duration);
 
@@ -425,7 +431,8 @@ mod tests {
         ];
         let nrows = y.nrows();
         y.column_mut(0).assign(&Array1::ones(nrows));
-        let pls = Pls::params(3).fit(&x, &y).expect("PLS fitting failed");
+        let ds = DatasetBase::new(x, y);
+        let pls = Pls::params(3).fit(&ds).expect("PLS fitting failed");
 
         let expected_x_weights = array![
             [0.6273573, 0.007081799, 0.7786994],
