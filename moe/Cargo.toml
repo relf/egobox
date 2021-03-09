@@ -16,8 +16,8 @@ ndarray-linalg = "0.12"
 intel-mkl-src = { version = "0.5", default-features = false }
 ndarray-stats = "0.3"
 ndarray-rand = "0.11"
-linfa = { version="0.3.0", default-features = false }
-linfa-clustering = { version="0.3.0", default-features = false }
+linfa = { path="../../linfa", default-features = false }
+linfa-clustering = { path="../../linfa/algorithms/linfa-clustering", default-features = false }
 rand_isaac = "0.2"
 
 [dev-dependencies]
