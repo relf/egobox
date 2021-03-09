@@ -11,13 +11,12 @@ name="moe"
 doe = { path = "../doe" }
 gp = { path = "../gp" }
 
+linfa = { path="../../linfa", features = ["intel-mkl-static"] }
+linfa-clustering = { path="../../linfa/algorithms/linfa-clustering", default-features = false }
 ndarray = { version = "0.13.1", features = ["rayon", "approx", "blas"]}
 ndarray-linalg = "0.12"
-intel-mkl-src = { version = "0.5", default-features = false }
 ndarray-stats = "0.3"
 ndarray-rand = "0.11"
-linfa = { path="../../linfa", default-features = false }
-linfa-clustering = { path="../../linfa/algorithms/linfa-clustering", default-features = false }
 rand_isaac = "0.2"
 
 [dev-dependencies]

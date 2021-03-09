@@ -1,5 +1,3 @@
-// extern crate openblas_src;
-extern crate intel_mkl_src;
 use doe::{SamplingMethod, LHS};
 use gp::*;
 use ndarray::{array, Array1, Array2, Zip};

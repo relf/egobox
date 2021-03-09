@@ -8,10 +8,10 @@ edition = "2018"
 name = "pls"
 
 [dependencies]
-linfa = { path = "../../linfa", default-features = false }
+linfa = { path="../../linfa", features = ["intel-mkl-static"] }
+
 ndarray = { version = "0.13.1", features = ["rayon", "approx", "blas"]}
 ndarray-linalg = "0.12"
-intel-mkl-src = { version = "0.5", default-features = false }
 ndarray-stats = "0.3"
 ndarray-rand = "0.11"
 rand_isaac = "0.2"

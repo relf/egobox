@@ -304,7 +304,6 @@ pub fn reduced_likelihood(
 
 #[cfg(test)]
 mod tests {
-    extern crate intel_mkl_src;
     use super::*;
     use crate::{correlation_models::SquaredExponentialKernel, mean_models::ConstantMean};
     use approx::assert_abs_diff_eq;

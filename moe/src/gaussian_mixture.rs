@@ -235,7 +235,7 @@ impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictRef<ArrayBase<D, Ix2>
 #[cfg(test)]
 mod tests {
     // extern crate openblas_src;
-    extern crate intel_mkl_src;
+    // extern crate intel_mkl_src;
     use super::*;
     use approx::assert_abs_diff_eq;
     use ndarray::{array, Array, Array2};

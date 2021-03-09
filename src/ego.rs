@@ -393,7 +393,6 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 
 #[cfg(test)]
 mod tests {
-    extern crate intel_mkl_src;
     use super::*;
     use approx::assert_abs_diff_eq;
     // use argmin_testfunctions::rosenbrock;

@@ -10,15 +10,16 @@ name = "gp"
 [dependencies]
 doe = { path="../doe" }
 pls = { path="../pls" }
+
+linfa = { path="../../linfa", features = ["intel-mkl-static"] }
+linfa-clustering = { path="../../linfa/algorithms/linfa-clustering", default-features = false }
+
 ndarray = { version = "0.13.1", features = ["rayon", "approx"]}
-ndarray-linalg = "0.12"
-intel-mkl-src = { version = "0.5", default-features = false }
+ndarray-linalg = { version = "0.12.1" }
 ndarray-stats = "0.3"
 ndarray_einsum_beta = "0.5"
 ndarray-rand = "0.11"
 ndarray-npy = { version = "0.5", default-features = false }
-linfa = { path="../../linfa", default-features = false }
-linfa-clustering = { path="../../linfa/algorithms/linfa-clustering", default-features = false }
 nlopt = "0.5.3"
 cobyla = "0.1.2"
 rand_isaac = "0.2"
