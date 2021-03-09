@@ -1,4 +1,5 @@
 mod algorithm;
+//mod clustering;
 mod errors;
 mod gaussian_mixture;
 mod parameters;

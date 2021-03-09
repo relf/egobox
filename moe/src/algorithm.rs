@@ -1,4 +1,5 @@
 use super::gaussian_mixture::GaussianMixture;
+//use crate::clustering;
 use crate::errors::Result;
 use crate::{MoeParams, Recombination};
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
@@ -20,7 +21,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
         let mut ytrain = data.slice(s![.., nx..nx + 1]).to_owned();
         if self.is_heaviside_optimization_enabled() {
             // Separate training data and test data for heaviside optim
-            let (data_test, data_train) = Self::_extract_part(&data, 10);
+            let (data_test, data_train) = extract_part(&data, 10);
             xtrain = data_train.slice(s![.., ..nx]).to_owned();
             ytrain = data_train.slice(s![.., nx..nx + 1]).to_owned();
         }
@@ -94,18 +95,6 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
         }
         res
     }
-
-    fn _extract_part(
-        data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        quantile: usize,
-    ) -> (Array2<f64>, Array2<f64>) {
-        let nsamples = data.nrows();
-        let indices = Array::range(0., nsamples as f32, quantile as f32).mapv(|v| v as usize);
-        let data_test = data.select(Axis(0), indices.as_slice().unwrap());
-        let indices2: Vec<usize> = (0..nsamples).filter(|i| i % quantile == 0).collect();
-        let data_train = data.select(Axis(0), &indices2);
-        (data_test, data_train)
-    }
 }
 
 pub struct Moe {
@@ -174,6 +163,18 @@ impl Moe {
             });
         Ok(preds)
     }
+}
+
+pub fn extract_part(
+    data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    quantile: usize,
+) -> (Array2<f64>, Array2<f64>) {
+    let nsamples = data.nrows();
+    let indices = Array::range(0., nsamples as f32, quantile as f32).mapv(|v| v as usize);
+    let data_test = data.select(Axis(0), indices.as_slice().unwrap());
+    let indices2: Vec<usize> = (0..nsamples).filter(|i| i % quantile == 0).collect();
+    let data_train = data.select(Axis(0), &indices2);
+    (data_test, data_train)
 }
 
 #[cfg(test)]
