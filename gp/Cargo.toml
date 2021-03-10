@@ -11,8 +11,8 @@ name = "gp"
 doe = { path="../doe" }
 pls = { path="../pls" }
 
-linfa = { path="../../linfa", features = ["intel-mkl-static"] }
-linfa-clustering = { path="../../linfa/algorithms/linfa-clustering", default-features = false }
+linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
+linfa-clustering = { git="https://github.com/relf/linfa.git", default-features = false }
 
 ndarray = { version = "0.13.1", features = ["rayon", "approx"]}
 ndarray-linalg = { version = "0.12.1" }

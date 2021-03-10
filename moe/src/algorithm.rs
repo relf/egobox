@@ -2,7 +2,7 @@ use super::gaussian_mixture::GaussianMixture;
 use crate::errors::Result;
 use crate::{MoeHyperParams, Recombination};
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
-use linfa::{traits::Fit, traits::Predict, DatasetBase};
+use linfa::{traits::Fit, traits::Predict, Dataset, DatasetBase};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::Rng;
@@ -26,7 +26,7 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         }
 
         // Cluster inputs
-        let dataset = DatasetBase::from(data);
+        let dataset = Dataset::from(data);
         let gmm = GaussianMixtureModel::params(self.n_clusters())
             .with_n_runs(20)
             .with_reg_covariance(1e-6)
