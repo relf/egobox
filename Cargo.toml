@@ -35,7 +35,6 @@ argmin_testfunctions = "0.1"
 
 members = [
   "doe", 
-  "pls",
   "gp",
   "moe"
 ]

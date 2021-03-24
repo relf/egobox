@@ -1,5 +1,5 @@
+use linfa_pls::PlsError;
 use ndarray_linalg::error::LinalgError;
-use pls::PlsError;
 use std::error::Error;
 use std::fmt::{self, Display};
 

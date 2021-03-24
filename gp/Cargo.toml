@@ -9,10 +9,10 @@ name = "gp"
 
 [dependencies]
 doe = { path="../doe" }
-pls = { path="../pls" }
 
 linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
 linfa-clustering = { git="https://github.com/relf/linfa.git", default-features = false }
+linfa-pls = { git="https://github.com/relf/linfa.git" }
 
 ndarray = { version = "0.13.1", features = ["rayon", "approx"]}
 ndarray-linalg = { version = "0.12.1" }
