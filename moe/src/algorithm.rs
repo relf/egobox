@@ -1,6 +1,6 @@
 use super::gaussian_mixture::GaussianMixture;
 use crate::errors::Result;
-use crate::{MoeHyperParams, Recombination};
+use crate::{MoeParams, Recombination};
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use linfa::{traits::Fit, traits::Predict, Dataset, DatasetBase};
 use linfa_clustering::GaussianMixtureModel;
@@ -8,7 +8,7 @@ use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::Rng;
 use rand_isaac::Isaac64Rng;
 
-impl<R: Rng + Clone> MoeHyperParams<R> {
+impl<R: Rng + Clone> MoeParams<R> {
     fn fit(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -115,8 +115,8 @@ struct MixtureOfExperts {
 }
 
 impl MixtureOfExperts {
-    pub fn params(n_clusters: usize) -> MoeHyperParams<Isaac64Rng> {
-        MoeHyperParams::new(n_clusters)
+    pub fn params(n_clusters: usize) -> MoeParams<Isaac64Rng> {
+        MoeParams::new(n_clusters)
     }
 
     pub fn nb_clusters(&self) -> usize {
@@ -205,7 +205,7 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
-        let moe = MoeHyperParams::new(3)
+        let moe = MoeParams::new(3)
             .with_rng(rng)
             .fit(&xt, &yt)
             .expect("MOE fitted");
@@ -225,7 +225,7 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
-        let moe = MoeHyperParams::new(3)
+        let moe = MoeParams::new(3)
             .set_recombination(Recombination::Smooth)
             .set_heaviside_factor(0.5)
             .with_rng(rng)

@@ -7,23 +7,23 @@ pub enum Recombination {
     Smooth,
 }
 
-pub struct MoeHyperParams<R: Rng + Clone> {
+pub struct MoeParams<R: Rng + Clone> {
     n_clusters: usize,
     recombination: Recombination,
     heaviside_factor: f64,
     rng: R,
 }
 
-impl MoeHyperParams<Isaac64Rng> {
+impl MoeParams<Isaac64Rng> {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(n_clusters: usize) -> MoeHyperParams<Isaac64Rng> {
+    pub fn new(n_clusters: usize) -> MoeParams<Isaac64Rng> {
         Self::new_with_rng(n_clusters, Isaac64Rng::seed_from_u64(42))
     }
 }
 
-impl<R: Rng + Clone> MoeHyperParams<R> {
-    pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeHyperParams<R> {
-        MoeHyperParams {
+impl<R: Rng + Clone> MoeParams<R> {
+    pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<R> {
+        MoeParams {
             n_clusters,
             recombination: Recombination::Hard,
             heaviside_factor: 1.0,
@@ -62,8 +62,8 @@ impl<R: Rng + Clone> MoeHyperParams<R> {
         self
     }
 
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeHyperParams<R2> {
-        MoeHyperParams {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<R2> {
+        MoeParams {
             n_clusters: self.n_clusters,
             recombination: self.recombination,
             heaviside_factor: self.heaviside_factor,

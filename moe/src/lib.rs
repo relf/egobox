@@ -1,8 +1,8 @@
 mod algorithm;
 mod errors;
 mod gaussian_mixture;
-mod hyperparameters;
+mod parameters;
 
 pub use algorithm::*;
 pub use errors::*;
-pub use hyperparameters::*;
+pub use parameters::*;
