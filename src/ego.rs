@@ -129,13 +129,14 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 
     fn next_points(
         &self,
+        n: usize,
         x_data: &Array2<f64>,
         y_data: &Array2<f64>,
         sampling: &LHS<R>,
     ) -> (Array2<f64>, Array2<f64>) {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
-        for i in 0..self.n_parallel {
+        for _ in 0..self.n_parallel {
             let gpr = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
                 ConstantMean::default(),
                 SquaredExponentialKernel::default(),
@@ -143,7 +144,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
             .fit(&x_data, &y_data)
             .expect("GP training failure");
 
-            if i == 0 {
+            if n == 6 {
                 let f_min = y_data.min().unwrap();
                 let xplot = Array::linspace(0., 25., 100).insert_axis(Axis(1));
                 let obj = self.obj_eval(&xplot);
@@ -182,7 +183,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
     pub fn suggest(&self, x_data: &Array2<f64>, y_data: &Array2<f64>) -> Array2<f64> {
         let rng = self.rng.clone();
         let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
-        let (x_dat, _) = self.next_points(&x_data, &y_data, &sampling);
+        let (x_dat, _) = self.next_points(0, &x_data, &y_data, &sampling);
         x_dat
     }
 
@@ -198,8 +199,8 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 
         let mut y_data = self.obj_eval(&x_data);
 
-        for _ in 0..self.n_iter {
-            let (x_dat, y_dat) = self.next_points(&x_data, &y_data, &sampling);
+        for i in 0..self.n_iter {
+            let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
             y_data = stack![Axis(0), y_data, y_dat];
             x_data = stack![Axis(0), x_data, x_dat];
             let n_par = -(self.n_parallel as i32);
@@ -209,7 +210,6 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
                 .and(y_actual.gencolumns())
                 .apply(|mut y, val| y.assign(&val));
         }
-
         let best_index = y_data.argmin().unwrap().0;
         OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
@@ -414,59 +414,46 @@ mod tests {
     use approx::assert_abs_diff_eq;
     // use argmin_testfunctions::rosenbrock;
     use ndarray::array;
-    use std::time::Instant;
+
+    fn xsinx(x: &[f64]) -> f64 {
+        (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
+    }
 
     #[test]
-    fn test_xsinx() {
-        fn xsinx(x: &[f64]) -> f64 {
-            (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
-        };
-        let now = Instant::now();
+    fn test_xsinx_ei() {
         let res = Ego::new(xsinx, &array![[0.0, 25.0]])
-            .n_iter(6)
+            .n_iter(10)
             .x_doe(&array![[0.], [7.], [25.]])
             .minimize();
-        println!("xsinx optim result = {:?}", res);
-        println!("Elapsed = {:?}", now.elapsed());
-        let expected = array![18.9];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+        let expected = -15.1;
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
     }
 
     #[test]
     fn test_xsinx_wb2() {
-        fn xsinx(x: &[f64]) -> f64 {
-            (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
-        };
-        let now = Instant::now();
         let res = Ego::new(xsinx, &array![[0.0, 25.0]])
-            .n_iter(10)
             .acq_strategy(AcqStrategy::WB2)
-            .x_doe(&array![[0.], [7.], [25.]])
             .minimize();
-        println!("xsinx optim result = {:?}", res);
-        println!("Elapsed = {:?}", now.elapsed());
         let expected = array![18.9];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
 
     #[test]
     fn test_xsinx_suggestions() {
-        fn xsinx(x: &[f64]) -> f64 {
-            (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
-        };
         let ego = Ego::new(xsinx, &array![[0.0, 25.0]]);
 
-        let mut x_doe = array![[0.], [7.], [25.]];
+        let mut x_doe = array![[0.], [7.], [20.], [25.]];
         let mut y_doe = x_doe.mapv(|x| xsinx(&[x]));
-        for _i in 0..6 {
+        for _i in 0..10 {
             let x_suggested = ego.suggest(&x_doe, &y_doe);
-            println!("{:?}", x_suggested);
+
             x_doe = stack![Axis(0), x_doe, x_suggested];
             y_doe = x_doe.mapv(|x| xsinx(&[x]));
         }
 
-        let expected = 18.9;
-        assert_abs_diff_eq!(expected, x_doe[[8, 0]], epsilon = 5e-1);
+        let expected = -15.1;
+        let y_opt = y_doe.min().unwrap();
+        assert_abs_diff_eq!(expected, *y_opt, epsilon = 1e-1);
     }
 
     // #[test]
