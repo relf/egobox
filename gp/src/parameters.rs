@@ -3,7 +3,7 @@ use crate::{CorrelationModel, RegressionModel};
 use ndarray::Array2;
 
 #[derive(Clone)]
-pub struct GpHyperParams<Mean: RegressionModel, Kernel: CorrelationModel> {
+pub struct GpParams<Mean: RegressionModel, Kernel: CorrelationModel> {
     /// Parameter of the autocorrelation model
     theta: f64,
     /// Regression model representing the mean(x)
@@ -20,9 +20,9 @@ pub struct GpHyperParams<Mean: RegressionModel, Kernel: CorrelationModel> {
     ytrain: Array2<f64>,
 }
 
-impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel> {
-    pub fn new(mean: Mean, kernel: Kernel) -> GpHyperParams<Mean, Kernel> {
-        GpHyperParams {
+impl<Mean: RegressionModel, Kernel: CorrelationModel> GpParams<Mean, Kernel> {
+    pub fn new(mean: Mean, kernel: Kernel) -> GpParams<Mean, Kernel> {
+        GpParams {
             theta: 1e-2,
             mean,
             kernel,

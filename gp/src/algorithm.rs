@@ -1,7 +1,7 @@
 use crate::correlation_models::CorrelationModel;
 use crate::errors::{GpError, Result};
-use crate::hyperparameters::GpHyperParams;
 use crate::mean_models::RegressionModel;
+use crate::parameters::GpParams;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
 use linfa::{traits::Fit, Dataset};
@@ -55,8 +55,8 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GaussianProcess<Mean, Kern
     pub fn params<NewMean: RegressionModel, NewKernel: CorrelationModel>(
         mean: NewMean,
         kernel: NewKernel,
-    ) -> GpHyperParams<NewMean, NewKernel> {
-        GpHyperParams::new(mean, kernel)
+    ) -> GpParams<NewMean, NewKernel> {
+        GpParams::new(mean, kernel)
     }
 
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
@@ -118,7 +118,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GaussianProcess<Mean, Kern
     }
 }
 
-impl<Mean: RegressionModel, Kernel: CorrelationModel> GpHyperParams<Mean, Kernel> {
+impl<Mean: RegressionModel, Kernel: CorrelationModel> GpParams<Mean, Kernel> {
     pub fn fit(
         self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -307,7 +307,7 @@ pub fn reduced_likelihood(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{correlation_models::SquaredExponentialKernel, mean_models::ConstantMean};
+    use crate::{correlation_models::*, mean_models::ConstantMean};
     use approx::assert_abs_diff_eq;
     use doe::{SamplingMethod, LHS};
     use ndarray::{arr2, array, Zip};
@@ -317,10 +317,37 @@ mod tests {
     use std::time::Instant;
 
     #[test]
-    fn test_gp_fit_and_predict() {
+    fn test_gp_squared_exp() {
         let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
         let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
         let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
+            ConstantMean::default(),
+            SquaredExponentialKernel::default(),
+        )
+        .set_initial_theta(0.1)
+        .fit(&xt, &yt)
+        .expect("GP fit error");
+        let expected = 1.6699060;
+        assert_abs_diff_eq!(expected, gp.theta[0], epsilon = 1e-6);
+
+        let yvals = gp
+            .predict_values(&arr2(&[[1.0], [3.5]]))
+            .expect("prediction error");
+        let expected_y = arr2(&[[1.0], [0.869721]]);
+        assert_abs_diff_eq!(expected_y, yvals, epsilon = 1e-3);
+
+        let yvars = gp
+            .predict_variances(&arr2(&[[1.0], [3.5]]))
+            .expect("prediction error");
+        let expected_vars = arr2(&[[0.], [0.0105914]]);
+        assert_abs_diff_eq!(expected_vars, yvars, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_gp_abs_exp() {
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let gp = GaussianProcess::<ConstantMean, AbsoluteExponentialKernel>::params(
             ConstantMean::default(),
             SquaredExponentialKernel::default(),
         )

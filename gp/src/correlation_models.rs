@@ -1,6 +1,6 @@
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 
-pub trait CorrelationModel: Clone + Copy {
+pub trait CorrelationModel: Clone + Copy + Default {
     fn eval(
         &self,
         theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
@@ -9,7 +9,7 @@ pub trait CorrelationModel: Clone + Copy {
     ) -> Array2<f64>;
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct SquaredExponentialKernel();
 
 impl CorrelationModel for SquaredExponentialKernel {
@@ -27,9 +27,21 @@ impl CorrelationModel for SquaredExponentialKernel {
     }
 }
 
-impl SquaredExponentialKernel {
-    pub fn default() -> Self {
-        Self {}
+#[derive(Clone, Copy, Default)]
+pub struct AbsoluteExponentialKernel();
+
+impl CorrelationModel for AbsoluteExponentialKernel {
+    fn eval(
+        &self,
+        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Array2<f64> {
+        let mut r = Array2::zeros((d.nrows(), 1));
+        let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
+        let m = (wd * theta).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+        r.column_mut(0).assign(&m);
+        r
     }
 }
 
