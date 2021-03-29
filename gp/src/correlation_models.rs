@@ -19,11 +19,9 @@ impl CorrelationModel for SquaredExponentialKernel {
         d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        let mut r = Array2::zeros((d.nrows(), 1));
         let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
-        let m = (wd * theta).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
-        r.column_mut(0).assign(&m);
-        r
+        let r = (wd * theta).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+        r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
 
@@ -37,11 +35,45 @@ impl CorrelationModel for AbsoluteExponentialKernel {
         d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        let mut r = Array2::zeros((d.nrows(), 1));
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
-        let m = (wd * theta).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
-        r.column_mut(0).assign(&m);
-        r
+        let r = (wd * theta).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+        r.into_shape((d.nrows(), 1)).unwrap()
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct Matern32Kernel();
+
+impl CorrelationModel for Matern32Kernel {
+    fn eval(
+        &self,
+        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Array2<f64> {
+        let wd = d
+            .mapv(|v| v.abs() * f64::sqrt(3.))
+            .dot(&weights.mapv(|v| v.abs()));
+        let r = (wd * theta).mapv(|v| (1. + v) * f64::exp(-v));
+        r.into_shape((d.nrows(), 1)).unwrap()
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct Matern52Kernel();
+
+impl CorrelationModel for Matern52Kernel {
+    fn eval(
+        &self,
+        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Array2<f64> {
+        let wd = d
+            .mapv(|v| v.abs() * f64::sqrt(5.))
+            .dot(&weights.mapv(|v| v.abs()));
+        let r = (wd * theta).mapv(|v| (1. + v + v * v / 3.) * f64::exp(-v));
+        r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
 
