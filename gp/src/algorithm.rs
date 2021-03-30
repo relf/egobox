@@ -307,52 +307,75 @@ pub fn reduced_likelihood(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{correlation_models::*, mean_models::ConstantMean};
+    use crate::{correlation_models::*, mean_models::*};
     use approx::assert_abs_diff_eq;
     use doe::{SamplingMethod, LHS};
-    use ndarray::{arr2, array, Zip};
+    use ndarray::{arr2, array, Array, Zip};
     use ndarray_npy::{read_npy, write_npy};
     use ndarray_rand::rand::SeedableRng;
     use paste::paste;
     use rand_isaac::Isaac64Rng;
 
     macro_rules! test_gp {
-        ($corr:ident, $expected:expr) => {
+        ($regr:ident, $corr:ident, $expected:expr) => {
             paste! {
 
                 #[test]
-                fn [<test_gp_ $corr:lower >]() {
+                fn [<test_gp_ $regr:snake _ $corr:snake >]() {
                     let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+                    let xplot = Array::linspace(0., 4., 100).insert_axis(Axis(1));
                     let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
-                    let gp = GaussianProcess::<ConstantMean, [<$corr Kernel>]>::params(
-                        ConstantMean::default(),
+                    let gp = GaussianProcess::<[<$regr Mean>], [<$corr Kernel>]>::params(
+                        [<$regr Mean>]::default(),
                         [<$corr Kernel>]::default(),
                     )
                     .set_initial_theta(0.1)
                     .fit(&xt, &yt)
                     .expect("GP fit error");
                     assert_abs_diff_eq!($expected, gp.theta[0], epsilon = 1e-2);
-
                     let yvals = gp
                         .predict_values(&arr2(&[[1.0], [3.5]]))
                         .expect("prediction error");
                     let expected_y = arr2(&[[1.0], [0.9]]);
-                    assert_abs_diff_eq!(expected_y, yvals, epsilon = 1e-1);
+                    assert_abs_diff_eq!(expected_y, yvals, epsilon = 0.5);
+
+                    let gpr_vals = gp.predict_values(&xplot).unwrap();
 
                     let yvars = gp
                         .predict_variances(&arr2(&[[1.0], [3.5]]))
                         .expect("prediction error");
-                    let expected_vars = arr2(&[[0.], [0.0105914]]);
+                    let expected_vars = arr2(&[[0.], [0.1]]);
                     assert_abs_diff_eq!(expected_vars, yvars, epsilon = 0.5);
+
+                    let gpr_vars = gp.predict_variances(&xplot).unwrap();
+
+                    let xplot_file = stringify!([<gp_x_ $regr:snake _ $corr:snake >]);
+                    write_npy(format!("{}.npy", xplot_file), xplot).expect("x saved");
+
+                    let gp_vals_file = stringify!([<gp_vals_ $regr:snake _ $corr:snake >]);
+                    write_npy(format!("{}.npy", gp_vals_file), gpr_vals).expect("gp vals saved");
+
+                    let gp_vars_file = stringify!([<gp_vars_ $regr:snake _ $corr:snake >]);
+                    write_npy(format!("{}.npy", gp_vars_file), gpr_vars).expect("gp vars saved");
                 }
             }
         };
     }
 
-    test_gp!(SquaredExponential, 1.66);
-    test_gp!(AbsoluteExponential, 22.35);
-    test_gp!(Matern32, 21.68);
-    test_gp!(Matern52, 21.68);
+    test_gp!(Constant, SquaredExponential, 1.66);
+    test_gp!(Constant, AbsoluteExponential, 22.35);
+    test_gp!(Constant, Matern32, 21.68);
+    test_gp!(Constant, Matern52, 21.68);
+
+    test_gp!(Linear, SquaredExponential, 1.55);
+    test_gp!(Linear, AbsoluteExponential, 21.68);
+    test_gp!(Linear, Matern32, 21.68);
+    test_gp!(Linear, Matern52, 21.68);
+
+    test_gp!(Quadratic, SquaredExponential, 21.14);
+    test_gp!(Quadratic, AbsoluteExponential, 24.98);
+    test_gp!(Quadratic, Matern32, 22.35);
+    test_gp!(Quadratic, Matern52, 21.68);
 
     #[test]
     fn test_kpls() {
