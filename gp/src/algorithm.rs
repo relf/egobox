@@ -315,7 +315,6 @@ mod tests {
     use ndarray_rand::rand::SeedableRng;
     use paste::paste;
     use rand_isaac::Isaac64Rng;
-    use std::time::Instant;
 
     macro_rules! test_gp {
         ($corr:ident, $expected:expr) => {
@@ -325,7 +324,7 @@ mod tests {
                 fn [<test_gp_ $corr:lower >]() {
                     let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
                     let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
-                    let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
+                    let gp = GaussianProcess::<ConstantMean, [<$corr Kernel>]>::params(
                         ConstantMean::default(),
                         [<$corr Kernel>]::default(),
                     )
@@ -366,7 +365,7 @@ mod tests {
             let dim = dims[i];
             let nt = nts[i];
 
-            let griewak = |x: &Array1<f64>| -> f64 {
+            let griewank = |x: &Array1<f64>| -> f64 {
                 let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
                 x.mapv(|v| v * v).sum() / 4000.
                     - (x / &d).mapv(|v| v.cos()).fold(1., |acc, x| acc * x)
@@ -393,7 +392,7 @@ mod tests {
                 Err(_) => {
                     let mut yv: Array1<f64> = Array1::zeros(xt.nrows());
                     Zip::from(&mut yv).and(xt.genrows()).par_apply(|y, x| {
-                        *y = griewak(&x.to_owned());
+                        *y = griewank(&x.to_owned());
                     });
                     let yt = yv.into_shape((xt.nrows(), 1)).unwrap();
                     write_npy(&yfilename, yt.to_owned()).expect("cannot save yt");
@@ -401,7 +400,6 @@ mod tests {
                 }
             };
 
-            let start2 = Instant::now();
             let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
                 ConstantMean::default(),
                 SquaredExponentialKernel::default(),
@@ -410,7 +408,6 @@ mod tests {
             //.with_initial_theta(1.0)
             .fit(&xt, &yt)
             .expect("GP fit error");
-            println!("Time fitting is: {:?}", start2.elapsed());
 
             let xtest = Array2::zeros((1, dim));
             let ytest = gp.predict_values(&xtest).expect("prediction error");
