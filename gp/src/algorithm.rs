@@ -62,7 +62,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GaussianProcess<Mean, Kern
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
         let corr = self._compute_correlation(&x);
         // Compute the mean at x
-        let f = self.mean.eval(x);
+        let f = self.mean.apply(x);
         // Scaled predictor
         let y_ = &f.dot(&self.inner_params.beta) + &corr.dot(&self.inner_params.gamma);
         // Predictor
@@ -80,7 +80,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GaussianProcess<Mean, Kern
         let rt = inners
             .r_chol
             .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t)?;
-        let lhs = inners.ft.t().dot(&rt) - self.mean.eval(x).t();
+        let lhs = inners.ft.t().dot(&rt) - self.mean.apply(x).t();
         let u = inners
             .ft_qr_r
             .t()
@@ -113,7 +113,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GaussianProcess<Mean, Kern
             dx.slice_mut(s![a..b, ..]).assign(&dxrows);
         }
         // Compute the correlation function
-        let r = self.kernel.eval(&self.theta, &dx, &self.w_star);
+        let r = self.kernel.apply(&self.theta, &dx, &self.w_star);
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 }
@@ -139,14 +139,14 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpParams<Mean, Kernel> {
 
         let x_distances = DistanceMatrix::new(&xtrain.data);
         let theta0 = Array1::from_elem(w_star.ncols(), self.initial_theta());
-        let fx = self.mean().eval(x);
+        let fx = self.mean().apply(x);
         let y_t = ytrain.clone();
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
             let theta =
                 Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
                     .unwrap();
-            let rxx = self.kernel().eval(&theta, &x_distances.d, &w_star);
+            let rxx = self.kernel().apply(&theta, &x_distances.d, &w_star);
             match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
                 Ok(r) => {
                     // println!("theta={} lkh={}", theta, -r.0);
@@ -180,7 +180,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpParams<Mean, Kernel> {
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0;
 
-        let rxx = self.kernel().eval(opt_theta, &x_distances.d, &w_star);
+        let rxx = self.kernel().apply(opt_theta, &x_distances.d, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
             theta: opt_theta.to_owned(),

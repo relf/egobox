@@ -1,7 +1,7 @@
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 
 pub trait CorrelationModel: Clone + Copy + Default {
-    fn eval(
+    fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -13,7 +13,7 @@ pub trait CorrelationModel: Clone + Copy + Default {
 pub struct SquaredExponentialKernel();
 
 impl CorrelationModel for SquaredExponentialKernel {
-    fn eval(
+    fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -29,7 +29,7 @@ impl CorrelationModel for SquaredExponentialKernel {
 pub struct AbsoluteExponentialKernel();
 
 impl CorrelationModel for AbsoluteExponentialKernel {
-    fn eval(
+    fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -45,7 +45,7 @@ impl CorrelationModel for AbsoluteExponentialKernel {
 pub struct Matern32Kernel();
 
 impl CorrelationModel for Matern32Kernel {
-    fn eval(
+    fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -63,7 +63,7 @@ impl CorrelationModel for Matern32Kernel {
 pub struct Matern52Kernel();
 
 impl CorrelationModel for Matern52Kernel {
-    fn eval(
+    fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -88,7 +88,7 @@ mod tests {
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let dm = DistanceMatrix::new(&xt);
-        let res = SquaredExponentialKernel::default().eval(&arr1(&[0.1]), &dm.d, &array![[1.]]);
+        let res = SquaredExponentialKernel::default().apply(&arr1(&[0.1]), &dm.d, &array![[1.]]);
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],
