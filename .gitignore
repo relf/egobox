@@ -15,4 +15,7 @@ Cargo.lock
 # vscode
 .vscode/
 
+# Python, notebook
 **/py_egobox/
+**/.ipynb_checkpoints/
+**/*.ipynb
