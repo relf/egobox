@@ -31,7 +31,6 @@ impl SamplingMethod for FullFactorial {
         //!
         let nx = self.xlimits.nrows();
         let weights: Array1<f64> = Array1::ones(nx) / (nx as f64);
-        println!("weights = {:?}", weights);
         let mut num_list: Array1<usize> = Array::ones(nx);
 
         while num_list.fold(1, |acc, n| acc * n) < ns {

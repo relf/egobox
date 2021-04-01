@@ -1,5 +1,5 @@
 use crate::{MoeError, Result};
-use linfa::{dataset::DatasetBase, traits::*, Float};
+use linfa::{traits::*, Float};
 use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
 use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
 use ndarray_stats::QuantileExt;
@@ -237,7 +237,7 @@ mod tests {
     // extern crate openblas_src;
     // extern crate intel_mkl_src;
     use super::*;
-    use approx::assert_abs_diff_eq;
+    // use approx::assert_abs_diff_eq;
     use ndarray::{array, Array, Array2};
     use ndarray_npy::write_npy;
 
