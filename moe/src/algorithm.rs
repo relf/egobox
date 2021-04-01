@@ -9,11 +9,11 @@ use ndarray_rand::rand::Rng;
 use rand_isaac::Isaac64Rng;
 
 impl<R: Rng + Clone> MoeParams<R> {
-    fn fit(
+    pub fn fit(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<MixtureOfExperts> {
+    ) -> Result<Moe> {
         let nx = xt.ncols();
         let data = stack(Axis(1), &[xt.view(), yt.view()]).unwrap();
         let mut xtrain = data.slice(s![.., ..nx]).to_owned();
@@ -46,6 +46,7 @@ impl<R: Rng + Clone> MoeParams<R> {
                     ConstantMean::default(),
                     SquaredExponentialKernel::default(),
                 )
+                .set_kpls_dim(self.kpls_dim())
                 .fit(&xtrain, &ytrain)
                 .expect("GP fit error"),
             );
@@ -57,7 +58,7 @@ impl<R: Rng + Clone> MoeParams<R> {
         let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
         let gmx = GaussianMixture::new(weights, means, covariances)?
             .with_heaviside_factor(self.heaviside_factor());
-        Ok(MixtureOfExperts {
+        Ok(Moe {
             recombination: self.recombination(),
             heaviside_factor: self.heaviside_factor(),
             gps,
@@ -107,14 +108,14 @@ impl<R: Rng + Clone> MoeParams<R> {
     }
 }
 
-struct MixtureOfExperts {
+pub struct Moe {
     recombination: Recombination,
     heaviside_factor: f64,
     gps: Vec<GaussianProcess<ConstantMean, SquaredExponentialKernel>>,
     gmx: GaussianMixture<f64>,
 }
 
-impl MixtureOfExperts {
+impl Moe {
     pub fn params(n_clusters: usize) -> MoeParams<Isaac64Rng> {
         MoeParams::new(n_clusters)
     }
@@ -166,7 +167,7 @@ impl MixtureOfExperts {
             .par_apply(|mut y, x, &c| {
                 y.assign(
                     &self.gps[c]
-                        .predict_values(&x.insert_axis(Axis(1)))
+                        .predict_values(&x.insert_axis(Axis(0)))
                         .unwrap()
                         .row(0),
                 );
@@ -205,7 +206,7 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
-        let moe = MoeParams::new(3)
+        let moe = Moe::params(3)
             .with_rng(rng)
             .fit(&xt, &yt)
             .expect("MOE fitted");
@@ -225,7 +226,7 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
-        let moe = MoeParams::new(3)
+        let moe = Moe::params(3)
             .set_recombination(Recombination::Smooth)
             .set_heaviside_factor(0.5)
             .with_rng(rng)

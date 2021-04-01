@@ -79,8 +79,8 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpParams<Mean, Kernel> {
     }
 
     /// Set KPLS.
-    pub fn set_kpls_dim(mut self, kpls_dim: usize) -> Self {
-        self.kpls_dim = Some(kpls_dim);
+    pub fn set_kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
+        self.kpls_dim = kpls_dim;
         self
     }
 

@@ -11,6 +11,7 @@ pub struct MoeParams<R: Rng + Clone> {
     n_clusters: usize,
     recombination: Recombination,
     heaviside_factor: f64,
+    kpls_dim: Option<usize>,
     rng: R,
 }
 
@@ -27,6 +28,7 @@ impl<R: Rng + Clone> MoeParams<R> {
             n_clusters,
             recombination: Recombination::Hard,
             heaviside_factor: 1.0,
+            kpls_dim: None,
             rng,
         }
     }
@@ -41,6 +43,10 @@ impl<R: Rng + Clone> MoeParams<R> {
 
     pub fn heaviside_factor(&self) -> f64 {
         self.heaviside_factor
+    }
+
+    pub fn kpls_dim(&self) -> Option<usize> {
+        self.kpls_dim
     }
 
     pub fn rng(&self) -> R {
@@ -62,11 +68,17 @@ impl<R: Rng + Clone> MoeParams<R> {
         self
     }
 
+    pub fn set_kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
+        self.kpls_dim = kpls_dim;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<R2> {
         MoeParams {
             n_clusters: self.n_clusters,
             recombination: self.recombination,
             heaviside_factor: self.heaviside_factor,
+            kpls_dim: self.kpls_dim,
             rng,
         }
     }
