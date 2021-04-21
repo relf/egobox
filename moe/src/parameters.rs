@@ -26,7 +26,7 @@ impl<R: Rng + Clone> MoeParams<R> {
     pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<R> {
         MoeParams {
             n_clusters,
-            recombination: Recombination::Hard,
+            recombination: Recombination::Smooth,
             heaviside_factor: 1.0,
             kpls_dim: None,
             rng,

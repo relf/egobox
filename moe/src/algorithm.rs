@@ -1,5 +1,4 @@
 use super::gaussian_mixture::GaussianMixture;
-//use crate::clustering;
 use crate::errors::Result;
 use crate::{MoeParams, Recombination};
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
@@ -16,28 +15,21 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Moe> {
         let nx = xt.ncols();
-        let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-        let mut xtrain = data.slice(s![.., ..nx]).to_owned();
-        let mut ytrain = data.slice(s![.., nx..nx + 1]).to_owned();
-        if self.is_heaviside_optimization_enabled() {
-            // Separate training data and test data for heaviside optim
-            let (data_test, data_train) = extract_part(&data, 10);
-            xtrain = data_train.slice(s![.., ..nx]).to_owned();
-            ytrain = data_train.slice(s![.., nx..nx + 1]).to_owned();
-        }
 
-        // Cluster inputs
-        let dataset = Dataset::from(data);
-        let gmm = GaussianMixtureModel::params(self.n_clusters())
-            .with_n_runs(20)
-            .with_reg_covariance(1e-6)
-            .with_rng(self.rng())
-            .fit(&dataset)
-            .expect("Training data clustering");
+        let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
+        // let mut xtrain = data.slice(s![.., ..nx]).to_owned();
+        // let mut ytrain = data.slice(s![.., nx..nx + 1]).to_owned();
+        // if self.is_heaviside_optimization_enabled() {
+        // Separate training data and test data for heaviside optim
+        // let (data_test, data_train) = extract_part(&data, 10);
+        // xtrain = data_train.slice(s![.., ..nx]).to_owned();
+        // ytrain = data_train.slice(s![.., nx..nx + 1]).to_owned();
+        // }
+
+        // Clustering using GMM
+        let (clusters, gmm) = sort_by_cluster(self.n_clusters(), &data, self.rng());
 
         // Fit GPs on clustered data
-        let dataset_clustering = gmm.predict(dataset);
-        let clusters = self.sort_by_cluster(dataset_clustering);
         let mut gps = Vec::new();
         for cluster in clusters {
             let xtrain = cluster.slice(s![.., ..nx]);
@@ -67,34 +59,44 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
         })
     }
 
-    fn is_heaviside_optimization_enabled(&self) -> bool {
+    pub fn is_heaviside_optimization_enabled(&self) -> bool {
         self.recombination() == Recombination::Smooth && self.n_clusters() > 1
     }
+}
 
-    fn sort_by_cluster(
-        &self,
-        dataset: DatasetBase<Array2<f64>, Array1<usize>>,
-    ) -> Vec<Array2<f64>> {
-        let mut res: Vec<Array2<f64>> = Vec::new();
-        let ndim = dataset.records.ncols();
-        for n in 0..self.n_clusters() {
-            let cluster_data_indices: Array1<usize> = dataset
-                .targets
-                .iter()
-                .enumerate()
-                .filter_map(|(k, i)| if *i == n { Some(k) } else { None })
-                .collect();
-            let nsamples = cluster_data_indices.len();
-            let mut subset = Array2::zeros((nsamples, ndim));
-            Zip::from(subset.genrows_mut())
-                .and(&cluster_data_indices)
-                .apply(|mut r, &k| {
-                    r.assign(&dataset.records.row(k));
-                });
-            res.push(subset);
-        }
-        res
+pub fn sort_by_cluster<R: Rng + SeedableRng + Clone>(
+    n_clusters: usize,
+    data: &Array2<f64>,
+    rng: R,
+) -> (Vec<Array2<f64>>, GaussianMixtureModel<f64>) {
+    let dataset = Dataset::from(data.to_owned());
+    let gmm = GaussianMixtureModel::params(n_clusters)
+        .with_n_runs(20)
+        .with_reg_covariance(1e-6)
+        .with_rng(rng)
+        .fit(&dataset)
+        .expect("Training data clustering");
+
+    let dataset_clustering = gmm.predict(dataset);
+    let mut res: Vec<Array2<f64>> = Vec::new();
+    let ndim = dataset_clustering.records.ncols();
+    for n in 0..n_clusters {
+        let cluster_data_indices: Array1<usize> = dataset_clustering
+            .targets
+            .iter()
+            .enumerate()
+            .filter_map(|(k, i)| if *i == n { Some(k) } else { None })
+            .collect();
+        let nsamples = cluster_data_indices.len();
+        let mut subset = Array2::zeros((nsamples, ndim));
+        Zip::from(subset.genrows_mut())
+            .and(&cluster_data_indices)
+            .apply(|mut r, &k| {
+                r.assign(&dataset_clustering.records.row(k));
+            });
+        res.push(subset);
     }
+    (res, gmm)
 }
 
 pub struct Moe {
@@ -208,6 +210,7 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
+            .set_recombination(Recombination::Hard)
             .with_rng(rng)
             .fit(&xt, &yt)
             .expect("MOE fitted");
@@ -228,7 +231,6 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
-            .set_recombination(Recombination::Smooth)
             .set_heaviside_factor(0.5)
             .with_rng(rng)
             .fit(&xt, &yt)

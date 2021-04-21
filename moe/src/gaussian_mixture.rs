@@ -4,6 +4,57 @@ use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3,
 use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
 use ndarray_stats::QuantileExt;
 
+// def score_samples(self, X):
+// """Compute the weighted log probabilities for each sample.
+// Parameters
+// ----------
+// X : array-like of shape (n_samples, n_features)
+//     List of n_features-dimensional data points. Each row
+//     corresponds to a single data point.
+// Returns
+// -------
+// log_prob : array, shape (n_samples,)
+//     Log probabilities of each data point in X.
+// """
+// check_is_fitted(self)
+// X = _check_X(X, None, self.means_.shape[1])
+
+// return logsumexp(self._estimate_weighted_log_prob(X), axis=1)
+
+// def score(self, X, y=None):
+// """Compute the per-sample average log-likelihood of the given data X.
+// Parameters
+// ----------
+// X : array-like of shape (n_samples, n_dimensions)
+//     List of n_features-dimensional data points. Each row
+//     corresponds to a single data point.
+// Returns
+// -------
+// log_likelihood : float
+//     Log likelihood of the Gaussian mixture given X.
+// """
+// return self.score_samples(X).mean()
+
+// /// Return the number of free parameters in the model.
+// fn n_parameters(n_clusters: usize, gmm: &GaussianMixtureModel<f64>) -> usize {
+//     let n_features = gmm.means().shape()[1];
+//     let cov_params = n_clusters * n_features * (n_features + 1) / 2;
+//     let mean_params = n_features * n_clusters;
+//     return (cov_params + mean_params + n_clusters - 1) as usize;
+// }
+
+// /// Bayesian information criterion for the current model on the input X.
+// /// The lower the better.
+// fn bic(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> f64 {
+//     -2 * self.score(X) * X.shape()[0] + n_parameters() * X.shape()[0].ln()
+// }
+
+// /// Akaike information criterion for the current model on the input X.
+// /// The lower the better
+// fn aic(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> f64 {
+//     -2 * self.score(X) * X.shape()[0] + 2 * n_parameters()
+// }
+
 pub struct GaussianMixture<F: Float> {
     weights: Array1<F>,
     means: Array2<F>,
