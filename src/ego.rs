@@ -3,7 +3,7 @@ use doe::{LHSKind, SamplingMethod, LHS};
 use finitediff::FiniteDiff;
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use libm::erfc;
-use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix2, Zip};
+use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix2, Zip};
 use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
@@ -152,19 +152,19 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
                 let gpr_vars = gpr.predict_variances(&xplot).unwrap();
                 let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min));
                 let wb2 = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, None));
-                write_npy("ego_x.npy", xplot).expect("xplot saved");
-                write_npy("ego_obj.npy", obj).expect("obj saved");
-                write_npy("ego_gpr.npy", gpr_vals).expect("gp vals saved");
-                write_npy("ego_gpr_vars.npy", gpr_vars).expect("gp vars saved");
-                write_npy("ego_ei.npy", ei).expect("ei saved");
-                write_npy("ego_wb2.npy", wb2).expect("wb2 saved");
+                write_npy("ego_x.npy", &xplot).expect("xplot saved");
+                write_npy("ego_obj.npy", &obj).expect("obj saved");
+                write_npy("ego_gpr.npy", &gpr_vals).expect("gp vals saved");
+                write_npy("ego_gpr_vars.npy", &gpr_vars).expect("gp vars saved");
+                write_npy("ego_ei.npy", &ei).expect("ei saved");
+                write_npy("ego_wb2.npy", &wb2).expect("wb2 saved");
             }
 
             match self.find_best_point(&x_data, &y_data, &sampling, &gpr) {
                 Ok(xk) => match self.get_virtual_point(&xk, &y_data, &gpr) {
                     Ok(yk) => {
-                        y_dat = stack![Axis(0), y_dat, Array2::from_elem((1, 1), yk)];
-                        x_dat = stack![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+                        y_dat = concatenate![Axis(0), y_dat, Array2::from_elem((1, 1), yk)];
+                        x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
                     }
                     Err(_) => {
                         // Error while predict at best point: ignore
@@ -201,8 +201,8 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
 
         for i in 0..self.n_iter {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
-            y_data = stack![Axis(0), y_data, y_dat];
-            x_data = stack![Axis(0), x_data, x_dat];
+            y_data = concatenate![Axis(0), y_data, y_dat];
+            x_data = concatenate![Axis(0), x_data, x_dat];
             let n_par = -(self.n_parallel as i32);
             let x_to_eval = x_data.slice(s![n_par.., ..]);
             let y_actual = self.obj_eval(&x_to_eval);
@@ -251,7 +251,7 @@ impl<F: ObjFn, R: Rng + Clone> Ego<F, R> {
             if n_optim == -1 {
                 let xplot = Array::linspace(0., 25., 100).insert_axis(Axis(1));
                 let wb2s = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, Some(scale_wb2)));
-                write_npy("ego_wb2s.npy", wb2s).expect("wb2 saved");
+                write_npy("ego_wb2s.npy", &wb2s).expect("wb2 saved");
             }
 
             let mut optimizer = Nlopt::new(
@@ -447,7 +447,7 @@ mod tests {
         for _i in 0..10 {
             let x_suggested = ego.suggest(&x_doe, &y_doe);
 
-            x_doe = stack![Axis(0), x_doe, x_suggested];
+            x_doe = concatenate![Axis(0), x_doe, x_suggested];
             y_doe = x_doe.mapv(|x| xsinx(&[x]));
         }
 

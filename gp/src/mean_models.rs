@@ -1,4 +1,4 @@
-use ndarray::{s, stack, Array2, ArrayBase, Axis, Data, Ix2};
+use ndarray::{concatenate, s, Array2, ArrayBase, Axis, Data, Ix2};
 
 pub trait RegressionModel: Clone + Copy {
     fn apply(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64>;
@@ -24,7 +24,7 @@ pub struct LinearMean();
 
 impl RegressionModel for LinearMean {
     fn apply(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        let res = stack![Axis(1), Array2::ones((x.nrows(), 1)), x.to_owned()];
+        let res = concatenate![Axis(1), Array2::ones((x.nrows(), 1)), x.to_owned()];
         res
     }
 }
@@ -40,10 +40,10 @@ pub struct QuadraticMean();
 
 impl RegressionModel for QuadraticMean {
     fn apply(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        let mut res = stack![Axis(1), Array2::ones((x.nrows(), 1)), x.to_owned()];
+        let mut res = concatenate![Axis(1), Array2::ones((x.nrows(), 1)), x.to_owned()];
         for k in 0..x.ncols() {
             let part = x.slice(s![.., k..]).to_owned() * x.slice(s![.., k..k + 1]);
-            res = stack![Axis(1), res, part]
+            res = concatenate![Axis(1), res, part]
         }
         res
     }

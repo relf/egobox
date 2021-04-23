@@ -34,7 +34,7 @@ fn main() {
                 let xlimits = lim.broadcast((dim, 2)).unwrap();
                 let rng = Isaac64Rng::seed_from_u64(42);
                 let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
-                write_npy(&xfilename, xt.to_owned()).expect("cannot save xt");
+                write_npy(&xfilename, &xt).expect("cannot save xt");
                 xt
             }
         };
@@ -47,7 +47,7 @@ fn main() {
                     *y = griewak(&x.to_owned());
                 });
                 let yt = yv.into_shape((xt.nrows(), 1)).unwrap();
-                write_npy(&yfilename, yt.to_owned()).expect("cannot save yt");
+                write_npy(&yfilename, &yt).expect("cannot save yt");
                 yt
             }
         };

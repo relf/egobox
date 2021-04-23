@@ -29,9 +29,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ytest = moe.predict(&xtest)?;
     let ytrue = norm1(&xtest);
 
-    write_npy("moe_x_norm1.npy", xtest).expect("x not saved!");
-    write_npy("moe_ypred_norm1.npy", ytest).expect("ypred not saved!");
-    write_npy("moe_ytrue_norm1.npy", ytrue).expect("ytrue not saved!");
+    write_npy("moe_x_norm1.npy", &xtest).expect("x not saved!");
+    write_npy("moe_ypred_norm1.npy", &ytest).expect("ypred not saved!");
+    write_npy("moe_ytrue_norm1.npy", &ytrue).expect("ytrue not saved!");
 
     Ok(())
 }

@@ -4,18 +4,18 @@ use crate::{MoeParams, Recombination};
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use linfa::{traits::Fit, traits::Predict, Dataset, DatasetBase};
 use linfa_clustering::GaussianMixtureModel;
-use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
-use ndarray_rand::rand::Rng;
+use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
-impl<R: Rng + Clone> MoeParams<R> {
+impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
     pub fn fit(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Moe> {
         let nx = xt.ncols();
-        let data = stack(Axis(1), &[xt.view(), yt.view()]).unwrap();
+        let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
         let mut xtrain = data.slice(s![.., ..nx]).to_owned();
         let mut ytrain = data.slice(s![.., nx..nx + 1]).to_owned();
         if self.is_heaviside_optimization_enabled() {
@@ -217,8 +217,8 @@ mod tests {
             moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
             epsilon = 1e-4
         );
-        write_npy("obs.npy", obs).expect("obs saved");
-        write_npy("preds.npy", preds).expect("preds saved");
+        write_npy("obs.npy", &obs).expect("obs saved");
+        write_npy("preds.npy", &preds).expect("preds saved");
     }
 
     #[test]
@@ -234,8 +234,8 @@ mod tests {
             .expect("MOE fitted");
         let obs = Array::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict(&obs).expect("MOE prediction");
-        write_npy("obs_smooth.npy", obs).expect("obs saved");
-        write_npy("preds_smooth.npy", preds).expect("preds saved");
+        write_npy("obs_smooth.npy", &obs).expect("obs saved");
+        write_npy("preds_smooth.npy", &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.859021,
             moe.predict(&array![[0.39]]).unwrap()[[0, 0]],

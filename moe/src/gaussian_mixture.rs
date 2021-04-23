@@ -67,7 +67,7 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
 
     pub fn predict_probas<D: Data<Elem = F>>(&self, observations: &ArrayBase<D, Ix2>) -> Array2<F> {
         let (_, log_resp) = self.estimate_log_prob_resp(observations);
-        log_resp.mapv(|v| v.exp())
+        log_resp.mapv(|v| Scalar::exp(v))
     }
 
     pub fn with_heaviside_factor(mut self, heaviside_factor: F) -> Self {
@@ -151,9 +151,9 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
     ) -> (Array1<F>, Array2<F>) {
         let weighted_log_prob = self.estimate_weighted_log_prob(&observations);
         let log_prob_norm = weighted_log_prob
-            .mapv(|v| v.exp())
+            .mapv(|v| Scalar::exp(v))
             .sum_axis(Axis(1))
-            .mapv(|v| v.ln());
+            .mapv(|v| Scalar::ln(v));
         let log_resp = weighted_log_prob - log_prob_norm.to_owned().insert_axis(Axis(1));
         (log_prob_norm, log_resp)
     }
@@ -181,7 +181,10 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
         let n_features = observations.ncols();
         let means = self.means();
         let n_clusters = means.nrows();
-        let factor = self.heaviside_factor().powf(F::from(-0.5).unwrap());
+        let factor = ndarray_rand::rand_distr::num_traits::Float::powf(
+            self.heaviside_factor(),
+            F::from(-0.5).unwrap(),
+        );
         let precs = &self.precisions_chol * factor;
         // GmmCovarType = full
         // det(precision_chol) is half of det(precision)
@@ -212,12 +215,12 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
             .unwrap()
             .slice(s![.., ..; n_features+1])
             .to_owned()
-            .mapv(|v| v.ln());
+            .mapv(|v| Scalar::ln(v));
         log_diags.sum_axis(Axis(1))
     }
 
     fn estimate_log_weights(&self) -> Array1<F> {
-        self.weights().mapv(|v| v.ln())
+        self.weights().mapv(|v| Scalar::ln(v))
     }
 }
 
@@ -227,7 +230,7 @@ impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictRef<ArrayBase<D, Ix2>
     fn predict_ref(&self, observations: &ArrayBase<D, Ix2>) -> Array1<usize> {
         let (_, log_resp) = self.estimate_log_prob_resp(&observations);
         log_resp
-            .mapv(|v| v.exp())
+            .mapv(|v| Scalar::exp(v))
             .map_axis(Axis(1), |row| row.argmax().unwrap())
     }
 }
@@ -259,7 +262,7 @@ mod tests {
         println!("preds = {:?}", preds);
         let probas = gmix.predict_probas(&obs);
         println!("probas = {:?}", probas);
-        write_npy("probes.npy", obs).expect("probes saved");
-        write_npy("probas.npy", probas).expect("probas saved");
+        write_npy("probes.npy", &obs).expect("probes saved");
+        write_npy("probas.npy", &probas).expect("probas saved");
     }
 }

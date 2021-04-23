@@ -350,13 +350,13 @@ mod tests {
                     let gpr_vars = gp.predict_variances(&xplot).unwrap();
 
                     let xplot_file = stringify!([<gp_x_ $regr:snake _ $corr:snake >]);
-                    write_npy(format!("{}.npy", xplot_file), xplot).expect("x saved");
+                    write_npy(format!("{}.npy", xplot_file), &xplot).expect("x saved");
 
                     let gp_vals_file = stringify!([<gp_vals_ $regr:snake _ $corr:snake >]);
-                    write_npy(format!("{}.npy", gp_vals_file), gpr_vals).expect("gp vals saved");
+                    write_npy(format!("{}.npy", gp_vals_file), &gpr_vals).expect("gp vals saved");
 
                     let gp_vars_file = stringify!([<gp_vars_ $regr:snake _ $corr:snake >]);
-                    write_npy(format!("{}.npy", gp_vars_file), gpr_vars).expect("gp vars saved");
+                    write_npy(format!("{}.npy", gp_vars_file), &gpr_vars).expect("gp vars saved");
                 }
             }
         };
@@ -405,7 +405,7 @@ mod tests {
                     let xlimits = lim.broadcast((dim, 2)).unwrap();
                     let rng = Isaac64Rng::seed_from_u64(42);
                     let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
-                    write_npy(&xfilename, xt.to_owned()).expect("cannot save xt");
+                    write_npy(&xfilename, &xt).expect("cannot save xt");
                     xt
                 }
             };
@@ -418,7 +418,7 @@ mod tests {
                         *y = griewank(&x.to_owned());
                     });
                     let yt = yv.into_shape((xt.nrows(), 1)).unwrap();
-                    write_npy(&yfilename, yt.to_owned()).expect("cannot save yt");
+                    write_npy(&yfilename, &yt).expect("cannot save yt");
                     yt
                 }
             };
