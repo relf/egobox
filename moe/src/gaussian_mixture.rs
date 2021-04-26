@@ -4,57 +4,6 @@ use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3,
 use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
 use ndarray_stats::QuantileExt;
 
-// def score_samples(self, X):
-// """Compute the weighted log probabilities for each sample.
-// Parameters
-// ----------
-// X : array-like of shape (n_samples, n_features)
-//     List of n_features-dimensional data points. Each row
-//     corresponds to a single data point.
-// Returns
-// -------
-// log_prob : array, shape (n_samples,)
-//     Log probabilities of each data point in X.
-// """
-// check_is_fitted(self)
-// X = _check_X(X, None, self.means_.shape[1])
-
-// return logsumexp(self._estimate_weighted_log_prob(X), axis=1)
-
-// def score(self, X, y=None):
-// """Compute the per-sample average log-likelihood of the given data X.
-// Parameters
-// ----------
-// X : array-like of shape (n_samples, n_dimensions)
-//     List of n_features-dimensional data points. Each row
-//     corresponds to a single data point.
-// Returns
-// -------
-// log_likelihood : float
-//     Log likelihood of the Gaussian mixture given X.
-// """
-// return self.score_samples(X).mean()
-
-// /// Return the number of free parameters in the model.
-// fn n_parameters(n_clusters: usize, gmm: &GaussianMixtureModel<f64>) -> usize {
-//     let n_features = gmm.means().shape()[1];
-//     let cov_params = n_clusters * n_features * (n_features + 1) / 2;
-//     let mean_params = n_features * n_clusters;
-//     return (cov_params + mean_params + n_clusters - 1) as usize;
-// }
-
-// /// Bayesian information criterion for the current model on the input X.
-// /// The lower the better.
-// fn bic(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> f64 {
-//     -2 * self.score(X) * X.shape()[0] + n_parameters() * X.shape()[0].ln()
-// }
-
-// /// Akaike information criterion for the current model on the input X.
-// /// The lower the better
-// fn aic(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> f64 {
-//     -2 * self.score(X) * X.shape()[0] + 2 * n_parameters()
-// }
-
 pub struct GaussianMixture<F: Float> {
     weights: Array1<F>,
     means: Array2<F>,
@@ -166,7 +115,7 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
         covariances
     }
 
-    fn compute_precisions_cholesky_full<D: Data<Elem = F>>(
+    pub fn compute_precisions_cholesky_full<D: Data<Elem = F>>(
         covariances: &ArrayBase<D, Ix3>,
     ) -> Result<Array3<F>> {
         let n_clusters = covariances.shape()[0];
@@ -273,6 +222,43 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
     fn estimate_log_weights(&self) -> Array1<F> {
         self.weights().mapv(|v| Scalar::ln(v))
     }
+
+    /// Compute the weighted log probabilities for each sample.
+    pub fn score_samples<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array1<F> {
+        self.estimate_weighted_log_prob(x)
+            .mapv(|v| Scalar::exp(v))
+            .sum_axis(Axis(1))
+            .mapv(|v| Scalar::ln(v))
+    }
+
+    // Compute the per-sample average log-likelihood of the given data X.
+    pub fn score<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> F {
+        self.score_samples(x).mean().unwrap()
+    }
+
+    /// Return the number of free parameters in the model.
+    pub fn n_parameters(&self) -> usize {
+        let (n_clusters, n_features) = (self.means.nrows(), self.means.ncols());
+        let cov_params = n_clusters * n_features * (n_features + 1) / 2;
+        let mean_params = n_features * n_clusters;
+        (cov_params + mean_params + n_clusters - 1) as usize
+    }
+
+    /// Bayesian information criterion for the current model on the input X.
+    /// The lower the better.
+    pub fn bic<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> F {
+        let n_samples = F::from(x.shape()[0]).unwrap();
+        F::from(-2.).unwrap() * self.score(x) * n_samples
+            + F::from(self.n_parameters()).unwrap() * Scalar::ln(n_samples)
+    }
+
+    /// Akaike information criterion for the current model on the input X.
+    /// The lower the better
+    pub fn aic<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> F {
+        let two = F::from(2.).unwrap();
+        -two * (F::from(self.score(x)).unwrap()) * (F::from(x.shape()[0]).unwrap())
+            + two * (F::from(self.n_parameters()).unwrap())
+    }
 }
 
 impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictRef<ArrayBase<D, Ix2>, Array1<usize>>
@@ -281,7 +267,7 @@ impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictRef<ArrayBase<D, Ix2>
     fn predict_ref(&self, observations: &ArrayBase<D, Ix2>) -> Array1<usize> {
         let (_, log_resp) = self.estimate_log_prob_resp(&observations);
         log_resp
-            .mapv(|v| Scalar::exp(v))
+            .mapv(Scalar::exp)
             .map_axis(Axis(1), |row| row.argmax().unwrap())
     }
 }
@@ -291,9 +277,16 @@ mod tests {
     // extern crate openblas_src;
     // extern crate intel_mkl_src;
     use super::*;
-    // use approx::assert_abs_diff_eq;
+    use approx::assert_abs_diff_eq;
+    use linfa::DatasetBase;
+    use linfa_clustering::GaussianMixtureModel;
     use ndarray::{array, Array, Array2};
+    use ndarray_linalg::solve::*;
     use ndarray_npy::write_npy;
+    use ndarray_rand::rand::{rngs::SmallRng, SeedableRng};
+    use ndarray_rand::rand_distr::StandardNormal;
+    use ndarray_rand::RandomExt;
+    use ndarray_stats::CorrelationExt;
 
     #[test]
     fn test_gaussian_mixture() {
@@ -313,7 +306,63 @@ mod tests {
         println!("preds = {:?}", preds);
         let probas = gmix.predict_probas(&obs);
         println!("probas = {:?}", probas);
-        write_npy("probes.npy", &obs).expect("probes saved");
-        write_npy("probas.npy", &probas).expect("probas saved");
+        write_npy("probes.npy", &obs).expect("failed to save");
+        write_npy("probas.npy", &probas).expect("failed to save");
+    }
+
+    #[test]
+    fn test_gaussian_mixture_aic_bic() {
+        // Test the aic and bic criteria
+        let mut rng = SmallRng::seed_from_u64(42);
+        let (n_samples, n_features, n_components) = (50, 3, 2);
+        let x = Array::random_using((n_samples, n_features), StandardNormal, &mut rng);
+        write_npy("test_bic_aic.npy", &x).expect("failed to save");
+
+        let dataset = DatasetBase::from(x.to_owned());
+        let g = GaussianMixtureModel::params(n_components)
+            .with_max_n_iterations(200)
+            .with_rng(rng)
+            .fit(&dataset)
+            .expect("GMM fails");
+        let gmx = GaussianMixture::new(
+            g.weights().to_owned(),
+            g.means().to_owned(),
+            g.covariances().to_owned(),
+        )
+        .unwrap();
+        // write_npy("test_bic_aic_weights.npy", g.weights()).expect("failed to save");
+        // write_npy("test_bic_aic_means.npy", g.means()).expect("failed to save");
+        // write_npy("test_bic_aic_precisions.npy", g.precisions()).expect("failed to save");
+        // write_npy(
+        //     "test_bic_aic_precisions_chol.npy",
+        //     &GaussianMixture::compute_precisions_cholesky_full(g.covariances()).unwrap(),
+        // )
+        // .expect("failed to save");
+
+        // True values checked against sklearn 0.24.1
+        assert_abs_diff_eq!(489.5790028439929, gmx.bic(&x), epsilon = 1e-7);
+        assert_abs_diff_eq!(453.2505657408581, gmx.aic(&x), epsilon = 1e-7);
+        // standard gaussian entropy
+        let sgh = 0.5
+            * (x.t().cov(0.).unwrap().det().unwrap().ln()
+                + (n_features as f64) * (1. + f64::ln(2. * std::f64::consts::PI)));
+
+        assert_abs_diff_eq!(4.193902320935888, sgh, epsilon = 1e-7);
+
+        let aic = 2. * (n_samples as f64) * sgh + 2. * (gmx.n_parameters() as f64);
+        let bic =
+            2. * (n_samples as f64) * sgh + (n_samples as f64).ln() * (gmx.n_parameters() as f64);
+        let bound = (n_features as f64) / (n_samples as f64).sqrt();
+
+        assert_eq!(19, gmx.n_parameters());
+        assert_abs_diff_eq!(493.71866919672357, bic, epsilon = 1e-7);
+        assert_abs_diff_eq!(457.3902320935888, aic, epsilon = 1e-7);
+        assert_abs_diff_eq!(0.4242640687119285, bound, epsilon = 1e-7);
+
+        let v_aic = (gmx.aic(&x) - aic) / (n_samples as f64);
+        let v_bic = (gmx.bic(&x) - bic) / (n_samples as f64);
+
+        assert!(v_aic < bound);
+        assert!(v_bic < bound);
     }
 }
