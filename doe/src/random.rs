@@ -1,25 +1,26 @@
 use crate::SamplingMethod;
+use linfa::Float;
 use ndarray::{Array, Array2, ArrayBase, Data, Ix2};
 use ndarray_rand::{rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt};
 use rand_isaac::Isaac64Rng;
 
 /// The Random design consists in drawing samples randomly.
-pub struct Random<R: Rng + Clone> {
+pub struct Random<F: Float, R: Rng + Clone> {
     /// Sampling space definition as a (nx, 2) matrix
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of x
-    xlimits: Array2<f64>,
+    xlimits: Array2<F>,
     /// Random generator used for reproducibility (not used in case of Centered LHS)
     rng: R,
 }
 
-impl Random<Isaac64Rng> {
-    pub fn new(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Self {
+impl<F: Float> Random<F, Isaac64Rng> {
+    pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
         Self::new_with_rng(xlimits, Isaac64Rng::seed_from_u64(42))
     }
 }
 
-impl<R: Rng + Clone> Random<R> {
-    pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
+impl<F: Float, R: Rng + Clone> Random<F, R> {
+    pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>, rng: R) -> Self {
         if xlimits.ncols() != 2 {
             panic!("xlimits must have 2 columns (lower, upper)");
         }
@@ -29,7 +30,7 @@ impl<R: Rng + Clone> Random<R> {
         }
     }
 
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Random<R2> {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Random<F, R2> {
         Random {
             xlimits: self.xlimits,
             rng,
@@ -37,15 +38,15 @@ impl<R: Rng + Clone> Random<R> {
     }
 }
 
-impl<R: Rng + Clone> SamplingMethod for Random<R> {
-    fn sampling_space(&self) -> &Array2<f64> {
+impl<F: Float, R: Rng + Clone> SamplingMethod<F> for Random<F, R> {
+    fn sampling_space(&self) -> &Array2<F> {
         &self.xlimits
     }
 
-    fn normalized_sample(&self, ns: usize) -> Array2<f64> {
+    fn normalized_sample(&self, ns: usize) -> Array2<F> {
         let mut rng = self.rng.clone();
         let nx = self.xlimits.nrows();
-        Array::random_using((ns, nx), Uniform::new(0., 1.), &mut rng)
+        Array::random_using((ns, nx), Uniform::new(0., 1.), &mut rng).mapv(|v| F::cast(v))
     }
 }
 

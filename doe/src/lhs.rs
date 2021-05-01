@@ -1,5 +1,6 @@
 use crate::utils::{cdist, pdist};
 use crate::SamplingMethod;
+use linfa::Float;
 use ndarray::{s, Array, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::{
     rand::seq::SliceRandom, rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt,
@@ -27,10 +28,10 @@ pub enum LHSKind {
 /// The LHS design is built as follows: each dimension space is divided into ns sections
 /// where ns is the number of sampling points, and one point in selected in each section.
 /// The selection method gives different kind of LHS (see [LHSKind])
-pub struct LHS<R: Rng + Clone> {
+pub struct LHS<F: Float, R: Rng + Clone> {
     /// Sampling space definition as a (nx, 2) matrix
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of x
-    xlimits: Array2<f64>,
+    xlimits: Array2<F>,
     /// The requested kind of LHS
     kind: LHSKind,
     /// Random generator used for reproducibility (not used in case of Centered LHS)
@@ -38,18 +39,18 @@ pub struct LHS<R: Rng + Clone> {
 }
 
 /// LHS with default random generator set for reproducibility
-impl LHS<Isaac64Rng> {
-    pub fn new(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Self {
+impl<F: Float> LHS<F, Isaac64Rng> {
+    pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
         Self::new_with_rng(xlimits, Isaac64Rng::seed_from_u64(42))
     }
 }
 
-impl<R: Rng + Clone> SamplingMethod for LHS<R> {
-    fn sampling_space(&self) -> &Array2<f64> {
+impl<F: Float, R: Rng + Clone> SamplingMethod<F> for LHS<F, R> {
+    fn sampling_space(&self) -> &Array2<F> {
         &self.xlimits
     }
 
-    fn normalized_sample(&self, ns: usize) -> Array2<f64> {
+    fn normalized_sample(&self, ns: usize) -> Array2<F> {
         let mut rng = self.rng.clone();
         match &self.kind {
             LHSKind::Classic => self._classic_lhs(ns, &mut rng),
@@ -67,7 +68,7 @@ impl<R: Rng + Clone> SamplingMethod for LHS<R> {
     }
 }
 
-impl<R: Rng + Clone> LHS<R> {
+impl<F: Float, R: Rng + Clone> LHS<F, R> {
     /// Constructor with given design space and random generator
     ///
     /// ### Parameters
@@ -76,7 +77,7 @@ impl<R: Rng + Clone> LHS<R> {
     /// is the interval of the ith component of x.
     ///
     /// `rng`: random generator used for Classic and Optimized LHS
-    pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
+    pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>, rng: R) -> Self {
         if xlimits.ncols() != 2 {
             panic!("xlimits must have 2 columns (lower, upper)");
         }
@@ -94,7 +95,7 @@ impl<R: Rng + Clone> LHS<R> {
     }
 
     /// Sets the random generator
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> LHS<R2> {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> LHS<F, R2> {
         LHS {
             xlimits: self.xlimits,
             kind: self.kind,
@@ -104,16 +105,16 @@ impl<R: Rng + Clone> LHS<R> {
 
     fn _maximin_ese(
         &self,
-        lhs: &Array2<f64>,
+        lhs: &Array2<F>,
         outer_loop: usize,
         inner_loop: usize,
         rng: &mut R,
-    ) -> Array2<f64> {
+    ) -> Array2<F> {
         // hard-coded params
         let j_range = 20;
-        let p = 10.;
-        let t0 = 0.005 * self._phip(&lhs, p);
-        let tol = 1e-3;
+        let p = F::cast(10.);
+        let t0 = F::cast(0.005) * self._phip(&lhs, p);
+        let tol = F::cast(1e-3);
 
         let mut t = t0;
         let mut lhs_own = lhs.to_owned();
@@ -129,8 +130,8 @@ impl<R: Rng + Clone> LHS<R> {
 
             for i in 0..inner_loop {
                 let modulo = (i + 1) % nx;
-                let mut l_x: Vec<Box<Array2<f64>>> = Vec::new();
-                let mut l_phip: Vec<f64> = Vec::new();
+                let mut l_x: Vec<Box<Array2<F>>> = Vec::new();
+                let mut l_phip: Vec<F> = Vec::new();
 
                 // Build j different plans with a single swap procedure
                 // See description of phip_swap procedure
@@ -143,7 +144,7 @@ impl<R: Rng + Clone> LHS<R> {
                 let k = lphip.argmin().unwrap();
                 let phip_try = lphip[k];
                 // Threshold of acceptance
-                if phip_try - phip <= t * rng.gen::<f64>() {
+                if phip_try - phip <= t * F::cast(rng.gen::<f64>()) {
                     phip = phip_try;
                     n_acpt += 1.;
                     //lhs_own.assign(&(*l_x[k]));
@@ -163,25 +164,25 @@ impl<R: Rng + Clone> LHS<R> {
 
             if phip_best - phip < tol {
                 if p_accpt >= 0.1 && p_imp < p_accpt {
-                    t *= 0.8
+                    t *= F::cast(0.8)
                 } else if p_accpt >= 0.1 && (p_imp - p_accpt).abs() < f64::EPSILON {
                 } else {
-                    t /= 0.8
+                    t /= F::cast(0.8)
                 }
             } else if p_accpt <= 0.1 {
-                t /= 0.7
+                t /= F::cast(0.7)
             } else {
-                t *= 0.9
+                t *= F::cast(0.9)
             }
         }
         lhs_best
     }
 
-    fn _phip(&self, lhs: &ArrayBase<impl Data<Elem = f64>, Ix2>, p: f64) -> f64 {
-        f64::powf(pdist(lhs).mapv(|v| f64::powf(v, -p)).sum(), 1. / p)
+    fn _phip(&self, lhs: &ArrayBase<impl Data<Elem = F>, Ix2>, p: F) -> F {
+        F::powf(pdist(lhs).mapv(|v| F::powf(v, -p)).sum(), F::one() / p)
     }
 
-    fn _phip_swap(&self, x: &mut Array2<f64>, k: usize, phip: f64, p: f64, rng: &mut R) -> f64 {
+    fn _phip_swap(&self, x: &mut Array2<F>, k: usize, phip: F, p: F, rng: &mut R) -> F {
         // Choose two random rows
         //let mut rng = thread_rng();
         let i1 = rng.gen_range(0..x.nrows());
@@ -202,26 +203,27 @@ impl<R: Rng + Clone> LHS<R> {
         let mut dist1 = cdist(&x.slice(s![i1..i1 + 1, ..]), &x_rest);
         let mut dist2 = cdist(&x.slice(s![i2..i2 + 1, ..]), &x_rest);
 
-        let m1 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i1..i1 + 1, k])).map(|v| v * v);
-        let m2 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i2..i2 + 1, k])).map(|v| v * v);
+        let m1 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i1..i1 + 1, k])).map(|v| *v * *v);
+        let m2 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i2..i2 + 1, k])).map(|v| *v * *v);
 
         let mut d1 = dist1.mapv(|v| v * v) - &m1 + &m2;
-        d1.mapv_inplace(|v| f64::powf(v, -p / 2.));
+        let two = F::cast(2.);
+        d1.mapv_inplace(|v| F::powf(v, -p / two));
         let mut d2 = dist2.mapv(|v| v * v) + &m1 - &m2;
-        d2.mapv_inplace(|v| f64::powf(v, -p / 2.));
+        d2.mapv_inplace(|v| F::powf(v, -p / two));
 
-        dist1.mapv_inplace(|v| f64::powf(v, -p));
-        dist2.mapv_inplace(|v| f64::powf(v, -p));
+        dist1.mapv_inplace(|v| F::powf(v, -p));
+        dist2.mapv_inplace(|v| F::powf(v, -p));
         let mut res = (d1 - dist1).sum();
         res += (d2 - dist2).sum();
-        res = f64::powf(f64::powf(phip, p) + res, 1. / p);
+        res = F::powf(F::powf(phip, p) + res, F::one() / p);
 
         // swap points
         x.swap([i1, k], [i2, k]);
         res
     }
 
-    fn _classic_lhs(&self, ns: usize, rng: &mut R) -> Array2<f64> {
+    fn _classic_lhs(&self, ns: usize, rng: &mut R) -> Array2<F> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
@@ -240,10 +242,10 @@ impl<R: Rng + Clone> LHS<R> {
             colj.as_slice_mut().unwrap().shuffle(rng);
             lhs.column_mut(j).assign(&colj);
         }
-        lhs
+        lhs.mapv(F::cast)
     }
 
-    fn _centered_lhs(&self, ns: usize, rng: &mut R) -> Array2<f64> {
+    fn _centered_lhs(&self, ns: usize, rng: &mut R) -> Array2<F> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
@@ -257,11 +259,11 @@ impl<R: Rng + Clone> LHS<R> {
             c.as_slice_mut().unwrap().shuffle(rng);
             lhs.column_mut(j).assign(&c);
         }
-        lhs
+        lhs.mapv(F::cast)
     }
 
-    fn _maximin_lhs(&self, ns: usize, rng: &mut R, centered: bool, n_iter: usize) -> Array2<f64> {
-        let mut max_dist = 0.;
+    fn _maximin_lhs(&self, ns: usize, rng: &mut R, centered: bool, n_iter: usize) -> Array2<F> {
+        let mut max_dist = F::zero();
         let mut lhs = self._classic_lhs(ns, rng);
         for _ in 0..n_iter {
             if centered {
@@ -270,9 +272,9 @@ impl<R: Rng + Clone> LHS<R> {
                 lhs = self._classic_lhs(ns, rng);
             }
             let d = pdist(&lhs);
-            let d_min = d.min().unwrap();
-            if max_dist < *d_min {
-                max_dist = *d_min
+            let d_min = F::cast(*d.min().unwrap());
+            if max_dist < d_min {
+                max_dist = d_min
             }
         }
         lhs

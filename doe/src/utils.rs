@@ -1,8 +1,8 @@
-use ndarray::{s, Array1, Array2, ArrayBase, Data, Ix2, NdFloat};
+use linfa::Float;
+use ndarray::{s, Array1, Array2, ArrayBase, Data, Ix2};
 use ndarray_stats::DeviationExt;
-use num_traits::Signed;
 
-pub fn pdist<F: NdFloat + Signed>(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array1<F> {
+pub fn pdist<F: Float>(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array1<F> {
     let nrows = x.nrows();
     let size: usize = (nrows - 1) * nrows / 2;
     let mut res: Array1<F> = Array1::zeros(size);
@@ -18,7 +18,7 @@ pub fn pdist<F: NdFloat + Signed>(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Ar
     res
 }
 
-pub fn cdist<F: NdFloat + Signed>(
+pub fn cdist<F: Float>(
     xa: &ArrayBase<impl Data<Elem = F>, Ix2>,
     xb: &ArrayBase<impl Data<Elem = F>, Ix2>,
 ) -> Array2<F> {
