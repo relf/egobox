@@ -1,11 +1,12 @@
 use crate::errors::{GpError, Result};
 use crate::{CorrelationModel, RegressionModel};
+use linfa::dataset::Float;
 use ndarray::Array2;
 
 #[derive(Clone)]
-pub struct GpParams<Mean: RegressionModel, Kernel: CorrelationModel> {
+pub struct GpParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
-    theta: f64,
+    theta: F,
     /// Regression model representing the mean(x)
     mean: Mean,
     /// Correlation model representing the spatial correlation between errors at e(x) and e(x')
@@ -13,28 +14,28 @@ pub struct GpParams<Mean: RegressionModel, Kernel: CorrelationModel> {
     /// Optionally apply dimension reduction (KPLS) or not
     kpls_dim: Option<usize>,
     /// Optionally apply dimension reduction (KPLS) or not
-    nugget: f64,
+    nugget: F,
     /// Training inputs
-    xtrain: Array2<f64>,
+    xtrain: Array2<F>,
     /// Training outputs
-    ytrain: Array2<f64>,
+    ytrain: Array2<F>,
 }
 
-impl<Mean: RegressionModel, Kernel: CorrelationModel> GpParams<Mean, Kernel> {
-    pub fn new(mean: Mean, kernel: Kernel) -> GpParams<Mean, Kernel> {
+impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F, Mean, Kernel> {
+    pub fn new(mean: Mean, kernel: Kernel) -> GpParams<F, Mean, Kernel> {
         GpParams {
-            theta: 1e-2,
+            theta: F::cast(1e-2),
             mean,
             kernel,
             kpls_dim: None,
-            nugget: 100.0 * f64::EPSILON,
+            nugget: F::cast(100.0) * F::epsilon(),
             xtrain: Array2::default((1, 1)),
             ytrain: Array2::default((1, 1)),
         }
     }
 
     /// Get starting theta value for optimization
-    pub fn initial_theta(&self) -> f64 {
+    pub fn initial_theta(&self) -> F {
         self.theta
     }
 
@@ -54,14 +55,14 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpParams<Mean, Kernel> {
     }
 
     /// Get number of components used by PLS
-    pub fn nugget(&self) -> f64 {
+    pub fn nugget(&self) -> F {
         self.nugget
     }
 
     /// Set initial value for theta hyper parameter.
     ///
     /// During training process, the internal optimization is started from `initial_theta`.
-    pub fn set_initial_theta(mut self, theta: f64) -> Self {
+    pub fn set_initial_theta(mut self, theta: F) -> Self {
         self.theta = theta;
         self
     }
@@ -87,7 +88,7 @@ impl<Mean: RegressionModel, Kernel: CorrelationModel> GpParams<Mean, Kernel> {
     /// Set nugget.
     ///
     /// Nugget is used to improve numerical stability
-    pub fn set_nugget(mut self, nugget: f64) -> Self {
+    pub fn set_nugget(mut self, nugget: F) -> Self {
         self.nugget = nugget;
         self
     }

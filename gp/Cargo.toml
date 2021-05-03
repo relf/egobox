@@ -12,7 +12,7 @@ doe = { path="../doe" }
 
 linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
 linfa-clustering = { git="https://github.com/relf/linfa.git", default-features = false }
-linfa-pls = { git="https://github.com/relf/linfa.git" }
+linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
 
 ndarray = { version = "0.14", features = ["rayon", "approx"]}
 ndarray-linalg = { version = "0.13" }

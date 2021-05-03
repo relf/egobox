@@ -8,6 +8,10 @@ use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2,
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
+// impl<F: Float, R: Rng + SeedableRng + Clone, D: Data<Elem = F>, T>
+//     Fit<ArrayBase<D, Ix2>, T, GmmError> for MoeParams<F, R>
+// {
+
 impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
     pub fn fit(
         &self,
@@ -15,16 +19,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Moe> {
         let nx = xt.ncols();
-
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-        // let mut xtrain = data.slice(s![.., ..nx]).to_owned();
-        // let mut ytrain = data.slice(s![.., nx..nx + 1]).to_owned();
-        // if self.is_heaviside_optimization_enabled() {
-        // Separate training data and test data for heaviside optim
-        // let (data_test, data_train) = extract_part(&data, 10);
-        // xtrain = data_train.slice(s![.., ..nx]).to_owned();
-        // ytrain = data_train.slice(s![.., nx..nx + 1]).to_owned();
-        // }
 
         // Clustering using GMM
         let (clusters, gmm) = sort_by_cluster(self.n_clusters(), &data, self.rng());
@@ -33,7 +28,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
         let mut gps = Vec::new();
         for cluster in clusters {
             let xtrain = cluster.slice(s![.., ..nx]);
-            let ytrain = cluster.slice(s![.., nx..nx + 1]);
+            let ytrain = cluster.slice(s![.., nx..]);
             gps.push(
                 GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
                     ConstantMean::default(),
@@ -125,12 +120,12 @@ impl Moe {
 
     pub fn predict(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self._predict_hard(x),
-            Recombination::Smooth => self._predict_smooth(x),
+            Recombination::Hard => self.predict_hard(x),
+            Recombination::Smooth => self.predict_smooth(x),
         }
     }
 
-    pub fn _predict_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let probas = self.gmx.predict_probas(observations);
         let mut preds = Array1::<f64>::zeros(observations.nrows());
 
@@ -149,7 +144,7 @@ impl Moe {
         Ok(preds.insert_axis(Axis(1)))
     }
 
-    pub fn _predict_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(observations);
         let mut preds = Array2::<f64>::zeros((observations.nrows(), 1));
         Zip::from(preds.genrows_mut())
@@ -172,6 +167,8 @@ pub fn extract_part(
     quantile: usize,
 ) -> (Array2<f64>, Array2<f64>) {
     let nsamples = data.nrows();
+    println!("{:?}", nsamples);
+    println!("{:?}", quantile);
     let indices = Array::range(0., nsamples as f32, quantile as f32).mapv(|v| v as usize);
     let data_test = data.select(Axis(0), indices.as_slice().unwrap());
     let indices2: Vec<usize> = (0..nsamples).filter(|i| i % quantile == 0).collect();

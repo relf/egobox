@@ -8,7 +8,7 @@ edition = "2018"
 name = "doe"
 
 [dependencies]
-linfa = "0.4"
+linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
 ndarray = { version = "0.14", features = ["rayon", "approx"]}
 ndarray-stats = "0.4"
 ndarray-rand = "0.13"

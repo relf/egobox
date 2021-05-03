@@ -1,26 +1,27 @@
+use linfa::Float;
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 
-pub trait CorrelationModel: Clone + Copy + Default {
+pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Array2<f64>;
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F>;
 }
 
 #[derive(Clone, Copy, Default)]
 pub struct SquaredExponentialKernel();
 
-impl CorrelationModel for SquaredExponentialKernel {
+impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Array2<f64> {
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
         let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
-        let r = (wd * theta).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+        let r = (wd * theta).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
@@ -28,15 +29,15 @@ impl CorrelationModel for SquaredExponentialKernel {
 #[derive(Clone, Copy, Default)]
 pub struct AbsoluteExponentialKernel();
 
-impl CorrelationModel for AbsoluteExponentialKernel {
+impl<F: Float> CorrelationModel<F> for AbsoluteExponentialKernel {
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Array2<f64> {
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
-        let r = (wd * theta).sum_axis(Axis(1)).mapv(|v| f64::exp(-v));
+        let r = (wd * theta).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
@@ -44,17 +45,17 @@ impl CorrelationModel for AbsoluteExponentialKernel {
 #[derive(Clone, Copy, Default)]
 pub struct Matern32Kernel();
 
-impl CorrelationModel for Matern32Kernel {
+impl<F: Float> CorrelationModel<F> for Matern32Kernel {
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Array2<f64> {
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
         let wd = d
-            .mapv(|v| v.abs() * f64::sqrt(3.))
+            .mapv(|v| v.abs() * F::sqrt(F::cast(3.)))
             .dot(&weights.mapv(|v| v.abs()));
-        let r = (wd * theta).mapv(|v| (1. + v) * f64::exp(-v));
+        let r = (wd * theta).mapv(|v| (F::one() + v) * F::exp(-v));
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
@@ -62,17 +63,17 @@ impl CorrelationModel for Matern32Kernel {
 #[derive(Clone, Copy, Default)]
 pub struct Matern52Kernel();
 
-impl CorrelationModel for Matern52Kernel {
+impl<F: Float> CorrelationModel<F> for Matern52Kernel {
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-        d: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        weights: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Array2<f64> {
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
         let wd = d
-            .mapv(|v| v.abs() * f64::sqrt(5.))
+            .mapv(|v| v.abs() * F::sqrt(F::cast(5.)))
             .dot(&weights.mapv(|v| v.abs()));
-        let r = (wd * theta).mapv(|v| (1. + v + v * v / 3.) * f64::exp(-v));
+        let r = (wd * theta).mapv(|v| (F::one() + v + v * v / F::cast(3.)) * F::exp(-v));
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }

@@ -1,15 +1,16 @@
+use linfa::Float;
 use ndarray::{concatenate, s, Array2, ArrayBase, Axis, Data, Ix2};
 
-pub trait RegressionModel: Clone + Copy {
-    fn apply(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64>;
+pub trait RegressionModel<F: Float>: Clone + Copy {
+    fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F>;
 }
 
 #[derive(Clone, Copy)]
 pub struct ConstantMean();
 
-impl RegressionModel for ConstantMean {
-    fn apply(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        Array2::<f64>::ones((x.nrows(), 1))
+impl<F: Float> RegressionModel<F> for ConstantMean {
+    fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        Array2::<F>::ones((x.nrows(), 1))
     }
 }
 
@@ -22,8 +23,8 @@ impl ConstantMean {
 #[derive(Clone, Copy)]
 pub struct LinearMean();
 
-impl RegressionModel for LinearMean {
-    fn apply(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+impl<F: Float> RegressionModel<F> for LinearMean {
+    fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let res = concatenate![Axis(1), Array2::ones((x.nrows(), 1)), x.to_owned()];
         res
     }
@@ -38,8 +39,8 @@ impl LinearMean {
 #[derive(Clone, Copy)]
 pub struct QuadraticMean();
 
-impl RegressionModel for QuadraticMean {
-    fn apply(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+impl<F: Float> RegressionModel<F> for QuadraticMean {
+    fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut res = concatenate![Axis(1), Array2::ones((x.nrows(), 1)), x.to_owned()];
         for k in 0..x.ncols() {
             let part = x.slice(s![.., k..]).to_owned() * x.slice(s![.., k..k + 1]);
