@@ -1,3 +1,4 @@
+use linfa::Float;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
@@ -7,27 +8,27 @@ pub enum Recombination {
     Smooth,
 }
 
-pub struct MoeParams<R: Rng + Clone> {
+pub struct MoeParams<F: Float, R: Rng + Clone> {
     n_clusters: usize,
     recombination: Recombination,
-    heaviside_factor: f64,
+    heaviside_factor: F,
     kpls_dim: Option<usize>,
     rng: R,
 }
 
-impl MoeParams<Isaac64Rng> {
+impl<F: Float> MoeParams<F, Isaac64Rng> {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(n_clusters: usize) -> MoeParams<Isaac64Rng> {
+    pub fn new(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
         Self::new_with_rng(n_clusters, Isaac64Rng::seed_from_u64(42))
     }
 }
 
-impl<R: Rng + Clone> MoeParams<R> {
-    pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<R> {
+impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
+    pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<F, R> {
         MoeParams {
             n_clusters,
             recombination: Recombination::Smooth,
-            heaviside_factor: 1.0,
+            heaviside_factor: F::one(),
             kpls_dim: None,
             rng,
         }
@@ -41,7 +42,7 @@ impl<R: Rng + Clone> MoeParams<R> {
         self.recombination
     }
 
-    pub fn heaviside_factor(&self) -> f64 {
+    pub fn heaviside_factor(&self) -> F {
         self.heaviside_factor
     }
 
@@ -63,7 +64,7 @@ impl<R: Rng + Clone> MoeParams<R> {
         self
     }
 
-    pub fn set_heaviside_factor(mut self, heaviside_factor: f64) -> Self {
+    pub fn set_heaviside_factor(mut self, heaviside_factor: F) -> Self {
         self.heaviside_factor = heaviside_factor;
         self
     }
@@ -73,7 +74,7 @@ impl<R: Rng + Clone> MoeParams<R> {
         self
     }
 
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<R2> {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<F, R2> {
         MoeParams {
             n_clusters: self.n_clusters,
             recombination: self.recombination,

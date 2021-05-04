@@ -2,9 +2,13 @@ use super::gaussian_mixture::GaussianMixture;
 use crate::errors::Result;
 use crate::{MoeParams, Recombination};
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
-use linfa::{traits::Fit, traits::Predict, Dataset, DatasetBase};
+use linfa::{
+    dataset::WithLapack, dataset::WithoutLapack, traits::Fit, traits::Predict, Dataset,
+    DatasetBase, Float,
+};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray_linalg::{Lapack, Scalar};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
@@ -12,14 +16,16 @@ use rand_isaac::Isaac64Rng;
 //     Fit<ArrayBase<D, Ix2>, T, GmmError> for MoeParams<F, R>
 // {
 
-impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
+impl<F: Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
     pub fn fit(
         &self,
-        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Moe> {
+        xt: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Result<Moe<F>> {
         let nx = xt.ncols();
-        let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
+        let data = concatenate(Axis(1), &[xt.view(), yt.view()])
+            .unwrap()
+            .with_lapack();
 
         // Clustering using GMM
         let (clusters, gmm) = sort_by_cluster(self.n_clusters(), &data, self.rng());
@@ -27,10 +33,10 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
         // Fit GPs on clustered data
         let mut gps = Vec::new();
         for cluster in clusters {
-            let xtrain = cluster.slice(s![.., ..nx]);
-            let ytrain = cluster.slice(s![.., nx..]);
+            let xtrain = cluster.slice(s![.., ..nx]).without_lapack();
+            let ytrain = cluster.slice(s![.., nx..]).without_lapack();
             gps.push(
-                GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
+                GaussianProcess::<F, ConstantMean, SquaredExponentialKernel>::params(
                     ConstantMean::default(),
                     SquaredExponentialKernel::default(),
                 )
@@ -41,9 +47,13 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
         }
 
         // GMX for prediction
-        let weights = gmm.weights().to_owned();
-        let means = gmm.means().slice(s![.., ..nx]).to_owned();
-        let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
+        let weights = gmm.weights().to_owned().without_lapack();
+        let means = gmm.means().slice(s![.., ..nx]).to_owned().without_lapack();
+        let covariances = gmm
+            .covariances()
+            .slice(s![.., ..nx, ..nx])
+            .to_owned()
+            .without_lapack();
         let gmx = GaussianMixture::new(weights, means, covariances)?
             .with_heaviside_factor(self.heaviside_factor());
         Ok(Moe {
@@ -59,21 +69,21 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<R> {
     }
 }
 
-pub fn sort_by_cluster<R: Rng + SeedableRng + Clone>(
+pub fn sort_by_cluster<F: Float + Lapack + Scalar, R: Rng + SeedableRng + Clone>(
     n_clusters: usize,
-    data: &Array2<f64>,
+    data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     rng: R,
-) -> (Vec<Array2<f64>>, GaussianMixtureModel<f64>) {
-    let dataset = Dataset::from(data.to_owned());
+) -> (Vec<Array2<F>>, GaussianMixtureModel<F>) {
+    let dataset = DatasetBase::from(data.to_owned());
     let gmm = GaussianMixtureModel::params(n_clusters)
         .with_n_runs(20)
-        .with_reg_covariance(1e-6)
+        //.with_reg_covariance(1e-6)
         .with_rng(rng)
         .fit(&dataset)
         .expect("Training data clustering");
 
     let dataset_clustering = gmm.predict(dataset);
-    let mut res: Vec<Array2<f64>> = Vec::new();
+    let mut res: Vec<Array2<F>> = Vec::new();
     let ndim = dataset_clustering.records.ncols();
     for n in 0..n_clusters {
         let cluster_data_indices: Array1<usize> = dataset_clustering
@@ -94,15 +104,15 @@ pub fn sort_by_cluster<R: Rng + SeedableRng + Clone>(
     (res, gmm)
 }
 
-pub struct Moe {
+pub struct Moe<F: Float> {
     recombination: Recombination,
-    heaviside_factor: f64,
-    gps: Vec<GaussianProcess<ConstantMean, SquaredExponentialKernel>>,
-    gmx: GaussianMixture<f64>,
+    heaviside_factor: F,
+    gps: Vec<GaussianProcess<F, ConstantMean, SquaredExponentialKernel>>,
+    gmx: GaussianMixture<F>,
 }
 
-impl Moe {
-    pub fn params(n_clusters: usize) -> MoeParams<Isaac64Rng> {
+impl<F: Float> Moe<F> {
+    pub fn params(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
         MoeParams::new(n_clusters)
     }
 
@@ -114,27 +124,27 @@ impl Moe {
         self.recombination
     }
 
-    pub fn heaviside_factor(&self) -> f64 {
+    pub fn heaviside_factor(&self) -> F {
         self.heaviside_factor
     }
 
-    pub fn predict(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict(&self, x: &Array2<F>) -> Result<Array2<F>> {
         match self.recombination {
             Recombination::Hard => self.predict_hard(x),
             Recombination::Smooth => self.predict_smooth(x),
         }
     }
 
-    pub fn predict_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_smooth(&self, observations: &Array2<F>) -> Result<Array2<F>> {
         let probas = self.gmx.predict_probas(observations);
-        let mut preds = Array1::<f64>::zeros(observations.nrows());
+        let mut preds = Array1::<F>::zeros(observations.nrows());
 
         Zip::from(&mut preds)
             .and(observations.genrows())
             .and(probas.genrows())
             .par_apply(|y, x, p| {
                 let obs = x.clone().insert_axis(Axis(0));
-                let subpreds: Array1<f64> = self
+                let subpreds: Array1<F> = self
                     .gps
                     .iter()
                     .map(|gp| gp.predict_values(&obs).unwrap()[[0, 0]])
@@ -144,9 +154,9 @@ impl Moe {
         Ok(preds.insert_axis(Axis(1)))
     }
 
-    pub fn predict_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_hard(&self, observations: &Array2<F>) -> Result<Array2<F>> {
         let clustering = self.gmx.predict(observations);
-        let mut preds = Array2::<f64>::zeros((observations.nrows(), 1));
+        let mut preds = Array2::<F>::zeros((observations.nrows(), 1));
         Zip::from(preds.genrows_mut())
             .and(observations.genrows())
             .and(&clustering)
@@ -162,10 +172,10 @@ impl Moe {
     }
 }
 
-pub fn extract_part(
-    data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+pub fn extract_part<F: Float>(
+    data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     quantile: usize,
-) -> (Array2<f64>, Array2<f64>) {
+) -> (Array2<F>, Array2<F>) {
     let nsamples = data.nrows();
     println!("{:?}", nsamples);
     println!("{:?}", quantile);

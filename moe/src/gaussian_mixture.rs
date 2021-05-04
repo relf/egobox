@@ -1,7 +1,7 @@
 use crate::{MoeError, Result};
-use linfa::{traits::*, Float};
+use linfa::{dataset::WithLapack, dataset::WithoutLapack, traits::*, Float};
 use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
-use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
+use ndarray_linalg::{cholesky::*, triangular::*};
 use ndarray_stats::QuantileExt;
 
 pub struct GaussianMixture<F: Float> {
@@ -26,7 +26,7 @@ impl<F: Float> Clone for GaussianMixture<F> {
     }
 }
 
-impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
+impl<F: Float> GaussianMixture<F> {
     pub fn new(
         weights: Array1<F>,
         means: Array2<F>,
@@ -67,7 +67,7 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
 
     pub fn predict_probas<D: Data<Elem = F>>(&self, observations: &ArrayBase<D, Ix2>) -> Array2<F> {
         let (_, log_resp) = self.estimate_log_prob_resp(observations);
-        log_resp.mapv(|v| Scalar::exp(v))
+        log_resp.mapv(|v| v.exp())
     }
 
     pub fn with_heaviside_factor(mut self, heaviside_factor: F) -> Self {
@@ -122,9 +122,10 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
         let n_features = covariances.shape()[1];
         let mut precisions_chol = Array::zeros((n_clusters, n_features, n_features));
         for (k, covariance) in covariances.outer_iter().enumerate() {
-            let cov_chol = covariance.cholesky(UPLO::Lower)?;
-            let sol =
-                cov_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &Array::eye(n_features))?;
+            let cov_chol = covariance.with_lapack().cholesky(UPLO::Lower)?;
+            let sol = cov_chol
+                .solve_triangular(UPLO::Lower, Diag::NonUnit, &Array::eye(n_features))?
+                .without_lapack();
             precisions_chol.slice_mut(s![k, .., ..]).assign(&sol.t());
         }
         Ok(precisions_chol)
@@ -151,9 +152,9 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
     ) -> (Array1<F>, Array2<F>) {
         let weighted_log_prob = self.estimate_weighted_log_prob(&observations);
         let log_prob_norm = weighted_log_prob
-            .mapv(|v| Scalar::exp(v))
+            .mapv(|v| v.exp())
             .sum_axis(Axis(1))
-            .mapv(|v| Scalar::ln(v));
+            .mapv(|v| v.ln());
         let log_resp = weighted_log_prob - log_prob_norm.to_owned().insert_axis(Axis(1));
         (log_prob_norm, log_resp)
     }
@@ -215,20 +216,20 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
             .unwrap()
             .slice(s![.., ..; n_features+1])
             .to_owned()
-            .mapv(|v| Scalar::ln(v));
+            .mapv(|v| v.ln());
         log_diags.sum_axis(Axis(1))
     }
 
     fn estimate_log_weights(&self) -> Array1<F> {
-        self.weights().mapv(|v| Scalar::ln(v))
+        self.weights().mapv(|v| v.ln())
     }
 
     /// Compute the weighted log probabilities for each sample.
     pub fn score_samples<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array1<F> {
         self.estimate_weighted_log_prob(x)
-            .mapv(|v| Scalar::exp(v))
+            .mapv(|v| v.exp())
             .sum_axis(Axis(1))
-            .mapv(|v| Scalar::ln(v))
+            .mapv(|v| v.ln())
     }
 
     // Compute the per-sample average log-likelihood of the given data X.
@@ -249,7 +250,7 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
     pub fn bic<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> F {
         let n_samples = F::from(x.shape()[0]).unwrap();
         F::from(-2.).unwrap() * self.score(x) * n_samples
-            + F::from(self.n_parameters()).unwrap() * Scalar::ln(n_samples)
+            + F::from(self.n_parameters()).unwrap() * n_samples.ln()
     }
 
     /// Akaike information criterion for the current model on the input X.
@@ -261,13 +262,13 @@ impl<F: Float + Lapack + Scalar> GaussianMixture<F> {
     }
 }
 
-impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictRef<ArrayBase<D, Ix2>, Array1<usize>>
+impl<F: Float, D: Data<Elem = F>> PredictRef<ArrayBase<D, Ix2>, Array1<usize>>
     for GaussianMixture<F>
 {
     fn predict_ref(&self, observations: &ArrayBase<D, Ix2>) -> Array1<usize> {
         let (_, log_resp) = self.estimate_log_prob_resp(&observations);
         log_resp
-            .mapv(Scalar::exp)
+            .mapv(|v| v.exp())
             .map_axis(Axis(1), |row| row.argmax().unwrap())
     }
 }
@@ -344,7 +345,7 @@ mod tests {
         assert_abs_diff_eq!(453.2505657408581, gmx.aic(&x), epsilon = 1e-7);
         // standard gaussian entropy
         let sgh = 0.5
-            * (x.t().cov(0.).unwrap().det().unwrap().ln()
+            * (f64::ln(x.t().cov(0.).unwrap().det().unwrap())
                 + (n_features as f64) * (1. + f64::ln(2. * std::f64::consts::PI)));
 
         assert_abs_diff_eq!(4.193902320935888, sgh, epsilon = 1e-7);
