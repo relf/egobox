@@ -52,7 +52,7 @@ fn main() {
             }
         };
         let start2 = Instant::now();
-        let gp = GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
             ConstantMean::default(),
             SquaredExponentialKernel::default(),
         )
