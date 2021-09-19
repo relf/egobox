@@ -18,7 +18,7 @@ use nlopt::*;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct GpInnerParams<F: Float> {
     /// Gaussian process variance
     sigma2: Array1<F>,
@@ -143,8 +143,14 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
             let (x_rotations, _) = pls.rotations();
             w_star = x_rotations.to_owned();
         };
-
         let x_distances = DistanceMatrix::new(&xtrain.data);
+        let sums = x_distances.d.mapv(|v| v.abs()).sum_axis(Axis(1));
+        if *sums.min().unwrap() == F::zero() {
+            println!(
+                "Warning: multiple x input features have the same value (at least same row twice)."
+            );
+        }
+
         let theta0 = Array1::from_elem(w_star.ncols(), self.initial_theta());
         let fx = self.mean().apply(x);
         let y_t = ytrain.clone();
@@ -180,7 +186,6 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
         // println!("theta0s = {:?}", theta0s);
         let opt_thetas =
             theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
-        // println!("opt_theta = {:?}", opt_thetas);
 
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(F::cast);
@@ -235,7 +240,15 @@ where
     optimizer.set_ftol_rel(1e-4).unwrap();
 
     match optimizer.optimize(&mut theta_vec) {
-        Ok((_, fmin)) => (arr1(&theta_vec).mapv(|v| base.powf(v)), fmin),
+        Ok((_, fmin)) => {
+            let thetas_opt = arr1(&theta_vec).mapv(|v| base.powf(v));
+            let fval = if f64::is_nan(fmin) {
+                f64::INFINITY
+            } else {
+                fmin
+            };
+            (thetas_opt, fval)
+        }
         Err(_e) => {
             // println!("ERROR OPTIM in GP {:?}", e);
             (arr1(&theta_vec).mapv(|v| base.powf(v)), f64::INFINITY)
