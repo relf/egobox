@@ -17,6 +17,7 @@ ndarray = { version = "0.14", features = ["rayon", "approx", "blas"]}
 ndarray-linalg = "0.13"
 ndarray-stats = "0.4"
 ndarray-rand = "0.13"
+ndarray-npy = "0.7"
 rand_isaac = "0.3"
 
 [dev-dependencies]

@@ -5,7 +5,7 @@ use std::fmt::{self, Display};
 
 pub type Result<T> = std::result::Result<T, MoeError>;
 
-/// An error when modeling a GMM algorithm
+/// An error when using MOE algorithm
 #[derive(Debug)]
 pub enum MoeError {
     /// When linear algebra computation fails
