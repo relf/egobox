@@ -5,8 +5,8 @@ use crate::parameters::GpParams;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
 use linfa::traits::Fit;
-use linfa::{dataset::Float, dataset::WithLapack, dataset::WithoutLapack, Dataset};
-use linfa_pls::PlsRegression;
+use linfa::Dataset;
+use linfa_pls::{Float, PlsRegression};
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
@@ -15,6 +15,7 @@ use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
+use num_traits;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 
@@ -76,21 +77,17 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
         let corr = self._compute_correlation(&x);
         let inners = &self.inner_params;
 
-        let corr_t = corr.t().to_owned().with_lapack();
+        let corr_t = corr.t().to_owned();
         let rt = inners
             .r_chol
             .to_owned()
-            .with_lapack()
-            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t)?
-            .without_lapack();
-        let lhs = (inners.ft.t().dot(&rt) - self.mean.apply(x).t()).with_lapack();
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t)?;
+        let lhs = inners.ft.t().dot(&rt) - self.mean.apply(x).t();
         let u = inners
             .ft_qr_r
             .to_owned()
-            .with_lapack()
             .t()
-            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)?
-            .without_lapack();
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)?;
 
         let a = &inners.sigma2;
         let b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
@@ -113,7 +110,7 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
         let nt = self.xtrain.data.nrows();
         // Get pairwise componentwise L1-distances to the input training set
         let mut dx: Array2<F> = Array2::zeros((nt * n_obs, n_features));
-        for (i, xrow) in xnorm.genrows().into_iter().enumerate() {
+        for (i, xrow) in xnorm.rows().into_iter().enumerate() {
             let dxrows = &self.xtrain.data - &xrow.into_shape((1, n_features)).unwrap();
             let a = i * nt;
             let b = (i + 1) * nt;
@@ -144,7 +141,10 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
             w_star = x_rotations.to_owned();
         };
         let x_distances = DistanceMatrix::new(&xtrain.data);
-        let sums = x_distances.d.mapv(|v| v.abs()).sum_axis(Axis(1));
+        let sums = x_distances
+            .d
+            .mapv(|v| num_traits::float::Float::abs(v))
+            .sum_axis(Axis(1));
         if *sums.min().unwrap() == F::zero() {
             println!(
                 "Warning: multiple x input features have the same value (at least same row twice)."
@@ -270,10 +270,10 @@ pub fn reduced_likelihood<F: Float>(
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
     }
 
-    let fxl = fx.to_owned().with_lapack();
+    let fxl = fx.to_owned();
 
     // R cholesky decomposition
-    let r_chol = r_mx.with_lapack().cholesky(UPLO::Lower)?;
+    let r_chol = r_mx.cholesky(UPLO::Lower)?;
 
     // Solve generalized least squared problem
     let ft = r_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &fxl)?;
@@ -298,31 +298,19 @@ pub fn reduced_likelihood<F: Float>(
             ));
         }
     }
-    let yt = r_chol.solve_triangular(
-        UPLO::Lower,
-        Diag::NonUnit,
-        &ytrain.data.to_owned().with_lapack(),
-    )?;
+    let yt = r_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &ytrain.data.to_owned())?;
     let beta = ft_qr_r.solve_triangular_into(UPLO::Upper, Diag::NonUnit, ft_qr_q.t().dot(&yt))?;
 
     let rho = yt - ft.dot(&beta);
-    let rho_sqr: Array1<F> = rho.mapv(|v| v * v).sum_axis(Axis(0)).without_lapack();
+    let rho_sqr: Array1<F> = rho.mapv(|v| v * v).sum_axis(Axis(0));
     let gamma = r_chol
         .t()
-        .solve_triangular_into(UPLO::Upper, Diag::NonUnit, rho)?
-        .without_lapack();
+        .solve_triangular_into(UPLO::Upper, Diag::NonUnit, rho)?;
 
     // The determinant of R is equal to the squared product of
     // the diagonal elements of its Cholesky decomposition r_chol
     let n_obs: F = F::cast(x_distances.n_obs);
-    let logdet = r_chol
-        .to_owned()
-        .without_lapack()
-        .diag()
-        .mapv(|v: F| v.log10())
-        .sum()
-        * F::cast(2.)
-        / n_obs;
+    let logdet = r_chol.to_owned().diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
     // Reduced likelihood
     let sigma2 = rho_sqr / n_obs;
     let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
@@ -330,11 +318,11 @@ pub fn reduced_likelihood<F: Float>(
         reduced_likelihood,
         GpInnerParams {
             sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
-            beta: beta.without_lapack(),
+            beta: beta,
             gamma,
-            r_chol: r_chol.without_lapack(),
-            ft: ft.without_lapack(),
-            ft_qr_r: ft_qr_r.without_lapack(),
+            r_chol: r_chol,
+            ft: ft,
+            ft_qr_r: ft_qr_r,
         },
     ))
 }

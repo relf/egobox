@@ -3,13 +3,19 @@ use doe::{LHSKind, SamplingMethod, LHS};
 use finitediff::FiniteDiff;
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use libm::erfc;
-use linfa::Float;
+use linfa_pls::Float;
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix2, Zip};
+use ndarray_linalg::{Lapack, Scalar};
 use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
+
+/// Add Scalar and Lapack trait bounds to the common Float trait
+// pub trait Float: linfa_pls::Float {}
+// impl Float for f32 {}
+// impl Float for f64 {}
 
 const SQRT_2PI: f64 = 2.5066282746310007;
 
@@ -209,8 +215,8 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
             let n_par = -(self.n_parallel as i32);
             let x_to_eval = x_data.slice(s![n_par.., ..]);
             let y_actual = self.obj_eval(&x_to_eval);
-            Zip::from(y_data.slice_mut(s![n_par.., ..]).gencolumns_mut())
-                .and(y_actual.gencolumns())
+            Zip::from(y_data.slice_mut(s![n_par.., ..]).columns_mut())
+                .and(y_actual.columns())
                 .apply(|mut y, val| y.assign(&val));
         }
         let best_index = y_data.argmin().unwrap().0;
@@ -309,7 +315,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
                 QEiStrategy::KrigingBelieverUpperBound => 3.,
                 _ => -1., // never used
             };
-            Ok(pred + F::cast(conf) * var.sqrt())
+            Ok(pred + F::cast(conf) * Scalar::sqrt(var))
         }
     }
 
@@ -323,7 +329,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
             println!("P = {:?}", p);
             if let Ok(s) = gpr.predict_variances(&pt) {
                 let pred = p[[0, 0]];
-                let sigma = s[[0, 0]].sqrt();
+                let sigma = Scalar::sqrt(s[[0, 0]]);
                 let args0 = (f_min - pred) / sigma;
                 let args1 = (f_min - pred) * Self::norm_cdf(args0);
                 let args2 = sigma * Self::norm_pdf(args0);
@@ -364,18 +370,18 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
             .unwrap()[[0, 0]];
         let ei_max = ei_x[i_max];
         if ei_max > F::zero() {
-            ratio * pred_max.abs() / ei_max
+            ratio * F::cast(pred_max) / ei_max
         } else {
-            F::one()
+            F::cast(1.)
         }
     }
 
     fn _compute_obj_scale(&self, x: &Array2<F>) -> F {
         *self
             .obj_eval(&x)
-            .mapv(|v| v.abs())
+            .mapv(|v| F::cast(Scalar::abs(v)))
             .max()
-            .unwrap_or(&F::one())
+            .unwrap_or(&F::cast(1.))
     }
 
     fn norm_cdf(x: F) -> F {
@@ -386,7 +392,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
     }
 
     fn norm_pdf(x: F) -> F {
-        (-F::cast(0.5) * x * x).exp() / F::cast(SQRT_2PI)
+        Scalar::exp(-F::cast(0.5) * x * x) / F::cast(SQRT_2PI)
     }
 
     fn acq_eval(
@@ -409,7 +415,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
     fn obj_eval<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
         let mut y = Array1::zeros(x.nrows());
         let obj = &self.obj;
-        Zip::from(&mut y).and(x.genrows()).par_apply(|yn, xn| {
+        Zip::from(&mut y).and(x.rows()).par_apply(|yn, xn| {
             let val = to_vec_f64(xn.to_slice().unwrap());
             *yn = F::cast((obj)(&val))
         });

@@ -14,16 +14,17 @@ linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static
 linfa-clustering = { git="https://github.com/relf/linfa.git", default-features = false }
 linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
 
-ndarray = { version = "0.14", features = ["rayon", "approx"]}
-ndarray-linalg = { version = "0.13" }
-ndarray-stats = "0.4"
-ndarray_einsum_beta = "0.6"
-ndarray-rand = "0.13"
-ndarray-npy = "0.7"
+ndarray = { version = "0.15", features = ["rayon", "approx"]}
+ndarray-linalg = "0.14"
+ndarray-stats = "0.5"
+ndarray_einsum_beta = "0.7"
+ndarray-rand = "0.14"
+ndarray-npy = "0.8"
 nlopt = "0.5.3"
 cobyla = "0.1.2"
 rand_isaac = "0.3"
 paste = "1.0"
+num-traits = "0.2"
 
 [dev-dependencies]
 criterion = "0.3"

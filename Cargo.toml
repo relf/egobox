@@ -13,11 +13,13 @@ gp = { path="gp" }
 moe = { path="moe" }
 
 linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
-ndarray = { version = "0.14", features = ["rayon", "approx", "blas"]}
-ndarray-linalg = "0.13"
-ndarray-stats = "0.4"
-ndarray-rand = "0.13"
-ndarray-npy = "0.7"
+linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
+
+ndarray = { version = "0.15", features = ["rayon", "approx", "blas"]}
+ndarray-linalg = "0.14"
+ndarray-stats = "0.5"
+ndarray-rand = "0.14"
+ndarray-npy = "0.8"
 
 nlopt = "0.5.3"
 rand_isaac = "0.3"

@@ -18,7 +18,7 @@ use rand_isaac::Isaac64Rng;
 //     Fit<ArrayBase<D, Ix2>, T, GmmError> for MoeParams<F, R>
 // {
 
-impl<F: Float + Lapack + Scalar, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
+impl<F: linfa_pls::Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
     pub fn fit(
         &self,
         xt: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -102,7 +102,7 @@ fn factorial(n: usize) -> usize {
     (1..=n).product()
 }
 
-pub fn sort_by_cluster<F: Float + Lapack + Scalar, R: Rng + SeedableRng + Clone>(
+pub fn sort_by_cluster<F: linfa_pls::Float, R: Rng + SeedableRng + Clone>(
     n_clusters: usize,
     data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     dataset_clustering: &Array1<usize>,
@@ -128,14 +128,14 @@ pub fn sort_by_cluster<F: Float + Lapack + Scalar, R: Rng + SeedableRng + Clone>
     res
 }
 
-pub struct Moe<F: Float + Lapack + Scalar> {
+pub struct Moe<F: linfa_pls::Float> {
     recombination: Recombination,
     heaviside_factor: F,
     gps: Vec<GaussianProcess<F, ConstantMean, SquaredExponentialKernel>>,
     gmx: GaussianMixture<F>,
 }
 
-impl<F: Float + Lapack + Scalar> Moe<F> {
+impl<F: linfa_pls::Float> Moe<F> {
     pub fn params(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
         MoeParams::new(n_clusters)
     }
@@ -196,7 +196,7 @@ impl<F: Float + Lapack + Scalar> Moe<F> {
     }
 }
 
-pub fn extract_part<F: Float + Lapack + Scalar>(
+pub fn extract_part<F: linfa_pls::Float>(
     data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     quantile: usize,
 ) -> (Array2<F>, Array2<F>) {

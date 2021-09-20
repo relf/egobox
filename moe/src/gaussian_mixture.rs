@@ -1,7 +1,7 @@
 use crate::{MoeError, Result};
 use linfa::{dataset::WithLapack, dataset::WithoutLapack, traits::*, Float};
 use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
-use ndarray_linalg::{cholesky::*, triangular::*};
+use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
 use ndarray_stats::QuantileExt;
 
 pub struct GaussianMixture<F: Float> {
@@ -262,14 +262,24 @@ impl<F: Float> GaussianMixture<F> {
     }
 }
 
-impl<F: Float, D: Data<Elem = F>> PredictRef<ArrayBase<D, Ix2>, Array1<usize>>
+impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictInplace<ArrayBase<D, Ix2>, Array1<usize>>
     for GaussianMixture<F>
 {
-    fn predict_ref(&self, observations: &ArrayBase<D, Ix2>) -> Array1<usize> {
-        let (_, log_resp) = self.estimate_log_prob_resp(&observations);
-        log_resp
-            .mapv(|v| v.exp())
-            .map_axis(Axis(1), |row| row.argmax().unwrap())
+    fn predict_inplace(&self, observations: &ArrayBase<D, Ix2>, targets: &mut Array1<usize>) {
+        assert_eq!(
+            observations.nrows(),
+            targets.len(),
+            "The number of data points must match the number of output targets."
+        );
+
+        let (_, log_resp) = self.estimate_log_prob_resp(observations);
+        *targets = log_resp
+            .mapv(Scalar::exp)
+            .map_axis(Axis(1), |row| row.argmax().unwrap());
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<usize> {
+        Array1::zeros(x.nrows())
     }
 }
 

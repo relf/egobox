@@ -9,9 +9,9 @@ name = "doe"
 
 [dependencies]
 linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
-ndarray = { version = "0.14", features = ["rayon", "approx"]}
-ndarray-stats = "0.4"
-ndarray-rand = "0.13"
+ndarray = { version = "0.15", features = ["rayon", "approx"]}
+ndarray-stats = "0.5"
+ndarray-rand = "0.14"
 rand_isaac = "0.3"
 num-traits = "0.2"
 
