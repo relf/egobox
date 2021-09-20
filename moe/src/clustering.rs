@@ -31,9 +31,14 @@ fn median(v: &[f64]) -> f64 {
 pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    max_nb_clusters: usize,
     rng: R,
 ) -> usize {
-    let max_nb_clusters = x.len() / 10 + 1;
+    let max_nb_clusters = if max_nb_clusters == 0 {
+        (x.len() / 10) + 1
+    } else {
+        max_nb_clusters
+    };
     //let max_nb_clusters = 3;
     let val = concatenate(Axis(1), &[x.view(), y.view()]).unwrap();
     let nx = x.ncols();
@@ -63,7 +68,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
     let mut i = 0;
     let mut exit_ = false;
 
-    let use_median = false;
+    let use_median = true;
 
     // Find error for each cluster
     while i < max_nb_clusters && !exit_ {
@@ -86,16 +91,6 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                 .fit(&xydata)
                 .expect("Training data clustering"),
         );
-
-        if let Ok(mix) = Moe::params(n_clusters)
-            .set_recombination(Recombination::Hard)
-            .set_gmm(Some(gmm.clone()))
-            .fit(&x, &y)
-        {
-            let doe = Array::linspace(0., 1., 101).insert_axis(Axis(1));
-            let pred = mix.predict(&doe).unwrap();
-            write_npy(format!("pred_{}.npy", n_clusters), &pred).expect("pred saved");
-        }
 
         // Cross Validation
         if ok {
@@ -133,12 +128,12 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                     let actual = valid.targets();
                     let h_error =
                         if let Ok(pred) = mixture.predict_hard(&valid.records().to_owned()) {
-                            write_npy(format!("valid_x_{}_{}.npy", n_clusters, k), valid.records())
-                                .expect("valid x saved");
-                            write_npy(format!("valid_y_{}_{}.npy", n_clusters, k), actual)
-                                .expect("valid y saved");
-                            write_npy(format!("pred_{}_{}.npy", n_clusters, k), &pred)
-                                .expect("pred saved");
+                            // write_npy(format!("valid_x_{}_{}.npy", n_clusters, k), valid.records())
+                            //     .expect("valid x saved");
+                            // write_npy(format!("valid_y_{}_{}.npy", n_clusters, k), actual)
+                            //     .expect("valid y saved");
+                            // write_npy(format!("pred_{}_{}.npy", n_clusters, k), &pred)
+                            //     .expect("pred saved");
                             pred.sub(actual).mapv(|x| x * x).sum().sqrt()
                                 / actual.mapv(|x| x * x).sum().sqrt()
                         } else {
@@ -161,8 +156,8 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         }
 
         // Stock for box plot
-        //b_ic.push(bic_c);
-        //a_ic.push(aic_c);
+        b_ic.push(bic_c);
+        a_ic.push(aic_c);
         error_s.push(s_errors.to_owned());
         error_h.push(h_errors.to_owned());
 
@@ -284,20 +279,6 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
 
     let number_cluster = cluster;
 
-    //   if plot:
-    //       self._plot_number_cluster(
-    //           posi,
-    //           errori,
-    //           erroris,
-    //           median_eh,
-    //           median_es,
-    //           b_ic,
-    //           a_ic,
-    //           error_h,
-    //           error_s,
-    //           cluster,
-    //       )
-
     let method = if use_median {
         "| Method: Minimum of Median errors"
     } else {
@@ -338,17 +319,25 @@ mod test {
     }
 
     #[test]
-    fn test_find_best_cluster_nb() {
-        //let doe = LHS::new(&array![[-1., 1.], [-1., 1.]]);
-        let doe = Array::linspace(0., 1., 101).insert_axis(Axis(1));
-        write_npy("doe.npy", &doe);
+    fn test_find_best_cluster_nb_1d() {
         let doe = LHS::new(&array![[0., 1.]]);
+        //write_npy("doe.npy", &doe);
         let xtrain = doe.sample(100);
-        write_npy("xtrain.npy", &xtrain);
-        //let ytrain = l1norm(&xtrain);
+        //write_npy("xtrain.npy", &xtrain);
         let ytrain = function_test_1d(&xtrain);
-        write_npy("ytrain.npy", &ytrain);
+        //write_npy("ytrain.npy", &ytrain);
         let rng = Isaac64Rng::seed_from_u64(42);
-        let nb_clusters = find_best_number_of_clusters(&xtrain, &ytrain, rng);
+        let nb_clusters = find_best_number_of_clusters(&xtrain, &ytrain, 5, rng);
+        assert_eq!(3, nb_clusters);
+    }
+
+    #[test]
+    fn test_find_best_cluster_nb_2d() {
+        let doe = LHS::new(&array![[-1., 1.], [-1., 1.]]);
+        let xtrain = doe.sample(200);
+        let ytrain = l1norm(&xtrain);
+        let rng = Isaac64Rng::seed_from_u64(42);
+        let nb_clusters = find_best_number_of_clusters(&xtrain, &ytrain, 5, rng);
+        assert_eq!(4, nb_clusters);
     }
 }
