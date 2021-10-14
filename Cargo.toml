@@ -5,7 +5,8 @@ authors = ["relf <remi.lafage@onera.fr>"]
 edition = "2018"
 
 [lib]
-name = "ego"
+name = "egobox"
+crate-type = ["cdylib"]
 
 [dependencies]
 doe = { path="doe" }
@@ -20,11 +21,16 @@ ndarray-linalg = "0.14"
 ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
+numpy = "0.14"
 
 nlopt = "0.5.3"
 rand_isaac = "0.3"
 libm = "0.2"
 finitediff = { version="0.1", features = ["ndarray"] }
+
+[dependencies.pyo3]
+version = "0.14.5"
+features = ["extension-module"]
 
 [dev-dependencies]
 linfa-datasets = { git="https://github.com/relf/linfa.git", features = ["linnerud"] }
@@ -34,9 +40,11 @@ approx = "0.4"
 argmin_testfunctions = "0.1"
 
 [workspace]
-
 members = [
   "doe", 
   "gp",
   "moe"
 ]
+
+[package.metadata.maturin]
+python-source = "python"

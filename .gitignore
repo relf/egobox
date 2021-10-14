@@ -19,3 +19,6 @@ Cargo.lock
 **/py_egobox/
 **/.ipynb_checkpoints/
 **/*.ipynb
+
+# Project
+python/egobox/egobox.pyd
