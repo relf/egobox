@@ -2,11 +2,11 @@ use gp::GpError;
 use std::error::Error;
 use std::fmt::{self, Display};
 
-pub type Result<T> = std::result::Result<T, EgoboxError>;
+pub type Result<T> = std::result::Result<T, EgoError>;
 
 /// An error when modeling a GMM algorithm
 #[derive(Debug)]
-pub enum EgoboxError {
+pub enum EgoError {
     /// When LikelihoodComputation computation fails
     GpError(String),
     /// When EGO fails
@@ -15,7 +15,7 @@ pub enum EgoboxError {
     InvalidValue(String),
 }
 
-impl Display for EgoboxError {
+impl Display for EgoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::GpError(message) => {
@@ -27,10 +27,10 @@ impl Display for EgoboxError {
     }
 }
 
-impl Error for EgoboxError {}
+impl Error for EgoError {}
 
-impl From<GpError> for EgoboxError {
-    fn from(error: GpError) -> EgoboxError {
-        EgoboxError::GpError(error.to_string())
+impl From<GpError> for EgoError {
+    fn from(error: GpError) -> EgoError {
+        EgoError::GpError(error.to_string())
     }
 }

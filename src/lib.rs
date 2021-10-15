@@ -1,8 +1,6 @@
-pub mod ego;
-pub mod errors;
-
 use doe::{SamplingMethod, LHS};
-use ndarray::{arr2, Array2, Ix1, Ix2};
+use ego::{AcqStrategy, Ego};
+use ndarray::{arr2, array, Array2, Ix1, Ix2};
 use numpy::{IntoPyArray, PyArray, PyReadonlyArray};
 use pyo3::prelude::*;
 use pyo3::types::{PyFloat, PyTuple};
@@ -20,7 +18,7 @@ fn lhs<'py>(
 }
 
 #[pyclass]
-struct Ego {}
+struct Optimizer {}
 
 #[pyclass]
 struct OptimResult {
@@ -33,36 +31,41 @@ struct OptimResult {
 unsafe impl Send for OptimResult {}
 
 #[pymethods]
-impl Ego {
+impl Optimizer {
     #[new]
     fn new() -> Self {
-        Ego {}
+        Optimizer {}
     }
 
-    fn optimize(&self, test: &PyAny) -> OptimResult {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
+    fn minimize(&self, py_callback: &PyAny) -> OptimResult {
+        let callback: PyObject = py_callback.into();
 
-        let x = vec![0.1];
-        let args = PyTuple::new(py, &[x.clone()]);
-        let res = test.call1(args);
+        let obj = move |x: &[f64]| -> f64 {
+            let gil = Python::acquire_gil();
+            let py = gil.python();
+
+            let args = PyTuple::new(py, &[x.clone()]);
+            let res = callback.call1(py, args);
+
+            let val = res.unwrap().extract::<f64>(py).unwrap();
+            val
+        };
+
+        let res = Ego::new(obj, &array![[0.0, 25.0]])
+            .acq_strategy(AcqStrategy::WB2)
+            .minimize();
 
         OptimResult {
-            x_opt: x.clone(),
-            y_opt: res.unwrap().extract::<f64>().unwrap(),
+            x_opt: res.x_opt.to_vec(),
+            y_opt: res.y_opt,
         }
-        // let f = |&[f64]| {
-        // let res = Ego::new(f, &array![[0.0, 25.0]])
-        // .acq_strategy(AcqStrategy::WB2)
-        // .minimize()
-        // };
     }
 }
 
 #[pymodule]
 fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lhs, m)?)?;
-    m.add_class::<Ego>()?;
+    m.add_class::<Optimizer>()?;
     m.add_class::<OptimResult>()?;
     Ok(())
 }

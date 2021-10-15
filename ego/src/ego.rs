@@ -1,4 +1,4 @@
-use crate::errors::{EgoboxError, Result};
+use crate::errors::{EgoError, Result};
 use doe::{LHSKind, SamplingMethod, LHS};
 use finitediff::FiniteDiff;
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
@@ -24,8 +24,8 @@ impl<T> ObjFn for T where T: Send + Sync + 'static + Fn(&[f64]) -> f64 {}
 
 #[derive(Debug)]
 pub struct OptimResult<F: Float> {
-    x_opt: Array1<F>,
-    y_opt: F,
+    pub x_opt: Array1<F>,
+    pub y_opt: F,
 }
 
 #[derive(Debug, PartialEq)]
@@ -136,7 +136,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
 
     fn next_points(
         &self,
-        n: usize,
+        _n: usize,
         x_data: &Array2<F>,
         y_data: &Array2<F>,
         sampling: &LHS<F, R>,
@@ -294,7 +294,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
             }
             n_optim += 1;
         }
-        best_x.ok_or_else(|| EgoboxError::EgoError(String::from("Can not find best point")))
+        best_x.ok_or_else(|| EgoError::EgoError(String::from("Can not find best point")))
     }
 
     fn get_virtual_point(
@@ -326,7 +326,6 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
     ) -> F {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = gpr.predict_values(&pt) {
-            println!("P = {:?}", p);
             if let Ok(s) = gpr.predict_variances(&pt) {
                 let pred = p[[0, 0]];
                 let sigma = Scalar::sqrt(s[[0, 0]]);
@@ -385,9 +384,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
     }
 
     fn norm_cdf(x: F) -> F {
-        dbg!(to_f64(x));
         let norm = F::cast(0.5 * erfc(-to_f64(x) / std::f64::consts::SQRT_2));
-        dbg!(norm);
         norm
     }
 
@@ -415,7 +412,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
     fn obj_eval<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
         let mut y = Array1::zeros(x.nrows());
         let obj = &self.obj;
-        Zip::from(&mut y).and(x.rows()).par_for_each(|yn, xn| {
+        Zip::from(&mut y).and(x.rows()).for_each(|yn, xn| {
             let val = to_vec_f64(xn.to_slice().unwrap());
             *yn = F::cast((obj)(&val))
         });
