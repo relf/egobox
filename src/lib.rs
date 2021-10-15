@@ -24,7 +24,8 @@ struct Ego {}
 
 #[pyclass]
 struct OptimResult {
-    // x_opt: PyArray<f64, Ix1>,
+    #[pyo3(get)]
+    x_opt: Vec<f64>,
     #[pyo3(get)]
     y_opt: f64,
 }
@@ -39,13 +40,16 @@ impl Ego {
     }
 
     fn optimize(&self, test: &PyAny) -> OptimResult {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
         let x = vec![0.1];
-        let args = PyTuple::new(py, &[x]);
+        let args = PyTuple::new(py, &[x.clone()]);
         let res = test.call1(args);
 
         OptimResult {
-            // x_opt: res.unwrap(),
-            y_opt: res.unwrap().downcast::<PyFloat>().unwrap().value(),
+            x_opt: x.clone(),
+            y_opt: res.unwrap().extract::<f64>().unwrap(),
         }
         // let f = |&[f64]| {
         // let res = Ego::new(f, &array![[0.0, 25.0]])

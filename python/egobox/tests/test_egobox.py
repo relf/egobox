@@ -12,4 +12,5 @@ class TestEgobox(unittest.TestCase):
 
     def test_egobox(self):
         ego = Ego()
-        print(ego.optimize(TestEgobox.xsinx).y_opt)
+        res = ego.optimize(TestEgobox.xsinx)
+        print(f"Optimization f={res.y_opt} at {res.x_opt}")
