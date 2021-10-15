@@ -174,15 +174,15 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
         let mut theta0s = Array2::zeros((8, theta0.len()));
         theta0s.row_mut(0).assign(&theta0);
         let mut xlimits: Array2<F> = Array2::zeros((theta0.len(), 2));
-        for mut row in xlimits.genrows_mut() {
+        for mut row in xlimits.rows_mut() {
             row.assign(&arr1(&[F::cast(1e-6), F::cast(20.)]));
         }
         // xlimits.column_mut(0).assign(&Array1::from_elem(theta0.len(), 1e-6));
         // xlimits.column_mut(1).assign(&Array1::from_elem(theta0.len(), 20.));
         let seeds = LHS::new(&xlimits).sample(7);
-        Zip::from(theta0s.slice_mut(s![1.., ..]).genrows_mut())
-            .and(seeds.genrows())
-            .par_apply(|mut theta, row| theta.assign(&row));
+        Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
+            .and(seeds.rows())
+            .par_for_each(|mut theta, row| theta.assign(&row));
         // println!("theta0s = {:?}", theta0s);
         let opt_thetas =
             theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
@@ -437,7 +437,7 @@ mod tests {
                 Ok(yt) => yt,
                 Err(_) => {
                     let mut yv: Array1<f64> = Array1::zeros(xt.nrows());
-                    Zip::from(&mut yv).and(xt.genrows()).par_apply(|y, x| {
+                    Zip::from(&mut yv).and(xt.rows()).par_for_each(|y, x| {
                         *y = griewank(&x.to_owned());
                     });
                     let yt = yv.into_shape((xt.nrows(), 1)).unwrap();

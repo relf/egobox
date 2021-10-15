@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from egobox import *
+from egobox import Ego
 
 
 class TestEgobox(unittest.TestCase):

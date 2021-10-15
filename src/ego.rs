@@ -5,8 +5,8 @@ use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
 use libm::erfc;
 use linfa_pls::Float;
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix2, Zip};
-use ndarray_linalg::{Lapack, Scalar};
-use ndarray_npy::write_npy;
+use ndarray_linalg::Scalar;
+// use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use nlopt::*;
@@ -151,23 +151,23 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
             .fit(&x_data, &y_data)
             .expect("GP training failure");
 
-            if n == 6 {
-                let f_min = y_data.min().unwrap();
-                let xplot = Array::linspace(0., 25., 100)
-                    .mapv(F::cast)
-                    .insert_axis(Axis(1));
-                let obj = self.obj_eval(&xplot);
-                let gpr_vals = gpr.predict_values(&xplot).unwrap();
-                let gpr_vars = gpr.predict_variances(&xplot).unwrap();
-                let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min));
-                let wb2 = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, None));
-                // write_npy("ego_x.npy", &xplot).expect("xplot saved");
-                // write_npy("ego_obj.npy", &obj).expect("obj saved");
-                // write_npy("ego_gpr.npy", &gpr_vals).expect("gp vals saved");
-                // write_npy("ego_gpr_vars.npy", &gpr_vars).expect("gp vars saved");
-                // write_npy("ego_ei.npy", &ei).expect("ei saved");
-                // write_npy("ego_wb2.npy", &wb2).expect("wb2 saved");
-            }
+            // if n == 6 {
+            //     let f_min = y_data.min().unwrap();
+            //     let xplot = Array::linspace(0., 25., 100)
+            //         .mapv(F::cast)
+            //         .insert_axis(Axis(1));
+            //     let obj = self.obj_eval(&xplot);
+            //     let gpr_vals = gpr.predict_values(&xplot).unwrap();
+            //     let gpr_vars = gpr.predict_variances(&xplot).unwrap();
+            //     let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min));
+            //     let wb2 = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, None));
+            //     write_npy("ego_x.npy", &xplot).expect("xplot saved");
+            //     write_npy("ego_obj.npy", &obj).expect("obj saved");
+            //     write_npy("ego_gpr.npy", &gpr_vals).expect("gp vals saved");
+            //     write_npy("ego_gpr_vars.npy", &gpr_vars).expect("gp vars saved");
+            //     write_npy("ego_ei.npy", &ei).expect("ei saved");
+            //     write_npy("ego_wb2.npy", &wb2).expect("wb2 saved");
+            // }
 
             match self.find_best_point(&x_data, &y_data, &sampling, &gpr) {
                 Ok(xk) => match self.get_virtual_point(&xk, &y_data, &gpr) {
@@ -217,7 +217,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
             let y_actual = self.obj_eval(&x_to_eval);
             Zip::from(y_data.slice_mut(s![n_par.., ..]).columns_mut())
                 .and(y_actual.columns())
-                .apply(|mut y, val| y.assign(&val));
+                .for_each(|mut y, val| y.assign(&val));
         }
         let best_index = y_data.argmin().unwrap().0;
         OptimResult {
@@ -415,7 +415,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
     fn obj_eval<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
         let mut y = Array1::zeros(x.nrows());
         let obj = &self.obj;
-        Zip::from(&mut y).and(x.rows()).par_apply(|yn, xn| {
+        Zip::from(&mut y).and(x.rows()).par_for_each(|yn, xn| {
             let val = to_vec_f64(xn.to_slice().unwrap());
             *yn = F::cast((obj)(&val))
         });

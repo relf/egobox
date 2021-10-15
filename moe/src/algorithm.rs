@@ -3,14 +3,10 @@ use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::{MoeParams, Recombination};
 use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
-use linfa::{
-    dataset::WithLapack, dataset::WithoutLapack, traits::Fit, traits::Predict, Dataset,
-    DatasetBase, Float,
-};
+use linfa::{traits::Fit, traits::Predict, Dataset};
 use linfa_clustering::GaussianMixtureModel;
 
-use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
-use ndarray_linalg::{Lapack, Scalar};
+use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
@@ -35,12 +31,6 @@ impl<F: linfa_pls::Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
             .with_rng(self.rng())
             .fit(&dataset)
             .expect("Training data clustering");
-
-        // Clustering using GMM
-        let dataset_clustering = match self.gmm() {
-            Some(gmm) => gmm.predict(&data),
-            None => gmm.predict(&data),
-        };
 
         // GMX for prediction
         let weights = gmm.weights().to_owned();
@@ -106,7 +96,7 @@ pub fn sort_by_cluster<F: linfa_pls::Float, R: Rng + SeedableRng + Clone>(
     n_clusters: usize,
     data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     dataset_clustering: &Array1<usize>,
-    rng: R,
+    _rng: R,
 ) -> Vec<Array2<F>> {
     let mut res: Vec<Array2<F>> = Vec::new();
     let ndim = data.ncols();
@@ -118,9 +108,9 @@ pub fn sort_by_cluster<F: linfa_pls::Float, R: Rng + SeedableRng + Clone>(
             .collect();
         let nsamples = cluster_data_indices.len();
         let mut subset = Array2::zeros((nsamples, ndim));
-        Zip::from(subset.genrows_mut())
+        Zip::from(subset.rows_mut())
             .and(&cluster_data_indices)
-            .apply(|mut r, &k| {
+            .for_each(|mut r, &k| {
                 r.assign(&data.row(k));
             });
         res.push(subset);
@@ -164,9 +154,9 @@ impl<F: linfa_pls::Float> Moe<F> {
         let mut preds = Array1::<F>::zeros(observations.nrows());
 
         Zip::from(&mut preds)
-            .and(observations.genrows())
-            .and(probas.genrows())
-            .par_apply(|y, x, p| {
+            .and(observations.rows())
+            .and(probas.rows())
+            .par_for_each(|y, x, p| {
                 let obs = x.clone().insert_axis(Axis(0));
                 let subpreds: Array1<F> = self
                     .gps
@@ -181,10 +171,10 @@ impl<F: linfa_pls::Float> Moe<F> {
     pub fn predict_hard(&self, observations: &Array2<F>) -> Result<Array2<F>> {
         let clustering = self.gmx.predict(observations);
         let mut preds = Array2::<F>::zeros((observations.nrows(), 1));
-        Zip::from(preds.genrows_mut())
-            .and(observations.genrows())
+        Zip::from(preds.rows_mut())
+            .and(observations.rows())
             .and(&clustering)
-            .par_apply(|mut y, x, &c| {
+            .par_for_each(|mut y, x, &c| {
                 y.assign(
                     &self.gps[c]
                         .predict_values(&x.insert_axis(Axis(0)))
@@ -221,7 +211,7 @@ mod tests {
 
     fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
         let mut y = Array2::zeros(x.dim());
-        Zip::from(&mut y).and(x).apply(|yi, &xi| {
+        Zip::from(&mut y).and(x).for_each(|yi, &xi| {
             if xi < 0.4 {
                 *yi = xi * xi;
             } else if (0.4..0.8).contains(&xi) {

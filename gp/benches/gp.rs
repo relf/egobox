@@ -38,7 +38,7 @@ fn criterion_gp(c: &mut Criterion) {
             Ok(yt) => yt,
             Err(_) => {
                 let mut yv: Array1<f64> = Array1::zeros(xt.nrows());
-                Zip::from(&mut yv).and(xt.genrows()).par_apply(|y, x| {
+                Zip::from(&mut yv).and(xt.rows()).par_apply(|y, x| {
                     *y = griewak(&x.to_owned());
                 });
                 let yt = yv.into_shape((xt.nrows(), 1)).unwrap();

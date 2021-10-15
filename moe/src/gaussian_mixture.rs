@@ -1,4 +1,5 @@
-use crate::{MoeError, Result};
+#![allow(dead_code)]
+use crate::Result;
 use linfa::{dataset::WithLapack, dataset::WithoutLapack, traits::*, Float};
 use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
 use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
@@ -53,13 +54,13 @@ impl<F: Float> GaussianMixture<F> {
         &self.means
     }
 
-    pub fn covariances(&self) -> &Array3<F> {
-        &self.covariances
-    }
+    // pub fn covariances(&self) -> &Array3<F> {
+    //     &self.covariances
+    // }
 
-    pub fn precisions(&self) -> &Array3<F> {
-        &self.precisions
-    }
+    // pub fn precisions(&self) -> &Array3<F> {
+    //     &self.precisions
+    // }
 
     pub fn heaviside_factor(&self) -> F {
         self.heaviside_factor
@@ -75,45 +76,46 @@ impl<F: Float> GaussianMixture<F> {
         self
     }
 
-    fn estimate_gaussian_parameters<D: Data<Elem = F>>(
-        observations: &ArrayBase<D, Ix2>,
-        resp: &Array2<F>,
-        reg_covar: F,
-    ) -> Result<(Array1<F>, Array2<F>, Array3<F>)> {
-        let nk = resp.sum_axis(Axis(0));
-        if nk.min().unwrap() < &(F::from(10.).unwrap() * F::epsilon()) {
-            return Err(MoeError::EmptyCluster(format!(
-              "Cluster #{} has no more point. Consider decreasing number of clusters or change initialization.",
-              nk.argmin().unwrap() + 1
-          )));
-        }
+    // NOT USED at the moment
+    // fn estimate_gaussian_parameters<D: Data<Elem = F>>(
+    //     observations: &ArrayBase<D, Ix2>,
+    //     resp: &Array2<F>,
+    //     reg_covar: F,
+    // ) -> Result<(Array1<F>, Array2<F>, Array3<F>)> {
+    //     let nk = resp.sum_axis(Axis(0));
+    //     if nk.min().unwrap() < &(F::from(10.).unwrap() * F::epsilon()) {
+    //         return Err(MoeError::EmptyCluster(format!(
+    //           "Cluster #{} has no more point. Consider decreasing number of clusters or change initialization.",
+    //           nk.argmin().unwrap() + 1
+    //       )));
+    //     }
 
-        let nk2 = nk.to_owned().insert_axis(Axis(1));
-        let means = resp.t().dot(observations) / nk2;
-        let covariances =
-            Self::estimate_gaussian_covariances_full(&observations, resp, &nk, &means, reg_covar);
-        Ok((nk, means, covariances))
-    }
+    //     let nk2 = nk.to_owned().insert_axis(Axis(1));
+    //     let means = resp.t().dot(observations) / nk2;
+    //     let covariances =
+    //         Self::estimate_gaussian_covariances_full(&observations, resp, &nk, &means, reg_covar);
+    //     Ok((nk, means, covariances))
+    // }
 
-    fn estimate_gaussian_covariances_full<D: Data<Elem = F>>(
-        observations: &ArrayBase<D, Ix2>,
-        resp: &Array2<F>,
-        nk: &Array1<F>,
-        means: &Array2<F>,
-        reg_covar: F,
-    ) -> Array3<F> {
-        let n_clusters = means.nrows();
-        let n_features = means.ncols();
-        let mut covariances = Array::zeros((n_clusters, n_features, n_features));
-        for k in 0..n_clusters {
-            let diff = observations - &means.row(k);
-            let m = &diff.t() * &resp.index_axis(Axis(1), k);
-            let mut cov_k = m.dot(&diff) / nk[k];
-            cov_k.diag_mut().mapv_inplace(|x| x + reg_covar);
-            covariances.slice_mut(s![k, .., ..]).assign(&cov_k);
-        }
-        covariances
-    }
+    // fn estimate_gaussian_covariances_full<D: Data<Elem = F>>(
+    //     observations: &ArrayBase<D, Ix2>,
+    //     resp: &Array2<F>,
+    //     nk: &Array1<F>,
+    //     means: &Array2<F>,
+    //     reg_covar: F,
+    // ) -> Array3<F> {
+    //     let n_clusters = means.nrows();
+    //     let n_features = means.ncols();
+    //     let mut covariances = Array::zeros((n_clusters, n_features, n_features));
+    //     for k in 0..n_clusters {
+    //         let diff = observations - &means.row(k);
+    //         let m = &diff.t() * &resp.index_axis(Axis(1), k);
+    //         let mut cov_k = m.dot(&diff) / nk[k];
+    //         cov_k.diag_mut().mapv_inplace(|x| x + reg_covar);
+    //         covariances.slice_mut(s![k, .., ..]).assign(&cov_k);
+    //     }
+    //     covariances
+    // }
 
     pub fn compute_precisions_cholesky_full<D: Data<Elem = F>>(
         covariances: &ArrayBase<D, Ix3>,
@@ -191,9 +193,9 @@ impl<F: Float> GaussianMixture<F> {
         // det(precision_chol) is half of det(precision)
         let log_det = Self::compute_log_det_cholesky_full(&precs, n_features);
         let mut log_prob: Array2<F> = Array::zeros((n_samples, n_clusters));
-        Zip::indexed(means.genrows())
+        Zip::indexed(means.rows())
             .and(precs.outer_iter())
-            .apply(|k, mu, prec_chol| {
+            .for_each(|k, mu, prec_chol| {
                 let diff = (&observations.to_owned() - &mu).dot(&prec_chol);
                 log_prob
                     .slice_mut(s![.., k])
@@ -310,9 +312,9 @@ mod tests {
         // let obs = array![[0., 0.], [1., 1.], [2., 2.], [3., 3.], [4., 4.]];
         // let n = 100;
         let mut obs = Array2::from_elem((101, 2), 0.);
-        Zip::from(obs.genrows_mut())
+        Zip::from(obs.rows_mut())
             .and(&Array::linspace(0., 4., 101))
-            .apply(|mut o, &v| o.assign(&array![v, v]));
+            .for_each(|mut o, &v| o.assign(&array![v, v]));
         let preds = gmix.predict(&obs);
         println!("preds = {:?}", preds);
         let probas = gmix.predict_probas(&obs);

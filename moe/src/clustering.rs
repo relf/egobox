@@ -1,13 +1,12 @@
-use crate::algorithm::{extract_part, sort_by_cluster, Moe};
+#![allow(dead_code)]
+use crate::algorithm::{sort_by_cluster, Moe};
 use crate::gaussian_mixture::GaussianMixture;
-use crate::parameters::{MoeParams, Recombination};
 use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
 use linfa_clustering::GaussianMixtureModel;
-use ndarray::{concatenate, s, Array, Array2, ArrayBase, Axis, Data, Ix2};
-use ndarray_npy::write_npy;
+use ndarray::{concatenate, ArrayBase, Axis, Data, Ix2};
+// use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
-use ndarray_stats::Quantile1dExt;
 use std::ops::Sub;
 
 fn mean(list: &[f64]) -> f64 {
@@ -40,7 +39,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         max_nb_clusters
     };
     //let max_nb_clusters = 3;
-    let val = concatenate(Axis(1), &[x.view(), y.view()]).unwrap();
+    //let val = concatenate(Axis(1), &[x.view(), y.view()]).unwrap();
     let nx = x.ncols();
 
     let dataset: DatasetView<f64, f64> = DatasetView::new(x.view(), y.view());
@@ -57,14 +56,14 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
     let mut median_es: Vec<f64> = Vec::new();
 
     // Init Output Loop
-    let mut auxkh = 0.;
-    let mut auxkph = 0.;
-    let mut auxkpph = 0.;
-    let mut auxks = 0.;
-    let mut auxkps = 0.;
-    let mut auxkpps = 0.;
+    let mut auxkh;
+    let mut auxkph;
+    let mut auxkpph;
+    let mut auxks;
+    let mut auxkps;
+    let mut auxkpps;
     let mut ok1 = true;
-    let mut ok2 = true;
+    let mut ok2;
     let mut i = 0;
     let mut exit_ = false;
 
@@ -72,7 +71,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
 
     // Find error for each cluster
     while i < max_nb_clusters && !exit_ {
-        let kpls = nx > 9;
+        let _kpls = nx > 9;
 
         let mut h_errors: Vec<f64> = Vec::new();
         let mut s_errors: Vec<f64> = Vec::new();
@@ -306,7 +305,7 @@ mod test {
 
     fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
         let mut y = Array2::zeros(x.dim());
-        Zip::from(&mut y).and(x).apply(|yi, &xi| {
+        Zip::from(&mut y).and(x).for_each(|yi, &xi| {
             if xi < 0.4 {
                 *yi = xi * xi;
             } else if (0.4..0.8).contains(&xi) {
