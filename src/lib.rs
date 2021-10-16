@@ -1,9 +1,9 @@
 use doe::{SamplingMethod, LHS};
 use ego::{AcqStrategy, Ego};
-use ndarray::{arr2, array, Array2, Ix1, Ix2};
+use ndarray::{array, Ix2};
 use numpy::{IntoPyArray, PyArray, PyReadonlyArray};
 use pyo3::prelude::*;
-use pyo3::types::{PyFloat, PyTuple};
+use pyo3::types::PyTuple;
 
 /// Formats the sum of two numbers as string.
 #[pyfunction]
