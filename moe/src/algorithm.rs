@@ -2,17 +2,121 @@ use super::gaussian_mixture::GaussianMixture;
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::{MoeParams, Recombination};
-use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
+use gp::correlation_models::*;
+use gp::mean_models::*;
+use gp::GaussianProcess;
 use linfa::{traits::Fit, traits::Predict, Dataset};
 use linfa_clustering::GaussianMixtureModel;
+use paste::paste;
 
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray_linalg::norm::Norm;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
-// impl<F: Float, R: Rng + SeedableRng + Clone, D: Data<Elem = F>, T>
-//     Fit<ArrayBase<D, Ix2>, T, GmmError> for MoeParams<F, R>
-// {
+macro_rules! make_gp_params {
+    ($regr:ident, $corr:ident) => {
+        paste! {
+            GaussianProcess::<f64, [<$regr Mean>], [<$corr Kernel>] >::params(
+                [<$regr Mean>]::default(),
+                [<$corr Kernel>]::default(),
+            )
+        }
+    };
+}
+
+macro_rules! compute_error {
+    ($regr:ident, $corr:ident, $dataset:ident) => {{
+        let params = make_gp_params!($regr, $corr);
+        let mut errors = Vec::new();
+        for (gp, valid) in $dataset.iter_fold(5, |v| {
+            params
+                .fit(&v.records().to_owned(), &v.targets().to_owned())
+                .unwrap()
+        }) {
+            let pred = gp.predict_values(valid.records()).unwrap();
+            let error = (valid.targets() - pred).norm_l2();
+            errors.push(error);
+        }
+        errors.iter().fold(0.0, |acc, &item| acc + item) / errors.len() as f64
+    }};
+}
+
+macro_rules! compute_accuracies_with_corr {
+    ($allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident, $corr:ident) => {{
+        if $allowed_corr_models.contains(&stringify!($corr)) {
+            $map_accuracy.push((
+                format!("{}_{}", stringify!($regr), stringify!($corr)),
+                compute_error!($regr, $corr, $dataset),
+            ));
+        }
+    }};
+}
+
+macro_rules! compute_accuracies_with_regr {
+    ($allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident) => {{
+        if $allowed_mean_models.contains(&stringify!($regr)) {
+            compute_accuracies_with_corr!(
+                $allowed_mean_models,
+                $allowed_corr_models,
+                $dataset,
+                $map_accuracy,
+                $regr,
+                SquaredExponential
+            );
+            compute_accuracies_with_corr!(
+                $allowed_mean_models,
+                $allowed_corr_models,
+                $dataset,
+                $map_accuracy,
+                $regr,
+                AbsoluteExponential
+            );
+            compute_accuracies_with_corr!(
+                $allowed_mean_models,
+                $allowed_corr_models,
+                $dataset,
+                $map_accuracy,
+                $regr,
+                Matern32
+            );
+            compute_accuracies_with_corr!(
+                $allowed_mean_models,
+                $allowed_corr_models,
+                $dataset,
+                $map_accuracy,
+                $regr,
+                Matern52
+            );
+        }
+    }};
+}
+
+macro_rules! compute_accuracies {
+    ($allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident) => {{
+        compute_accuracies_with_regr!(
+            $allowed_mean_models,
+            $allowed_corr_models,
+            $dataset,
+            $map_accuracy,
+            Constant
+        );
+        compute_accuracies_with_regr!(
+            $allowed_mean_models,
+            $allowed_corr_models,
+            $dataset,
+            $map_accuracy,
+            Linear
+        );
+        compute_accuracies_with_regr!(
+            $allowed_mean_models,
+            $allowed_corr_models,
+            $dataset,
+            $map_accuracy,
+            Quadratic
+        );
+    }};
+}
 
 impl<F: linfa_pls::Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
     pub fn fit(
@@ -186,6 +290,26 @@ impl<F: linfa_pls::Float> Moe<F> {
     }
 }
 
+impl Moe<f64> {
+    pub fn find_best_expert(&self, nx: usize, clustered_values: &Array2<f64>) -> String {
+        let xtrain = clustered_values.slice(s![.., ..nx]);
+        let ytrain = clustered_values.slice(s![.., nx..]);
+        let mut dataset = Dataset::from((xtrain.to_owned(), ytrain.to_owned()));
+        let allowed_mean_models = vec!["Constant", "Linear"];
+        let allowed_corr_models = vec!["SquaredExponential", "Matern32"];
+
+        let mut map_accuracy = Vec::new();
+        compute_accuracies!(
+            allowed_mean_models,
+            allowed_corr_models,
+            dataset,
+            map_accuracy
+        );
+        println!("{:?}", map_accuracy);
+        "dfsdf".to_string()
+    }
+}
+
 pub fn extract_part<F: linfa_pls::Float>(
     data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     quantile: usize,
@@ -263,5 +387,23 @@ mod tests {
             moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
             epsilon = 1e-6
         );
+    }
+
+    fn xsinx(x: &[f64]) -> f64 {
+        (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
+    }
+
+    #[test]
+    fn test_find_best_expert() {
+        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let xt = Array2::random_using((10, 1), Uniform::new(0., 1.), &mut rng);
+        let yt = xt.mapv(|x| xsinx(&[x]));
+        let moe = Moe::params(1)
+            .with_rng(rng)
+            .fit(&xt, &yt)
+            .expect("MOE fitted");
+        let clustered = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
+        println!("{:?}", &clustered);
+        moe.find_best_expert(1, &clustered);
     }
 }

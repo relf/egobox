@@ -1,3 +1,9 @@
+#[allow(unused_imports)]
+use gp::correlation_models::{
+    AbsoluteExponentialKernel, Matern32Kernel, Matern52Kernel, SquaredExponentialKernel,
+};
+#[allow(unused_imports)]
+use gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
 use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
 use ndarray_linalg::{Lapack, Scalar};

@@ -1,9 +1,9 @@
+use crate::correlation_models::CorrelationModel;
 use crate::errors::{GpError, Result};
-use crate::{CorrelationModel, RegressionModel};
+use crate::mean_models::RegressionModel;
 use linfa::dataset::Float;
-use ndarray::Array2;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct GpParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: F,
@@ -15,10 +15,6 @@ pub struct GpParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel
     kpls_dim: Option<usize>,
     /// Optionally apply dimension reduction (KPLS) or not
     nugget: F,
-    /// Training inputs
-    xtrain: Array2<F>,
-    /// Training outputs
-    ytrain: Array2<F>,
 }
 
 impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F, Mean, Kernel> {
@@ -29,8 +25,6 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
             kernel,
             kpls_dim: None,
             nugget: F::cast(100.0) * F::epsilon(),
-            xtrain: Array2::default((1, 1)),
-            ytrain: Array2::default((1, 1)),
         }
     }
 
