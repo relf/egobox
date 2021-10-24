@@ -2,10 +2,9 @@ use crate::errors::{EgoError, Result};
 use doe::{LHSKind, SamplingMethod, LHS};
 use finitediff::FiniteDiff;
 use gp::{
-    correlation_models::SquaredExponentialKernel, mean_models::ConstantMean, GaussianProcess,
+    correlation_models::SquaredExponentialKernel, mean_models::ConstantMean, Float, GaussianProcess,
 };
 use libm::erfc;
-use linfa_pls::Float;
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix2, Zip};
 use ndarray_linalg::Scalar;
 // use ndarray_npy::write_npy;

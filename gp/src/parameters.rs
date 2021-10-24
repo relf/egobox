@@ -1,7 +1,11 @@
 use crate::correlation_models::CorrelationModel;
 use crate::errors::{GpError, Result};
 use crate::mean_models::RegressionModel;
-use linfa::dataset::Float;
+use ndarray_linalg::{Lapack, Scalar};
+
+pub trait Float: linfa::Float + Lapack + Scalar {}
+impl Float for f32 {}
+impl Float for f64 {}
 
 #[derive(Clone, Copy)]
 pub struct GpParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {

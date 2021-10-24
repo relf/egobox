@@ -2,9 +2,7 @@ use super::gaussian_mixture::GaussianMixture;
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::{MoeParams, Recombination};
-use gp::correlation_models::*;
-use gp::mean_models::*;
-use gp::GaussianProcess;
+use gp::{correlation_models::*, mean_models::*, Float, GaussianProcess};
 use linfa::{traits::Fit, traits::Predict, Dataset};
 use linfa_clustering::GaussianMixtureModel;
 use paste::paste;
@@ -118,7 +116,7 @@ macro_rules! compute_accuracies {
     }};
 }
 
-impl<F: linfa_pls::Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
+impl<F: Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
     pub fn fit(
         &self,
         xt: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -130,7 +128,7 @@ impl<F: linfa_pls::Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
         let dataset = Dataset::from(data.to_owned());
 
         let gmm = GaussianMixtureModel::params(self.n_clusters())
-            .with_n_runs(20)
+            .n_runs(20)
             //.with_reg_covariance(1e-6)
             .with_rng(self.rng())
             .fit(&dataset)
@@ -196,7 +194,7 @@ fn factorial(n: usize) -> usize {
     (1..=n).product()
 }
 
-pub fn sort_by_cluster<F: linfa_pls::Float, R: Rng + SeedableRng + Clone>(
+pub fn sort_by_cluster<F: Float, R: Rng + SeedableRng + Clone>(
     n_clusters: usize,
     data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     dataset_clustering: &Array1<usize>,
@@ -222,14 +220,14 @@ pub fn sort_by_cluster<F: linfa_pls::Float, R: Rng + SeedableRng + Clone>(
     res
 }
 
-pub struct Moe<F: linfa_pls::Float> {
+pub struct Moe<F: Float> {
     recombination: Recombination,
     heaviside_factor: F,
     gps: Vec<GaussianProcess<F, ConstantMean, SquaredExponentialKernel>>,
     gmx: GaussianMixture<F>,
 }
 
-impl<F: linfa_pls::Float> Moe<F> {
+impl<F: Float> Moe<F> {
     pub fn params(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
         MoeParams::new(n_clusters)
     }
@@ -310,7 +308,7 @@ impl Moe<f64> {
     }
 }
 
-pub fn extract_part<F: linfa_pls::Float>(
+pub fn extract_part<F: Float>(
     data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     quantile: usize,
 ) -> (Array2<F>, Array2<F>) {

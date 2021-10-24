@@ -1,12 +1,12 @@
 use crate::correlation_models::CorrelationModel;
 use crate::errors::{GpError, Result};
 use crate::mean_models::RegressionModel;
-use crate::parameters::GpParams;
+use crate::parameters::{Float, GpParams};
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
 use linfa::traits::Fit;
 use linfa::Dataset;
-use linfa_pls::{Float, PlsRegression};
+use linfa_pls::PlsRegression;
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
