@@ -1,5 +1,7 @@
 use doe::{SamplingMethod, LHS};
-use gp::*;
+use gp::correlation_models::*;
+use gp::mean_models::*;
+use gp::GaussianProcess;
 use ndarray::{array, Array1, Array2, Zip};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;

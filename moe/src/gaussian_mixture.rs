@@ -333,7 +333,7 @@ mod tests {
 
         let dataset = DatasetBase::from(x.to_owned());
         let g = GaussianMixtureModel::params(n_components)
-            .with_max_n_iterations(200)
+            .max_n_iterations(200)
             .with_rng(rng)
             .fit(&dataset)
             .expect("GMM fails");

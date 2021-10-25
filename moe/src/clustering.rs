@@ -84,8 +84,8 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         let xydata = Dataset::from(concatenate(Axis(1), &[x.view(), y.view()]).unwrap());
         let gmm = Box::new(
             GaussianMixtureModel::params(n_clusters)
-                .with_n_runs(20)
-                //.with_reg_covariance(1e-6)
+                .n_runs(20)
+                //.reg_covariance(1e-6)
                 .with_rng(rng.clone())
                 .fit(&xydata)
                 .expect("Training data clustering"),

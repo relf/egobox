@@ -1,6 +1,11 @@
-use linfa::Float;
+#[allow(unused_imports)]
+use gp::correlation_models::{
+    AbsoluteExponentialKernel, Matern32Kernel, Matern52Kernel, SquaredExponentialKernel,
+};
+#[allow(unused_imports)]
+use gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
+use gp::Float;
 use linfa_clustering::GaussianMixtureModel;
-use ndarray_linalg::{Lapack, Scalar};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
@@ -10,7 +15,7 @@ pub enum Recombination {
     Smooth,
 }
 
-pub struct MoeParams<F: Float + Lapack + Scalar, R: Rng + Clone> {
+pub struct MoeParams<F: Float, R: Rng + Clone> {
     n_clusters: usize,
     recombination: Recombination,
     heaviside_factor: F,
@@ -19,14 +24,14 @@ pub struct MoeParams<F: Float + Lapack + Scalar, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float + Lapack + Scalar> MoeParams<F, Isaac64Rng> {
+impl<F: Float> MoeParams<F, Isaac64Rng> {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
         Self::new_with_rng(n_clusters, Isaac64Rng::seed_from_u64(42))
     }
 }
 
-impl<F: Float + Lapack + Scalar, R: Rng + Clone> MoeParams<F, R> {
+impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<F, R> {
         MoeParams {
             n_clusters,
