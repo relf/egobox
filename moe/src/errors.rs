@@ -12,10 +12,10 @@ pub enum MoeError {
     LinalgError(String),
     /// When clustering fails
     EmptyCluster(String),
-    // /// When PLS fails
-    // PlsError(String),
     /// When Gaussian Process fails
     GpError(String),
+    /// When best expert search fails
+    ExpertError(String),
 }
 
 impl Display for MoeError {
@@ -26,6 +26,9 @@ impl Display for MoeError {
             Self::EmptyCluster(message) => write!(f, "Empty cluster: {}", message),
             Self::GpError(message) => {
                 write!(f, "Gaussian process computation error: {}", message)
+            }
+            Self::ExpertError(message) => {
+                write!(f, "Best expert computation error: {}", message)
             }
         }
     }

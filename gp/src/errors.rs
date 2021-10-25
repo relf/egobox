@@ -14,9 +14,7 @@ pub enum GpError {
     LinalgError(String),
     /// When clustering fails
     EmptyCluster(String),
-    // /// When EGO fails
-    // EgoError(String),
-    // /// When PLS fails
+    /// When PLS fails
     PlsError(String),
     /// When a value is invalid
     InvalidValue(String),

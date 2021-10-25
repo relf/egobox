@@ -105,8 +105,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                         concatenate(Axis(1), &[train.records().view(), train.targets.view()])
                             .unwrap();
                     let data_clustering = gmm.predict(&xytrain);
-                    let clusters =
-                        sort_by_cluster(n_clusters, &xytrain, &data_clustering, rng.clone());
+                    let clusters = sort_by_cluster(n_clusters, &xytrain, &data_clustering);
                     let gmx = GaussianMixture::new(
                         gmm.weights().to_owned(),
                         gmm.means().to_owned(),

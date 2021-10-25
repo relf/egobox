@@ -1,127 +1,25 @@
 use super::gaussian_mixture::GaussianMixture;
 use crate::errors::MoeError;
 use crate::errors::Result;
+use crate::expert::*;
 use crate::{MoeParams, Recombination};
 use gp::{correlation_models::*, mean_models::*, Float, GaussianProcess};
 use linfa::{traits::Fit, traits::Predict, Dataset};
 use linfa_clustering::GaussianMixtureModel;
 use paste::paste;
+use std::cmp::Ordering;
 
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_linalg::norm::Norm;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
-macro_rules! make_gp_params {
-    ($regr:ident, $corr:ident) => {
-        paste! {
-            GaussianProcess::<f64, [<$regr Mean>], [<$corr Kernel>] >::params(
-                [<$regr Mean>]::default(),
-                [<$corr Kernel>]::default(),
-            )
-        }
-    };
-}
-
-macro_rules! compute_error {
-    ($regr:ident, $corr:ident, $dataset:ident) => {{
-        let params = make_gp_params!($regr, $corr);
-        let mut errors = Vec::new();
-        for (gp, valid) in $dataset.iter_fold(5, |v| {
-            params
-                .fit(&v.records().to_owned(), &v.targets().to_owned())
-                .unwrap()
-        }) {
-            let pred = gp.predict_values(valid.records()).unwrap();
-            let error = (valid.targets() - pred).norm_l2();
-            errors.push(error);
-        }
-        errors.iter().fold(0.0, |acc, &item| acc + item) / errors.len() as f64
-    }};
-}
-
-macro_rules! compute_accuracies_with_corr {
-    ($allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident, $corr:ident) => {{
-        if $allowed_corr_models.contains(&stringify!($corr)) {
-            $map_accuracy.push((
-                format!("{}_{}", stringify!($regr), stringify!($corr)),
-                compute_error!($regr, $corr, $dataset),
-            ));
-        }
-    }};
-}
-
-macro_rules! compute_accuracies_with_regr {
-    ($allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident) => {{
-        if $allowed_mean_models.contains(&stringify!($regr)) {
-            compute_accuracies_with_corr!(
-                $allowed_mean_models,
-                $allowed_corr_models,
-                $dataset,
-                $map_accuracy,
-                $regr,
-                SquaredExponential
-            );
-            compute_accuracies_with_corr!(
-                $allowed_mean_models,
-                $allowed_corr_models,
-                $dataset,
-                $map_accuracy,
-                $regr,
-                AbsoluteExponential
-            );
-            compute_accuracies_with_corr!(
-                $allowed_mean_models,
-                $allowed_corr_models,
-                $dataset,
-                $map_accuracy,
-                $regr,
-                Matern32
-            );
-            compute_accuracies_with_corr!(
-                $allowed_mean_models,
-                $allowed_corr_models,
-                $dataset,
-                $map_accuracy,
-                $regr,
-                Matern52
-            );
-        }
-    }};
-}
-
-macro_rules! compute_accuracies {
-    ($allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident) => {{
-        compute_accuracies_with_regr!(
-            $allowed_mean_models,
-            $allowed_corr_models,
-            $dataset,
-            $map_accuracy,
-            Constant
-        );
-        compute_accuracies_with_regr!(
-            $allowed_mean_models,
-            $allowed_corr_models,
-            $dataset,
-            $map_accuracy,
-            Linear
-        );
-        compute_accuracies_with_regr!(
-            $allowed_mean_models,
-            $allowed_corr_models,
-            $dataset,
-            $map_accuracy,
-            Quadratic
-        );
-    }};
-}
-
-impl<F: Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
+impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
     pub fn fit(
         &self,
-        xt: &ArrayBase<impl Data<Elem = F>, Ix2>,
-        yt: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> Result<Moe<F>> {
+        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Moe> {
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
 
@@ -129,7 +27,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
 
         let gmm = GaussianMixtureModel::params(self.n_clusters())
             .n_runs(20)
-            //.with_reg_covariance(1e-6)
+            //.reg_covariance(1e-6)
             .with_rng(self.rng())
             .fit(&dataset)
             .expect("Training data clustering");
@@ -142,33 +40,66 @@ impl<F: Float, R: Rng + SeedableRng + Clone> MoeParams<F, R> {
             .with_heaviside_factor(self.heaviside_factor());
 
         let dataset_clustering = gmx.predict(xt);
-        let clusters = sort_by_cluster(self.n_clusters(), &data, &dataset_clustering, self.rng());
+        let clusters = sort_by_cluster(self.n_clusters(), &data, &dataset_clustering);
 
         check_number_of_points(&clusters, data.ncols())?;
 
         // Fit GPs on clustered data
-        let mut gps = Vec::new();
+        let mut experts = Vec::new();
         for cluster in clusters {
             let xtrain = cluster.slice(s![.., ..nx]);
             let ytrain = cluster.slice(s![.., nx..]);
 
-            gps.push(
-                GaussianProcess::<F, ConstantMean, SquaredExponentialKernel>::params(
-                    ConstantMean::default(),
-                    SquaredExponentialKernel::default(),
-                )
-                .set_kpls_dim(self.kpls_dim())
-                .fit(&xtrain, &ytrain)
-                .expect("GP fit error"),
-            );
+            let expert = self.find_best_expert(nx, &cluster)?;
+            experts.push(expert.fit(&xtrain.view(), &ytrain.view())?);
         }
 
         Ok(Moe {
             recombination: self.recombination(),
             heaviside_factor: self.heaviside_factor(),
-            gps,
+            experts,
             gmx,
         })
+    }
+
+    pub fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn ExpertParams>> {
+        let xtrain = data.slice(s![.., ..nx]);
+        let ytrain = data.slice(s![.., nx..]);
+        let mut dataset = Dataset::from((xtrain.to_owned(), ytrain.to_owned()));
+        let allowed_mean_models = vec!["Constant"];
+        let allowed_corr_models = vec!["SquaredExponential"];
+
+        let mut map_accuracy = Vec::new();
+        compute_accuracies!(
+            allowed_mean_models,
+            allowed_corr_models,
+            dataset,
+            map_accuracy
+        );
+        // dbg!(&map_accuracy);
+        let errs: Vec<f64> = map_accuracy.iter().map(|(_, err)| *err).collect();
+        let argmin = errs
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .map(|(index, _)| index)
+            .unwrap();
+        let best = &map_accuracy[argmin].0;
+        match best.as_str() {
+            "Constant_SquaredExponential" => make_expert_params!(Constant, SquaredExponential),
+            "Constant_AbsoluteExponential" => make_expert_params!(Constant, AbsoluteExponential),
+            "Constant_Matern32" => make_expert_params!(Constant, Matern32),
+            "Constant_Matern52" => make_expert_params!(Constant, Matern52),
+            "Linear_SquaredExponential" => make_expert_params!(Linear, SquaredExponential),
+            "Linear_AbsoluteExponential" => make_expert_params!(Linear, AbsoluteExponential),
+            "Linear_Matern32" => make_expert_params!(Linear, Matern32),
+            "Linear_Matern52" => make_expert_params!(Linear, Matern52),
+            "Quadratic_SquaredExponential" => make_expert_params!(Quadratic, SquaredExponential),
+            "Quadratic_AbsoluteExponential" => make_expert_params!(Quadratic, AbsoluteExponential),
+            "Quadratic_Matern32" => make_expert_params!(Quadratic, Matern32),
+            "Quadratic_Matern52" => make_expert_params!(Quadratic, Matern52),
+            _ => Err(MoeError::ExpertError(format!("Unknown expert {}", best))),
+        }
     }
 
     pub fn is_heaviside_optimization_enabled(&self) -> bool {
@@ -194,11 +125,10 @@ fn factorial(n: usize) -> usize {
     (1..=n).product()
 }
 
-pub fn sort_by_cluster<F: Float, R: Rng + SeedableRng + Clone>(
+pub fn sort_by_cluster<F: Float>(
     n_clusters: usize,
     data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     dataset_clustering: &Array1<usize>,
-    _rng: R,
 ) -> Vec<Array2<F>> {
     let mut res: Vec<Array2<F>> = Vec::new();
     let ndim = data.ncols();
@@ -220,48 +150,48 @@ pub fn sort_by_cluster<F: Float, R: Rng + SeedableRng + Clone>(
     res
 }
 
-pub struct Moe<F: Float> {
+pub struct Moe {
     recombination: Recombination,
-    heaviside_factor: F,
-    gps: Vec<GaussianProcess<F, ConstantMean, SquaredExponentialKernel>>,
-    gmx: GaussianMixture<F>,
+    heaviside_factor: f64,
+    experts: Vec<Box<dyn Expert>>,
+    gmx: GaussianMixture<f64>,
 }
 
-impl<F: Float> Moe<F> {
-    pub fn params(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
+impl Moe {
+    pub fn params(n_clusters: usize) -> MoeParams<f64, Isaac64Rng> {
         MoeParams::new(n_clusters)
     }
 
     pub fn nb_clusters(&self) -> usize {
-        self.gps.len()
+        self.experts.len()
     }
 
     pub fn recombination(&self) -> Recombination {
         self.recombination
     }
 
-    pub fn heaviside_factor(&self) -> F {
+    pub fn heaviside_factor(&self) -> f64 {
         self.heaviside_factor
     }
 
-    pub fn predict(&self, x: &Array2<F>) -> Result<Array2<F>> {
+    pub fn predict(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_hard(x),
             Recombination::Smooth => self.predict_smooth(x),
         }
     }
 
-    pub fn predict_smooth(&self, observations: &Array2<F>) -> Result<Array2<F>> {
+    pub fn predict_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let probas = self.gmx.predict_probas(observations);
-        let mut preds = Array1::<F>::zeros(observations.nrows());
+        let mut preds = Array1::<f64>::zeros(observations.nrows());
 
         Zip::from(&mut preds)
             .and(observations.rows())
             .and(probas.rows())
-            .par_for_each(|y, x, p| {
+            .for_each(|y, x, p| {
                 let obs = x.clone().insert_axis(Axis(0));
-                let subpreds: Array1<F> = self
-                    .gps
+                let subpreds: Array1<f64> = self
+                    .experts
                     .iter()
                     .map(|gp| gp.predict_values(&obs).unwrap()[[0, 0]])
                     .collect();
@@ -270,15 +200,15 @@ impl<F: Float> Moe<F> {
         Ok(preds.insert_axis(Axis(1)))
     }
 
-    pub fn predict_hard(&self, observations: &Array2<F>) -> Result<Array2<F>> {
+    pub fn predict_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(observations);
-        let mut preds = Array2::<F>::zeros((observations.nrows(), 1));
+        let mut preds = Array2::zeros((observations.nrows(), 1));
         Zip::from(preds.rows_mut())
             .and(observations.rows())
             .and(&clustering)
-            .par_for_each(|mut y, x, &c| {
+            .for_each(|mut y, x, &c| {
                 y.assign(
-                    &self.gps[c]
+                    &self.experts[c]
                         .predict_values(&x.insert_axis(Axis(0)))
                         .unwrap()
                         .row(0),
@@ -286,38 +216,6 @@ impl<F: Float> Moe<F> {
             });
         Ok(preds)
     }
-}
-
-impl Moe<f64> {
-    pub fn find_best_expert(&self, nx: usize, clustered_values: &Array2<f64>) -> String {
-        let xtrain = clustered_values.slice(s![.., ..nx]);
-        let ytrain = clustered_values.slice(s![.., nx..]);
-        let mut dataset = Dataset::from((xtrain.to_owned(), ytrain.to_owned()));
-        let allowed_mean_models = vec!["Constant", "Linear"];
-        let allowed_corr_models = vec!["SquaredExponential", "Matern32"];
-
-        let mut map_accuracy = Vec::new();
-        compute_accuracies!(
-            allowed_mean_models,
-            allowed_corr_models,
-            dataset,
-            map_accuracy
-        );
-        println!("{:?}", map_accuracy);
-        "dfsdf".to_string()
-    }
-}
-
-pub fn extract_part<F: Float>(
-    data: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    quantile: usize,
-) -> (Array2<F>, Array2<F>) {
-    let nsamples = data.nrows();
-    let indices = Array::range(0., nsamples as f32, quantile as f32).mapv(|v| v as usize);
-    let data_test = data.select(Axis(0), indices.as_slice().unwrap());
-    let indices2: Vec<usize> = (0..nsamples).filter(|i| i % quantile == 0).collect();
-    let data_train = data.select(Axis(0), &indices2);
-    (data_test, data_train)
 }
 
 #[cfg(test)]
@@ -396,12 +294,8 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((10, 1), Uniform::new(0., 1.), &mut rng);
         let yt = xt.mapv(|x| xsinx(&[x]));
-        let moe = Moe::params(1)
-            .with_rng(rng)
-            .fit(&xt, &yt)
-            .expect("MOE fitted");
-        let clustered = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-        println!("{:?}", &clustered);
-        moe.find_best_expert(1, &clustered);
+        let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
+        let moe = Moe::params(1).with_rng(rng);
+        let best_expert = &moe.find_best_expert(1, &data);
     }
 }
