@@ -2,17 +2,28 @@ use super::gaussian_mixture::GaussianMixture;
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expert::*;
-use crate::{MoeParams, Recombination};
+use crate::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use gp::{correlation_models::*, mean_models::*, Float, GaussianProcess};
+use linfa::dataset::Records;
 use linfa::{traits::Fit, traits::Predict, Dataset};
 use linfa_clustering::GaussianMixtureModel;
 use paste::paste;
 use std::cmp::Ordering;
 
-use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_linalg::norm::Norm;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
+
+macro_rules! check_allowed {
+    ($spec:ident, $model_kind:ident, $model:ident, $list:ident) => {
+        paste! {
+            if $spec.contains([< $model_kind Spec>]::[< $model:upper >]) {
+                $list.push(stringify!($model));
+            }
+        }
+    };
+}
 
 impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
     pub fn fit(
@@ -47,6 +58,12 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         // Fit GPs on clustered data
         let mut experts = Vec::new();
         for cluster in clusters {
+            if cluster.nrows() <= 5 {
+                return Err(MoeError::ClusteringError(format!(
+                    "Not enough points in cluster, requires at least 5, got {}",
+                    cluster.nrows()
+                )));
+            }
             let xtrain = cluster.slice(s![.., ..nx]);
             let ytrain = cluster.slice(s![.., nx..]);
 
@@ -66,16 +83,30 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         let xtrain = data.slice(s![.., ..nx]);
         let ytrain = data.slice(s![.., nx..]);
         let mut dataset = Dataset::from((xtrain.to_owned(), ytrain.to_owned()));
-        let allowed_mean_models = vec!["Constant"];
-        let allowed_corr_models = vec!["SquaredExponential"];
+        let regression_spec = self.regression_spec();
+        let mut allowed_means = vec![];
+        check_allowed!(regression_spec, Regression, Constant, allowed_means);
+        check_allowed!(regression_spec, Regression, Linear, allowed_means);
+        check_allowed!(regression_spec, Regression, Quadratic, allowed_means);
+        let correlation_spec = self.correlation_spec();
+        let mut allowed_corrs = vec![];
+        check_allowed!(
+            correlation_spec,
+            Correlation,
+            SquaredExponential,
+            allowed_corrs
+        );
+        check_allowed!(
+            correlation_spec,
+            Correlation,
+            AbsoluteExponential,
+            allowed_corrs
+        );
+        check_allowed!(correlation_spec, Correlation, Matern32, allowed_corrs);
+        check_allowed!(correlation_spec, Correlation, Matern52, allowed_corrs);
 
         let mut map_accuracy = Vec::new();
-        compute_accuracies!(
-            allowed_mean_models,
-            allowed_corr_models,
-            dataset,
-            map_accuracy
-        );
+        compute_accuracies!(allowed_means, allowed_corrs, dataset, map_accuracy);
         // dbg!(&map_accuracy);
         let errs: Vec<f64> = map_accuracy.iter().map(|(_, err)| *err).collect();
         let argmin = errs
@@ -253,7 +284,7 @@ mod tests {
             .with_rng(rng)
             .fit(&xt, &yt)
             .expect("MOE fitted");
-        let obs = Array::linspace(0., 1., 100).insert_axis(Axis(1));
+        let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict(&obs).expect("MOE prediction");
         assert_abs_diff_eq!(
             0.39 * 0.39, // 0.1521
@@ -274,7 +305,7 @@ mod tests {
             .with_rng(rng)
             .fit(&xt, &yt)
             .expect("MOE fitted");
-        let obs = Array::linspace(0., 1., 100).insert_axis(Axis(1));
+        let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict(&obs).expect("MOE prediction");
         write_npy("obs_smooth.npy", &obs).expect("obs saved");
         write_npy("preds_smooth.npy", &preds).expect("preds saved");
@@ -296,6 +327,6 @@ mod tests {
         let yt = xt.mapv(|x| xsinx(&[x]));
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
         let moe = Moe::params(1).with_rng(rng);
-        let best_expert = &moe.find_best_expert(1, &data);
+        let _best_expert = &moe.find_best_expert(1, &data);
     }
 }

@@ -2,7 +2,7 @@ use crate::errors::Result;
 use gp::{correlation_models::*, mean_models::*, GaussianProcess, GpParams};
 use paste::paste;
 
-use ndarray::{Array2, ArrayBase, ArrayView2, Data, Ix2};
+use ndarray::{Array2, ArrayView2};
 
 pub trait ExpertParams {
     fn fit(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn Expert>>;
@@ -92,10 +92,14 @@ macro_rules! compute_error {
     ($regr:ident, $corr:ident, $dataset:ident) => {{
         let params = make_gp_params!($regr, $corr);
         let mut errors = Vec::new();
-        for (gp, valid) in $dataset.iter_fold(5, |v| {
-            params
-                .fit(&v.records().to_owned(), &v.targets().to_owned())
-                .unwrap()
+        println!(
+            "{}_{} dataset size = {}",
+            stringify!($regr),
+            stringify!($corr),
+            $dataset.nsamples()
+        );
+        for (gp, valid) in $dataset.iter_fold(5, |train| {
+            params.fit(&train.records(), &train.targets()).unwrap()
         }) {
             let pred = gp.predict_values(valid.records()).unwrap();
             let error = (valid.targets() - pred).norm_l2();

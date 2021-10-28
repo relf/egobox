@@ -38,6 +38,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
     } else {
         max_nb_clusters
     };
+    println!("{}", max_nb_clusters);
     //let max_nb_clusters = 3;
     //let val = concatenate(Axis(1), &[x.view(), y.view()]).unwrap();
     let nx = x.ncols();
@@ -120,8 +121,8 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                     bic_c.push(gmx.bic(&valid_set));
                     aic_c.push(gmx.aic(&valid_set));
                     for j in 0..i + 1 {
-                        // If there is at least one point
-                        ok = clusters[j].len() > 3
+                        // If there is at least 5 points
+                        ok = clusters[j].len() > 5
                     }
                     let actual = valid.targets();
                     let h_error =
@@ -135,6 +136,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                             pred.sub(actual).mapv(|x| x * x).sum().sqrt()
                                 / actual.mapv(|x| x * x).sum().sqrt()
                         } else {
+                            ok = false;
                             1.0
                         };
                     h_errors.push(h_error);
@@ -143,10 +145,12 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                             pred.sub(actual).mapv(|x| x * x).sum().sqrt()
                                 / actual.mapv(|x| x * x).sum().sqrt()
                         } else {
+                            ok = false;
                             1.0
                         };
                     s_errors.push(s_error);
                 } else {
+                    ok = false;
                     s_errors.push(1.0);
                     h_errors.push(1.0);
                 }

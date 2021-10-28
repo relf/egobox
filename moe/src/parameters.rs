@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 #[allow(unused_imports)]
 use gp::correlation_models::{
     AbsoluteExponentialKernel, Matern32Kernel, Matern52Kernel, SquaredExponentialKernel,
@@ -15,9 +16,35 @@ pub enum Recombination {
     Smooth,
 }
 
+bitflags! {
+    pub struct RegressionSpec: u8 {
+        const CONSTANT = 0x01;
+        const LINEAR = 0x02;
+        const QUADRATIC = 0x04;
+        const ALL = RegressionSpec::CONSTANT.bits
+                    | RegressionSpec::LINEAR.bits
+                    | RegressionSpec::QUADRATIC.bits;
+    }
+}
+
+bitflags! {
+    pub struct CorrelationSpec: u8 {
+        const SQUAREDEXPONENTIAL = 0x01;
+        const ABSOLUTEEXPONENTIAL = 0x02;
+        const MATERN32 = 0x04;
+        const MATERN52 = 0x08;
+        const ALL = CorrelationSpec::SQUAREDEXPONENTIAL.bits
+                    | CorrelationSpec::ABSOLUTEEXPONENTIAL.bits
+                    | CorrelationSpec::MATERN32.bits
+                    | CorrelationSpec::MATERN52.bits;
+    }
+}
+
 pub struct MoeParams<F: Float, R: Rng + Clone> {
     n_clusters: usize,
     recombination: Recombination,
+    regression_spec: RegressionSpec,
+    correlation_spec: CorrelationSpec,
     heaviside_factor: F,
     kpls_dim: Option<usize>,
     gmm: Option<Box<GaussianMixtureModel<F>>>,
@@ -36,6 +63,8 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         MoeParams {
             n_clusters,
             recombination: Recombination::Smooth,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             heaviside_factor: F::one(),
             kpls_dim: None,
             gmm: None,
@@ -49,6 +78,14 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
 
     pub fn recombination(&self) -> Recombination {
         self.recombination
+    }
+
+    pub fn regression_spec(&self) -> RegressionSpec {
+        self.regression_spec
+    }
+
+    pub fn correlation_spec(&self) -> CorrelationSpec {
+        self.correlation_spec
     }
 
     pub fn heaviside_factor(&self) -> F {
@@ -96,6 +133,8 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         MoeParams {
             n_clusters: self.n_clusters,
             recombination: self.recombination,
+            regression_spec: self.regression_spec,
+            correlation_spec: self.correlation_spec,
             heaviside_factor: self.heaviside_factor,
             kpls_dim: self.kpls_dim,
             gmm: self.gmm,

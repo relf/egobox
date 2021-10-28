@@ -16,6 +16,8 @@ pub enum MoeError {
     GpError(String),
     /// When best expert search fails
     ExpertError(String),
+    /// When error on clustering
+    ClusteringError(String),
 }
 
 impl Display for MoeError {
@@ -29,6 +31,9 @@ impl Display for MoeError {
             }
             Self::ExpertError(message) => {
                 write!(f, "Best expert computation error: {}", message)
+            }
+            Self::ClusteringError(message) => {
+                write!(f, "Clustering error: {}", message)
             }
         }
     }
