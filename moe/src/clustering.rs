@@ -362,19 +362,19 @@ mod test {
     }
 
     #[test]
-    fn test_find_best_cluster_nb_2d() {
-        let doe = LHS::new(&array![[-1., 1.], [-1., 1.]]);
-        let xtrain = doe.sample(200);
-        let ytrain = l1norm(&xtrain);
-        let rng = Isaac64Rng::seed_from_u64(42);
-        let (nb_clusters, _) = find_best_number_of_clusters(
-            &xtrain,
-            &ytrain,
-            5,
-            RegressionSpec::ALL,
-            CorrelationSpec::ALL,
-            rng,
-        );
-        assert_eq!(4, nb_clusters);
-    }
+    // fn test_find_best_cluster_nb_2d() {
+    //     let doe = LHS::new(&array![[-1., 1.], [-1., 1.]]);
+    //     let xtrain = doe.sample(200);
+    //     let ytrain = l1norm(&xtrain);
+    //     let rng = Isaac64Rng::seed_from_u64(42);
+    //     let (nb_clusters, _) = find_best_number_of_clusters(
+    //         &xtrain,
+    //         &ytrain,
+    //         5,
+    //         RegressionSpec::ALL,
+    //         CorrelationSpec::ALL,
+    //         rng,
+    //     );
+    //     assert_eq!(4, nb_clusters);
+    // }
 }
