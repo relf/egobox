@@ -1,14 +1,13 @@
 use crate::errors::Result;
 use gp::{correlation_models::*, mean_models::*, GaussianProcess, GpParams};
-use paste::paste;
-
 use ndarray::{Array2, ArrayView2};
+use paste::paste;
 
 pub trait ExpertParams {
     fn fit(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn Expert>>;
 }
 
-pub trait Expert {
+pub trait Expert: std::fmt::Display {
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
 }
@@ -52,6 +51,12 @@ macro_rules! declare_expert {
                     Ok(self.0.predict_variances(x)?)
                 }
             }
+
+            impl std::fmt::Display for [<Gp $regr $corr Expert>] {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}_{}", stringify!($regr), stringify!($corr))
+                }
+            }
         }
     };
 }
@@ -92,12 +97,6 @@ macro_rules! compute_error {
     ($regr:ident, $corr:ident, $dataset:ident) => {{
         let params = make_gp_params!($regr, $corr);
         let mut errors = Vec::new();
-        println!(
-            "{}_{} dataset size = {}",
-            stringify!($regr),
-            stringify!($corr),
-            $dataset.nsamples()
-        );
         for (gp, valid) in $dataset.iter_fold(5, |train| {
             params.fit(&train.records(), &train.targets()).unwrap()
         }) {
@@ -105,7 +104,15 @@ macro_rules! compute_error {
             let error = (valid.targets() - pred).norm_l2();
             errors.push(error);
         }
-        errors.iter().fold(0.0, |acc, &item| acc + item) / errors.len() as f64
+        let mean_err = errors.iter().fold(0.0, |acc, &item| acc + item) / errors.len() as f64;
+        debug!(
+            "Expert {}_{} on dataset size = {}, error = {}",
+            stringify!($regr),
+            stringify!($corr),
+            $dataset.nsamples(),
+            mean_err
+        );
+        mean_err
     }};
 }
 

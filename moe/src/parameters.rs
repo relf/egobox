@@ -10,10 +10,10 @@ use linfa_clustering::GaussianMixtureModel;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum Recombination {
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Recombination<F: Float> {
     Hard,
-    Smooth,
+    Smooth(Option<F>),
 }
 
 bitflags! {
@@ -42,10 +42,9 @@ bitflags! {
 
 pub struct MoeParams<F: Float, R: Rng + Clone> {
     n_clusters: usize,
-    recombination: Recombination,
+    recombination: Recombination<F>,
     regression_spec: RegressionSpec,
     correlation_spec: CorrelationSpec,
-    heaviside_factor: F,
     kpls_dim: Option<usize>,
     gmm: Option<Box<GaussianMixtureModel<F>>>,
     rng: R,
@@ -62,10 +61,9 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<F, R> {
         MoeParams {
             n_clusters,
-            recombination: Recombination::Smooth,
-            regression_spec: RegressionSpec::CONSTANT,
-            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
-            heaviside_factor: F::one(),
+            recombination: Recombination::Smooth(Some(F::one())),
+            regression_spec: RegressionSpec::ALL,
+            correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
             gmm: None,
             rng,
@@ -76,7 +74,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self.n_clusters
     }
 
-    pub fn recombination(&self) -> Recombination {
+    pub fn recombination(&self) -> Recombination<F> {
         self.recombination
     }
 
@@ -86,10 +84,6 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
 
     pub fn correlation_spec(&self) -> CorrelationSpec {
         self.correlation_spec
-    }
-
-    pub fn heaviside_factor(&self) -> F {
-        self.heaviside_factor
     }
 
     pub fn kpls_dim(&self) -> Option<usize> {
@@ -109,13 +103,18 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self
     }
 
-    pub fn set_recombination(mut self, recombination: Recombination) -> Self {
+    pub fn set_recombination(mut self, recombination: Recombination<F>) -> Self {
         self.recombination = recombination;
         self
     }
 
-    pub fn set_heaviside_factor(mut self, heaviside_factor: F) -> Self {
-        self.heaviside_factor = heaviside_factor;
+    pub fn set_regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
+        self.regression_spec = regression_spec;
+        self
+    }
+
+    pub fn set_correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
+        self.correlation_spec = correlation_spec;
         self
     }
 
@@ -135,7 +134,6 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
             recombination: self.recombination,
             regression_spec: self.regression_spec,
             correlation_spec: self.correlation_spec,
-            heaviside_factor: self.heaviside_factor,
             kpls_dim: self.kpls_dim,
             gmm: self.gmm,
             rng,

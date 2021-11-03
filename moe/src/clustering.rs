@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use crate::algorithm::{sort_by_cluster, Moe};
 use crate::gaussian_mixture::GaussianMixture;
+use crate::parameters::{CorrelationSpec, Recombination, RegressionSpec};
 use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
 use linfa_clustering::GaussianMixtureModel;
@@ -31,8 +32,10 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     max_nb_clusters: usize,
+    regr_spec: RegressionSpec,
+    corr_spec: CorrelationSpec,
     rng: R,
-) -> usize {
+) -> (usize, Recombination<f64>) {
     let max_nb_clusters = if max_nb_clusters == 0 {
         (x.len() / 10) + 1
     } else {
@@ -98,6 +101,8 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
             for (train, valid) in dataset.fold(5).into_iter() {
                 k = k + 1;
                 if let Ok(mixture) = Moe::params(n_clusters)
+                    .set_regression_spec(regr_spec)
+                    .set_correlation_spec(corr_spec)
                     //.set_kpls_dim(Some(1))
                     .set_gmm(Some(gmm.clone()))
                     .fit(&train.records(), &train.targets())
@@ -125,29 +130,31 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                         ok = clusters[j].len() > 5
                     }
                     let actual = valid.targets();
-                    let h_error =
-                        if let Ok(pred) = mixture.predict_hard(&valid.records().to_owned()) {
-                            // write_npy(format!("valid_x_{}_{}.npy", n_clusters, k), valid.records())
-                            //     .expect("valid x saved");
-                            // write_npy(format!("valid_y_{}_{}.npy", n_clusters, k), actual)
-                            //     .expect("valid y saved");
-                            // write_npy(format!("pred_{}_{}.npy", n_clusters, k), &pred)
-                            //     .expect("pred saved");
-                            pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                                / actual.mapv(|x| x * x).sum().sqrt()
-                        } else {
-                            ok = false;
-                            1.0
-                        };
+                    let mixture = mixture.set_recombination(Recombination::Hard);
+                    let h_error = if let Ok(pred) = mixture.predict(&valid.records().to_owned()) {
+                        // write_npy(format!("valid_x_{}_{}.npy", n_clusters, k), valid.records())
+                        //     .expect("valid x saved");
+                        // write_npy(format!("valid_y_{}_{}.npy", n_clusters, k), actual)
+                        //     .expect("valid y saved");
+                        // write_npy(format!("pred_{}_{}.npy", n_clusters, k), &pred)
+                        //     .expect("pred saved");
+                        pred.sub(actual).mapv(|x| x * x).sum().sqrt()
+                            / actual.mapv(|x| x * x).sum().sqrt()
+                    } else {
+                        ok = false;
+                        1.0
+                    };
+                    println!("{} error: {}", mixture, h_error);
                     h_errors.push(h_error);
-                    let s_error =
-                        if let Ok(pred) = mixture.predict_smooth(&valid.records().to_owned()) {
-                            pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                                / actual.mapv(|x| x * x).sum().sqrt()
-                        } else {
-                            ok = false;
-                            1.0
-                        };
+                    let mixture = mixture.set_recombination(Recombination::Smooth(None));
+                    let s_error = if let Ok(pred) = mixture.predict(&valid.records().to_owned()) {
+                        pred.sub(actual).mapv(|x| x * x).sum().sqrt()
+                            / actual.mapv(|x| x * x).sum().sqrt()
+                    } else {
+                        ok = false;
+                        1.0
+                    };
+                    println!("{} error: {}", mixture, s_error);
                     s_errors.push(s_error);
                 } else {
                     ok = false;
@@ -289,16 +296,21 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
 
     println!("Optimal Number of cluster: {} {}", cluster, method);
     println!("Recombination Hard: {}", hardi);
-
-    number_cluster
+    let recomb = if hardi {
+        Recombination::Hard
+    } else {
+        Recombination::Smooth(None)
+    };
+    (number_cluster, recomb)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use doe::{SamplingMethod, LHS};
-    use ndarray::{array, Array2, Axis, Zip};
+    use ndarray::{array, Array1, Array2, Axis, Zip};
     use ndarray_linalg::norm::*;
+    use ndarray_npy::write_npy;
     use ndarray_rand::rand::SeedableRng;
     use rand_isaac::Isaac64Rng;
 
@@ -324,13 +336,29 @@ mod test {
     fn test_find_best_cluster_nb_1d() {
         let doe = LHS::new(&array![[0., 1.]]);
         //write_npy("doe.npy", &doe);
-        let xtrain = doe.sample(100);
+        let xtrain = doe.sample(50);
         //write_npy("xtrain.npy", &xtrain);
         let ytrain = function_test_1d(&xtrain);
         //write_npy("ytrain.npy", &ytrain);
         let rng = Isaac64Rng::seed_from_u64(42);
-        let nb_clusters = find_best_number_of_clusters(&xtrain, &ytrain, 5, rng);
-        assert_eq!(3, nb_clusters);
+        let (nb_clusters, recombination) = find_best_number_of_clusters(
+            &xtrain,
+            &ytrain,
+            5,
+            RegressionSpec::ALL,
+            CorrelationSpec::ALL,
+            rng,
+        );
+        let moe = Moe::params(nb_clusters)
+            .set_recombination(recombination)
+            .fit(&xtrain, &ytrain)
+            .unwrap();
+        let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
+        let preds = moe.predict(&obs).unwrap();
+        moe.save_expert_predict(&obs);
+        write_npy("best_obs.npy", &obs).expect("saved");
+        write_npy("best_preds.npy", &preds).expect("saved");
+        assert_eq!(1, nb_clusters);
     }
 
     #[test]
@@ -339,7 +367,14 @@ mod test {
         let xtrain = doe.sample(200);
         let ytrain = l1norm(&xtrain);
         let rng = Isaac64Rng::seed_from_u64(42);
-        let nb_clusters = find_best_number_of_clusters(&xtrain, &ytrain, 5, rng);
+        let (nb_clusters, _) = find_best_number_of_clusters(
+            &xtrain,
+            &ytrain,
+            5,
+            RegressionSpec::ALL,
+            CorrelationSpec::ALL,
+            rng,
+        );
         assert_eq!(4, nb_clusters);
     }
 }
