@@ -21,7 +21,9 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
-        let r = (wd * theta).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+        let theta_r = theta.to_owned().insert_axis(Axis(0));
+        let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+        println!("r {:?}", r);
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
@@ -37,7 +39,8 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialKernel {
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
-        let r = (wd * theta).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+        let theta_r = theta.to_owned().insert_axis(Axis(0));
+        let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
@@ -52,10 +55,15 @@ impl<F: Float> CorrelationModel<F> for Matern32Kernel {
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let wd = d
-            .mapv(|v| v.abs() * F::sqrt(F::cast(3.)))
-            .dot(&weights.mapv(|v| v.abs()));
-        let r = (wd * theta).mapv(|v| (F::one() + v) * F::exp(-v));
+        let theta = theta.to_owned().insert_axis(Axis(0));
+        let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
+        let theta_wd = (theta.to_owned() * &wd).mapv(|v| F::cast(3).sqrt() * v);
+        let a = theta_wd
+            .to_owned()
+            .mapv(|v| F::one() + v)
+            .map_axis(Axis(1), |row| row.product());
+        let b = theta_wd.sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+        let r = a * b;
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
@@ -70,10 +78,15 @@ impl<F: Float> CorrelationModel<F> for Matern52Kernel {
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let wd = d
-            .mapv(|v| v.abs() * F::sqrt(F::cast(5.)))
-            .dot(&weights.mapv(|v| v.abs()));
-        let r = (wd * theta).mapv(|v| (F::one() + v + v * v / F::cast(3.)) * F::exp(-v));
+        let theta = theta.to_owned().insert_axis(Axis(0));
+        let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
+        let theta_wd = (theta.to_owned() * &wd).mapv(|v| F::cast(5.).sqrt() * v);
+        let a = theta_wd
+            .to_owned()
+            .mapv(|v| (F::one() + v + v * v / F::cast(3.)))
+            .map_axis(Axis(1), |row| row.product());
+        let b = theta_wd.sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+        let r = a * b;
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
@@ -102,6 +115,41 @@ mod tests {
             [0.6703200460356393],
             [0.9048374180359595]
         ];
+        assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_squared_exponential_2d() {
+        let xt = array![[0., 1.], [2., 3.], [4., 5.]];
+        let dm = DistanceMatrix::new(&xt);
+        dbg!(&dm);
+        let res = SquaredExponentialKernel::default().apply(
+            &arr1(&[1., 2.]),
+            &dm.d,
+            &array![[1., 0.], [0., 1.]],
+        );
+        let expected = array![[6.14421235e-06], [1.42516408e-21], [6.14421235e-06]];
+        assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_matern32_2d() {
+        let xt = array![[0., 1.], [2., 3.], [4., 5.]];
+        let dm = DistanceMatrix::new(&xt);
+        dbg!(&dm);
+        let res =
+            Matern32Kernel::default().apply(&arr1(&[1., 2.]), &dm.d, &array![[1., 0.], [0., 1.]]);
+        let expected = array![[1.08539595e-03], [1.10776401e-07], [1.08539595e-03]];
+        assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_matern52_2d() {
+        let xt = array![[0., 1.], [2., 3.], [4., 5.]];
+        let dm = DistanceMatrix::new(&xt);
+        let res =
+            Matern52Kernel::default().apply(&arr1(&[1., 2.]), &dm.d, &array![[1., 0.], [0., 1.]]);
+        let expected = array![[6.62391590e-04], [1.02117882e-08], [6.62391590e-04]];
         assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }
 }
