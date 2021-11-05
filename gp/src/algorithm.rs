@@ -35,6 +35,19 @@ pub struct GpInnerParams<F: Float> {
     ft_qr_r: Array2<F>,
 }
 
+impl<F: Float> Clone for GpInnerParams<F> {
+    fn clone(&self) -> Self {
+        Self {
+            sigma2: self.sigma2.to_owned(),
+            beta: self.beta.to_owned(),
+            gamma: self.gamma.to_owned(),
+            r_chol: self.r_chol.to_owned(),
+            ft: self.ft.to_owned(),
+            ft_qr_r: self.ft_qr_r.to_owned(),
+        }
+    }
+}
+
 /// Gaussian
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
@@ -51,6 +64,22 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Kernel: Correlati
     xtrain: NormalizedMatrix<F>,
     /// Training outputs
     ytrain: NormalizedMatrix<F>,
+}
+
+impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> Clone
+    for GaussianProcess<F, Mean, Kernel>
+{
+    fn clone(&self) -> Self {
+        Self {
+            theta: self.theta.to_owned(),
+            mean: self.mean.clone(),
+            kernel: self.kernel.clone(),
+            inner_params: self.inner_params.clone(),
+            w_star: self.w_star.to_owned(),
+            xtrain: self.xtrain.clone(),
+            ytrain: self.xtrain.clone(),
+        }
+    }
 }
 
 impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>

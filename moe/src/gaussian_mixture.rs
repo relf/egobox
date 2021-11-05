@@ -309,16 +309,12 @@ mod tests {
         let gmix = GaussianMixture::new(weights, means, covs)
             .expect("Gaussian mixture creation failed")
             .with_heaviside_factor(0.99);
-        // let obs = array![[0., 0.], [1., 1.], [2., 2.], [3., 3.], [4., 4.]];
-        // let n = 100;
         let mut obs = Array2::from_elem((101, 2), 0.);
         Zip::from(obs.rows_mut())
             .and(&Array::linspace(0., 4., 101))
             .for_each(|mut o, &v| o.assign(&array![v, v]));
-        let preds = gmix.predict(&obs);
-        println!("preds = {:?}", preds);
+        let _preds = gmix.predict(&obs);
         let probas = gmix.predict_probas(&obs);
-        println!("probas = {:?}", probas);
         write_npy("probes.npy", &obs).expect("failed to save");
         write_npy("probas.npy", &probas).expect("failed to save");
     }
