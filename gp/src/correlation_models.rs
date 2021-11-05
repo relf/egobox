@@ -23,7 +23,6 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
         let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
         let theta_r = theta.to_owned().insert_axis(Axis(0));
         let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
-        println!("r {:?}", r);
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }

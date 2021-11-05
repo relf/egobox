@@ -2,11 +2,12 @@
 use crate::algorithm::{sort_by_cluster, Moe};
 use crate::gaussian_mixture::GaussianMixture;
 use crate::parameters::{CorrelationSpec, Recombination, RegressionSpec};
+use log::debug;
+
 use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{concatenate, ArrayBase, Axis, Data, Ix2};
-// use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use std::ops::Sub;
 
@@ -41,7 +42,6 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
     } else {
         max_nb_clusters
     };
-    println!("{}", max_nb_clusters);
     //let max_nb_clusters = 3;
     //let val = concatenate(Axis(1), &[x.view(), y.view()]).unwrap();
     let nx = x.ncols();
@@ -126,8 +126,8 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                     bic_c.push(gmx.bic(&valid_set));
                     aic_c.push(gmx.aic(&valid_set));
                     for j in 0..i + 1 {
-                        // If there is at least 5 points
-                        ok = clusters[j].len() > 5
+                        // If there is at least 3 points
+                        ok = clusters[j].len() > 3
                     }
                     let actual = valid.targets();
                     let mixture = mixture.set_recombination(Recombination::Hard);
@@ -144,7 +144,6 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                         ok = false;
                         1.0
                     };
-                    println!("{} error: {}", mixture, h_error);
                     h_errors.push(h_error);
                     let mixture = mixture.set_recombination(Recombination::Smooth(None));
                     let s_error = if let Ok(pred) = mixture.predict(&valid.records().to_owned()) {
@@ -154,7 +153,6 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                         ok = false;
                         1.0
                     };
-                    println!("{} error: {}", mixture, s_error);
                     s_errors.push(s_error);
                 } else {
                     ok = false;
@@ -183,7 +181,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         erroris.push(mean(&s_errors));
         errorih.push(mean(&h_errors));
 
-        println!(
+        debug!(
             "Number of cluster: {} \
             | Possible: {} \
             | Error(hard): {} \
@@ -197,7 +195,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
             median(&h_errors),
             median(&s_errors),
         );
-        println!("#######");
+        debug!("#######");
 
         if i > 3 {
             // Stop the search if the clustering can not be performed three times
@@ -294,8 +292,8 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         "| Method: Minimum of relative L2"
     };
 
-    println!("Optimal Number of cluster: {} {}", cluster, method);
-    println!("Recombination Hard: {}", hardi);
+    debug!("Optimal Number of cluster: {} {}", cluster, method);
+    debug!("Recombination Hard: {}", hardi);
     let recomb = if hardi {
         Recombination::Hard
     } else {
@@ -307,7 +305,8 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use doe::{SamplingMethod, LHS};
+    use approx::assert_abs_diff_eq;
+    use doe::{FullFactorial, SamplingMethod, LHS};
     use ndarray::{array, Array1, Array2, Axis, Zip};
     use ndarray_linalg::norm::*;
     use ndarray_npy::write_npy;
@@ -362,19 +361,27 @@ mod test {
     }
 
     #[test]
-    // fn test_find_best_cluster_nb_2d() {
-    //     let doe = LHS::new(&array![[-1., 1.], [-1., 1.]]);
-    //     let xtrain = doe.sample(200);
-    //     let ytrain = l1norm(&xtrain);
-    //     let rng = Isaac64Rng::seed_from_u64(42);
-    //     let (nb_clusters, _) = find_best_number_of_clusters(
-    //         &xtrain,
-    //         &ytrain,
-    //         5,
-    //         RegressionSpec::ALL,
-    //         CorrelationSpec::ALL,
-    //         rng,
-    //     );
-    //     assert_eq!(4, nb_clusters);
-    // }
+    fn test_find_best_cluster_nb_2d() {
+        let doe = LHS::new(&array![[-1., 1.], [-1., 1.]]);
+        let xtrain = doe.sample(200);
+        let ytrain = l1norm(&xtrain);
+        let rng = Isaac64Rng::seed_from_u64(42);
+        let (n_clusters, recomb) = find_best_number_of_clusters(
+            &xtrain,
+            &ytrain,
+            5,
+            RegressionSpec::ALL,
+            CorrelationSpec::ALL,
+            rng,
+        );
+        let valid = FullFactorial::new(&array![[-1., 1.], [-1., 1.]]);
+        let xvalid = valid.sample(200);
+        let yvalid = l1norm(&xvalid);
+        let moe = Moe::params(n_clusters)
+            .set_recombination(recomb)
+            .fit(&xtrain, &ytrain)
+            .unwrap();
+        let ypreds = moe.predict(&xvalid).expect("moe not fitted");
+        assert_abs_diff_eq!(&ypreds, &yvalid, epsilon = 1e-2);
+    }
 }

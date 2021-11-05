@@ -33,26 +33,29 @@ macro_rules! check_allowed {
 
 impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
     pub fn fit(
-        &self,
+        self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-        let training = data.to_owned();
-        // let (test, training) = extract_part(&data, 5); // 10% of data for validation
-        // println!(
-        //     "training size = {}, test size = {}",
-        //     training.nrows(),
-        //     test.nrows(),
-        // );
-        // write_npy("xt_hard.npy", &training.slice(s![.., ..nx])).expect("obs saved");
-        // write_npy("yt_hard.npy", &training.slice(s![.., nx..])).expect("preds saved");
+        let training;
+        let (mut xtest, mut ytest) = (None, None);
 
-        // let xtest = test.slice(s![.., ..nx]).to_owned();
-        // let ytest = test.slice(s![.., nx..]).to_owned();
-        let dataset = Dataset::from(training.to_owned());
+        if let Recombination::Smooth(None) = self.recombination() {
+            // 10% of data for validation
+            let (test, training_data) = extract_part(&data, 5);
+            // write_npy("xt_hard.npy", &training.slice(s![.., ..nx])).expect("obs saved");
+            // write_npy("yt_hard.npy", &training.slice(s![.., nx..])).expect("preds saved");
+
+            xtest = Some(test.slice(s![.., ..nx]).to_owned());
+            ytest = Some(test.slice(s![.., nx..]).to_owned());
+            training = training_data;
+        } else {
+            training = data.to_owned();
+        }
+        let dataset = Dataset::from(training);
 
         let gmm = GaussianMixtureModel::params(self.n_clusters())
             .n_runs(20)
@@ -86,26 +89,25 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
                     cluster.nrows()
                 )));
             }
-            let xtrain = cluster.slice(s![.., ..nx]);
-            let ytrain = cluster.slice(s![.., nx..]);
-
             let expert = self.find_best_expert(nx, &cluster)?;
-            experts.push(expert.fit(&xtrain.view(), &ytrain.view())?);
+            experts.push(expert);
         }
 
-        let recombination = match self.recombination() {
-            Recombination::Smooth(_) => Recombination::Smooth(Some(factor)),
-            Recombination::Hard => self.recombination(),
-        };
-
-        Ok(Moe {
-            recombination,
-            experts,
-            gmx,
-        })
+        if self.recombination() == Recombination::Smooth(None) {
+            let factor =
+                self.optimize_heaviside_factor(&experts, &gmx, &xtest.unwrap(), &ytest.unwrap());
+            self.set_recombination(Recombination::Smooth(Some(factor)))
+                .fit(&xt, &yt)
+        } else {
+            Ok(Moe {
+                recombination: self.recombination(),
+                experts,
+                gmx,
+            })
+        }
     }
 
-    pub fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn ExpertParams>> {
+    pub fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn Expert>> {
         let xtrain = data.slice(s![.., ..nx]);
         let ytrain = data.slice(s![.., nx..]);
         let mut dataset = Dataset::from((xtrain.to_owned(), ytrain.to_owned()));
@@ -134,7 +136,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         let mut map_accuracy = Vec::new();
         compute_accuracies!(allowed_means, allowed_corrs, dataset, map_accuracy);
         let errs: Vec<f64> = map_accuracy.iter().map(|(_, err)| *err).collect();
-        println!("Accuracies {:?}", map_accuracy);
+        debug!("Accuracies {:?}", map_accuracy);
         let argmin = errs
             .iter()
             .enumerate()
@@ -142,7 +144,9 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
             .map(|(index, _)| index)
             .unwrap();
         let best = &map_accuracy[argmin].0;
-        match best.as_str() {
+        let best_expert_params: std::result::Result<Box<dyn ExpertParams>, MoeError> = match best
+            .as_str()
+        {
             "Constant_SquaredExponential" => make_expert_params!(Constant, SquaredExponential),
             "Constant_AbsoluteExponential" => make_expert_params!(Constant, AbsoluteExponential),
             "Constant_Matern32" => make_expert_params!(Constant, Matern32),
@@ -155,8 +159,9 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
             "Quadratic_AbsoluteExponential" => make_expert_params!(Quadratic, AbsoluteExponential),
             "Quadratic_Matern32" => make_expert_params!(Quadratic, Matern32),
             "Quadratic_Matern52" => make_expert_params!(Quadratic, Matern52),
-            _ => Err(MoeError::ExpertError(format!("Unknown expert {}", best))),
-        }
+            _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best))),
+        };
+        best_expert_params?.fit(&xtrain.view(), &ytrain.view())
     }
 
     pub fn optimize_heaviside_factor(
@@ -333,7 +338,7 @@ impl Moe {
 
     pub fn predict_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(observations);
-        println!("{:?}", clustering);
+        debug!("Clustering {:?}", clustering);
         let mut preds = Array2::zeros((observations.nrows(), 1));
         Zip::from(preds.rows_mut())
             .and(observations.rows())
@@ -421,16 +426,28 @@ mod tests {
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
             .set_recombination(Recombination::Smooth(Some(0.5)))
-            .with_rng(rng)
+            .with_rng(rng.clone())
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict(&obs).expect("MOE prediction");
+        println!("Smooth moe {}", moe);
+        assert_abs_diff_eq!(
+            0.37579, // true value = 0.37*0.37 = 0.1369
+            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
+            epsilon = 1e-3
+        );
+        let moe = Moe::params(3)
+            .set_recombination(Recombination::Smooth(None))
+            .with_rng(rng)
+            .fit(&xt, &yt)
+            .expect("MOE fitted");
+        println!("Smooth moe {}", moe);
         write_npy("obs_smooth.npy", &obs).expect("obs saved");
         write_npy("preds_smooth.npy", &preds).expect("preds saved");
         assert_abs_diff_eq!(
-            0.859021,
-            moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
+            0.37 * 0.37, // true value of the function
+            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
     }
@@ -446,7 +463,8 @@ mod tests {
         let yt = xt.mapv(|x| xsinx(&[x]));
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
         let moe = Moe::params(1).with_rng(rng);
-        let _best_expert = &moe.find_best_expert(1, &data);
+        let best_expert = &moe.find_best_expert(1, &data).unwrap();
+        println!("Best expert {}", best_expert);
     }
 
     #[test]

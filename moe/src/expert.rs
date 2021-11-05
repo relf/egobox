@@ -88,7 +88,7 @@ macro_rules! make_gp_params {
 macro_rules! make_expert_params {
     ($regr:ident, $corr:ident) => {
         paste! {
-            Ok(Box::new([<Gp $regr $corr ExpertParams>]::new(make_gp_params!($regr, $corr))))
+            Ok(Box::new([<Gp $regr $corr ExpertParams>]::new(make_gp_params!($regr, $corr))) as Box<dyn ExpertParams>)
         }
     };
 }
