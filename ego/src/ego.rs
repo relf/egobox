@@ -268,13 +268,13 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
                     scale_wb2: Some(scale_wb2),
                 },
             );
-            let lower = to_vec_f64(self.xlimits.column(0).as_slice().unwrap());
-            optimizer.set_lower_bounds(&lower).unwrap();
-            let upper = to_vec_f64(self.xlimits.column(1).as_slice().unwrap());
-            optimizer.set_upper_bounds(&upper).unwrap();
-            optimizer.set_maxeval(200).unwrap();
-            optimizer.set_ftol_rel(1e-4).unwrap();
-            optimizer.set_ftol_abs(1e-4).unwrap();
+            let lower = to_vec_f64(self.xlimits.column(0).to_owned().as_slice().unwrap());
+            optimizer.set_lower_bounds(&lower)?;
+            let upper = to_vec_f64(self.xlimits.column(1).to_owned().as_slice().unwrap());
+            optimizer.set_upper_bounds(&upper)?;
+            optimizer.set_maxeval(200)?;
+            optimizer.set_ftol_rel(1e-4)?;
+            optimizer.set_ftol_abs(1e-4)?;
 
             let mut best_opt = f64::INFINITY;
             let x_start = sampling.sample(self.n_start);
@@ -366,7 +366,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
         });
         let i_max = ei_x.argmax().unwrap();
         let pred_max = gpr
-            .predict_values(&x.row(i_max).insert_axis(Axis(1)))
+            .predict_values(&x.row(i_max).insert_axis(Axis(0)))
             .unwrap()[[0, 0]];
         let ei_max = ei_x[i_max];
         if ei_max > F::zero() {
@@ -436,8 +436,9 @@ fn to_vec_f64<F: Float>(v: &[F]) -> Vec<f64> {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    // use argmin_testfunctions::rosenbrock;
+    use argmin_testfunctions::rosenbrock;
     use ndarray::array;
+    use std::time::Instant;
 
     fn xsinx(x: &[f64]) -> f64 {
         (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
@@ -480,18 +481,19 @@ mod tests {
         assert_abs_diff_eq!(expected, *y_opt, epsilon = 1e-1);
     }
 
-    // #[test]
-    // fn test_rosenbrock_2d() {
-    //     fn rosenb(x: &[f64]) -> f64 {
-    //         rosenbrock(x, 1., 100.)
-    //     };
-    //     let now = Instant::now();
-    //     let xlimits = array![[-2., 2.], [-2., 2.]];
-    //     let doe = FullFactorial::new(&xlimits).sample(10);
-    //     let res = Ego::new(rosenb, &xlimits).x_doe(&doe).n_iter(40).minimize();
-    //     println!("Rosenbrock optim result = {:?}", res);
-    //     println!("Elapsed = {:?}", now.elapsed());
-    //     let expected = array![1., 1.];
-    //     assert_abs_diff_eq!(expected, res.x_opt, epsilon = 6e-1);
-    // }
+    fn rosenb(x: &[f64]) -> f64 {
+        rosenbrock(x, 1., 100.)
+    }
+
+    #[test]
+    fn test_rosenbrock_2d() {
+        let now = Instant::now();
+        let xlimits = array![[-2., 2.], [-2., 2.]];
+        let doe = LHS::new(&xlimits).sample(10);
+        let res = Ego::new(rosenb, &xlimits).x_doe(&doe).n_iter(10).minimize();
+        println!("Rosenbrock optim result = {:?}", res);
+        println!("Elapsed = {:?}", now.elapsed());
+        let expected = array![1., 1.];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
+    }
 }

@@ -1,4 +1,5 @@
 use gp::GpError;
+use nlopt::FailState;
 use std::error::Error;
 use std::fmt::{self, Display};
 
@@ -13,6 +14,8 @@ pub enum EgoError {
     EgoError(String),
     /// When PLS fails
     InvalidValue(String),
+    /// When nlopt fails
+    NloptFailure,
 }
 
 impl Display for EgoError {
@@ -23,6 +26,7 @@ impl Display for EgoError {
             }
             Self::EgoError(message) => write!(f, "EGO error: {}", message),
             Self::InvalidValue(message) => write!(f, "Value error: {}", message),
+            Self::NloptFailure => write!(f, "NlOpt error"),
         }
     }
 }
@@ -32,5 +36,11 @@ impl Error for EgoError {}
 impl From<GpError> for EgoError {
     fn from(error: GpError) -> EgoError {
         EgoError::GpError(error.to_string())
+    }
+}
+
+impl From<FailState> for EgoError {
+    fn from(_error: FailState) -> EgoError {
+        EgoError::NloptFailure
     }
 }
