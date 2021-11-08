@@ -1,5 +1,5 @@
 use gp::Float;
-use ndarray::Array1;
+use ndarray::{Array1, Array2};
 
 pub const SQRT_2PI: f64 = 2.5066282746310007;
 
@@ -31,4 +31,19 @@ pub enum QEiStrategy {
 pub struct ObjData<F> {
     pub scale: F,
     pub scale_wb2: Option<F>,
+}
+
+/// SEGO
+pub trait GroupFunc: Send + Sync + 'static + Fn(&Array2<f64>) -> Array2<f64> {}
+impl<T> GroupFunc for T where T: Send + Sync + 'static + Fn(&Array2<f64>) -> Array2<f64> {}
+
+pub enum CstrStatus {
+    Respected,
+    Violated,
+    Active,
+}
+
+pub struct Constraint {
+    pub value: f64,
+    pub status: CstrStatus,
 }

@@ -3,10 +3,12 @@ use crate::types::*;
 use doe::{LHSKind, SamplingMethod, LHS};
 use finitediff::FiniteDiff;
 use gp::{
-    correlation_models::SquaredExponentialKernel, mean_models::ConstantMean, Float, GaussianProcess,
+    correlation_models::SquaredExponentialKernel, mean_models::ConstantMean, GaussianProcess,
 };
 use libm::erfc;
-use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix2, Zip};
+use ndarray::{
+    concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix1, Ix2, Zip,
+};
 use ndarray_linalg::Scalar;
 // use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
@@ -14,32 +16,34 @@ use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
 
-pub struct Sego<F: Float, O: ObjFunc, R: Rng> {
+pub struct Sego<O: GroupFunc, R: Rng> {
     pub n_iter: usize,
     pub n_start: usize,
     pub n_parallel: usize,
     pub n_doe: usize,
-    pub x_doe: Option<Array2<F>>,
-    pub xlimits: Array2<F>,
+    pub n_cstr: usize,
+    pub x_doe: Option<Array2<f64>>,
+    pub xlimits: Array2<f64>,
     pub q_ei: QEiStrategy,
     pub acq: AcqStrategy,
     pub obj: O,
     pub rng: R,
 }
 
-impl<F: Float, O: ObjFunc> Sego<F, O, Isaac64Rng> {
-    pub fn new(f: O, xlimits: &Array2<F>) -> Sego<F, O, Isaac64Rng> {
-        Self::new_with_rng(f, &xlimits, Isaac64Rng::seed_from_u64(42))
+impl<O: GroupFunc> Sego<O, Isaac64Rng> {
+    pub fn new(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Sego<O, Isaac64Rng> {
+        Self::new_with_rng(f, xlimits, Isaac64Rng::seed_from_u64(42))
     }
 }
 
-impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
-    pub fn new_with_rng(f: O, xlimits: &Array2<F>, rng: R) -> Self {
+impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
+    pub fn new_with_rng(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
         Sego {
             n_iter: 20,
             n_start: 20,
             n_parallel: 1,
             n_doe: 10,
+            n_cstr: 0,
             x_doe: None,
             xlimits: xlimits.to_owned(),
             q_ei: QEiStrategy::KrigingBeliever,
@@ -69,7 +73,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
         self
     }
 
-    pub fn x_doe(&mut self, x_doe: &Array2<F>) -> &mut Self {
+    pub fn x_doe(&mut self, x_doe: &Array2<f64>) -> &mut Self {
         self.x_doe = Some(x_doe.to_owned());
         self
     }
@@ -84,12 +88,13 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
         self
     }
 
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Sego<F, O, R2> {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Sego<O, R2> {
         Sego {
             n_iter: self.n_iter,
             n_start: self.n_start,
             n_parallel: self.n_parallel,
             n_doe: self.n_doe,
+            n_cstr: self.n_cstr,
             x_doe: self.x_doe,
             xlimits: self.xlimits,
             q_ei: self.q_ei,
@@ -102,14 +107,14 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
     fn next_points(
         &self,
         _n: usize,
-        x_data: &Array2<F>,
-        y_data: &Array2<F>,
-        sampling: &LHS<F, R>,
-    ) -> (Array2<F>, Array2<F>) {
+        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        sampling: &LHS<f64, R>,
+    ) -> (Array2<f64>, Array2<f64>) {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
         for _ in 0..self.n_parallel {
-            let gpr = GaussianProcess::<F, ConstantMean, SquaredExponentialKernel>::params(
+            let gpr = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
                 ConstantMean::default(),
                 SquaredExponentialKernel::default(),
             )
@@ -134,7 +139,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
             //     write_npy("ego_wb2.npy", &wb2).expect("wb2 saved");
             // }
 
-            match self.find_best_point(&x_data, &y_data, &sampling, &gpr) {
+            match self.find_best_point(x_data, &y_data, &sampling, &gpr) {
                 Ok(xk) => match self.get_virtual_point(&xk, &y_data, &gpr) {
                     Ok(yk) => {
                         y_dat = concatenate![Axis(0), y_dat, Array2::from_elem((1, 1), yk)];
@@ -154,14 +159,18 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
         (x_dat, y_dat)
     }
 
-    pub fn suggest(&self, x_data: &Array2<F>, y_data: &Array2<F>) -> Array2<F> {
+    pub fn suggest(
+        &self,
+        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Array2<f64> {
         let rng = self.rng.clone();
         let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
         let (x_dat, _) = self.next_points(0, &x_data, &y_data, &sampling);
         x_dat
     }
 
-    pub fn minimize(&mut self) -> OptimResult<F> {
+    pub fn minimize(&mut self) -> OptimResult<f64> {
         let rng = self.rng.clone();
         let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
 
@@ -193,14 +202,14 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
 
     fn find_best_point(
         &self,
-        x_data: &Array2<F>,
-        y_data: &Array2<F>,
-        sampling: &LHS<F, R>,
-        gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
-    ) -> Result<Array1<F>> {
+        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        sampling: &LHS<f64, R>,
+        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+    ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
-        let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<F>| -> f64 {
+        let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
             let ObjData {
                 scale, scale_wb2, ..
             } = params;
@@ -232,10 +241,10 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
                     scale_wb2: Some(scale_wb2),
                 },
             );
-            let lower = to_vec_f64(self.xlimits.column(0).to_owned().as_slice().unwrap());
-            optimizer.set_lower_bounds(&lower)?;
-            let upper = to_vec_f64(self.xlimits.column(1).to_owned().as_slice().unwrap());
-            optimizer.set_upper_bounds(&upper)?;
+            let lower = self.xlimits.column(0).to_owned();
+            optimizer.set_lower_bounds(&lower.as_slice().unwrap())?;
+            let upper = self.xlimits.column(1).to_owned();
+            optimizer.set_upper_bounds(&upper.as_slice().unwrap())?;
             optimizer.set_maxeval(200)?;
             optimizer.set_ftol_rel(1e-4)?;
             optimizer.set_ftol_abs(1e-4)?;
@@ -244,12 +253,12 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
             let x_start = sampling.sample(self.n_start);
 
             for i in 0..self.n_start {
-                let mut x_opt = to_vec_f64(x_start.row(i).as_slice().unwrap());
+                let mut x_opt = x_start.row(i).to_vec();
                 match optimizer.optimize(&mut x_opt) {
                     Ok((_, opt)) => {
                         if opt < best_opt {
                             best_opt = opt;
-                            let res = x_opt.iter().map(|v| F::cast(*v)).collect::<Vec<F>>();
+                            let res = x_opt.iter().map(|v| *v).collect::<Vec<f64>>();
                             best_x = Some(Array::from(res));
                             success = true;
                         }
@@ -264,10 +273,10 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
 
     fn get_virtual_point(
         &self,
-        xk: &Array1<F>,
-        y_data: &Array2<F>,
-        gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
-    ) -> Result<F> {
+        xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+    ) -> Result<f64> {
         if self.q_ei == QEiStrategy::ConstantLiarMinimum {
             Ok(*y_data.min().unwrap())
         } else {
@@ -280,15 +289,15 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
                 QEiStrategy::KrigingBelieverUpperBound => 3.,
                 _ => -1., // never used
             };
-            Ok(pred + F::cast(conf) * Scalar::sqrt(var))
+            Ok(pred + conf * Scalar::sqrt(var))
         }
     }
 
     fn ei(
-        x: &[F],
-        gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
-        f_min: F,
-    ) -> F {
+        x: &[f64],
+        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        f_min: f64,
+    ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = gpr.predict_values(&pt) {
             if let Ok(s) = gpr.predict_variances(&pt) {
@@ -299,31 +308,31 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
                 let args2 = sigma * Self::norm_pdf(args0);
                 args1 + args2
             } else {
-                -F::cast(f32::INFINITY)
+                -f64::INFINITY
             }
         } else {
-            -F::cast(f32::INFINITY)
+            -f64::INFINITY
         }
     }
 
     fn wb2s(
-        x: &[F],
-        gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
-        f_min: F,
-        scale: Option<F>,
-    ) -> F {
+        x: &[f64],
+        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        f_min: f64,
+        scale: Option<f64>,
+    ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         let ei = Self::ei(x, gpr, f_min);
-        let scale = scale.unwrap_or_else(F::one);
+        let scale = scale.unwrap_or(1.0);
         scale * ei - gpr.predict_values(&pt).unwrap()[[0, 0]]
     }
 
     fn compute_wb2s_scale(
-        x: &Array2<F>,
-        gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
-        f_min: F,
-    ) -> F {
-        let ratio = F::cast(100.); // TODO: make it a parameter
+        x: &Array2<f64>,
+        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        f_min: f64,
+    ) -> f64 {
+        let ratio = 100.; // TODO: make it a parameter
         let ei_x = x.map_axis(Axis(1), |xi| {
             let ei = Self::ei(xi.as_slice().unwrap(), gpr, f_min);
             ei
@@ -333,67 +342,59 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Sego<F, O, R> {
             .predict_values(&x.row(i_max).insert_axis(Axis(0)))
             .unwrap()[[0, 0]];
         let ei_max = ei_x[i_max];
-        if ei_max > F::zero() {
-            ratio * F::cast(pred_max) / ei_max
+        if ei_max > 0. {
+            ratio * pred_max / ei_max
         } else {
-            F::cast(1.)
+            1.
         }
     }
 
-    fn _compute_obj_scale(&self, x: &Array2<F>) -> F {
+    fn _compute_obj_scale(&self, x: &Array2<f64>) -> f64 {
         *self
             .obj_eval(&x)
-            .mapv(|v| F::cast(Scalar::abs(v)))
+            .mapv(|v| Scalar::abs(v))
             .max()
-            .unwrap_or(&F::cast(1.))
+            .unwrap_or(&1.)
     }
 
-    fn norm_cdf(x: F) -> F {
-        let norm = F::cast(0.5 * erfc(-to_f64(x) / std::f64::consts::SQRT_2));
+    fn norm_cdf(x: f64) -> f64 {
+        let norm = 0.5 * erfc(-x / std::f64::consts::SQRT_2);
         norm
     }
 
-    fn norm_pdf(x: F) -> F {
-        Scalar::exp(-F::cast(0.5) * x * x) / F::cast(SQRT_2PI)
+    fn norm_pdf(x: f64) -> f64 {
+        Scalar::exp(-0.5 * x * x) / SQRT_2PI
     }
 
     fn acq_eval(
         &self,
         x: &[f64],
-        gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
-        f_min: F,
-        scale: F,
-        scale_wb2: Option<F>,
+        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        f_min: f64,
+        scale: f64,
+        scale_wb2: Option<f64>,
     ) -> f64 {
-        let x_f = x.iter().map(|v| F::cast(*v)).collect::<Vec<F>>();
+        let x_f = x.iter().map(|v| *v).collect::<Vec<f64>>();
         let obj = match self.acq {
             AcqStrategy::EI => -Self::ei(&x_f, gpr, f_min),
-            AcqStrategy::WB2 => -Self::wb2s(&x_f, gpr, f_min, Some(F::one())),
+            AcqStrategy::WB2 => -Self::wb2s(&x_f, gpr, f_min, Some(1.)),
             AcqStrategy::WB2S => -Self::wb2s(&x_f, gpr, f_min, scale_wb2),
         };
-        to_f64(obj / scale)
+        obj / scale
     }
 
-    fn obj_eval<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        let mut y = Array1::zeros(x.nrows());
+    fn obj_eval(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+        let mut y = Array2::zeros((x.nrows(), 1 + self.n_cstr));
         let obj = &self.obj;
-        Zip::from(&mut y).and(x.rows()).for_each(|yn, xn| {
-            let val = to_vec_f64(xn.to_slice().unwrap());
-            *yn = F::cast((obj)(&val))
-        });
-        y.insert_axis(Axis(1))
+        Zip::from(y.rows_mut())
+            .and(x.rows())
+            .for_each(|mut yn, xn| {
+                let val = xn.insert_axis(Axis(0)).to_owned();
+                let yval = obj(&val);
+                yn.assign(&yval.row(0));
+            });
+        y
     }
-}
-
-fn to_f64<F: Float>(a: F) -> f64 {
-    unsafe { std::ptr::read(&a as *const F as *const f64) }
-}
-
-fn to_vec_f64<F: Float>(v: &[F]) -> Vec<f64> {
-    v.to_owned()
-        .iter()
-        .map(|v| to_f64(*v))
-        .collect::<Vec<f64>>()
 }
 
 #[cfg(test)]
@@ -404,12 +405,12 @@ mod tests {
     use ndarray::array;
     use std::time::Instant;
 
-    fn xsinx(x: &[f64]) -> f64 {
-        (x[0] - 3.5) * f64::sin((x[0] - 3.5) / std::f64::consts::PI)
+    fn xsinx(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+        (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
     }
 
     #[test]
-    fn test_xsinx_ei() {
+    fn test_xsinx_ei_sego() {
         let res = Sego::new(xsinx, &array![[0.0, 25.0]])
             .n_iter(10)
             .x_doe(&array![[0.], [7.], [25.]])
@@ -432,12 +433,12 @@ mod tests {
         let ego = Sego::new(xsinx, &array![[0.0, 25.0]]);
 
         let mut x_doe = array![[0.], [7.], [20.], [25.]];
-        let mut y_doe = x_doe.mapv(|x| xsinx(&[x]));
+        let mut y_doe = xsinx(&x_doe);
         for _i in 0..10 {
             let x_suggested = ego.suggest(&x_doe, &y_doe);
 
             x_doe = concatenate![Axis(0), x_doe, x_suggested];
-            y_doe = x_doe.mapv(|x| xsinx(&[x]));
+            y_doe = xsinx(&x_doe);
         }
 
         let expected = -15.1;
@@ -445,8 +446,12 @@ mod tests {
         assert_abs_diff_eq!(expected, *y_opt, epsilon = 1e-1);
     }
 
-    fn rosenb(x: &[f64]) -> f64 {
-        rosenbrock(x, 1., 100.)
+    fn rosenb(x: &Array2<f64>) -> Array2<f64> {
+        let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
+        Zip::from(y.rows_mut())
+            .and(x.rows())
+            .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]));
+        y
     }
 
     #[test]
@@ -465,27 +470,34 @@ mod tests {
     }
 
     // Objective
-    fn g24(p: &[f64]) -> f64 {
+    fn g24(x: &ArrayBase<impl Data<Elem = f64>, Ix1>) -> f64 {
         // Function G24: 1 global optimum y_opt = -5.5080 at x_opt =(2.3295, 3.1785)
-        -p[0] - p[1]
+        -x[0] - x[1]
     }
 
     // Constraints < 0
-    fn g24_c1(p: &[f64]) -> f64 {
-        -2.0 * p[0].powf(4.0) + 8.0 * p[0].powf(3.0) - 8.0 * p[0].powf(2.0) + p[1] - 2.0
+    fn g24_c1(x: &ArrayBase<impl Data<Elem = f64>, Ix1>) -> f64 {
+        -2.0 * x[0].powf(4.0) + 8.0 * x[0].powf(3.0) - 8.0 * x[0].powf(2.0) + x[1] - 2.0
     }
 
-    fn g24_c2(p: &[f64]) -> f64 {
-        -4.0 * p[0].powf(4.0) + 32.0 * p[0].powf(3.0) - 88.0 * p[0].powf(2.0) + 96.0 * p[0] + p[1]
+    fn g24_c2(x: &ArrayBase<impl Data<Elem = f64>, Ix1>) -> f64 {
+        -4.0 * x[0].powf(4.0) + 32.0 * x[0].powf(3.0) - 88.0 * x[0].powf(2.0) + 96.0 * x[0] + x[1]
             - 36.0
     }
-    fn f_grouped(p: &[f64]) -> [f64; 3] {
-        [g24(p), g24_c1(p), g24_c2(p)]
+
+    fn f_grouped(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+        let mut y = Array2::zeros((x.nrows(), 3));
+        Zip::from(y.rows_mut())
+            .and(x.rows())
+            .for_each(|mut yi, xi| {
+                yi.assign(&array![g24(&xi), g24_c1(&xi), g24_c2(&xi)]);
+            });
+        y
     }
 
     #[test]
     fn test_sego() {
-        let x = array![1., 2.];
-        println!("{:?}", f_grouped(&x.to_vec()));
+        let x = array![[1., 2.]];
+        println!("{:?}", f_grouped(&x));
     }
 }
