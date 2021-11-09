@@ -509,8 +509,9 @@ mod tests {
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&obs).expect("MOE prediction");
-        let variances = moe.predict_variances(&obs).expect("MOE prediction");
+        let variances = moe
+            .predict_variances(&obs)
+            .expect("MOE variances prediction");
         assert_abs_diff_eq!(*variances.max().unwrap(), 0., epsilon = 1e-10);
     }
 

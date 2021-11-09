@@ -73,6 +73,11 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         self
     }
 
+    pub fn n_cstr(&mut self, n_cstr: usize) -> &mut Self {
+        self.n_cstr = n_cstr;
+        self
+    }
+
     pub fn x_doe(&mut self, x_doe: &Array2<f64>) -> &mut Self {
         self.x_doe = Some(x_doe.to_owned());
         self
@@ -113,36 +118,58 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
     ) -> (Array2<f64>, Array2<f64>) {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
-        for _ in 0..self.n_parallel {
-            let gpr = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
-                ConstantMean::default(),
-                SquaredExponentialKernel::default(),
-            )
-            .fit(&x_data, &y_data)
-            .expect("GP training failure");
 
+        let obj_model = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+            ConstantMean::default(),
+            SquaredExponentialKernel::default(),
+        )
+        .fit(&x_data, &y_data.slice(s![.., 0..1]))
+        .expect("GP training failure");
+
+        let mut cstr_models: Vec<
+            Box<GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>>,
+        > = Vec::with_capacity(self.n_cstr);
+        for k in 0..self.n_cstr {
+            cstr_models.push(Box::new(
+                GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+                    ConstantMean::default(),
+                    SquaredExponentialKernel::default(),
+                )
+                .fit(&x_data, &y_data.slice(s![.., k + 1..k + 2]))
+                .expect("GP training failure"),
+            ))
+        }
+
+        for _ in 0..self.n_parallel {
             // if n == 6 {
             //     let f_min = y_data.min().unwrap();
             //     let xplot = Array::linspace(0., 25., 100)
             //         .mapv(F::cast)
             //         .insert_axis(Axis(1));
             //     let obj = self.obj_eval(&xplot);
-            //     let gpr_vals = gpr.predict_values(&xplot).unwrap();
-            //     let gpr_vars = gpr.predict_variances(&xplot).unwrap();
-            //     let ei = xplot.map(|x| Self::ei(&[*x], &gpr, *f_min));
-            //     let wb2 = xplot.map(|x| Self::wb2s(&[*x], &gpr, *f_min, None));
+            //     let obj_model_vals = obj_model.predict_values(&xplot).unwrap();
+            //     let obj_model_vars = obj_model.predict_variances(&xplot).unwrap();
+            //     let ei = xplot.map(|x| Self::ei(&[*x], &obj_model, *f_min));
+            //     let wb2 = xplot.map(|x| Self::wb2s(&[*x], &obj_model, *f_min, None));
             //     write_npy("ego_x.npy", &xplot).expect("xplot saved");
             //     write_npy("ego_obj.npy", &obj).expect("obj saved");
-            //     write_npy("ego_gpr.npy", &gpr_vals).expect("gp vals saved");
-            //     write_npy("ego_gpr_vars.npy", &gpr_vars).expect("gp vars saved");
+            //     write_npy("ego_obj_model.npy", &obj_model_vals).expect("gp vals saved");
+            //     write_npy("ego_obj_model_vars.npy", &obj_model_vars).expect("gp vars saved");
             //     write_npy("ego_ei.npy", &ei).expect("ei saved");
             //     write_npy("ego_wb2.npy", &wb2).expect("wb2 saved");
             // }
 
-            match self.find_best_point(x_data, &y_data, &sampling, &gpr) {
-                Ok(xk) => match self.get_virtual_point(&xk, &y_data, &gpr) {
+            match self.find_best_point(x_data, &y_data, &sampling, &obj_model, &cstr_models) {
+                Ok(xk) => match self.get_virtual_point(&xk, &y_data, &obj_model, &cstr_models) {
                     Ok(yk) => {
-                        y_dat = concatenate![Axis(0), y_dat, Array2::from_elem((1, 1), yk)];
+                        println!("ydata {:?}", &y_data);
+                        println!("ydat {:?}", &y_dat);
+                        println!("yk {:?}", &yk);
+                        y_dat = concatenate![
+                            Axis(0),
+                            y_dat,
+                            Array2::from_shape_vec((1, 1 + self.n_cstr), yk).unwrap()
+                        ];
                         x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
                     }
                     Err(_) => {
@@ -193,7 +220,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                 .and(y_actual.columns())
                 .for_each(|mut y, val| y.assign(&val));
         }
-        let best_index = y_data.argmin().unwrap().0;
+        let best_index = y_data.column(0).argmin().unwrap();
+        println!("{:?}", &y_data);
         OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
             y_opt: y_data.row(best_index)[0],
@@ -205,7 +233,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &LHS<f64, R>,
-        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        cstr_models: &Vec<Box<GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>>>,
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
@@ -214,25 +243,48 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                 scale, scale_wb2, ..
             } = params;
             if let Some(grad) = gradient {
-                let f =
-                    |x: &Vec<f64>| -> f64 { self.acq_eval(x, &gpr, *f_min, *scale, *scale_wb2) };
+                let f = |x: &Vec<f64>| -> f64 {
+                    self.acq_eval(x, &obj_model, *f_min, *scale, *scale_wb2)
+                };
                 grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
             }
-            self.acq_eval(x, &gpr, *f_min, *scale, *scale_wb2)
+            self.acq_eval(x, &obj_model, *f_min, *scale, *scale_wb2)
         };
+
+        let mut cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>>>> = Vec::with_capacity(self.n_cstr);
+        for i in 0..self.n_cstr {
+            let index = i;
+            let cstr =
+                move |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut ObjData<f64>| -> f64 {
+                    if let Some(grad) = gradient {
+                        let f = |x: &Vec<f64>| -> f64 {
+                            cstr_models[i]
+                                .predict_values(
+                                    &Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap(),
+                                )
+                                .unwrap()[[0, 0]]
+                        };
+                        grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
+                    }
+                    cstr_models[index]
+                        .predict_values(&Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap())
+                        .unwrap()[[0, 0]]
+                };
+            cstrs.push(Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>>>);
+        }
 
         let mut success = false;
         let mut n_optim = 1;
         let n_max_optim = 20;
         let mut best_x = None;
 
-        while !success && n_optim <= n_max_optim {
-            let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-            let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &gpr, *f_min);
-            let scale_obj = self._compute_obj_scale(&scaling_points);
+        let scaling_points = sampling.sample(100 * self.xlimits.nrows());
+        let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &obj_model, *f_min);
+        let scale_obj = self._compute_obj_scale(&scaling_points);
 
+        while !success && n_optim <= n_max_optim {
             let mut optimizer = Nlopt::new(
-                Algorithm::Slsqp,
+                Algorithm::Cobyla,
                 x_data.ncols(),
                 obj,
                 Target::Minimize,
@@ -248,6 +300,18 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             optimizer.set_maxeval(200)?;
             optimizer.set_ftol_rel(1e-4)?;
             optimizer.set_ftol_abs(1e-4)?;
+            cstrs.iter().for_each(|cstr| {
+                optimizer
+                    .add_inequality_constraint(
+                        cstr,
+                        ObjData {
+                            scale: scale_obj,
+                            scale_wb2: Some(scale_wb2),
+                        },
+                        1e-10,
+                    )
+                    .unwrap();
+            });
 
             let mut best_opt = f64::INFINITY;
             let x_start = sampling.sample(self.n_start);
@@ -275,32 +339,43 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         &self,
         xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
-    ) -> Result<f64> {
+        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        cstr_models: &Vec<Box<GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>>>,
+    ) -> Result<Vec<f64>> {
+        let mut res: Vec<f64> = Vec::with_capacity(3);
         if self.q_ei == QEiStrategy::ConstantLiarMinimum {
-            Ok(*y_data.min().unwrap())
+            let index_min = y_data.slice(s![.., 0]).argmin().unwrap();
+            res.push(y_data[[index_min, 0]]);
+            for ic in 1..=self.n_cstr {
+                res.push(y_data[[index_min, ic]]);
+            }
+            Ok(res)
         } else {
             let x = &xk.to_owned().insert_axis(Axis(0));
-            let pred = gpr.predict_values(&x)?[[0, 0]];
-            let var = gpr.predict_variances(&x)?[[0, 0]];
+            let pred = obj_model.predict_values(&x)?[[0, 0]];
+            let var = obj_model.predict_variances(&x)?[[0, 0]];
             let conf = match self.q_ei {
                 QEiStrategy::KrigingBeliever => 0.,
                 QEiStrategy::KrigingBelieverLowerBound => -3.,
                 QEiStrategy::KrigingBelieverUpperBound => 3.,
                 _ => -1., // never used
             };
-            Ok(pred + conf * Scalar::sqrt(var))
+            res.push(pred + conf * Scalar::sqrt(var));
+            for ic in 0..self.n_cstr {
+                res.push(cstr_models[ic].predict_values(&x)?[[0, 0]]);
+            }
+            Ok(res)
         }
     }
 
     fn ei(
         x: &[f64],
-        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
         f_min: f64,
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-        if let Ok(p) = gpr.predict_values(&pt) {
-            if let Ok(s) = gpr.predict_variances(&pt) {
+        if let Ok(p) = obj_model.predict_values(&pt) {
+            if let Ok(s) = obj_model.predict_variances(&pt) {
                 let pred = p[[0, 0]];
                 let sigma = Scalar::sqrt(s[[0, 0]]);
                 let args0 = (f_min - pred) / sigma;
@@ -317,28 +392,28 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
 
     fn wb2s(
         x: &[f64],
-        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
         f_min: f64,
         scale: Option<f64>,
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-        let ei = Self::ei(x, gpr, f_min);
+        let ei = Self::ei(x, obj_model, f_min);
         let scale = scale.unwrap_or(1.0);
-        scale * ei - gpr.predict_values(&pt).unwrap()[[0, 0]]
+        scale * ei - obj_model.predict_values(&pt).unwrap()[[0, 0]]
     }
 
     fn compute_wb2s_scale(
         x: &Array2<f64>,
-        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
         f_min: f64,
     ) -> f64 {
         let ratio = 100.; // TODO: make it a parameter
         let ei_x = x.map_axis(Axis(1), |xi| {
-            let ei = Self::ei(xi.as_slice().unwrap(), gpr, f_min);
+            let ei = Self::ei(xi.as_slice().unwrap(), obj_model, f_min);
             ei
         });
         let i_max = ei_x.argmax().unwrap();
-        let pred_max = gpr
+        let pred_max = obj_model
             .predict_values(&x.row(i_max).insert_axis(Axis(0)))
             .unwrap()[[0, 0]];
         let ei_max = ei_x[i_max];
@@ -369,16 +444,16 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
     fn acq_eval(
         &self,
         x: &[f64],
-        gpr: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
         f_min: f64,
         scale: f64,
         scale_wb2: Option<f64>,
     ) -> f64 {
         let x_f = x.iter().map(|v| *v).collect::<Vec<f64>>();
         let obj = match self.acq {
-            AcqStrategy::EI => -Self::ei(&x_f, gpr, f_min),
-            AcqStrategy::WB2 => -Self::wb2s(&x_f, gpr, f_min, Some(1.)),
-            AcqStrategy::WB2S => -Self::wb2s(&x_f, gpr, f_min, scale_wb2),
+            AcqStrategy::EI => -Self::ei(&x_f, obj_model, f_min),
+            AcqStrategy::WB2 => -Self::wb2s(&x_f, obj_model, f_min, Some(1.)),
+            AcqStrategy::WB2S => -Self::wb2s(&x_f, obj_model, f_min, scale_wb2),
         };
         obj / scale
     }
@@ -485,7 +560,7 @@ mod tests {
             - 36.0
     }
 
-    fn f_grouped(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+    fn f_g24(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
         let mut y = Array2::zeros((x.nrows(), 3));
         Zip::from(y.rows_mut())
             .and(x.rows())
@@ -495,9 +570,19 @@ mod tests {
         y
     }
 
-    #[test]
-    fn test_sego() {
-        let x = array![[1., 2.]];
-        println!("{:?}", f_grouped(&x));
-    }
+    // #[test]
+    // fn test_sego_g24() {
+    //     let x = array![[1., 2.]];
+    //     println!("{:?}", f_g24(&x));
+    //     let xlimits = array![[0., 3.], [0., 4.]];
+    //     let doe = LHS::new(&xlimits).sample(10);
+    //     let res = Sego::new(f_g24, &xlimits)
+    //         .n_cstr(2)
+    //         .x_doe(&doe)
+    //         .n_iter(100)
+    //         .minimize();
+    //     println!("G24 optim result = {:?}", res);
+    //     let expected = array![2.3295, 3.1785];
+    //     assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
+    // }
 }
