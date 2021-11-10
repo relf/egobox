@@ -1,7 +1,9 @@
+// File: https://github.com/rust-ndarray/ndarray/blob/209d171540b59f2c896903772fccea637f921627/examples/sort-axis.rs
 //! This is an example of sorting arrays along an axis.
 //! This file may not be so instructive except for advanced users, instead it
 //! could be a "feature preview" before sorting is added to the main crate.
 //!
+
 use ndarray::prelude::*;
 use ndarray::{Data, RemoveAxis, Zip};
 
@@ -18,6 +20,7 @@ pub struct Permutation {
 
 impl Permutation {
     /// Checks if the permutation is correct
+    #[allow(dead_code)]
     pub fn from_indices(v: Vec<usize>) -> Result<Self, ()> {
         let perm = Permutation { indices: v };
         if perm.correct() {
@@ -180,6 +183,7 @@ fn main() {
 }
 
 #[cfg(not(feature = "std"))]
+#[allow(dead_code)]
 fn main() {}
 
 #[cfg(test)]
