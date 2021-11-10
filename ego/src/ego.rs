@@ -137,6 +137,8 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
             match self.find_best_point(&x_data, &y_data, &sampling, &gpr) {
                 Ok(xk) => match self.get_virtual_point(&xk, &y_data, &gpr) {
                     Ok(yk) => {
+                        println!("ydata {:?}", &y_data);
+                        println!("yk {:?}", &yk);
                         y_dat = concatenate![Axis(0), y_dat, Array2::from_elem((1, 1), yk)];
                         x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
                     }
@@ -187,7 +189,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         let best_index = y_data.argmin().unwrap().0;
         OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
-            y_opt: y_data.row(best_index)[0],
+            y_opt: y_data.row(best_index).to_owned(),
         }
     }
 
@@ -414,7 +416,7 @@ mod tests {
             .n_iter(10)
             .x_doe(&array![[0.], [7.], [25.]])
             .minimize();
-        let expected = -15.1;
+        let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
     }
 

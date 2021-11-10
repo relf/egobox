@@ -1,4 +1,5 @@
 use crate::errors::{EgoError, Result};
+use crate::sort_axis::*;
 use crate::types::*;
 use doe::{LHSKind, SamplingMethod, LHS};
 use finitediff::FiniteDiff;
@@ -26,6 +27,7 @@ pub struct Sego<O: GroupFunc, R: Rng> {
     pub xlimits: Array2<f64>,
     pub q_ei: QEiStrategy,
     pub acq: AcqStrategy,
+    pub acq_optimizer: AcqOptimizer,
     pub obj: O,
     pub rng: R,
 }
@@ -48,6 +50,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             xlimits: xlimits.to_owned(),
             q_ei: QEiStrategy::KrigingBeliever,
             acq: AcqStrategy::EI,
+            acq_optimizer: AcqOptimizer::Slsqp,
             obj: f,
             rng,
         }
@@ -93,6 +96,11 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         self
     }
 
+    pub fn acq_optimizer(&mut self, optimizer: AcqOptimizer) -> &mut Self {
+        self.acq_optimizer = optimizer;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Sego<O, R2> {
         Sego {
             n_iter: self.n_iter,
@@ -104,6 +112,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             xlimits: self.xlimits,
             q_ei: self.q_ei,
             acq: self.acq,
+            acq_optimizer: self.acq_optimizer,
             obj: self.obj,
             rng,
         }
@@ -162,9 +171,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             match self.find_best_point(x_data, &y_data, &sampling, &obj_model, &cstr_models) {
                 Ok(xk) => match self.get_virtual_point(&xk, &y_data, &obj_model, &cstr_models) {
                     Ok(yk) => {
-                        println!("ydata {:?}", &y_data);
-                        println!("ydat {:?}", &y_dat);
-                        println!("yk {:?}", &yk);
+                        // println!("ydata {:?}", &y_data);
+                        // println!("yk {:?}", &yk);
                         y_dat = concatenate![
                             Axis(0),
                             y_dat,
@@ -220,11 +228,12 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                 .and(y_actual.columns())
                 .for_each(|mut y, val| y.assign(&val));
         }
-        let best_index = y_data.column(0).argmin().unwrap();
-        println!("{:?}", &y_data);
+        // let best_index = y_data.column(0).argmin().unwrap();
+        let best_index = self.find_best_result_index(&y_data);
+        println!("{:?}", concatenate![Axis(1), x_data, y_data]);
         OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
-            y_opt: y_data.row(best_index)[0],
+            y_opt: y_data.row(best_index).to_owned(),
         }
     }
 
@@ -282,9 +291,13 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &obj_model, *f_min);
         let scale_obj = self._compute_obj_scale(&scaling_points);
 
+        let algorithm = match self.acq_optimizer {
+            AcqOptimizer::Slsqp => Algorithm::Slsqp,
+            AcqOptimizer::Cobyla => Algorithm::Cobyla,
+        };
         while !success && n_optim <= n_max_optim {
             let mut optimizer = Nlopt::new(
-                Algorithm::Cobyla,
+                algorithm,
                 x_data.ncols(),
                 obj,
                 Target::Minimize,
@@ -308,7 +321,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                             scale: scale_obj,
                             scale_wb2: Some(scale_wb2),
                         },
-                        1e-10,
+                        1e-6,
                     )
                     .unwrap();
             });
@@ -333,6 +346,32 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             n_optim += 1;
         }
         best_x.ok_or_else(|| EgoError::EgoError(String::from("Can not find best point")))
+    }
+
+    fn find_best_result_index(&self, y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> usize {
+        if self.n_cstr > 0 {
+            let mut index = 0;
+            let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
+            println!("permutation {:?}", &perm);
+            let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
+            println!("{:?}", &y_sort);
+            for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
+                if row
+                    .slice(s![1..])
+                    .iter()
+                    .filter(|v| *v > &1e-6)
+                    .collect::<Vec<&f64>>()
+                    .len()
+                    == 0
+                {
+                    index = i;
+                    break;
+                }
+            }
+            perm.indices[index]
+        } else {
+            y_data.column(0).argmin().unwrap()
+        }
     }
 
     fn get_virtual_point(
@@ -432,6 +471,10 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             .unwrap_or(&1.)
     }
 
+    // fn _compute_cstr_scales(&self, x: &Array2<f64>) -> Array1<f64> {
+    //     for i in 0..self.n_cstr {}
+    // }
+
     fn norm_cdf(x: f64) -> f64 {
         let norm = 0.5 * erfc(-x / std::f64::consts::SQRT_2);
         norm
@@ -490,7 +533,7 @@ mod tests {
             .n_iter(10)
             .x_doe(&array![[0.], [7.], [25.]])
             .minimize();
-        let expected = -15.1;
+        let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
     }
 
@@ -541,7 +584,7 @@ mod tests {
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 6e-2);
     }
 
     // Objective
@@ -570,19 +613,21 @@ mod tests {
         y
     }
 
-    // #[test]
-    // fn test_sego_g24() {
-    //     let x = array![[1., 2.]];
-    //     println!("{:?}", f_g24(&x));
-    //     let xlimits = array![[0., 3.], [0., 4.]];
-    //     let doe = LHS::new(&xlimits).sample(10);
-    //     let res = Sego::new(f_g24, &xlimits)
-    //         .n_cstr(2)
-    //         .x_doe(&doe)
-    //         .n_iter(100)
-    //         .minimize();
-    //     println!("G24 optim result = {:?}", res);
-    //     let expected = array![2.3295, 3.1785];
-    //     assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
-    // }
+    #[test]
+    fn test_sego_g24() {
+        let x = array![[1., 2.]];
+        println!("{:?}", f_g24(&x));
+        let xlimits = array![[0., 3.], [0., 4.]];
+        let doe = LHS::new(&xlimits).sample(10);
+        let res = Sego::new(f_g24, &xlimits)
+            .n_cstr(2)
+            .acq_strategy(AcqStrategy::EI)
+            .acq_optimizer(AcqOptimizer::Cobyla)    // test passes also with WB2S and Slsqp
+            .x_doe(&doe)
+            .n_iter(100)
+            .minimize();
+        println!("G24 optim result = {:?}", res);
+        let expected = array![2.3295, 3.1785];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-2);
+    }
 }

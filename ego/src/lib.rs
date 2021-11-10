@@ -1,6 +1,7 @@
 mod ego;
 mod errors;
 mod sego;
+mod sort_axis;
 mod types;
 
 pub use crate::ego::*;

@@ -9,7 +9,7 @@ impl<T> ObjFunc for T where T: Send + Sync + 'static + Fn(&[f64]) -> f64 {}
 #[derive(Debug)]
 pub struct OptimResult<F: Float> {
     pub x_opt: Array1<F>,
-    pub y_opt: F,
+    pub y_opt: Array1<F>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -46,4 +46,9 @@ pub enum CstrStatus {
 pub struct Constraint {
     pub value: f64,
     pub status: CstrStatus,
+}
+
+pub enum AcqOptimizer {
+    Slsqp,
+    Cobyla,
 }
