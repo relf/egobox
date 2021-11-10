@@ -131,28 +131,30 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                     }
                     let actual = valid.targets();
                     let mixture = mixture.set_recombination(Recombination::Hard);
-                    let h_error = if let Ok(pred) = mixture.predict(&valid.records().to_owned()) {
-                        // write_npy(format!("valid_x_{}_{}.npy", n_clusters, k), valid.records())
-                        //     .expect("valid x saved");
-                        // write_npy(format!("valid_y_{}_{}.npy", n_clusters, k), actual)
-                        //     .expect("valid y saved");
-                        // write_npy(format!("pred_{}_{}.npy", n_clusters, k), &pred)
-                        //     .expect("pred saved");
-                        pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                            / actual.mapv(|x| x * x).sum().sqrt()
-                    } else {
-                        ok = false;
-                        1.0
-                    };
+                    let h_error =
+                        if let Ok(pred) = mixture.predict_values(&valid.records().to_owned()) {
+                            // write_npy(format!("valid_x_{}_{}.npy", n_clusters, k), valid.records())
+                            //     .expect("valid x saved");
+                            // write_npy(format!("valid_y_{}_{}.npy", n_clusters, k), actual)
+                            //     .expect("valid y saved");
+                            // write_npy(format!("pred_{}_{}.npy", n_clusters, k), &pred)
+                            //     .expect("pred saved");
+                            pred.sub(actual).mapv(|x| x * x).sum().sqrt()
+                                / actual.mapv(|x| x * x).sum().sqrt()
+                        } else {
+                            ok = false;
+                            1.0
+                        };
                     h_errors.push(h_error);
                     let mixture = mixture.set_recombination(Recombination::Smooth(None));
-                    let s_error = if let Ok(pred) = mixture.predict(&valid.records().to_owned()) {
-                        pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                            / actual.mapv(|x| x * x).sum().sqrt()
-                    } else {
-                        ok = false;
-                        1.0
-                    };
+                    let s_error =
+                        if let Ok(pred) = mixture.predict_values(&valid.records().to_owned()) {
+                            pred.sub(actual).mapv(|x| x * x).sum().sqrt()
+                                / actual.mapv(|x| x * x).sum().sqrt()
+                        } else {
+                            ok = false;
+                            1.0
+                        };
                     s_errors.push(s_error);
                 } else {
                     ok = false;
@@ -353,7 +355,7 @@ mod test {
             .fit(&xtrain, &ytrain)
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict(&obs).unwrap();
+        let preds = moe.predict_values(&obs).unwrap();
         moe.save_expert_predict(&obs);
         write_npy("best_obs.npy", &obs).expect("saved");
         write_npy("best_preds.npy", &preds).expect("saved");
@@ -381,7 +383,7 @@ mod test {
             .set_recombination(recomb)
             .fit(&xtrain, &ytrain)
             .unwrap();
-        let ypreds = moe.predict(&xvalid).expect("moe not fitted");
+        let ypreds = moe.predict_values(&xvalid).expect("moe not fitted");
         assert_abs_diff_eq!(&ypreds, &yvalid, epsilon = 1e-2);
     }
 }

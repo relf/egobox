@@ -178,7 +178,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
             let errors = scale_factors.map(move |&factor| {
                 let gmx2 = gmx.clone();
                 let gmx2 = gmx2.with_heaviside_factor(factor);
-                let pred = predict_smooth(&experts, &gmx2, &xtest).unwrap();
+                let pred = predict_values_smooth(&experts, &gmx2, &xtest).unwrap();
                 pred.sub(ytest).mapv(|x| x * x).sum().sqrt() / xtest.mapv(|x| x * x).sum().sqrt()
             });
 
@@ -236,7 +236,7 @@ pub fn sort_by_cluster<F: Float>(
     res
 }
 
-pub fn predict_smooth(
+pub fn predict_values_smooth(
     experts: &Vec<Box<dyn Expert>>,
     gmx: &GaussianMixture<f64>,
     observations: &Array2<f64>,
@@ -303,10 +303,17 @@ impl Moe {
         self
     }
 
-    pub fn predict(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_hard(x),
-            Recombination::Smooth(_) => self.predict_smooth(x),
+            Recombination::Hard => self.predict_values_hard(x),
+            Recombination::Smooth(_) => self.predict_values_smooth(x),
+        }
+    }
+
+    pub fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        match self.recombination {
+            Recombination::Hard => self.predict_variances_hard(x),
+            Recombination::Smooth(_) => self.predict_variances_smooth(x),
         }
     }
 
@@ -317,7 +324,7 @@ impl Moe {
         });
     }
 
-    pub fn predict_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_values_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let probas = self.gmx.predict_probas(observations);
         let mut preds = Array1::<f64>::zeros(observations.nrows());
 
@@ -336,7 +343,26 @@ impl Moe {
         Ok(preds.insert_axis(Axis(1)))
     }
 
-    pub fn predict_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_variances_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+        let probas = self.gmx.predict_probas(observations);
+        let mut preds = Array1::<f64>::zeros(observations.nrows());
+
+        Zip::from(&mut preds)
+            .and(observations.rows())
+            .and(probas.rows())
+            .for_each(|y, x, p| {
+                let obs = x.clone().insert_axis(Axis(0));
+                let subpreds: Array1<f64> = self
+                    .experts
+                    .iter()
+                    .map(|gp| gp.predict_variances(&obs).unwrap()[[0, 0]])
+                    .collect();
+                *y = (subpreds * p * p).sum();
+            });
+        Ok(preds.insert_axis(Axis(1)))
+    }
+
+    pub fn predict_values_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(observations);
         debug!("Clustering {:?}", clustering);
         let mut preds = Array2::zeros((observations.nrows(), 1));
@@ -352,6 +378,24 @@ impl Moe {
                 );
             });
         Ok(preds)
+    }
+
+    pub fn predict_variances_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+        let clustering = self.gmx.predict(observations);
+        debug!("Clustering {:?}", clustering);
+        let mut variances = Array2::zeros((observations.nrows(), 1));
+        Zip::from(variances.rows_mut())
+            .and(observations.rows())
+            .and(&clustering)
+            .for_each(|mut y, x, &c| {
+                y.assign(
+                    &self.experts[c]
+                        .predict_variances(&x.insert_axis(Axis(0)))
+                        .unwrap()
+                        .row(0),
+                );
+            });
+        Ok(variances)
     }
 }
 
@@ -404,17 +448,17 @@ mod tests {
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         moe.save_expert_predict(&obs);
-        let preds = moe.predict(&obs).expect("MOE prediction");
+        let preds = moe.predict_values(&obs).expect("MOE prediction");
         write_npy("obs_hard.npy", &obs).expect("obs saved");
         write_npy("preds_hard.npy", &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.39 * 0.39,
-            moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.39]]).unwrap()[[0, 0]],
             epsilon = 1e-4
         );
         assert_abs_diff_eq!(
             f64::sin(10. * 0.82),
-            moe.predict(&array![[0.82]]).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.82]]).unwrap()[[0, 0]],
             epsilon = 1e-4
         );
     }
@@ -430,11 +474,11 @@ mod tests {
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict(&obs).expect("MOE prediction");
+        let preds = moe.predict_values(&obs).expect("MOE prediction");
         println!("Smooth moe {}", moe);
         assert_abs_diff_eq!(
             0.37579, // true value = 0.37*0.37 = 0.1369
-            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
         let moe = Moe::params(3)
@@ -447,9 +491,28 @@ mod tests {
         write_npy("preds_smooth.npy", &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
-            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
+    }
+
+    #[test]
+    fn test_moe_variances_smooth() {
+        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
+        let yt = function_test_1d(&xt);
+        let moe = Moe::params(3)
+            .set_recombination(Recombination::Smooth(None))
+            .set_regression_spec(RegressionSpec::CONSTANT)
+            .set_correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+            .with_rng(rng.clone())
+            .fit(&xt, &yt)
+            .expect("MOE fitted");
+        let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
+        let variances = moe
+            .predict_variances(&obs)
+            .expect("MOE variances prediction");
+        assert_abs_diff_eq!(*variances.max().unwrap(), 0., epsilon = 1e-10);
     }
 
     fn xsinx(x: &[f64]) -> f64 {

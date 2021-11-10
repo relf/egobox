@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let xlimits = arr2(&[[-1., 1.], [-1., 1.]]);
     let xtest = FullFactorial::new(&xlimits).sample(100);
-    let ytest = moe.predict(&xtest)?;
+    let ytest = moe.predict_values(&xtest)?;
     let ytrue = norm1(&xtest);
 
     write_npy("moe_x_norm1.npy", &xtest).expect("x not saved!");

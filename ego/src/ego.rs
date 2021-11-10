@@ -1,4 +1,5 @@
 use crate::errors::{EgoError, Result};
+use crate::types::*;
 use doe::{LHSKind, SamplingMethod, LHS};
 use finitediff::FiniteDiff;
 use gp::{
@@ -13,44 +14,7 @@ use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
 
-/// Add Scalar and Lapack trait bounds to the common Float trait
-// pub trait Float: linfa_pls::Float {}
-// impl Float for f32 {}
-// impl Float for f64 {}
-
-const SQRT_2PI: f64 = 2.5066282746310007;
-
-pub trait ObjFn: Send + Sync + 'static + Fn(&[f64]) -> f64 {}
-impl<T> ObjFn for T where T: Send + Sync + 'static + Fn(&[f64]) -> f64 {}
-
-#[derive(Debug)]
-pub struct OptimResult<F: Float> {
-    pub x_opt: Array1<F>,
-    pub y_opt: F,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum AcqStrategy {
-    EI,
-    WB2,
-    WB2S,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum QEiStrategy {
-    KrigingBeliever,
-    KrigingBelieverLowerBound,
-    KrigingBelieverUpperBound,
-    ConstantLiarMinimum,
-}
-
-/// A structure to pass data to objective acquisition function
-struct ObjData<F> {
-    scale: F,
-    scale_wb2: Option<F>,
-}
-
-pub struct Ego<F: Float, O: ObjFn, R: Rng> {
+pub struct Ego<F: Float, O: ObjFunc, R: Rng> {
     pub n_iter: usize,
     pub n_start: usize,
     pub n_parallel: usize,
@@ -63,13 +27,13 @@ pub struct Ego<F: Float, O: ObjFn, R: Rng> {
     pub rng: R,
 }
 
-impl<F: Float, O: ObjFn> Ego<F, O, Isaac64Rng> {
+impl<F: Float, O: ObjFunc> Ego<F, O, Isaac64Rng> {
     pub fn new(f: O, xlimits: &Array2<F>) -> Ego<F, O, Isaac64Rng> {
         Self::new_with_rng(f, &xlimits, Isaac64Rng::seed_from_u64(42))
     }
 }
 
-impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
+impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
     pub fn new_with_rng(f: O, xlimits: &Array2<F>, rng: R) -> Self {
         Ego {
             n_iter: 20,
@@ -173,6 +137,8 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
             match self.find_best_point(&x_data, &y_data, &sampling, &gpr) {
                 Ok(xk) => match self.get_virtual_point(&xk, &y_data, &gpr) {
                     Ok(yk) => {
+                        println!("ydata {:?}", &y_data);
+                        println!("yk {:?}", &yk);
                         y_dat = concatenate![Axis(0), y_dat, Array2::from_elem((1, 1), yk)];
                         x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
                     }
@@ -223,7 +189,7 @@ impl<F: Float, O: ObjFn, R: Rng + Clone> Ego<F, O, R> {
         let best_index = y_data.argmin().unwrap().0;
         OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
-            y_opt: y_data.row(best_index)[0],
+            y_opt: y_data.row(best_index).to_owned(),
         }
     }
 
@@ -450,7 +416,7 @@ mod tests {
             .n_iter(10)
             .x_doe(&array![[0.], [7.], [25.]])
             .minimize();
-        let expected = -15.1;
+        let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
     }
 

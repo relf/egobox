@@ -25,7 +25,7 @@ struct OptimResult {
     #[pyo3(get)]
     x_opt: Vec<f64>,
     #[pyo3(get)]
-    y_opt: f64,
+    y_opt: Vec<f64>,
 }
 
 unsafe impl Send for OptimResult {}
@@ -57,7 +57,7 @@ impl Optimizer {
 
         OptimResult {
             x_opt: res.x_opt.to_vec(),
-            y_opt: res.y_opt,
+            y_opt: res.y_opt.to_vec(),
         }
     }
 }
