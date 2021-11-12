@@ -95,24 +95,32 @@ macro_rules! make_expert_params {
 
 macro_rules! compute_error {
     ($regr:ident, $corr:ident, $dataset:ident) => {{
-        let params = make_gp_params!($regr, $corr);
-        let mut errors = Vec::new();
-        for (gp, valid) in $dataset.iter_fold(5, |train| {
-            params.fit(&train.records(), &train.targets()).unwrap()
-        }) {
-            let pred = gp.predict_values(valid.records()).unwrap();
-            let error = (valid.targets() - pred).norm_l2();
-            errors.push(error);
-        }
-        let mean_err = errors.iter().fold(0.0, |acc, &item| acc + item) / errors.len() as f64;
         debug!(
-            "Expert {}_{} on dataset size = {}, error = {}",
+            "Expert {}_{} on dataset size = {}",
             stringify!($regr),
             stringify!($corr),
-            $dataset.nsamples(),
-            mean_err
+            $dataset.nsamples()
         );
-        mean_err
+        let params = make_gp_params!($regr, $corr);
+        let mut errors = Vec::new();
+        let input_dim = $dataset.records().shape()[1];
+        let n_fold = std::cmp::min($dataset.nsamples(), 5 * input_dim);
+        if (n_fold < 4 * input_dim && stringify!($regr) == "Quadratic") {
+            f64::INFINITY // not enough points => huge error
+        } else if (n_fold < 3 * input_dim && stringify!($regr) == "Linear") {
+            f64::INFINITY // not enough points => huge error
+        } else {
+            for (gp, valid) in $dataset.iter_fold(n_fold, |train| {
+                params.fit(&train.records(), &train.targets()).unwrap()
+            }) {
+                let pred = gp.predict_values(valid.records()).unwrap();
+                let error = (valid.targets() - pred).norm_l2();
+                errors.push(error);
+            }
+            let mean_err = errors.iter().fold(0.0, |acc, &item| acc + item) / errors.len() as f64;
+            debug!("-> mean error = {}", mean_err);
+            mean_err
+        }
     }};
 }
 

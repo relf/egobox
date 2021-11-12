@@ -3,17 +3,18 @@ use crate::sort_axis::*;
 use crate::types::*;
 use doe::{LHSKind, SamplingMethod, LHS};
 use finitediff::FiniteDiff;
-use gp::{
-    correlation_models::SquaredExponentialKernel, mean_models::ConstantMean, GaussianProcess,
-};
 use libm::erfc;
+use moe::{CorrelationSpec, Moe, RegressionSpec};
 use ndarray::{
     concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix1, Ix2, Zip,
 };
 use ndarray_linalg::Scalar;
-// use ndarray_npy::write_npy;
-use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
+// use ndarray_npy::write_npy;
+// use env_logger;
+use log::debug;
+
+use ndarray_rand::rand::{Rng, SeedableRng};
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
 
@@ -28,6 +29,8 @@ pub struct Sego<O: GroupFunc, R: Rng> {
     pub q_ei: QEiStrategy,
     pub acq: AcqStrategy,
     pub acq_optimizer: AcqOptimizer,
+    pub regr_spec: RegressionSpec,
+    pub corr_spec: CorrelationSpec,
     pub obj: O,
     pub rng: R,
 }
@@ -51,6 +54,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             q_ei: QEiStrategy::KrigingBeliever,
             acq: AcqStrategy::EI,
             acq_optimizer: AcqOptimizer::Slsqp,
+            regr_spec: RegressionSpec::ALL,
+            corr_spec: CorrelationSpec::ALL,
             obj: f,
             rng,
         }
@@ -101,6 +106,16 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         self
     }
 
+    pub fn regr_spec(&mut self, regr_spec: RegressionSpec) -> &mut Self {
+        self.regr_spec = regr_spec;
+        self
+    }
+
+    pub fn corr_spec(&mut self, corr_spec: CorrelationSpec) -> &mut Self {
+        self.corr_spec = corr_spec;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Sego<O, R2> {
         Sego {
             n_iter: self.n_iter,
@@ -113,6 +128,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             q_ei: self.q_ei,
             acq: self.acq,
             acq_optimizer: self.acq_optimizer,
+            regr_spec: self.regr_spec,
+            corr_spec: self.corr_spec,
             obj: self.obj,
             rng,
         }
@@ -128,24 +145,18 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
 
-        let obj_model = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
-            ConstantMean::default(),
-            SquaredExponentialKernel::default(),
-        )
-        .fit(&x_data, &y_data.slice(s![.., 0..1]))
-        .expect("GP training failure");
+        let obj_model = Moe::params(1)
+            .set_regression_spec(self.regr_spec)
+            .set_correlation_spec(self.corr_spec)
+            .fit(&x_data, &y_data.slice(s![.., 0..1]))
+            .expect("GP training failure");
 
-        let mut cstr_models: Vec<
-            Box<GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>>,
-        > = Vec::with_capacity(self.n_cstr);
+        let mut cstr_models: Vec<Box<Moe>> = Vec::with_capacity(self.n_cstr);
         for k in 0..self.n_cstr {
             cstr_models.push(Box::new(
-                GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
-                    ConstantMean::default(),
-                    SquaredExponentialKernel::default(),
-                )
-                .fit(&x_data, &y_data.slice(s![.., k + 1..k + 2]))
-                .expect("GP training failure"),
+                Moe::params(1)
+                    .fit(&x_data, &y_data.slice(s![.., k + 1..k + 2]))
+                    .expect("GP training failure"),
             ))
         }
 
@@ -230,7 +241,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         }
         // let best_index = y_data.column(0).argmin().unwrap();
         let best_index = self.find_best_result_index(&y_data);
-        println!("{:?}", concatenate![Axis(1), x_data, y_data]);
+        debug!("{:?}", concatenate![Axis(1), x_data, y_data]);
         OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
             y_opt: y_data.row(best_index).to_owned(),
@@ -242,8 +253,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &LHS<f64, R>,
-        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
-        cstr_models: &Vec<Box<GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>>>,
+        obj_model: &Moe,
+        cstr_models: &Vec<Box<Moe>>,
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
@@ -264,7 +275,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         for i in 0..self.n_cstr {
             let index = i;
             let cstr =
-                move |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut ObjData<f64>| -> f64 {
+                move |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
                     if let Some(grad) = gradient {
                         let f = |x: &Vec<f64>| -> f64 {
                             cstr_models[i]
@@ -272,12 +283,14 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                                     &Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap(),
                                 )
                                 .unwrap()[[0, 0]]
+                                / params.scale_cstr[index]
                         };
                         grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
                     }
                     cstr_models[index]
                         .predict_values(&Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap())
                         .unwrap()[[0, 0]]
+                        / params.scale_cstr[index]
                 };
             cstrs.push(Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>>>);
         }
@@ -289,7 +302,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
 
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
         let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &obj_model, *f_min);
-        let scale_obj = self._compute_obj_scale(&scaling_points);
+        let (scale_obj, scale_cstr) = self._compute_obj_cstr_scale(&scaling_points);
 
         let algorithm = match self.acq_optimizer {
             AcqOptimizer::Slsqp => Algorithm::Slsqp,
@@ -304,6 +317,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                 ObjData {
                     scale: scale_obj,
                     scale_wb2: Some(scale_wb2),
+                    scale_cstr: scale_cstr.to_owned(),
                 },
             );
             let lower = self.xlimits.column(0).to_owned();
@@ -313,15 +327,16 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             optimizer.set_maxeval(200)?;
             optimizer.set_ftol_rel(1e-4)?;
             optimizer.set_ftol_abs(1e-4)?;
-            cstrs.iter().for_each(|cstr| {
+            cstrs.iter().enumerate().for_each(|(i, cstr)| {
                 optimizer
                     .add_inequality_constraint(
                         cstr,
                         ObjData {
                             scale: scale_obj,
                             scale_wb2: Some(scale_wb2),
+                            scale_cstr: scale_cstr.to_owned(),
                         },
-                        1e-6,
+                        1e-6 / scale_cstr[i],
                     )
                     .unwrap();
             });
@@ -378,8 +393,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         &self,
         xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
-        cstr_models: &Vec<Box<GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>>>,
+        obj_model: &Moe,
+        cstr_models: &Vec<Box<Moe>>,
     ) -> Result<Vec<f64>> {
         let mut res: Vec<f64> = Vec::with_capacity(3);
         if self.q_ei == QEiStrategy::ConstantLiarMinimum {
@@ -407,12 +422,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         }
     }
 
-    fn ei(
-        x: &[f64],
-        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
-        f_min: f64,
-    ) -> f64 {
-        let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
+    fn ei(x: &[f64], obj_model: &Moe, f_min: f64) -> f64 {
+        let pt = ArrayView::from_shape((1, x.len()), x).unwrap().to_owned();
         if let Ok(p) = obj_model.predict_values(&pt) {
             if let Ok(s) = obj_model.predict_variances(&pt) {
                 let pred = p[[0, 0]];
@@ -429,23 +440,14 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         }
     }
 
-    fn wb2s(
-        x: &[f64],
-        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
-        f_min: f64,
-        scale: Option<f64>,
-    ) -> f64 {
-        let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
+    fn wb2s(x: &[f64], obj_model: &Moe, f_min: f64, scale: Option<f64>) -> f64 {
+        let pt = ArrayView::from_shape((1, x.len()), x).unwrap().to_owned();
         let ei = Self::ei(x, obj_model, f_min);
         let scale = scale.unwrap_or(1.0);
         scale * ei - obj_model.predict_values(&pt).unwrap()[[0, 0]]
     }
 
-    fn compute_wb2s_scale(
-        x: &Array2<f64>,
-        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
-        f_min: f64,
-    ) -> f64 {
+    fn compute_wb2s_scale(x: &Array2<f64>, obj_model: &Moe, f_min: f64) -> f64 {
         let ratio = 100.; // TODO: make it a parameter
         let ei_x = x.map_axis(Axis(1), |xi| {
             let ei = Self::ei(xi.as_slice().unwrap(), obj_model, f_min);
@@ -453,7 +455,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         });
         let i_max = ei_x.argmax().unwrap();
         let pred_max = obj_model
-            .predict_values(&x.row(i_max).insert_axis(Axis(0)))
+            .predict_values(&x.row(i_max).insert_axis(Axis(0)).to_owned())
             .unwrap()[[0, 0]];
         let ei_max = ei_x[i_max];
         if ei_max > 0. {
@@ -463,17 +465,24 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         }
     }
 
-    fn _compute_obj_scale(&self, x: &Array2<f64>) -> f64 {
-        *self
-            .obj_eval(&x)
+    fn _compute_obj_cstr_scale(&self, x: &Array2<f64>) -> (f64, Array1<f64>) {
+        let values = self.obj_eval(&x);
+
+        let obj_scale = *values
+            .column(0)
             .mapv(|v| Scalar::abs(v))
             .max()
-            .unwrap_or(&1.)
+            .unwrap_or(&1.);
+        let cstr_scale = if self.n_cstr > 0 {
+            values
+                .slice(s![.., 1..])
+                .mapv(|v| Scalar::abs(v))
+                .map_axis(Axis(0), |col| *col.max().unwrap())
+        } else {
+            Array1::from_elem(self.n_cstr, 1.)
+        };
+        (obj_scale, cstr_scale)
     }
-
-    // fn _compute_cstr_scales(&self, x: &Array2<f64>) -> Array1<f64> {
-    //     for i in 0..self.n_cstr {}
-    // }
 
     fn norm_cdf(x: f64) -> f64 {
         let norm = 0.5 * erfc(-x / std::f64::consts::SQRT_2);
@@ -487,7 +496,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
     fn acq_eval(
         &self,
         x: &[f64],
-        obj_model: &GaussianProcess<f64, ConstantMean, SquaredExponentialKernel>,
+        obj_model: &Moe,
         f_min: f64,
         scale: f64,
         scale_wb2: Option<f64>,
@@ -530,6 +539,8 @@ mod tests {
     #[test]
     fn test_xsinx_ei_sego() {
         let res = Sego::new(xsinx, &array![[0.0, 25.0]])
+            .regr_spec(RegressionSpec::QUADRATIC)
+            .corr_spec(CorrelationSpec::ALL)
             .n_iter(10)
             .x_doe(&array![[0.], [7.], [25.]])
             .minimize();
@@ -622,7 +633,7 @@ mod tests {
         let res = Sego::new(f_g24, &xlimits)
             .n_cstr(2)
             .acq_strategy(AcqStrategy::EI)
-            .acq_optimizer(AcqOptimizer::Cobyla)    // test passes also with WB2S and Slsqp
+            .acq_optimizer(AcqOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .x_doe(&doe)
             .n_iter(100)
             .minimize();

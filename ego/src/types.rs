@@ -31,6 +31,7 @@ pub enum QEiStrategy {
 pub struct ObjData<F> {
     pub scale: F,
     pub scale_wb2: Option<F>,
+    pub scale_cstr: Array1<F>,
 }
 
 /// SEGO
