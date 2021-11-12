@@ -9,12 +9,12 @@ use ndarray::{
     concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix1, Ix2, Zip,
 };
 use ndarray_linalg::Scalar;
+use ndarray_stats::QuantileExt;
 // use ndarray_npy::write_npy;
 // use env_logger;
 use log::debug;
 
 use ndarray_rand::rand::{Rng, SeedableRng};
-use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
 
@@ -275,7 +275,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         for i in 0..self.n_cstr {
             let index = i;
             let cstr =
-                move |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut ObjData<f64>| -> f64 {
+                move |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
                     if let Some(grad) = gradient {
                         let f = |x: &Vec<f64>| -> f64 {
                             cstr_models[i]
@@ -283,12 +283,14 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                                     &Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap(),
                                 )
                                 .unwrap()[[0, 0]]
+                                / params.scale_cstr[index]
                         };
                         grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
                     }
                     cstr_models[index]
                         .predict_values(&Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap())
                         .unwrap()[[0, 0]]
+                        / params.scale_cstr[index]
                 };
             cstrs.push(Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>>>);
         }
@@ -315,7 +317,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                 ObjData {
                     scale: scale_obj,
                     scale_wb2: Some(scale_wb2),
-                    scale_cstr,
+                    scale_cstr: scale_cstr.to_owned(),
                 },
             );
             let lower = self.xlimits.column(0).to_owned();
@@ -325,16 +327,16 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             optimizer.set_maxeval(200)?;
             optimizer.set_ftol_rel(1e-4)?;
             optimizer.set_ftol_abs(1e-4)?;
-            cstrs.iter().for_each(|cstr| {
+            cstrs.iter().enumerate().for_each(|(i, cstr)| {
                 optimizer
                     .add_inequality_constraint(
                         cstr,
                         ObjData {
                             scale: scale_obj,
                             scale_wb2: Some(scale_wb2),
-                            scale_cstr,
+                            scale_cstr: scale_cstr.to_owned(),
                         },
-                        1e-6,
+                        1e-6 / scale_cstr[i],
                     )
                     .unwrap();
             });
@@ -463,7 +465,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         }
     }
 
-    fn _compute_obj_cstr_scale(&self, x: &Array2<f64>) -> (f64, f64) {
+    fn _compute_obj_cstr_scale(&self, x: &Array2<f64>) -> (f64, Array1<f64>) {
         let values = self.obj_eval(&x);
 
         let obj_scale = *values
@@ -472,13 +474,12 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             .max()
             .unwrap_or(&1.);
         let cstr_scale = if self.n_cstr > 0 {
-            *values
+            values
                 .slice(s![.., 1..])
                 .mapv(|v| Scalar::abs(v))
-                .max()
-                .unwrap_or(&1.)
+                .map_axis(Axis(0), |col| *col.max().unwrap())
         } else {
-            1.0
+            Array1::from_elem(self.n_cstr, 1.)
         };
         (obj_scale, cstr_scale)
     }

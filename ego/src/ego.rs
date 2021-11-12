@@ -232,7 +232,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
                 ObjData {
                     scale: scale_obj,
                     scale_wb2: Some(scale_wb2),
-                    scale_cstr: F::cast(1.0), // not used
+                    scale_cstr: Array1::from_elem(0, F::cast(1.0)), // not used
                 },
             );
             let lower = to_vec_f64(self.xlimits.column(0).to_owned().as_slice().unwrap());
