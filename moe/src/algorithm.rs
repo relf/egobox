@@ -83,9 +83,9 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         // Fit GPs on clustered data
         let mut experts = Vec::new();
         for cluster in clusters {
-            if cluster.nrows() <= 5 {
+            if cluster.nrows() < 3 {
                 return Err(MoeError::ClusteringError(format!(
-                    "Not enough points in cluster, requires at least 5, got {}",
+                    "Not enough points in cluster, requires at least 3, got {}",
                     cluster.nrows()
                 )));
             }
@@ -303,28 +303,34 @@ impl Moe {
         self
     }
 
-    pub fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_values_hard(x),
             Recombination::Smooth(_) => self.predict_values_smooth(x),
         }
     }
 
-    pub fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_variances(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_variances_hard(x),
-            Recombination::Smooth(_) => self.predict_variances_smooth(x),
+            Recombination::Hard => self.predict_variances_hard(&x),
+            Recombination::Smooth(_) => self.predict_variances_smooth(&x),
         }
     }
 
-    pub fn save_expert_predict(&self, x: &Array2<f64>) -> () {
+    pub fn save_expert_predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> () {
         self.experts.iter().enumerate().for_each(|(i, expert)| {
             let preds = expert.predict_values(&x.view()).unwrap();
             write_npy(format!("preds_expert_{}.npy", i), &preds).expect("expert pred saved");
         });
     }
 
-    pub fn predict_values_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_values_smooth(
+        &self,
+        observations: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
         let probas = self.gmx.predict_probas(observations);
         let mut preds = Array1::<f64>::zeros(observations.nrows());
 
@@ -343,7 +349,10 @@ impl Moe {
         Ok(preds.insert_axis(Axis(1)))
     }
 
-    pub fn predict_variances_smooth(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_variances_smooth(
+        &self,
+        observations: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
         let probas = self.gmx.predict_probas(observations);
         let mut preds = Array1::<f64>::zeros(observations.nrows());
 
@@ -362,7 +371,10 @@ impl Moe {
         Ok(preds.insert_axis(Axis(1)))
     }
 
-    pub fn predict_values_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_values_hard(
+        &self,
+        observations: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(observations);
         debug!("Clustering {:?}", clustering);
         let mut preds = Array2::zeros((observations.nrows(), 1));
@@ -380,7 +392,10 @@ impl Moe {
         Ok(preds)
     }
 
-    pub fn predict_variances_hard(&self, observations: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_variances_hard(
+        &self,
+        observations: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(observations);
         debug!("Clustering {:?}", clustering);
         let mut variances = Array2::zeros((observations.nrows(), 1));

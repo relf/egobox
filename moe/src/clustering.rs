@@ -359,7 +359,7 @@ mod test {
         moe.save_expert_predict(&obs);
         write_npy("best_obs.npy", &obs).expect("saved");
         write_npy("best_preds.npy", &preds).expect("saved");
-        assert_eq!(1, nb_clusters);
+        assert_eq!(3, nb_clusters);
     }
 
     #[test]
@@ -384,6 +384,7 @@ mod test {
             .fit(&xtrain, &ytrain)
             .unwrap();
         let ypreds = moe.predict_values(&xvalid).expect("moe not fitted");
+        debug!("{:?}", concatenate![Axis(1), ypreds, yvalid]);
         assert_abs_diff_eq!(&ypreds, &yvalid, epsilon = 1e-2);
     }
 }
