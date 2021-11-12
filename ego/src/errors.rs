@@ -1,4 +1,5 @@
 use gp::GpError;
+use moe::MoeError;
 use nlopt::FailState;
 use std::error::Error;
 use std::fmt::{self, Display};
@@ -16,6 +17,8 @@ pub enum EgoError {
     InvalidValue(String),
     /// When nlopt fails
     NloptFailure,
+    /// When Moe error occurs
+    MoeError(String),
 }
 
 impl Display for EgoError {
@@ -27,6 +30,7 @@ impl Display for EgoError {
             Self::EgoError(message) => write!(f, "EGO error: {}", message),
             Self::InvalidValue(message) => write!(f, "Value error: {}", message),
             Self::NloptFailure => write!(f, "NlOpt error"),
+            Self::MoeError(message) => write!(f, "Moe error: {}", message),
         }
     }
 }
@@ -36,6 +40,12 @@ impl Error for EgoError {}
 impl From<GpError> for EgoError {
     fn from(error: GpError) -> EgoError {
         EgoError::GpError(error.to_string())
+    }
+}
+
+impl From<MoeError> for EgoError {
+    fn from(error: MoeError) -> EgoError {
+        EgoError::MoeError(error.to_string())
     }
 }
 

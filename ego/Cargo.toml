@@ -27,6 +27,8 @@ libm = "0.2"
 finitediff = { version="0.1", features = ["ndarray"] }
 # sort-axis
 rawpointer = { version = "0.2" }
+log = "0.4"
+env_logger = "0.9"
 
 [dev-dependencies]
 linfa-datasets = { git="https://github.com/relf/linfa.git", features = ["linnerud"] }

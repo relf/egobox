@@ -72,4 +72,12 @@ mod test {
         ];
         assert_abs_diff_eq!(expected, actual);
     }
+
+    #[test]
+    fn test_quadratic2() {
+        let a = array![[0.], [7.], [25.]];
+        let actual = QuadraticMean::default().apply(&a);
+        let expected = array![[1., 0., 0.], [1., 7., 49.], [1., 25., 625.]];
+        assert_abs_diff_eq!(expected, actual);
+    }
 }
