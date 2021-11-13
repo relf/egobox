@@ -1,6 +1,6 @@
 use doe::{SamplingMethod, LHS};
-use ego::{AcqStrategy, Ego};
-use ndarray::{array, Ix2};
+use ego::{AcqStrategy, Ego, Sego};
+use ndarray::{array, Array2, ArrayBase, Ix2};
 use numpy::{IntoPyArray, PyArray, PyReadonlyArray};
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
@@ -18,7 +18,10 @@ fn lhs<'py>(
 }
 
 #[pyclass]
-struct Optimizer {}
+struct EgoOptimizer {}
+
+#[pyclass]
+struct SegoOptimizer {}
 
 #[pyclass]
 struct OptimResult {
@@ -28,13 +31,13 @@ struct OptimResult {
     y_opt: Vec<f64>,
 }
 
-unsafe impl Send for OptimResult {}
+//unsafe impl Send for OptimResult {}
 
 #[pymethods]
-impl Optimizer {
+impl EgoOptimizer {
     #[new]
     fn new() -> Self {
-        Optimizer {}
+        EgoOptimizer {}
     }
 
     fn minimize(&self, py_callback: &PyAny) -> OptimResult {
@@ -62,10 +65,43 @@ impl Optimizer {
     }
 }
 
+#[pymethods]
+impl SegoOptimizer {
+    #[new]
+    fn new() -> Self {
+        SegoOptimizer {}
+    }
+
+    fn minimize(&self, py_callback: &PyAny) -> OptimResult {
+        let callback: PyObject = py_callback.into();
+
+        let obj = move |x: &Array2<f64>| -> Array2<f64> {
+            let gil = Python::acquire_gil();
+            let py = gil.python();
+
+            let args = PyTuple::new(py, x);
+            let res = callback.call1(py, args).unwrap();
+            let pyarray: &PyArray<f64, Ix2> = res.extract(py).unwrap();
+            let val = pyarray.to_owned_array();
+            val
+        };
+
+        let res = Sego::new(obj, &array![[0.0, 25.0]])
+            .acq_strategy(AcqStrategy::WB2)
+            .minimize();
+
+        OptimResult {
+            x_opt: res.x_opt.to_vec(),
+            y_opt: res.y_opt.to_vec(),
+        }
+    }
+}
+
 #[pymodule]
 fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lhs, m)?)?;
-    m.add_class::<Optimizer>()?;
+    m.add_class::<EgoOptimizer>()?;
+    m.add_class::<SegoOptimizer>()?;
     m.add_class::<OptimResult>()?;
     Ok(())
 }

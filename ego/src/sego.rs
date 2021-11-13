@@ -161,29 +161,9 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         }
 
         for _ in 0..self.n_parallel {
-            // if n == 6 {
-            //     let f_min = y_data.min().unwrap();
-            //     let xplot = Array::linspace(0., 25., 100)
-            //         .mapv(F::cast)
-            //         .insert_axis(Axis(1));
-            //     let obj = self.obj_eval(&xplot);
-            //     let obj_model_vals = obj_model.predict_values(&xplot).unwrap();
-            //     let obj_model_vars = obj_model.predict_variances(&xplot).unwrap();
-            //     let ei = xplot.map(|x| Self::ei(&[*x], &obj_model, *f_min));
-            //     let wb2 = xplot.map(|x| Self::wb2s(&[*x], &obj_model, *f_min, None));
-            //     write_npy("ego_x.npy", &xplot).expect("xplot saved");
-            //     write_npy("ego_obj.npy", &obj).expect("obj saved");
-            //     write_npy("ego_obj_model.npy", &obj_model_vals).expect("gp vals saved");
-            //     write_npy("ego_obj_model_vars.npy", &obj_model_vars).expect("gp vars saved");
-            //     write_npy("ego_ei.npy", &ei).expect("ei saved");
-            //     write_npy("ego_wb2.npy", &wb2).expect("wb2 saved");
-            // }
-
             match self.find_best_point(x_data, &y_data, &sampling, &obj_model, &cstr_models) {
                 Ok(xk) => match self.get_virtual_point(&xk, &y_data, &obj_model, &cstr_models) {
                     Ok(yk) => {
-                        // println!("ydata {:?}", &y_data);
-                        // println!("yk {:?}", &yk);
                         y_dat = concatenate![
                             Axis(0),
                             y_dat,
@@ -239,7 +219,6 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                 .and(y_actual.columns())
                 .for_each(|mut y, val| y.assign(&val));
         }
-        // let best_index = y_data.column(0).argmin().unwrap();
         let best_index = self.find_best_result_index(&y_data);
         debug!("{:?}", concatenate![Axis(1), x_data, y_data]);
         OptimResult {
@@ -635,7 +614,7 @@ mod tests {
             .acq_strategy(AcqStrategy::EI)
             .acq_optimizer(AcqOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .x_doe(&doe)
-            .n_iter(100)
+            .n_iter(15)
             .minimize();
         println!("G24 optim result = {:?}", res);
         let expected = array![2.3295, 3.1785];

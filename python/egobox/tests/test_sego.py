@@ -1,20 +1,20 @@
 import unittest
 import numpy as np
-from egobox import EgoOptimizer
+from egobox import SegoOptimizer
 
 
-class TestEgobox(unittest.TestCase):
+class TestSego(unittest.TestCase):
     @staticmethod
     def xsinx(x):
-        x = np.array(x)
+        x = np.atleast_2d(x)
         y = (x - 3.5) * np.sin((x - 3.5) / (np.pi))
         print(f"obj={y} at {x}")
-        return float(y)
+        return y
 
     def test_egobox(self):
-        ego = EgoOptimizer()
+        ego = SegoOptimizer()
         print("start")
-        res = ego.minimize(TestEgobox.xsinx)
+        res = ego.minimize(TestSego.xsinx)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
 
 
