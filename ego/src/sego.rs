@@ -208,7 +208,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
 
         let mut y_data = self.obj_eval(&x_data);
 
-        for i in 0..self.n_iter {
+        for i in 0..(self.n_iter - x_data.nrows()) {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
             y_data = concatenate![Axis(0), y_data, y_dat];
             x_data = concatenate![Axis(0), x_data, x_dat];
@@ -281,7 +281,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
 
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
         let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &obj_model, *f_min);
-        let (scale_obj, scale_cstr) = self._compute_obj_cstr_scale(&scaling_points);
+        let scale_obj = Self::compute_obj_scale(&scaling_points, &obj_model);
+        let scale_cstr = Self::compute_cstr_scales(&scaling_points, &cstr_models);
 
         let algorithm = match self.acq_optimizer {
             AcqOptimizer::Slsqp => Algorithm::Slsqp,
@@ -444,23 +445,20 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         }
     }
 
-    fn _compute_obj_cstr_scale(&self, x: &Array2<f64>) -> (f64, Array1<f64>) {
-        let values = self.obj_eval(&x);
+    fn compute_obj_scale(x: &Array2<f64>, obj_model: &Moe) -> f64 {
+        let preds = obj_model.predict_values(x).unwrap().mapv(|v| f64::abs(v));
+        *preds.max().unwrap_or(&1.0)
+    }
 
-        let obj_scale = *values
-            .column(0)
-            .mapv(|v| Scalar::abs(v))
-            .max()
-            .unwrap_or(&1.);
-        let cstr_scale = if self.n_cstr > 0 {
-            values
-                .slice(s![.., 1..])
-                .mapv(|v| Scalar::abs(v))
-                .map_axis(Axis(0), |col| *col.max().unwrap())
-        } else {
-            Array1::from_elem(self.n_cstr, 1.)
-        };
-        (obj_scale, cstr_scale)
+    fn compute_cstr_scales(x: &Array2<f64>, cstr_models: &Vec<Box<Moe>>) -> Array1<f64> {
+        let scales: Vec<f64> = cstr_models
+            .iter()
+            .map(|cstr_model| {
+                let preds = cstr_model.predict_values(x).unwrap().mapv(|v| f64::abs(v));
+                *preds.max().unwrap_or(&1.0)
+            })
+            .collect();
+        Array1::from_shape_vec(cstr_models.len(), scales).unwrap()
     }
 
     fn norm_cdf(x: f64) -> f64 {
@@ -490,16 +488,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
     }
 
     fn obj_eval(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        let mut y = Array2::zeros((x.nrows(), 1 + self.n_cstr));
-        let obj = &self.obj;
-        Zip::from(y.rows_mut())
-            .and(x.rows())
-            .for_each(|mut yn, xn| {
-                let val = xn.insert_axis(Axis(0)).to_owned();
-                let yval = obj(&val);
-                yn.assign(&yval.row(0));
-            });
-        y
+        (&self.obj)(&x.view())
     }
 }
 
@@ -508,10 +497,10 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
-    use ndarray::array;
+    use ndarray::{array, ArrayView2};
     use std::time::Instant;
 
-    fn xsinx(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+    fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
         (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
     }
 
@@ -541,12 +530,12 @@ mod tests {
         let ego = Sego::new(xsinx, &array![[0.0, 25.0]]);
 
         let mut x_doe = array![[0.], [7.], [20.], [25.]];
-        let mut y_doe = xsinx(&x_doe);
+        let mut y_doe = xsinx(&x_doe.view());
         for _i in 0..10 {
             let x_suggested = ego.suggest(&x_doe, &y_doe);
 
             x_doe = concatenate![Axis(0), x_doe, x_suggested];
-            y_doe = xsinx(&x_doe);
+            y_doe = xsinx(&x_doe.view());
         }
 
         let expected = -15.1;
@@ -554,7 +543,7 @@ mod tests {
         assert_abs_diff_eq!(expected, *y_opt, epsilon = 1e-1);
     }
 
-    fn rosenb(x: &Array2<f64>) -> Array2<f64> {
+    fn rosenb(x: &ArrayView2<f64>) -> Array2<f64> {
         let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
         Zip::from(y.rows_mut())
             .and(x.rows())
@@ -569,7 +558,7 @@ mod tests {
         let doe = LHS::new(&xlimits).sample(10);
         let res = Sego::new(rosenb, &xlimits)
             .x_doe(&doe)
-            .n_iter(10)
+            .n_iter(20)
             .minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
@@ -593,7 +582,7 @@ mod tests {
             - 36.0
     }
 
-    fn f_g24(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+    fn f_g24(x: &ArrayView2<f64>) -> Array2<f64> {
         let mut y = Array2::zeros((x.nrows(), 3));
         Zip::from(y.rows_mut())
             .and(x.rows())
@@ -606,7 +595,7 @@ mod tests {
     #[test]
     fn test_sego_g24() {
         let x = array![[1., 2.]];
-        println!("{:?}", f_g24(&x));
+        println!("{:?}", f_g24(&x.view()));
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = LHS::new(&xlimits).sample(10);
         let res = Sego::new(f_g24, &xlimits)
@@ -614,7 +603,7 @@ mod tests {
             .acq_strategy(AcqStrategy::EI)
             .acq_optimizer(AcqOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .x_doe(&doe)
-            .n_iter(15)
+            .n_iter(30)
             .minimize();
         println!("G24 optim result = {:?}", res);
         let expected = array![2.3295, 3.1785];

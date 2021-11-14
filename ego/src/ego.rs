@@ -175,7 +175,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
 
         let mut y_data = self.obj_eval(&x_data);
 
-        for i in 0..self.n_iter {
+        for i in 0..(self.n_iter - x_data.nrows()) {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
             y_data = concatenate![Axis(0), y_data, y_dat];
             x_data = concatenate![Axis(0), x_data, x_dat];
@@ -219,11 +219,11 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         let n_max_optim = 20;
         let mut best_x = None;
 
-        while !success && n_optim <= n_max_optim {
-            let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-            let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &gpr, *f_min);
-            let scale_obj = self._compute_obj_scale(&scaling_points);
+        let scaling_points = sampling.sample(100 * self.xlimits.nrows());
+        let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &gpr, *f_min);
+        let scale_obj = Self::compute_obj_scale(&scaling_points, &gpr);
 
+        while !success && n_optim <= n_max_optim {
             let mut optimizer = Nlopt::new(
                 Algorithm::Slsqp,
                 x_data.ncols(),
@@ -343,12 +343,16 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         }
     }
 
-    fn _compute_obj_scale(&self, x: &Array2<F>) -> F {
-        *self
-            .obj_eval(&x)
-            .mapv(|v| F::cast(Scalar::abs(v)))
-            .max()
-            .unwrap_or(&F::cast(1.))
+    fn compute_obj_scale(
+        x: &Array2<F>,
+        gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
+    ) -> F {
+        let preds = gpr.predict_values(x).unwrap().mapv(|v| Scalar::abs(v));
+        let max = preds.max();
+        match max {
+            Ok(m) => F::cast(*m),
+            Err(_) => F::one(),
+        }
     }
 
     fn norm_cdf(x: F) -> F {
@@ -457,7 +461,7 @@ mod tests {
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
         let doe = LHS::new(&xlimits).sample(10);
-        let res = Ego::new(rosenb, &xlimits).x_doe(&doe).n_iter(10).minimize();
+        let res = Ego::new(rosenb, &xlimits).x_doe(&doe).n_iter(20).minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];

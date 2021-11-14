@@ -1,6 +1,6 @@
 use doe::{SamplingMethod, LHS};
 use ego::{AcqStrategy, Ego, Sego};
-use ndarray::{array, Array2, ArrayBase, Ix2};
+use ndarray::{array, Array2, ArrayView2, Ix2};
 use numpy::{IntoPyArray, PyArray, PyReadonlyArray};
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
@@ -75,11 +75,10 @@ impl SegoOptimizer {
     fn minimize(&self, py_callback: &PyAny) -> OptimResult {
         let callback: PyObject = py_callback.into();
 
-        let obj = move |x: &Array2<f64>| -> Array2<f64> {
+        let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
             let gil = Python::acquire_gil();
             let py = gil.python();
-
-            let args = PyTuple::new(py, x);
+            let args = (x.to_owned().into_pyarray(py),);
             let res = callback.call1(py, args).unwrap();
             let pyarray: &PyArray<f64, Ix2> = res.extract(py).unwrap();
             let val = pyarray.to_owned_array();

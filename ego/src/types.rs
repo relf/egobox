@@ -1,5 +1,5 @@
 use gp::Float;
-use ndarray::{Array1, Array2};
+use ndarray::{Array1, Array2, ArrayView2};
 
 pub const SQRT_2PI: f64 = 2.5066282746310007;
 
@@ -35,8 +35,8 @@ pub struct ObjData<F> {
 }
 
 /// SEGO
-pub trait GroupFunc: Send + Sync + 'static + Fn(&Array2<f64>) -> Array2<f64> {}
-impl<T> GroupFunc for T where T: Send + Sync + 'static + Fn(&Array2<f64>) -> Array2<f64> {}
+pub trait GroupFunc: Send + Sync + 'static + Fn(&ArrayView2<f64>) -> Array2<f64> {}
+impl<T> GroupFunc for T where T: Send + Sync + 'static + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
 pub enum CstrStatus {
     Respected,
