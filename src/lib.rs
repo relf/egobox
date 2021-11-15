@@ -13,21 +13,23 @@ fn lhs<'py>(py: Python<'py>, xlimits: PyReadonlyArray2<f64>, a: usize) -> &'py P
 }
 
 #[pyclass]
-#[pyo3(text_signature = "(xlimits, /)")]
+#[pyo3(text_signature = "(xlimits, **)")]
 struct SegoOptimizer {
     pub xlimits: Array2<f64>,
-    // pub n_iter: usize,
-    // pub n_start: usize,
-    // pub n_parallel: usize,
-    // pub n_doe: usize,
-    // pub n_cstr: usize,
+    pub n_start: usize,
+    pub n_doe: usize,
     // pub x_doe: Option<Array2<f64>>,
     // pub q_ei: QEiStrategy,
-    // pub acq: AcqStrategy,
-    // pub acq_optimizer: AcqOptimizer,
-    // pub regr_spec: RegressionSpec,
-    // pub corr_spec: CorrelationSpec,
+    // pub infill: InfillStrategy,
+    // pub infill_optimizer: InfillOptimizer,
+    // pub regression_spec: RegressionSpec,
+    // pub correlation_spec: CorrelationSpec,
 }
+
+// #[pyclass]
+// struct Regress{
+
+// }
 
 #[pyclass]
 struct OptimResult {
@@ -40,9 +42,14 @@ struct OptimResult {
 #[pymethods]
 impl SegoOptimizer {
     #[new]
-    fn new(py_xlimits: PyReadonlyArray2<f64>) -> Self {
+    #[args(xlimits, n_start = "20", n_doe = "10")]
+    fn new(py_xlimits: PyReadonlyArray2<f64>, n_start: usize, n_doe: usize) -> Self {
         let xlimits = py_xlimits.to_owned_array();
-        SegoOptimizer { xlimits }
+        SegoOptimizer {
+            xlimits,
+            n_start,
+            n_doe,
+        }
     }
 
     /// This function finds the minimum of a given function
@@ -69,7 +76,7 @@ impl SegoOptimizer {
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
     #[args(n_iter = "20", n_cstr = "0")]
-    #[pyo3(text_signature = "(fun, n_cstr, n_iter, /)")]
+    #[pyo3(text_signature = "(fun, n_iter=20, n_cstr=0)")]
     fn minimize(&self, fun: &PyAny, n_cstr: usize, n_iter: usize) -> OptimResult {
         let obj: PyObject = fun.into();
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
@@ -85,6 +92,8 @@ impl SegoOptimizer {
         let res = Sego::new(obj, &self.xlimits)
             .n_cstr(n_cstr)
             .n_iter(n_iter)
+            .n_start(self.n_start)
+            .n_doe(self.n_doe)
             .minimize();
 
         OptimResult {

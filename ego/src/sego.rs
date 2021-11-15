@@ -27,10 +27,10 @@ pub struct Sego<O: GroupFunc, R: Rng> {
     pub x_doe: Option<Array2<f64>>,
     pub xlimits: Array2<f64>,
     pub q_ei: QEiStrategy,
-    pub acq: AcqStrategy,
-    pub acq_optimizer: AcqOptimizer,
-    pub regr_spec: RegressionSpec,
-    pub corr_spec: CorrelationSpec,
+    pub infill: InfillStrategy,
+    pub infill_optimizer: InfillOptimizer,
+    pub regression_spec: RegressionSpec,
+    pub correlation_spec: CorrelationSpec,
     pub obj: O,
     pub rng: R,
 }
@@ -52,10 +52,10 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             x_doe: None,
             xlimits: xlimits.to_owned(),
             q_ei: QEiStrategy::KrigingBeliever,
-            acq: AcqStrategy::WB2S,
-            acq_optimizer: AcqOptimizer::Slsqp,
-            regr_spec: RegressionSpec::ALL,
-            corr_spec: CorrelationSpec::ALL,
+            infill: InfillStrategy::WB2S,
+            infill_optimizer: InfillOptimizer::Slsqp,
+            regression_spec: RegressionSpec::ALL,
+            correlation_spec: CorrelationSpec::ALL,
             obj: f,
             rng,
         }
@@ -96,23 +96,23 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         self
     }
 
-    pub fn acq_strategy(&mut self, acq: AcqStrategy) -> &mut Self {
-        self.acq = acq;
+    pub fn infill_strategy(&mut self, infill: InfillStrategy) -> &mut Self {
+        self.infill = infill;
         self
     }
 
-    pub fn acq_optimizer(&mut self, optimizer: AcqOptimizer) -> &mut Self {
-        self.acq_optimizer = optimizer;
+    pub fn infill_optimizer(&mut self, optimizer: InfillOptimizer) -> &mut Self {
+        self.infill_optimizer = optimizer;
         self
     }
 
-    pub fn regr_spec(&mut self, regr_spec: RegressionSpec) -> &mut Self {
-        self.regr_spec = regr_spec;
+    pub fn regression_spec(&mut self, regression_spec: RegressionSpec) -> &mut Self {
+        self.regression_spec = regression_spec;
         self
     }
 
-    pub fn corr_spec(&mut self, corr_spec: CorrelationSpec) -> &mut Self {
-        self.corr_spec = corr_spec;
+    pub fn correlation_spec(&mut self, correlation_spec: CorrelationSpec) -> &mut Self {
+        self.correlation_spec = correlation_spec;
         self
     }
 
@@ -126,10 +126,10 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             x_doe: self.x_doe,
             xlimits: self.xlimits,
             q_ei: self.q_ei,
-            acq: self.acq,
-            acq_optimizer: self.acq_optimizer,
-            regr_spec: self.regr_spec,
-            corr_spec: self.corr_spec,
+            infill: self.infill,
+            infill_optimizer: self.infill_optimizer,
+            regression_spec: self.regression_spec,
+            correlation_spec: self.correlation_spec,
             obj: self.obj,
             rng,
         }
@@ -146,8 +146,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
 
         let obj_model = Moe::params(1)
-            .set_regression_spec(self.regr_spec)
-            .set_correlation_spec(self.corr_spec)
+            .set_regression_spec(self.regression_spec)
+            .set_correlation_spec(self.correlation_spec)
             .fit(&x_data, &y_data.slice(s![.., 0..1]))
             .expect("GP training failure");
 
@@ -243,11 +243,11 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             } = params;
             if let Some(grad) = gradient {
                 let f = |x: &Vec<f64>| -> f64 {
-                    self.acq_eval(x, &obj_model, *f_min, *scale, *scale_wb2)
+                    self.infill_eval(x, &obj_model, *f_min, *scale, *scale_wb2)
                 };
                 grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
             }
-            self.acq_eval(x, &obj_model, *f_min, *scale, *scale_wb2)
+            self.infill_eval(x, &obj_model, *f_min, *scale, *scale_wb2)
         };
 
         let mut cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>>>> = Vec::with_capacity(self.n_cstr);
@@ -284,9 +284,9 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         let scale_obj = Self::compute_obj_scale(&scaling_points, &obj_model);
         let scale_cstr = Self::compute_cstr_scales(&scaling_points, &cstr_models);
 
-        let algorithm = match self.acq_optimizer {
-            AcqOptimizer::Slsqp => Algorithm::Slsqp,
-            AcqOptimizer::Cobyla => Algorithm::Cobyla,
+        let algorithm = match self.infill_optimizer {
+            InfillOptimizer::Slsqp => Algorithm::Slsqp,
+            InfillOptimizer::Cobyla => Algorithm::Cobyla,
         };
         while !success && n_optim <= n_max_optim {
             let mut optimizer = Nlopt::new(
@@ -468,7 +468,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         Scalar::exp(-0.5 * x * x) / SQRT_2PI
     }
 
-    fn acq_eval(
+    fn infill_eval(
         &self,
         x: &[f64],
         obj_model: &Moe,
@@ -477,10 +477,10 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         scale_wb2: Option<f64>,
     ) -> f64 {
         let x_f = x.iter().map(|v| *v).collect::<Vec<f64>>();
-        let obj = match self.acq {
-            AcqStrategy::EI => -Self::ei(&x_f, obj_model, f_min),
-            AcqStrategy::WB2 => -Self::wb2s(&x_f, obj_model, f_min, Some(1.)),
-            AcqStrategy::WB2S => -Self::wb2s(&x_f, obj_model, f_min, scale_wb2),
+        let obj = match self.infill {
+            InfillStrategy::EI => -Self::ei(&x_f, obj_model, f_min),
+            InfillStrategy::WB2 => -Self::wb2s(&x_f, obj_model, f_min, Some(1.)),
+            InfillStrategy::WB2S => -Self::wb2s(&x_f, obj_model, f_min, scale_wb2),
         };
         obj / scale
     }
@@ -505,8 +505,8 @@ mod tests {
     #[test]
     fn test_xsinx_ei_sego() {
         let res = Sego::new(xsinx, &array![[0.0, 25.0]])
-            .regr_spec(RegressionSpec::QUADRATIC)
-            .corr_spec(CorrelationSpec::ALL)
+            .regression_spec(RegressionSpec::QUADRATIC)
+            .correlation_spec(CorrelationSpec::ALL)
             .n_iter(10)
             .x_doe(&array![[0.], [7.], [25.]])
             .minimize();
@@ -517,7 +517,7 @@ mod tests {
     #[test]
     fn test_xsinx_wb2() {
         let res = Sego::new(xsinx, &array![[0.0, 25.0]])
-            .acq_strategy(AcqStrategy::WB2)
+            .infill_strategy(InfillStrategy::WB2)
             .minimize();
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
@@ -526,11 +526,11 @@ mod tests {
     #[test]
     fn test_xsinx_suggestions() {
         let mut ego = Sego::new(xsinx, &array![[0.0, 25.0]]);
-        let ego = ego.acq_strategy(AcqStrategy::EI);
+        let ego = ego.infill_strategy(InfillStrategy::EI);
 
         let mut x_doe = array![[0.], [7.], [20.], [25.]];
         let mut y_doe = xsinx(&x_doe.view());
-        for _i in 0..10 {
+        for _i in 0..20 {
             let x_suggested = ego.suggest(&x_doe, &y_doe);
 
             x_doe = concatenate![Axis(0), x_doe, x_suggested];
@@ -556,7 +556,7 @@ mod tests {
         let xlimits = array![[-2., 2.], [-2., 2.]];
         let doe = LHS::new(&xlimits).sample(10);
         let res = Sego::new(rosenb, &xlimits)
-            .acq_strategy(AcqStrategy::EI)
+            .infill_strategy(InfillStrategy::EI)
             .x_doe(&doe)
             .n_iter(20)
             .minimize();
@@ -600,8 +600,8 @@ mod tests {
         let doe = LHS::new(&xlimits).sample(10);
         let res = Sego::new(f_g24, &xlimits)
             .n_cstr(2)
-            .acq_strategy(AcqStrategy::EI)
-            .acq_optimizer(AcqOptimizer::Cobyla) // test passes also with WB2S and Slsqp
+            .infill_strategy(InfillStrategy::EI)
+            .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .x_doe(&doe)
             .n_iter(30)
             .minimize();

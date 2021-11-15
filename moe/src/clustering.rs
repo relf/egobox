@@ -33,8 +33,8 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     max_nb_clusters: usize,
-    regr_spec: RegressionSpec,
-    corr_spec: CorrelationSpec,
+    regression_spec: RegressionSpec,
+    correlation_spec: CorrelationSpec,
     rng: R,
 ) -> (usize, Recombination<f64>) {
     let max_nb_clusters = if max_nb_clusters == 0 {
@@ -101,8 +101,8 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
             for (train, valid) in dataset.fold(5).into_iter() {
                 k = k + 1;
                 if let Ok(mixture) = Moe::params(n_clusters)
-                    .set_regression_spec(regr_spec)
-                    .set_correlation_spec(corr_spec)
+                    .set_regression_spec(regression_spec)
+                    .set_correlation_spec(correlation_spec)
                     //.set_kpls_dim(Some(1))
                     .set_gmm(Some(gmm.clone()))
                     .fit(&train.records(), &train.targets())

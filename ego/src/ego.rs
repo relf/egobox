@@ -22,7 +22,7 @@ pub struct Ego<F: Float, O: ObjFunc, R: Rng> {
     pub x_doe: Option<Array2<F>>,
     pub xlimits: Array2<F>,
     pub q_ei: QEiStrategy,
-    pub acq: AcqStrategy,
+    pub infill: InfillStrategy,
     pub obj: O,
     pub rng: R,
 }
@@ -43,7 +43,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
             x_doe: None,
             xlimits: xlimits.to_owned(),
             q_ei: QEiStrategy::KrigingBeliever,
-            acq: AcqStrategy::EI,
+            infill: InfillStrategy::EI,
             obj: f,
             rng,
         }
@@ -79,8 +79,8 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         self
     }
 
-    pub fn acq_strategy(&mut self, acq: AcqStrategy) -> &mut Self {
-        self.acq = acq;
+    pub fn infill_strategy(&mut self, infill: InfillStrategy) -> &mut Self {
+        self.infill = infill;
         self
     }
 
@@ -93,7 +93,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
             x_doe: self.x_doe,
             xlimits: self.xlimits,
             q_ei: self.q_ei,
-            acq: self.acq,
+            infill: self.infill,
             obj: self.obj,
             rng,
         }
@@ -206,10 +206,10 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
             } = params;
             if let Some(grad) = gradient {
                 let f =
-                    |x: &Vec<f64>| -> f64 { self.acq_eval(x, &gpr, *f_min, *scale, *scale_wb2) };
+                    |x: &Vec<f64>| -> f64 { self.infill_eval(x, &gpr, *f_min, *scale, *scale_wb2) };
                 grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
             }
-            self.acq_eval(x, &gpr, *f_min, *scale, *scale_wb2)
+            self.infill_eval(x, &gpr, *f_min, *scale, *scale_wb2)
         };
 
         let mut success = false;
@@ -362,7 +362,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         Scalar::exp(-F::cast(0.5) * x * x) / F::cast(SQRT_2PI)
     }
 
-    fn acq_eval(
+    fn infill_eval(
         &self,
         x: &[f64],
         gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
@@ -371,10 +371,10 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         scale_wb2: Option<F>,
     ) -> f64 {
         let x_f = x.iter().map(|v| F::cast(*v)).collect::<Vec<F>>();
-        let obj = match self.acq {
-            AcqStrategy::EI => -Self::ei(&x_f, gpr, f_min),
-            AcqStrategy::WB2 => -Self::wb2s(&x_f, gpr, f_min, Some(F::one())),
-            AcqStrategy::WB2S => -Self::wb2s(&x_f, gpr, f_min, scale_wb2),
+        let obj = match self.infill {
+            InfillStrategy::EI => -Self::ei(&x_f, gpr, f_min),
+            InfillStrategy::WB2 => -Self::wb2s(&x_f, gpr, f_min, Some(F::one())),
+            InfillStrategy::WB2S => -Self::wb2s(&x_f, gpr, f_min, scale_wb2),
         };
         to_f64(obj / scale)
     }
@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn test_xsinx_wb2() {
         let res = Ego::new(xsinx, &array![[0.0, 25.0]])
-            .acq_strategy(AcqStrategy::WB2)
+            .infill_strategy(InfillStrategy::WB2)
             .minimize();
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);

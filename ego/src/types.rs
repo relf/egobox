@@ -13,7 +13,7 @@ pub struct OptimResult<F: Float> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum AcqStrategy {
+pub enum InfillStrategy {
     EI,
     WB2,
     WB2S,
@@ -27,7 +27,7 @@ pub enum QEiStrategy {
     ConstantLiarMinimum,
 }
 
-/// A structure to pass data to objective acquisition function
+/// A structure to pass data to objective infill function
 pub struct ObjData<F> {
     pub scale: F,
     pub scale_wb2: Option<F>,
@@ -49,7 +49,7 @@ pub struct Constraint {
     pub status: CstrStatus,
 }
 
-pub enum AcqOptimizer {
+pub enum InfillOptimizer {
     Slsqp,
     Cobyla,
 }
