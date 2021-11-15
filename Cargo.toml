@@ -28,10 +28,10 @@ nlopt = "0.5.3"
 rand_isaac = "0.3"
 libm = "0.2"
 finitediff = { version="0.1", features = ["ndarray"] }
-
-[dependencies.pyo3]
-version = "0.14.5"
-features = ["extension-module"]
+env_logger = "0.5"
+log = "0.4"
+pyo3 = { version = "0.14.5", features = ["extension-module"] }
+pyo3-log = "0.4"
 
 [dev-dependencies]
 linfa-datasets = { git="https://github.com/relf/linfa.git", features = ["linnerud"] }

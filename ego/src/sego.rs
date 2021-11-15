@@ -52,7 +52,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             x_doe: None,
             xlimits: xlimits.to_owned(),
             q_ei: QEiStrategy::KrigingBeliever,
-            acq: AcqStrategy::EI,
+            acq: AcqStrategy::WB2S,
             acq_optimizer: AcqOptimizer::Slsqp,
             regr_spec: RegressionSpec::ALL,
             corr_spec: CorrelationSpec::ALL,
@@ -347,9 +347,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         if self.n_cstr > 0 {
             let mut index = 0;
             let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
-            println!("permutation {:?}", &perm);
             let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
-            println!("{:?}", &y_sort);
             for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
                 if row
                     .slice(s![1..])
@@ -527,7 +525,8 @@ mod tests {
 
     #[test]
     fn test_xsinx_suggestions() {
-        let ego = Sego::new(xsinx, &array![[0.0, 25.0]]);
+        let mut ego = Sego::new(xsinx, &array![[0.0, 25.0]]);
+        let ego = ego.acq_strategy(AcqStrategy::EI);
 
         let mut x_doe = array![[0.], [7.], [20.], [25.]];
         let mut y_doe = xsinx(&x_doe.view());
@@ -557,6 +556,7 @@ mod tests {
         let xlimits = array![[-2., 2.], [-2., 2.]];
         let doe = LHS::new(&xlimits).sample(10);
         let res = Sego::new(rosenb, &xlimits)
+            .acq_strategy(AcqStrategy::EI)
             .x_doe(&doe)
             .n_iter(20)
             .minimize();
