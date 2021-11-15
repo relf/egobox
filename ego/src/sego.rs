@@ -559,7 +559,7 @@ mod tests {
         let res = Sego::new(rosenb, &xlimits)
             .infill_strategy(InfillStrategy::EI)
             .x_doe(&doe)
-            .n_iter(20)
+            .n_iter(30)
             .minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
