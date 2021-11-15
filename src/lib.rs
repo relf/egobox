@@ -1,5 +1,6 @@
 use doe::{SamplingMethod, LHS};
 use ego::Sego;
+use moe;
 use ndarray::{Array2, ArrayView2};
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
@@ -13,23 +14,77 @@ fn lhs<'py>(py: Python<'py>, xlimits: PyReadonlyArray2<f64>, a: usize) -> &'py P
 }
 
 #[pyclass]
-#[pyo3(text_signature = "(xlimits, **)")]
+struct RegressionSpec(u8);
+
+#[pymethods]
+impl RegressionSpec {
+    #[classattr]
+    const ALL: u8 = moe::RegressionSpec::ALL.bits();
+    #[classattr]
+    const CONSTANT: u8 = moe::RegressionSpec::CONSTANT.bits();
+    #[classattr]
+    const LINEAR: u8 = moe::RegressionSpec::LINEAR.bits();
+    #[classattr]
+    const QUADRATIC: u8 = moe::RegressionSpec::QUADRATIC.bits();
+}
+
+#[pyclass]
+struct CorrelationSpec(u8);
+
+#[pymethods]
+impl CorrelationSpec {
+    #[classattr]
+    const ALL: u8 = moe::CorrelationSpec::ALL.bits();
+    #[classattr]
+    const SQUARED_EXPONENTIAL: u8 = moe::CorrelationSpec::SQUAREDEXPONENTIAL.bits();
+    #[classattr]
+    const ABSOLUTE_EXPONENTIAL: u8 = moe::CorrelationSpec::ABSOLUTEEXPONENTIAL.bits();
+    #[classattr]
+    const MATERN32: u8 = moe::CorrelationSpec::MATERN32.bits();
+    #[classattr]
+    const MATERN52: u8 = moe::CorrelationSpec::MATERN52.bits();
+}
+
+#[pyclass]
+struct InfillStrategy(u8);
+
+#[pymethods]
+impl InfillStrategy {
+    #[classattr]
+    const EI: u8 = 1;
+    #[classattr]
+    const WB2: u8 = 2;
+    #[classattr]
+    const WB2S: u8 = 3;
+}
+
+#[pyclass]
+struct InfillOptimizer(u8);
+
+#[pymethods]
+impl InfillOptimizer {
+    #[classattr]
+    const COBYLA: u8 = 1;
+    #[classattr]
+    const SLSQP: u8 = 2;
+}
+
+#[pyclass]
+#[pyo3(
+    text_signature = "(xlimits, n_start=20, n_doe=10, regression_spec=ALL, 
+        correlation_spec=ALL, infill_strategy=WBS2, infill_optimizer=COBYLA)"
+)]
 struct SegoOptimizer {
     pub xlimits: Array2<f64>,
     pub n_start: usize,
     pub n_doe: usize,
-    // pub x_doe: Option<Array2<f64>>,
+    pub regression_spec: RegressionSpec,
+    pub correlation_spec: CorrelationSpec,
+    pub infill_strategy: InfillStrategy,
+    pub infill_optimizer: InfillOptimizer,
     // pub q_ei: QEiStrategy,
-    // pub infill: InfillStrategy,
-    // pub infill_optimizer: InfillOptimizer,
-    // pub regression_spec: RegressionSpec,
-    // pub correlation_spec: CorrelationSpec,
+    // pub x_doe: Option<Array2<f64>>,
 }
-
-// #[pyclass]
-// struct Regress{
-
-// }
 
 #[pyclass]
 struct OptimResult {
@@ -41,14 +96,58 @@ struct OptimResult {
 
 #[pymethods]
 impl SegoOptimizer {
+    /// Constructor
+    ///
+    /// Parameters
+    ///
+    ///     xlimits (array[nx, 2]):
+    ///         bounds of x components (eg. [[lower_1, upper_1], ..., [lower_nx, upper_nx]])
+    ///
+    ///     n_start (int > 0):
+    ///         number of infill startegy optimization run (best result taken)
+    ///
+    ///     n_doe (int > 0):
+    ///         number of samples of initial LHS sampling (when not provided by the user)
+    ///
+    ///     regr_spec (RegressionSpec):
+    ///         specification of regression models used in gaussian processes
+    ///
+    ///     corr_spec (CorrelationSpec):
+    ///         specification of correlation models used in gaussian processes
+    ///
+    ///     infill_strategy (InfillStrategy)
+    ///         infill criteria either EI, WB2 or WB2S (default WB2S)
+    ///
+    ///     infill_optimizer (InfillOptimizer)
+    ///         intern optimizer used to optimize infill criteria (default COBYLA)
     #[new]
-    #[args(xlimits, n_start = "20", n_doe = "10")]
-    fn new(py_xlimits: PyReadonlyArray2<f64>, n_start: usize, n_doe: usize) -> Self {
-        let xlimits = py_xlimits.to_owned_array();
+    #[args(
+        xlimits,
+        n_start = "20",
+        n_doe = "10",
+        regr_spec = "RegressionSpec::ALL",
+        corr_spec = "CorrelationSpec::ALL",
+        infill_strategy = "InfillStrategy::WB2",
+        infill_optimizer = "InfillOptimizer::COBYLA"
+    )]
+    fn new(
+        xlimits: PyReadonlyArray2<f64>,
+        n_start: usize,
+        n_doe: usize,
+        regr_spec: u8,
+        corr_spec: u8,
+        infill_strategy: u8,
+        infill_optimizer: u8,
+    ) -> Self {
+        let xlimits = xlimits.to_owned_array();
         SegoOptimizer {
             xlimits,
             n_start,
             n_doe,
+            regression_spec: RegressionSpec(regr_spec),
+            correlation_spec: CorrelationSpec(corr_spec),
+            infill_strategy: InfillStrategy(infill_strategy),
+            infill_optimizer: InfillOptimizer(infill_optimizer),
         }
     }
 
@@ -89,11 +188,39 @@ impl SegoOptimizer {
             val
         };
 
+        let infill_strategy = match self.infill_strategy.0 {
+            InfillStrategy::EI => ego::InfillStrategy::EI,
+            InfillStrategy::WB2 => ego::InfillStrategy::WB2,
+            InfillStrategy::WB2S => ego::InfillStrategy::WB2S,
+            _ => panic!(
+                "InfillOptimizer should be either EI ({}), WB2 ({}) or WB2S ({}), got {}",
+                InfillStrategy::EI,
+                InfillStrategy::WB2,
+                InfillStrategy::WB2S,
+                self.infill_optimizer.0
+            ),
+        };
+
+        let infill_optimizer = match self.infill_optimizer.0 {
+            InfillOptimizer::COBYLA => ego::InfillOptimizer::Cobyla,
+            InfillOptimizer::SLSQP => ego::InfillOptimizer::Slsqp,
+            _ => panic!(
+                "InfillOptimizer should be either COBYLA ({}) or SLSQP ({}), got {}",
+                InfillOptimizer::COBYLA,
+                InfillOptimizer::SLSQP,
+                self.infill_optimizer.0
+            ),
+        };
+
         let res = Sego::new(obj, &self.xlimits)
             .n_cstr(n_cstr)
             .n_iter(n_iter)
             .n_start(self.n_start)
             .n_doe(self.n_doe)
+            .regression_spec(moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+            .correlation_spec(moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap())
+            .infill_strategy(infill_strategy)
+            .infill_optimizer(infill_optimizer)
             .minimize();
 
         OptimResult {
@@ -109,6 +236,10 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(lhs, m)?)?;
     m.add_class::<SegoOptimizer>()?;
+    m.add_class::<RegressionSpec>()?;
+    m.add_class::<CorrelationSpec>()?;
+    m.add_class::<InfillStrategy>()?;
+    m.add_class::<InfillOptimizer>()?;
     m.add_class::<OptimResult>()?;
     Ok(())
 }

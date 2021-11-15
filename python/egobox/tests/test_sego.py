@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from egobox import SegoOptimizer
+from egobox import SegoOptimizer, RegressionSpec
 
 
 def xsinx(x: np.ndarray) -> np.ndarray:
@@ -62,6 +62,13 @@ class TestSego(unittest.TestCase):
         sego = SegoOptimizer(np.array([[0.0, 3.0], [0.0, 4.0]]))
         res = sego.minimize(f_g24, 2)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
+
+    def test_constructor(self):
+        self.assertRaises(TypeError, SegoOptimizer)
+        SegoOptimizer(np.array([[0.0, 25.0]]), 22, n_doe=10)
+        SegoOptimizer(
+            np.array([[0.0, 25.0]]), 22, n_doe=10, regr_spec=RegressionSpec.ALL
+        )
 
 
 if __name__ == "__main__":

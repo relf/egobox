@@ -505,6 +505,7 @@ mod tests {
     #[test]
     fn test_xsinx_ei_sego() {
         let res = Sego::new(xsinx, &array![[0.0, 25.0]])
+            .infill_strategy(InfillStrategy::EI)
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
             .n_iter(10)
@@ -530,7 +531,7 @@ mod tests {
 
         let mut x_doe = array![[0.], [7.], [20.], [25.]];
         let mut y_doe = xsinx(&x_doe.view());
-        for _i in 0..20 {
+        for _i in 0..10 {
             let x_suggested = ego.suggest(&x_doe, &y_doe);
 
             x_doe = concatenate![Axis(0), x_doe, x_suggested];
