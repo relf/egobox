@@ -133,17 +133,21 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         check_allowed!(correlation_spec, Correlation, Matern32, allowed_corrs);
         check_allowed!(correlation_spec, Correlation, Matern52, allowed_corrs);
 
-        let mut map_accuracy = Vec::new();
-        compute_accuracies!(allowed_means, allowed_corrs, dataset, map_accuracy);
-        let errs: Vec<f64> = map_accuracy.iter().map(|(_, err)| *err).collect();
-        debug!("Accuracies {:?}", map_accuracy);
-        let argmin = errs
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
-            .map(|(index, _)| index)
-            .unwrap();
-        let best = &map_accuracy[argmin].0;
+        let best = if allowed_means.len() == 1 && allowed_corrs.len() == 1 {
+            format!("{}_{}", allowed_means[0], allowed_corrs[0]) // shortcut
+        } else {
+            let mut map_accuracy = Vec::new();
+            compute_accuracies!(allowed_means, allowed_corrs, dataset, map_accuracy);
+            let errs: Vec<f64> = map_accuracy.iter().map(|(_, err)| *err).collect();
+            debug!("Accuracies {:?}", map_accuracy);
+            let argmin = errs
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+                .map(|(index, _)| index)
+                .unwrap();
+            map_accuracy[argmin].0.clone()
+        };
         let best_expert_params: std::result::Result<Box<dyn ExpertParams>, MoeError> = match best
             .as_str()
         {
