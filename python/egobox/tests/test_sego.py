@@ -1,6 +1,12 @@
 import unittest
 import numpy as np
-from egobox import SegoOptimizer, RegressionSpec, CorrelationSpec, InfillStrategy
+from egobox import (
+    SegoOptimizer,
+    RegressionSpec,
+    CorrelationSpec,
+    InfillStrategy,
+    InfillOptimizer,
+)
 import time
 
 
@@ -48,6 +54,7 @@ def G24_c2(point):
 def g24(point):
     p = np.atleast_2d(point)
     res = np.array([G24(p), G24_c1(p), G24_c2(p)]).T
+    print(res)
     return res
 
 
@@ -80,9 +87,17 @@ class TestSego(unittest.TestCase):
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
 
     def test_g24(self):
-        sego = SegoOptimizer(np.array([[0.0, 3.0], [0.0, 4.0]]))
-        res = sego.minimize(g24, 2)
-        print(f"Optimization f={res.y_opt} at {res.x_opt}")
+        sego = SegoOptimizer(
+            np.array([[0.0, 3.0], [0.0, 4.0]]),
+            infill_optimizer=InfillOptimizer.COBYLA,
+            infill_strategy=InfillStrategy.EI,
+            regr_spec=RegressionSpec.CONSTANT,
+            corr_spec=CorrelationSpec.SQUARED_EXPONENTIAL,
+        )
+        start = time.process_time()
+        res = sego.minimize(g24, 2, n_iter=19)
+        end = time.process_time()
+        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
     def test_six_humps(self):
         sego = SegoOptimizer(
