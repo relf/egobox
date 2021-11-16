@@ -29,9 +29,9 @@ pub enum QEiStrategy {
 
 /// A structure to pass data to objective infill function
 pub struct ObjData<F> {
-    pub scale: F,
-    pub scale_wb2: Option<F>,
+    pub scale_obj: F,
     pub scale_cstr: Array1<F>,
+    pub scale_wb2: F,
 }
 
 /// SEGO

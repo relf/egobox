@@ -239,15 +239,17 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
 
         let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
             let ObjData {
-                scale, scale_wb2, ..
+                scale_obj,
+                scale_wb2,
+                ..
             } = params;
             if let Some(grad) = gradient {
                 let f = |x: &Vec<f64>| -> f64 {
-                    self.infill_eval(x, &obj_model, *f_min, *scale, *scale_wb2)
+                    self.infill_eval(x, &obj_model, *f_min, *scale_obj, *scale_wb2)
                 };
                 grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
             }
-            self.infill_eval(x, &obj_model, *f_min, *scale, *scale_wb2)
+            self.infill_eval(x, &obj_model, *f_min, *scale_obj, *scale_wb2)
         };
 
         let mut cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>>>> = Vec::with_capacity(self.n_cstr);
@@ -280,9 +282,13 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         let mut best_x = None;
 
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-        let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &obj_model, *f_min);
         let scale_obj = Self::compute_obj_scale(&scaling_points, &obj_model);
         let scale_cstr = Self::compute_cstr_scales(&scaling_points, &cstr_models);
+        let scale_wb2 = if self.infill == InfillStrategy::WB2S {
+            Self::compute_wb2s_scale(&scaling_points, &obj_model, *f_min)
+        } else {
+            1.
+        };
 
         let algorithm = match self.infill_optimizer {
             InfillOptimizer::Slsqp => Algorithm::Slsqp,
@@ -295,8 +301,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                 obj,
                 Target::Minimize,
                 ObjData {
-                    scale: scale_obj,
-                    scale_wb2: Some(scale_wb2),
+                    scale_obj,
+                    scale_wb2: scale_wb2,
                     scale_cstr: scale_cstr.to_owned(),
                 },
             );
@@ -312,8 +318,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
                     .add_inequality_constraint(
                         cstr,
                         ObjData {
-                            scale: scale_obj,
-                            scale_wb2: Some(scale_wb2),
+                            scale_obj,
+                            scale_wb2,
                             scale_cstr: scale_cstr.to_owned(),
                         },
                         1e-6 / scale_cstr[i],
@@ -418,10 +424,9 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         }
     }
 
-    fn wb2s(x: &[f64], obj_model: &Moe, f_min: f64, scale: Option<f64>) -> f64 {
+    fn wb2s(x: &[f64], obj_model: &Moe, f_min: f64, scale: f64) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap().to_owned();
         let ei = Self::ei(x, obj_model, f_min);
-        let scale = scale.unwrap_or(1.0);
         scale * ei - obj_model.predict_values(&pt).unwrap()[[0, 0]]
     }
 
@@ -474,12 +479,12 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         obj_model: &Moe,
         f_min: f64,
         scale: f64,
-        scale_wb2: Option<f64>,
+        scale_wb2: f64,
     ) -> f64 {
         let x_f = x.iter().map(|v| *v).collect::<Vec<f64>>();
         let obj = match self.infill {
             InfillStrategy::EI => -Self::ei(&x_f, obj_model, f_min),
-            InfillStrategy::WB2 => -Self::wb2s(&x_f, obj_model, f_min, Some(1.)),
+            InfillStrategy::WB2 => -Self::wb2s(&x_f, obj_model, f_min, 1.),
             InfillStrategy::WB2S => -Self::wb2s(&x_f, obj_model, f_min, scale_wb2),
         };
         obj / scale

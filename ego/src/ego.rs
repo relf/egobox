@@ -202,14 +202,17 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
 
         let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<F>| -> f64 {
             let ObjData {
-                scale, scale_wb2, ..
+                scale_obj,
+                scale_wb2,
+                ..
             } = params;
             if let Some(grad) = gradient {
-                let f =
-                    |x: &Vec<f64>| -> f64 { self.infill_eval(x, &gpr, *f_min, *scale, *scale_wb2) };
+                let f = |x: &Vec<f64>| -> f64 {
+                    self.infill_eval(x, &gpr, *f_min, *scale_obj, *scale_wb2)
+                };
                 grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
             }
-            self.infill_eval(x, &gpr, *f_min, *scale, *scale_wb2)
+            self.infill_eval(x, &gpr, *f_min, *scale_obj, *scale_wb2)
         };
 
         let mut success = false;
@@ -218,8 +221,12 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         let mut best_x = None;
 
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-        let scale_wb2 = Self::compute_wb2s_scale(&scaling_points, &gpr, *f_min);
         let scale_obj = Self::compute_obj_scale(&scaling_points, &gpr);
+        let scale_wb2 = if self.infill == InfillStrategy::WB2S {
+            Self::compute_wb2s_scale(&scaling_points, &gpr, *f_min)
+        } else {
+            F::one()
+        };
 
         while !success && n_optim <= n_max_optim {
             let mut optimizer = Nlopt::new(
@@ -228,8 +235,8 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
                 obj,
                 Target::Minimize,
                 ObjData {
-                    scale: scale_obj,
-                    scale_wb2: Some(scale_wb2),
+                    scale_obj,
+                    scale_wb2,
                     scale_cstr: Array1::from_elem(0, F::cast(1.0)), // not used
                 },
             );
@@ -311,11 +318,10 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         x: &[F],
         gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
         f_min: F,
-        scale: Option<F>,
+        scale: F,
     ) -> F {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         let ei = Self::ei(x, gpr, f_min);
-        let scale = scale.unwrap_or_else(F::one);
         scale * ei - gpr.predict_values(&pt).unwrap()[[0, 0]]
     }
 
@@ -368,12 +374,12 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         gpr: &GaussianProcess<F, ConstantMean, SquaredExponentialKernel>,
         f_min: F,
         scale: F,
-        scale_wb2: Option<F>,
+        scale_wb2: F,
     ) -> f64 {
         let x_f = x.iter().map(|v| F::cast(*v)).collect::<Vec<F>>();
         let obj = match self.infill {
             InfillStrategy::EI => -Self::ei(&x_f, gpr, f_min),
-            InfillStrategy::WB2 => -Self::wb2s(&x_f, gpr, f_min, Some(F::one())),
+            InfillStrategy::WB2 => -Self::wb2s(&x_f, gpr, f_min, F::one()),
             InfillStrategy::WB2S => -Self::wb2s(&x_f, gpr, f_min, scale_wb2),
         };
         to_f64(obj / scale)
