@@ -82,8 +82,8 @@ struct SegoOptimizer {
     pub correlation_spec: CorrelationSpec,
     pub infill_strategy: InfillStrategy,
     pub infill_optimizer: InfillOptimizer,
-    // pub q_ei: QEiStrategy,
     // pub x_doe: Option<Array2<f64>>,
+    // pub q_ei: QEiStrategy,
 }
 
 #[pyclass]
@@ -166,7 +166,7 @@ impl SegoOptimizer {
     ///
     ///     n_cstr (int): the number of constraints (default 0)
     ///             
-    ///     n_iter (int): the iteration budget, number of fun calls (default 20)
+    ///     n_eval (int): the function evaluation budget, number of fun calls (default 20)
     ///
     /// Returns
     ///
@@ -174,9 +174,9 @@ impl SegoOptimizer {
     ///         x_opt (array[1, nx]): x value  where fun is at its minimum subject to constraint
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
-    #[args(n_iter = "20", n_cstr = "0")]
-    #[pyo3(text_signature = "(fun, n_iter=20, n_cstr=0)")]
-    fn minimize(&self, fun: &PyAny, n_cstr: usize, n_iter: usize) -> OptimResult {
+    #[args(n_eval = "20", n_cstr = "0")]
+    #[pyo3(text_signature = "(fun, n_eval=20, n_cstr=0)")]
+    fn minimize(&self, fun: &PyAny, n_cstr: usize, n_eval: usize) -> OptimResult {
         let obj: PyObject = fun.into();
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
             let gil = Python::acquire_gil();
@@ -214,7 +214,7 @@ impl SegoOptimizer {
 
         let res = Sego::new(obj, &self.xlimits)
             .n_cstr(n_cstr)
-            .n_iter(n_iter)
+            .n_eval(n_eval)
             .n_start(self.n_start)
             .n_doe(self.n_doe)
             .regression_spec(moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())

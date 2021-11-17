@@ -11,15 +11,14 @@ use ndarray::{
 use ndarray_linalg::Scalar;
 use ndarray_stats::QuantileExt;
 // use ndarray_npy::write_npy;
-// use env_logger;
-use log::debug;
+use log::{debug, info};
 
 use ndarray_rand::rand::{Rng, SeedableRng};
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
 
 pub struct Sego<O: GroupFunc, R: Rng> {
-    pub n_iter: usize,
+    pub n_eval: usize,
     pub n_start: usize,
     pub n_parallel: usize,
     pub n_doe: usize,
@@ -44,7 +43,7 @@ impl<O: GroupFunc> Sego<O, Isaac64Rng> {
 impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
     pub fn new_with_rng(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
         Sego {
-            n_iter: 20,
+            n_eval: 20,
             n_start: 20,
             n_parallel: 1,
             n_doe: 10,
@@ -61,8 +60,8 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         }
     }
 
-    pub fn n_iter(&mut self, n_iter: usize) -> &mut Self {
-        self.n_iter = n_iter;
+    pub fn n_eval(&mut self, n_eval: usize) -> &mut Self {
+        self.n_eval = n_eval;
         self
     }
 
@@ -118,7 +117,7 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
 
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Sego<O, R2> {
         Sego {
-            n_iter: self.n_iter,
+            n_eval: self.n_eval,
             n_start: self.n_start,
             n_parallel: self.n_parallel,
             n_doe: self.n_doe,
@@ -200,15 +199,15 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
         let rng = self.rng.clone();
         let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
 
-        let mut x_data = if let Some(xdoe) = &self.x_doe {
-            xdoe.to_owned()
+        let (mut x_data, n_iter) = if let Some(xdoe) = &self.x_doe {
+            (xdoe.to_owned(), self.n_eval - xdoe.nrows())
         } else {
-            sampling.sample(self.n_doe)
+            (sampling.sample(self.n_doe), self.n_eval - self.n_doe)
         };
 
         let mut y_data = self.obj_eval(&x_data);
 
-        for i in 0..(self.n_iter - x_data.nrows()) {
+        for i in 1..=n_iter {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
             y_data = concatenate![Axis(0), y_data, y_dat];
             x_data = concatenate![Axis(0), x_data, x_dat];
@@ -218,6 +217,14 @@ impl<O: GroupFunc, R: Rng + Clone> Sego<O, R> {
             Zip::from(y_data.slice_mut(s![n_par.., ..]).columns_mut())
                 .and(y_actual.columns())
                 .for_each(|mut y, val| y.assign(&val));
+            let best_index = self.find_best_result_index(&y_data);
+            info!(
+                "Iteration {}/{}: Best fun(x)={} at x={}",
+                i,
+                n_iter,
+                y_data.row(best_index).to_owned(),
+                x_data.row(best_index).to_owned()
+            )
         }
         let best_index = self.find_best_result_index(&y_data);
         debug!("{:?}", concatenate![Axis(1), x_data, y_data]);
@@ -513,7 +520,7 @@ mod tests {
             .infill_strategy(InfillStrategy::EI)
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
-            .n_iter(10)
+            .n_eval(15)
             .x_doe(&array![[0.], [7.], [25.]])
             .minimize();
         let expected = array![-15.1];
@@ -564,7 +571,7 @@ mod tests {
         let res = Sego::new(rosenb, &xlimits)
             .infill_strategy(InfillStrategy::EI)
             .x_doe(&doe)
-            .n_iter(30)
+            .n_eval(30)
             .minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
@@ -609,7 +616,7 @@ mod tests {
             .infill_strategy(InfillStrategy::EI)
             .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .x_doe(&doe)
-            .n_iter(30)
+            .n_eval(40)
             .minimize();
         println!("G24 optim result = {:?}", res);
         let expected = array![2.3295, 3.1785];

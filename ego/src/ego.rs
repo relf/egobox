@@ -15,7 +15,7 @@ use nlopt::*;
 use rand_isaac::Isaac64Rng;
 
 pub struct Ego<F: Float, O: ObjFunc, R: Rng> {
-    pub n_iter: usize,
+    pub n_eval: usize,
     pub n_start: usize,
     pub n_parallel: usize,
     pub n_doe: usize,
@@ -36,7 +36,7 @@ impl<F: Float, O: ObjFunc> Ego<F, O, Isaac64Rng> {
 impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
     pub fn new_with_rng(f: O, xlimits: &Array2<F>, rng: R) -> Self {
         Ego {
-            n_iter: 20,
+            n_eval: 20,
             n_start: 20,
             n_parallel: 1,
             n_doe: 10,
@@ -49,8 +49,8 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
         }
     }
 
-    pub fn n_iter(&mut self, n_iter: usize) -> &mut Self {
-        self.n_iter = n_iter;
+    pub fn n_eval(&mut self, n_eval: usize) -> &mut Self {
+        self.n_eval = n_eval;
         self
     }
 
@@ -86,7 +86,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
 
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Ego<F, O, R2> {
         Ego {
-            n_iter: self.n_iter,
+            n_eval: self.n_eval,
             n_start: self.n_start,
             n_parallel: self.n_parallel,
             n_doe: self.n_doe,
@@ -173,7 +173,7 @@ impl<F: Float, O: ObjFunc, R: Rng + Clone> Ego<F, O, R> {
 
         let mut y_data = self.obj_eval(&x_data);
 
-        for i in 0..(self.n_iter - x_data.nrows()) {
+        for i in 0..(self.n_eval - x_data.nrows()) {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
             y_data = concatenate![Axis(0), y_data, y_dat];
             x_data = concatenate![Axis(0), x_data, x_dat];
@@ -422,7 +422,7 @@ mod tests {
     #[test]
     fn test_xsinx_ei() {
         let res = Ego::new(xsinx, &array![[0.0, 25.0]])
-            .n_iter(10)
+            .n_eval(10)
             .x_doe(&array![[0.], [7.], [25.]])
             .minimize();
         let expected = array![-15.1];
@@ -465,7 +465,7 @@ mod tests {
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
         let doe = LHS::new(&xlimits).sample(10);
-        let res = Ego::new(rosenb, &xlimits).x_doe(&doe).n_iter(20).minimize();
+        let res = Ego::new(rosenb, &xlimits).x_doe(&doe).n_eval(20).minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];

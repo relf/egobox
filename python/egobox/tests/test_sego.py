@@ -95,7 +95,7 @@ class TestSego(unittest.TestCase):
             corr_spec=CorrelationSpec.SQUARED_EXPONENTIAL,
         )
         start = time.process_time()
-        res = sego.minimize(g24, 2, n_iter=19)
+        res = sego.minimize(g24, 2, n_eval=29)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
@@ -107,18 +107,13 @@ class TestSego(unittest.TestCase):
             corr_spec=CorrelationSpec.SQUARED_EXPONENTIAL,
         )
         start = time.process_time()
-        res = sego.minimize(six_humps, n_iter=35)
+        res = sego.minimize(six_humps, n_eval=45)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
     def test_constructor(self):
         self.assertRaises(TypeError, SegoOptimizer)
         SegoOptimizer(np.array([[0.0, 25.0]]), 22, n_doe=10)
-        SegoOptimizer(
-            np.array([[0.0, 25.0]]),
-            22,
-            n_doe=10,
-        )
 
 
 if __name__ == "__main__":
