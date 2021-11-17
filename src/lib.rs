@@ -70,10 +70,9 @@ impl InfillOptimizer {
 }
 
 #[pyclass]
-#[pyo3(
-    text_signature = "(xlimits, n_start=20, n_doe=10, regression_spec=ALL, 
-        correlation_spec=ALL, infill_strategy=WBS2, infill_optimizer=COBYLA)"
-)]
+#[pyo3(text_signature = "(xlimits, n_start=20, n_doe=10, 
+    regression_spec=RegressionSpec.ALL, correlation_spec=CorrelationSpec.ALL,
+    infill_strategy=InfillStrategy.WBS2, infill_optimizer=InfillOptimizer.COBYLA)")]
 struct SegoOptimizer {
     pub xlimits: Array2<f64>,
     pub n_start: usize,
@@ -104,10 +103,10 @@ impl SegoOptimizer {
     ///         bounds of x components (eg. [[lower_1, upper_1], ..., [lower_nx, upper_nx]])
     ///
     ///     n_start (int > 0):
-    ///         number of infill startegy optimization run (best result taken)
+    ///         number of runs of infill strategy optimizations (best result taken)
     ///
     ///     n_doe (int > 0):
-    ///         number of samples of initial LHS sampling (when not provided by the user)
+    ///         number of samples of initial LHS sampling (used when DOE not provided by the user)
     ///
     ///     regr_spec (RegressionSpec):
     ///         specification of regression models used in gaussian processes
