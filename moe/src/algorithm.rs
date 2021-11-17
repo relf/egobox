@@ -4,7 +4,7 @@ use crate::errors::Result;
 use crate::expert::*;
 use crate::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use env_logger;
-use log::debug;
+use log::{debug, info, trace};
 
 use gp::{correlation_models::*, mean_models::*, Float, GaussianProcess};
 use linfa::dataset::Records;
@@ -134,7 +134,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         check_allowed!(correlation_spec, Correlation, Matern52, allowed_corrs);
 
         let best = if allowed_means.len() == 1 && allowed_corrs.len() == 1 {
-            format!("{}_{}", allowed_means[0], allowed_corrs[0]) // shortcut
+            (format!("{}_{}", allowed_means[0], allowed_corrs[0]), None) // shortcut
         } else {
             let mut map_accuracy = Vec::new();
             compute_accuracies!(allowed_means, allowed_corrs, dataset, map_accuracy);
@@ -146,9 +146,10 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
                 .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
                 .map(|(index, _)| index)
                 .unwrap();
-            map_accuracy[argmin].0.clone()
+            (map_accuracy[argmin].0.clone(), Some(map_accuracy[argmin].1))
         };
         let best_expert_params: std::result::Result<Box<dyn ExpertParams>, MoeError> = match best
+            .0
             .as_str()
         {
             "Constant_SquaredExponential" => make_expert_params!(Constant, SquaredExponential),
@@ -163,8 +164,14 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
             "Quadratic_AbsoluteExponential" => make_expert_params!(Quadratic, AbsoluteExponential),
             "Quadratic_Matern32" => make_expert_params!(Quadratic, Matern32),
             "Quadratic_Matern52" => make_expert_params!(Quadratic, Matern52),
-            _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best))),
+            _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
         };
+        info!(
+            "Best expert {} accuracy={}",
+            best.0,
+            best.1
+                .map_or_else(|| String::from("<Not Computed>"), |v| format!("{}", v))
+        );
         best_expert_params?.fit(&xtrain.view(), &ytrain.view())
     }
 

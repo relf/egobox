@@ -95,7 +95,7 @@ macro_rules! make_expert_params {
 
 macro_rules! compute_error {
     ($regr:ident, $corr:ident, $dataset:ident) => {{
-        debug!(
+        trace!(
             "Expert {}_{} on dataset size = {}",
             stringify!($regr),
             stringify!($corr),
@@ -118,7 +118,7 @@ macro_rules! compute_error {
                 errors.push(error);
             }
             let mean_err = errors.iter().fold(0.0, |acc, &item| acc + item) / errors.len() as f64;
-            debug!("-> mean error = {}", mean_err);
+            trace!("-> mean error = {}", mean_err);
             mean_err
         }
     }};
