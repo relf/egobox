@@ -1,13 +1,14 @@
 import unittest
 import numpy as np
 from egobox import (
-    SegoOptimizer,
+    Optimizer,
     RegressionSpec,
     CorrelationSpec,
     InfillStrategy,
     InfillOptimizer,
 )
 import time
+import logging
 
 
 def xsinx(x: np.ndarray) -> np.ndarray:
@@ -80,14 +81,16 @@ def six_humps(x):
     return np.atleast_2d(sum1).T
 
 
-class TestSego(unittest.TestCase):
+class TestOptimizer(unittest.TestCase):
     def test_xsinx(self):
-        sego = SegoOptimizer(np.array([[0.0, 25.0]]))
-        res = sego.minimize(xsinx)
+        logging.basicConfig(format="%(message)s")
+        logging.getLogger().setLevel(logging.DEBUG)
+        egor = Optimizer(np.array([[0.0, 25.0]]))
+        res = egor.minimize(xsinx, n_eval=15)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
 
     def test_g24(self):
-        sego = SegoOptimizer(
+        egor = Optimizer(
             np.array([[0.0, 3.0], [0.0, 4.0]]),
             infill_optimizer=InfillOptimizer.COBYLA,
             infill_strategy=InfillStrategy.EI,
@@ -95,25 +98,25 @@ class TestSego(unittest.TestCase):
             corr_spec=CorrelationSpec.SQUARED_EXPONENTIAL,
         )
         start = time.process_time()
-        res = sego.minimize(g24, 2, n_eval=29)
+        res = egor.minimize(g24, 2, n_eval=29)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
     def test_six_humps(self):
-        sego = SegoOptimizer(
+        egor = Optimizer(
             np.array([[-3.0, 3.0], [-2.0, 2.0]]),
             infill_strategy=InfillStrategy.WB2,
             regr_spec=RegressionSpec.CONSTANT,
             corr_spec=CorrelationSpec.SQUARED_EXPONENTIAL,
         )
         start = time.process_time()
-        res = sego.minimize(six_humps, n_eval=45)
+        res = egor.minimize(six_humps, n_eval=45)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
     def test_constructor(self):
-        self.assertRaises(TypeError, SegoOptimizer)
-        SegoOptimizer(np.array([[0.0, 25.0]]), 22, n_doe=10)
+        self.assertRaises(TypeError, Optimizer)
+        Optimizer(np.array([[0.0, 25.0]]), 22, n_doe=10)
 
 
 if __name__ == "__main__":

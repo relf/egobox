@@ -1,5 +1,5 @@
 use doe::{SamplingMethod, LHS};
-use ego::Sego;
+use ego::Egor;
 use moe;
 use ndarray::{Array2, ArrayView2};
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
@@ -69,11 +69,42 @@ impl InfillOptimizer {
     const SLSQP: u8 = 2;
 }
 
+/// Optimizer constructor
+///
+/// Parameters
+///
+///     xlimits (array[nx, 2]):
+///         Bounds of th nx components of the input x (eg. [[lower_1, upper_1], ..., [lower_nx, upper_nx]])
+///
+///     n_start (int > 0):
+///         Number of runs of infill strategy optimizations (best result taken)
+///
+///     n_doe (int > 0):
+///         Number of samples of initial LHS sampling (used when DOE not provided by the user)
+///
+///     regr_spec (RegressionSpec flags, an int in [1, 7]):
+///         Specification of regression models used in gaussian processes.
+///         Can be RegressionSpec.CONSTANT, RegressionSpec.LINEAR, RegressionSpec.QUADRATIC or
+///         any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
+///
+///     corr_spec (CorrelationSpec flags, an int in [1, 15]):
+///         Specification of correlation models used in gaussian processes.
+///         Can be CorrelationSpec.SQUARED_EXPONENTIAL, CorrelationSpec.ABSOLUTE_EXPONENTIAL,
+///         CorrelationSpec.MATERN32,CorrelationSpec.MATERN52 or
+///         any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
+///
+///     infill_strategy (InfillStrategy enum, an int in [1, 3])
+///         Infill criteria to decide best next promising point.
+///         Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S (default WB2(2))
+///
+///     infill_optimizer (InfillOptimizer enum, an int [1, 2])
+///         Internal optimizer used to optimize infill criteria.
+///         Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP (default COBYLA(1))
 #[pyclass]
-#[pyo3(text_signature = "(xlimits, n_start=20, n_doe=10, 
-    regression_spec=RegressionSpec.ALL, correlation_spec=CorrelationSpec.ALL,
-    infill_strategy=InfillStrategy.WBS2, infill_optimizer=InfillOptimizer.COBYLA)")]
-struct SegoOptimizer {
+#[pyo3(
+    text_signature = "(xlimits, n_start=20, n_doe=10, regression_spec=7, correlation_spec=15, infill_strategy=1, infill_optimizer=1)"
+)]
+struct Optimizer {
     pub xlimits: Array2<f64>,
     pub n_start: usize,
     pub n_doe: usize,
@@ -94,31 +125,7 @@ struct OptimResult {
 }
 
 #[pymethods]
-impl SegoOptimizer {
-    /// Constructor
-    ///
-    /// Parameters
-    ///
-    ///     xlimits (array[nx, 2]):
-    ///         bounds of x components (eg. [[lower_1, upper_1], ..., [lower_nx, upper_nx]])
-    ///
-    ///     n_start (int > 0):
-    ///         number of runs of infill strategy optimizations (best result taken)
-    ///
-    ///     n_doe (int > 0):
-    ///         number of samples of initial LHS sampling (used when DOE not provided by the user)
-    ///
-    ///     regr_spec (RegressionSpec):
-    ///         specification of regression models used in gaussian processes
-    ///
-    ///     corr_spec (CorrelationSpec):
-    ///         specification of correlation models used in gaussian processes
-    ///
-    ///     infill_strategy (InfillStrategy)
-    ///         infill criteria either EI, WB2 or WB2S (default WB2S)
-    ///
-    ///     infill_optimizer (InfillOptimizer)
-    ///         intern optimizer used to optimize infill criteria (default COBYLA)
+impl Optimizer {
     #[new]
     #[args(
         xlimits,
@@ -139,7 +146,7 @@ impl SegoOptimizer {
         infill_optimizer: u8,
     ) -> Self {
         let xlimits = xlimits.to_owned_array();
-        SegoOptimizer {
+        Optimizer {
             xlimits,
             n_start,
             n_doe,
@@ -150,22 +157,24 @@ impl SegoOptimizer {
         }
     }
 
-    /// This function finds the minimum of a given function
+    /// This function finds the minimum of a given fun function
     ///
     /// Parameters
     ///
-    ///     fun: the function to be minimized
-    ///          fun: array[n, nx]) -> array[n, ny]
-    ///          fun(x) = [obj(x), cstr_1(x), ... cstr_k(x)] where
-    ///             obj is the objective function [n, nx] -> [n, 1]
-    ///             cstr_i is the ith constraint function [n, nx] -> [n, 1]
-    ///             an k the number of constraints (n_cstr)
-    ///             hence ny = 1 (obj) + k (cstrs)
-    ///          cstr functions are expected be negative (<=0) at the optimum.
+    ///     fun: array[n, nx]) -> array[n, ny]
+    ///         the function to be minimized
+    ///         fun(x) = [obj(x), cstr_1(x), ... cstr_k(x)] where
+    ///            obj is the objective function [n, nx] -> [n, 1]
+    ///            cstr_i is the ith constraint function [n, nx] -> [n, 1]
+    ///            an k the number of constraints (n_cstr)
+    ///            hence ny = 1 (obj) + k (cstrs)
+    ///         cstr functions are expected be negative (<=0) at the optimum.
     ///
-    ///     n_cstr (int): the number of constraints (default 0)
+    ///     n_cstr (int):
+    ///         the number of constraints (default 0)
     ///             
-    ///     n_eval (int): the function evaluation budget, number of fun calls (default 20)
+    ///     n_eval (int):
+    ///         the function evaluation budget, number of fun calls (default 20)
     ///
     /// Returns
     ///
@@ -211,7 +220,7 @@ impl SegoOptimizer {
             ),
         };
 
-        let res = Sego::new(obj, &self.xlimits)
+        let res = Egor::new(obj, &self.xlimits)
             .n_cstr(n_cstr)
             .n_eval(n_eval)
             .n_start(self.n_start)
@@ -234,7 +243,7 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
 
     m.add_function(wrap_pyfunction!(lhs, m)?)?;
-    m.add_class::<SegoOptimizer>()?;
+    m.add_class::<Optimizer>()?;
     m.add_class::<RegressionSpec>()?;
     m.add_class::<CorrelationSpec>()?;
     m.add_class::<InfillStrategy>()?;

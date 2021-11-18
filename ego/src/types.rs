@@ -34,7 +34,7 @@ pub struct ObjData<F> {
     pub scale_wb2: F,
 }
 
-/// SEGO
+/// EGOR
 pub trait GroupFunc: Send + Sync + 'static + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Send + Sync + 'static + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
