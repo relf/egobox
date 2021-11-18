@@ -577,12 +577,12 @@ mod tests {
         let res = Egor::new(rosenb, &xlimits)
             .infill_strategy(InfillStrategy::EI)
             .x_doe(&doe)
-            .n_eval(30)
+            .n_eval(20)
             .minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 6e-2);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
 
     // Objective
