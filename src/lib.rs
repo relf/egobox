@@ -84,22 +84,22 @@ impl InfillOptimizer {
 ///
 ///     regr_spec (RegressionSpec flags, an int in [1, 7]):
 ///         Specification of regression models used in gaussian processes.
-///         Can be RegressionSpec.CONSTANT, RegressionSpec.LINEAR, RegressionSpec.QUADRATIC or
+///         Can be RegressionSpec.CONSTANT (1), RegressionSpec.LINEAR (2), RegressionSpec.QUADRATIC (4) or
 ///         any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
 ///
 ///     corr_spec (CorrelationSpec flags, an int in [1, 15]):
 ///         Specification of correlation models used in gaussian processes.
-///         Can be CorrelationSpec.SQUARED_EXPONENTIAL, CorrelationSpec.ABSOLUTE_EXPONENTIAL,
-///         CorrelationSpec.MATERN32,CorrelationSpec.MATERN52 or
+///         Can be CorrelationSpec.SQUARED_EXPONENTIAL (1), CorrelationSpec.ABSOLUTE_EXPONENTIAL (2),
+///         CorrelationSpec.MATERN32 (4), CorrelationSpec.MATERN52 (8) or
 ///         any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
 ///
 ///     infill_strategy (InfillStrategy enum, an int in [1, 3])
 ///         Infill criteria to decide best next promising point.
-///         Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S (default WB2(2))
+///         Can be either InfillStrategy.EI (1), InfillStrategy.WB2 (2) or InfillStrategy.WB2S (3)
 ///
 ///     infill_optimizer (InfillOptimizer enum, an int [1, 2])
 ///         Internal optimizer used to optimize infill criteria.
-///         Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP (default COBYLA(1))
+///         Can be either InfillOptimizer.COBYLA (1) or InfillOptimizer.SLSQP (2)
 #[pyclass]
 #[pyo3(
     text_signature = "(xlimits, n_start=20, n_doe=10, regression_spec=7, correlation_spec=15, infill_strategy=1, infill_optimizer=1)"
@@ -171,10 +171,10 @@ impl Optimizer {
     ///         cstr functions are expected be negative (<=0) at the optimum.
     ///
     ///     n_cstr (int):
-    ///         the number of constraints (default 0)
+    ///         the number of constraint functions.
     ///             
     ///     n_eval (int):
-    ///         the function evaluation budget, number of fun calls (default 20)
+    ///         the function evaluation budget, number of fun calls.
     ///
     /// Returns
     ///
