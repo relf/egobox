@@ -27,14 +27,12 @@ pub enum QEiStrategy {
     ConstantLiarMinimum,
 }
 
-/// A structure to pass data to objective infill function
 pub struct ObjData<F> {
     pub scale_obj: F,
     pub scale_cstr: Array1<F>,
     pub scale_wb2: F,
 }
 
-/// EGOR
 pub trait GroupFunc: Send + Sync + 'static + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Send + Sync + 'static + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 

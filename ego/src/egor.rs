@@ -138,56 +138,6 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         }
     }
 
-    fn next_points(
-        &self,
-        _n: usize,
-        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        sampling: &LHS<f64, R>,
-    ) -> (Array2<f64>, Array2<f64>) {
-        let mut x_dat = Array2::zeros((0, x_data.ncols()));
-        let mut y_dat = Array2::zeros((0, y_data.ncols()));
-
-        let obj_model = Moe::params(1)
-            .set_regression_spec(self.regression_spec)
-            .set_correlation_spec(self.correlation_spec)
-            .fit(&x_data, &y_data.slice(s![.., 0..1]))
-            .expect("GP training failure");
-
-        let mut cstr_models: Vec<Box<Moe>> = Vec::with_capacity(self.n_cstr);
-        for k in 0..self.n_cstr {
-            cstr_models.push(Box::new(
-                Moe::params(1)
-                    .fit(&x_data, &y_data.slice(s![.., k + 1..k + 2]))
-                    .expect("GP training failure"),
-            ))
-        }
-
-        for _ in 0..self.n_parallel {
-            match self.find_best_point(x_data, &y_data, &sampling, &obj_model, &cstr_models) {
-                Ok(xk) => match self.get_virtual_point(&xk, &y_data, &obj_model, &cstr_models) {
-                    Ok(yk) => {
-                        y_dat = concatenate![
-                            Axis(0),
-                            y_dat,
-                            Array2::from_shape_vec((1, 1 + self.n_cstr), yk).unwrap()
-                        ];
-                        x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
-                    }
-                    Err(_) => {
-                        // Error while predict at best point: ignore
-                        break;
-                    }
-                },
-                Err(_) => {
-                    // Cannot find best point: ignore
-                    break;
-                }
-            }
-        }
-        (x_dat, y_dat)
-    }
-
     pub fn suggest(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -236,6 +186,58 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             x_opt: x_data.row(best_index).to_owned(),
             y_opt: y_data.row(best_index).to_owned(),
         }
+    }
+
+    fn next_points(
+        &self,
+        _n: usize,
+        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        sampling: &LHS<f64, R>,
+    ) -> (Array2<f64>, Array2<f64>) {
+        let mut x_dat = Array2::zeros((0, x_data.ncols()));
+        let mut y_dat = Array2::zeros((0, y_data.ncols()));
+
+        let obj_model = Moe::params(1)
+            .set_regression_spec(self.regression_spec)
+            .set_correlation_spec(self.correlation_spec)
+            .fit(&x_data, &y_data.slice(s![.., 0..1]))
+            .expect("GP training failure");
+
+        let mut cstr_models: Vec<Box<Moe>> = Vec::with_capacity(self.n_cstr);
+        for k in 0..self.n_cstr {
+            cstr_models.push(Box::new(
+                Moe::params(1)
+                    .set_regression_spec(self.regression_spec)
+                    .set_correlation_spec(self.correlation_spec)
+                    .fit(&x_data, &y_data.slice(s![.., k + 1..k + 2]))
+                    .expect("GP training failure"),
+            ))
+        }
+
+        for _ in 0..self.n_parallel {
+            match self.find_best_point(x_data, &y_data, &sampling, &obj_model, &cstr_models) {
+                Ok(xk) => match self.get_virtual_point(&xk, &y_data, &obj_model, &cstr_models) {
+                    Ok(yk) => {
+                        y_dat = concatenate![
+                            Axis(0),
+                            y_dat,
+                            Array2::from_shape_vec((1, 1 + self.n_cstr), yk).unwrap()
+                        ];
+                        x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+                    }
+                    Err(_) => {
+                        // Error while predict at best point: ignore
+                        break;
+                    }
+                },
+                Err(_) => {
+                    // Cannot find best point: ignore
+                    break;
+                }
+            }
+        }
+        (x_dat, y_dat)
     }
 
     fn find_best_point(
