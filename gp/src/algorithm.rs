@@ -431,12 +431,10 @@ mod tests {
 
     #[test]
     fn test_kpls() {
-        let dims = vec![5, 10, 20, 60];
-        let nts = vec![100, 300, 400, 800];
+        let dims = vec![5, 10, 20]; //, 60];
+        let nts = vec![100, 300, 400]; //, 800];
 
-        // for i in 3..dims.len() {
-        // for i in 0..dims.len() {
-        for i in 0..1 {
+        for i in 0..2 {
             let dim = dims[i];
             let nt = nts[i];
 
@@ -479,14 +477,14 @@ mod tests {
                 ConstantMean::default(),
                 SquaredExponentialKernel::default(),
             )
-            //.with_kpls_dim(1)
-            //.with_initial_theta(1.0)
+            .set_kpls_dim(Some(3))
             .fit(&xt, &yt)
             .expect("GP fit error");
 
             let xtest = Array2::zeros((1, dim));
             let ytest = gp.predict_values(&xtest).expect("prediction error");
-            println!("ytest = {}", ytest);
+            let ytrue = griewank(&xtest.row(0).to_owned());
+            assert_abs_diff_eq!(Array::from_elem((1, 1), ytrue), ytest, epsilon = 1.);
         }
     }
 }
