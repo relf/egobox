@@ -1,4 +1,3 @@
-* Filter the DOE to check whether the next point is not too close
 * Add KPLS option
 * Add KPLS number of component determination
 * Add options validation

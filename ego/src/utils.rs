@@ -1,7 +1,10 @@
 use libm::erfc;
 use moe::Moe;
-use ndarray::{Array1, Array2, ArrayView, Axis};
-use ndarray_stats::QuantileExt;
+use ndarray::{concatenate, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix1, Ix2, Zip};
+use ndarray_stats::{DeviationExt, QuantileExt};
+
+// Infill strategy related function
+////////////////////////////////////////////////////////////////////////////
 
 const SQRT_2PI: f64 = 2.5066282746310007;
 
@@ -70,4 +73,68 @@ fn norm_cdf(x: f64) -> f64 {
 
 fn norm_pdf(x: f64) -> f64 {
     (-0.5 * x * x).exp() / SQRT_2PI
+}
+
+// DOE handling functions
+///////////////////////////////////////////////////////////////////////////////
+pub fn is_update_ok(
+    x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    x_new: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+) -> bool {
+    for row in x_data.rows() {
+        if row.l1_dist(x_new).unwrap() < 1e-6 {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn update_data(
+    x_data: &mut Array2<f64>,
+    y_data: &mut Array2<f64>,
+    x_new: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    y_new: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) -> usize {
+    let mut out_count = 0;
+    Zip::from(x_new.rows()).and(y_new.rows()).for_each(|x, y| {
+        let xdat = x.insert_axis(Axis(0));
+        let ydat = y.insert_axis(Axis(0));
+        if is_update_ok(x_data, &x) {
+            *x_data = concatenate![Axis(0), x_data.view(), xdat];
+            *y_data = concatenate![Axis(0), y_data.view(), ydat];
+        } else {
+            out_count += 1;
+        }
+    });
+    out_count
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::array;
+
+    #[test]
+    fn test_is_update_ok() {
+        let data = array![[0., 1.], [2., 3.]];
+        assert_eq!(true, is_update_ok(&data, &array![3., 4.]));
+        assert_eq!(false, is_update_ok(&data, &array![1e-7, 1.]));
+    }
+
+    #[test]
+    fn test_update_data() {
+        let mut xdata = array![[0., 1.], [2., 3.]];
+        let mut ydata = array![[3.], [4.]];
+        assert_eq!(
+            update_data(
+                &mut xdata,
+                &mut ydata,
+                &array![[3., 4.], [1e-7, 1.]],
+                &array![[6.], [7.]],
+            ),
+            1
+        );
+        assert_eq!(&array![[0., 1.], [2., 3.], [3., 4.]], xdata);
+        assert_eq!(&array![[3.], [4.], [6.]], ydata);
+    }
 }

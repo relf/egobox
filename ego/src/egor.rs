@@ -1,9 +1,9 @@
 use crate::errors::{EgoError, Result};
 use crate::sort_axis::*;
 use crate::types::*;
-use crate::utils::compute_cstr_scales;
-use crate::utils::ei;
-use crate::utils::wb2s;
+use crate::utils::update_data;
+use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale};
+use crate::utils::{ei, wb2s};
 use doe::{LHSKind, SamplingMethod, LHS};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
@@ -11,10 +11,8 @@ use log::{debug, info};
 use moe::{CorrelationSpec, Moe, RegressionSpec};
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_linalg::Scalar;
-use ndarray_stats::QuantileExt;
-
-use crate::utils::{compute_obj_scale, compute_wb2s_scale};
 use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
 
@@ -163,22 +161,42 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
 
         for i in 1..=n_iter {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
-            y_data = concatenate![Axis(0), y_data, y_dat];
-            x_data = concatenate![Axis(0), x_data, x_dat];
-            let n_par = -(self.n_parallel as i32);
-            let x_to_eval = x_data.slice(s![n_par.., ..]);
-            let y_actual = self.obj_eval(&x_to_eval);
-            Zip::from(y_data.slice_mut(s![n_par.., ..]).columns_mut())
-                .and(y_actual.columns())
-                .for_each(|mut y, val| y.assign(&val));
-            let best_index = self.find_best_result_index(&y_data);
-            info!(
-                "Iteration {}/{}: Best fun(x)={} at x={}",
-                i,
-                n_iter,
-                y_data.row(best_index).to_owned(),
-                x_data.row(best_index).to_owned()
-            )
+            // y_data = concatenate![Axis(0), y_data, y_dat];
+            // x_data = concatenate![Axis(0), x_data, x_dat];
+            // let rejected_count = 0;
+            let rejected_count = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
+            if rejected_count > 0 {
+                info!(
+                    "Reject {}/{} point{} too close to previous ones",
+                    rejected_count,
+                    x_dat.nrows(),
+                    if rejected_count > 1 { "s" } else { "" }
+                );
+            }
+            if rejected_count == x_dat.nrows() {
+                info!("No new point added")
+            } else {
+                let count = (self.n_parallel - rejected_count) as i32;
+                let x_to_eval = x_data.slice(s![-count.., ..]);
+                info!(
+                    "Add {} point{}:",
+                    count,
+                    if rejected_count > 1 { "s" } else { "" }
+                );
+                info!("  {:?}", x_dat);
+                let y_actual = self.obj_eval(&x_to_eval);
+                Zip::from(y_data.slice_mut(s![-count.., ..]).columns_mut())
+                    .and(y_actual.columns())
+                    .for_each(|mut y, val| y.assign(&val));
+                let best_index = self.find_best_result_index(&y_data);
+                info!(
+                    "Iteration {}/{}: Best fun(x)={} at x={}",
+                    i,
+                    n_iter,
+                    y_data.row(best_index).to_owned(),
+                    x_data.row(best_index).to_owned()
+                )
+            }
         }
         let best_index = self.find_best_result_index(&y_data);
         debug!("{:?}", concatenate![Axis(1), x_data, y_data]);
@@ -510,7 +528,7 @@ mod tests {
         let res = Egor::new(rosenb, &xlimits)
             .infill_strategy(InfillStrategy::EI)
             .x_doe(&doe)
-            .n_eval(20)
+            .n_eval(30)
             .minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
