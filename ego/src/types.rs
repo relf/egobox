@@ -1,8 +1,6 @@
 use gp::Float;
 use ndarray::{Array1, Array2, ArrayView2};
 
-pub const SQRT_2PI: f64 = 2.5066282746310007;
-
 pub trait ObjFunc: Send + Sync + 'static + Fn(&[f64]) -> f64 {}
 impl<T> ObjFunc for T where T: Send + Sync + 'static + Fn(&[f64]) -> f64 {}
 

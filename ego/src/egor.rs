@@ -1,19 +1,19 @@
 use crate::errors::{EgoError, Result};
 use crate::sort_axis::*;
 use crate::types::*;
+use crate::utils::compute_cstr_scales;
+use crate::utils::ei;
+use crate::utils::wb2s;
 use doe::{LHSKind, SamplingMethod, LHS};
+use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
-use libm::erfc;
+use log::{debug, info};
 use moe::{CorrelationSpec, Moe, RegressionSpec};
-use ndarray::{
-    concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix1, Ix2, Zip,
-};
+use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_linalg::Scalar;
 use ndarray_stats::QuantileExt;
-// use ndarray_npy::write_npy;
-use env_logger::{Builder, Env};
-use log::{debug, info};
 
+use crate::utils::{compute_obj_scale, compute_wb2s_scale};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
@@ -295,10 +295,10 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         let mut best_x = None;
 
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-        let scale_obj = Self::compute_obj_scale(&scaling_points, &obj_model);
-        let scale_cstr = Self::compute_cstr_scales(&scaling_points, &cstr_models);
+        let scale_obj = compute_obj_scale(&scaling_points, &obj_model);
+        let scale_cstr = compute_cstr_scales(&scaling_points, &cstr_models);
         let scale_wb2 = if self.infill == InfillStrategy::WB2S {
-            Self::compute_wb2s_scale(&scaling_points, &obj_model, *f_min)
+            compute_wb2s_scale(&scaling_points, &obj_model, *f_min)
         } else {
             1.
         };
@@ -419,73 +419,6 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         }
     }
 
-    fn ei(x: &[f64], obj_model: &Moe, f_min: f64) -> f64 {
-        let pt = ArrayView::from_shape((1, x.len()), x).unwrap().to_owned();
-        if let Ok(p) = obj_model.predict_values(&pt) {
-            if let Ok(s) = obj_model.predict_variances(&pt) {
-                let pred = p[[0, 0]];
-                let sigma = Scalar::sqrt(s[[0, 0]]);
-                let args0 = (f_min - pred) / sigma;
-                let args1 = (f_min - pred) * Self::norm_cdf(args0);
-                let args2 = sigma * Self::norm_pdf(args0);
-                args1 + args2
-            } else {
-                -f64::INFINITY
-            }
-        } else {
-            -f64::INFINITY
-        }
-    }
-
-    fn wb2s(x: &[f64], obj_model: &Moe, f_min: f64, scale: f64) -> f64 {
-        let pt = ArrayView::from_shape((1, x.len()), x).unwrap().to_owned();
-        let ei = Self::ei(x, obj_model, f_min);
-        scale * ei - obj_model.predict_values(&pt).unwrap()[[0, 0]]
-    }
-
-    fn compute_wb2s_scale(x: &Array2<f64>, obj_model: &Moe, f_min: f64) -> f64 {
-        let ratio = 100.; // TODO: make it a parameter
-        let ei_x = x.map_axis(Axis(1), |xi| {
-            let ei = Self::ei(xi.as_slice().unwrap(), obj_model, f_min);
-            ei
-        });
-        let i_max = ei_x.argmax().unwrap();
-        let pred_max = obj_model
-            .predict_values(&x.row(i_max).insert_axis(Axis(0)).to_owned())
-            .unwrap()[[0, 0]];
-        let ei_max = ei_x[i_max];
-        if ei_max > 0. {
-            ratio * pred_max / ei_max
-        } else {
-            1.
-        }
-    }
-
-    fn compute_obj_scale(x: &Array2<f64>, obj_model: &Moe) -> f64 {
-        let preds = obj_model.predict_values(x).unwrap().mapv(|v| f64::abs(v));
-        *preds.max().unwrap_or(&1.0)
-    }
-
-    fn compute_cstr_scales(x: &Array2<f64>, cstr_models: &Vec<Box<Moe>>) -> Array1<f64> {
-        let scales: Vec<f64> = cstr_models
-            .iter()
-            .map(|cstr_model| {
-                let preds = cstr_model.predict_values(x).unwrap().mapv(|v| f64::abs(v));
-                *preds.max().unwrap_or(&1.0)
-            })
-            .collect();
-        Array1::from_shape_vec(cstr_models.len(), scales).unwrap()
-    }
-
-    fn norm_cdf(x: f64) -> f64 {
-        let norm = 0.5 * erfc(-x / std::f64::consts::SQRT_2);
-        norm
-    }
-
-    fn norm_pdf(x: f64) -> f64 {
-        Scalar::exp(-0.5 * x * x) / SQRT_2PI
-    }
-
     fn infill_eval(
         &self,
         x: &[f64],
@@ -496,9 +429,9 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
     ) -> f64 {
         let x_f = x.iter().map(|v| *v).collect::<Vec<f64>>();
         let obj = match self.infill {
-            InfillStrategy::EI => -Self::ei(&x_f, obj_model, f_min),
-            InfillStrategy::WB2 => -Self::wb2s(&x_f, obj_model, f_min, 1.),
-            InfillStrategy::WB2S => -Self::wb2s(&x_f, obj_model, f_min, scale_wb2),
+            InfillStrategy::EI => -ei(&x_f, obj_model, f_min),
+            InfillStrategy::WB2 => -wb2s(&x_f, obj_model, f_min, 1.),
+            InfillStrategy::WB2S => -wb2s(&x_f, obj_model, f_min, scale_wb2),
         };
         obj / scale
     }
