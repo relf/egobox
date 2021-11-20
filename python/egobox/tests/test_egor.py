@@ -1,3 +1,4 @@
+import typing
 import unittest
 import numpy as np
 from egobox import (
@@ -9,6 +10,8 @@ from egobox import (
 )
 import time
 import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
 def xsinx(x: np.ndarray) -> np.ndarray:
@@ -83,22 +86,37 @@ def six_humps(x):
 
 class TestOptimizer(unittest.TestCase):
     def test_xsinx(self):
-        logging.basicConfig(format="%(message)s")
-        logging.getLogger().setLevel(logging.DEBUG)
         egor = Optimizer(np.array([[0.0, 25.0]]))
         res = egor.minimize(xsinx, n_eval=15)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
+        self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
+        self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
     def test_g24(self):
         egor = Optimizer(
             np.array([[0.0, 3.0], [0.0, 4.0]]),
-            infill_optimizer=InfillOptimizer.COBYLA,
             infill_strategy=InfillStrategy.EI,
             regr_spec=RegressionSpec.CONSTANT,
             corr_spec=CorrelationSpec.SQUARED_EXPONENTIAL,
         )
         start = time.process_time()
-        res = egor.minimize(g24, 2, n_eval=29)
+        res = egor.minimize(g24, 2, n_eval=20)
+        end = time.process_time()
+        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
+        self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=3e-3)
+        self.assertAlmostEqual(2.3295, res.x_opt[0], delta=1e-3)
+        self.assertAlmostEqual(3.1785, res.x_opt[1], delta=3e-3)
+
+    def test_g24_kpls(self):
+        egor = Optimizer(
+            np.array([[0.0, 3.0], [0.0, 4.0]]),
+            infill_strategy=InfillStrategy.EI,
+            regr_spec=RegressionSpec.LINEAR,
+            corr_spec=CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52,
+            kpls_dim=1,
+        )
+        start = time.process_time()
+        res = egor.minimize(g24, 2, n_eval=40)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
@@ -113,6 +131,10 @@ class TestOptimizer(unittest.TestCase):
         res = egor.minimize(six_humps, n_eval=45)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
+        # 2 global optimum value =-1.0316 located at (0.089842, -0.712656) and  (-0.089842, 0.712656)
+        self.assertAlmostEqual(-1.0316, res.y_opt[0], delta=1e-3)
+        self.assertAlmostEqual(-0.0898, res.x_opt[0], delta=1e-3)
+        self.assertAlmostEqual(0.7126, res.x_opt[1], delta=1e-3)
 
     def test_constructor(self):
         self.assertRaises(TypeError, Optimizer)

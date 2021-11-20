@@ -29,6 +29,7 @@ pub struct Egor<O: GroupFunc, R: Rng> {
     pub infill_optimizer: InfillOptimizer,
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
+    pub kpls_dim: Option<usize>,
     pub obj: O,
     pub rng: R,
 }
@@ -43,6 +44,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
     pub fn new_with_rng(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
+        let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();
         Egor {
             n_eval: 20,
@@ -57,6 +59,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             infill_optimizer: InfillOptimizer::Slsqp,
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
+            kpls_dim: None,
             obj: f,
             rng,
         }
@@ -117,6 +120,11 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         self
     }
 
+    pub fn kpls_dim(&mut self, kpls_dim: Option<usize>) -> &mut Self {
+        self.kpls_dim = kpls_dim;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<O, R2> {
         Egor {
             n_eval: self.n_eval,
@@ -131,6 +139,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             infill_optimizer: self.infill_optimizer,
             regression_spec: self.regression_spec,
             correlation_spec: self.correlation_spec,
+            kpls_dim: self.kpls_dim,
             obj: self.obj,
             rng,
         }
@@ -161,9 +170,6 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
 
         for i in 1..=n_iter {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
-            // y_data = concatenate![Axis(0), y_data, y_dat];
-            // x_data = concatenate![Axis(0), x_data, x_dat];
-            // let rejected_count = 0;
             let rejected_count = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
             if rejected_count > 0 {
                 info!(
@@ -215,8 +221,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
     ) -> (Array2<f64>, Array2<f64>) {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
-
         let obj_model = Moe::params(1)
+            .set_kpls_dim(self.kpls_dim)
             .set_regression_spec(self.regression_spec)
             .set_correlation_spec(self.correlation_spec)
             .fit(&x_data, &y_data.slice(s![.., 0..1]))
@@ -226,6 +232,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         for k in 0..self.n_cstr {
             cstr_models.push(Box::new(
                 Moe::params(1)
+                    .set_kpls_dim(self.kpls_dim)
                     .set_regression_spec(self.regression_spec)
                     .set_correlation_spec(self.correlation_spec)
                     .fit(&x_data, &y_data.slice(s![.., k + 1..k + 2]))

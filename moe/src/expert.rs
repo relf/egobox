@@ -4,6 +4,7 @@ use ndarray::{Array2, ArrayView2};
 use paste::paste;
 
 pub trait ExpertParams {
+    fn set_kpls_dim(&mut self, kpls_dim: Option<usize>);
     fn fit(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn Expert>>;
 }
 
@@ -27,6 +28,10 @@ macro_rules! declare_expert {
             }
 
             impl ExpertParams for [<Gp $regr $corr ExpertParams>] {
+                fn set_kpls_dim(&mut self, kpls_dim: Option<usize>) {
+                    self.0 = self.0.set_kpls_dim(kpls_dim);
+                }
+
                 fn fit(
                     &self,
                     x: &ArrayView2<f64>,
@@ -54,7 +59,12 @@ macro_rules! declare_expert {
 
             impl std::fmt::Display for [<Gp $regr $corr Expert>] {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}_{}", stringify!($regr), stringify!($corr))
+                    write!(f, "{}_{}{}", stringify!($regr), stringify!($corr),
+                        match self.0.kpls_dim() {
+                            None => String::from(""),
+                            Some(dim) => format!("_PLS({})", dim),
+                        }
+                    )
                 }
             }
         }
@@ -94,14 +104,14 @@ macro_rules! make_expert_params {
 }
 
 macro_rules! compute_error {
-    ($regr:ident, $corr:ident, $dataset:ident) => {{
+    ($self:ident, $regr:ident, $corr:ident, $dataset:ident) => {{
         trace!(
             "Expert {}_{} on dataset size = {}",
             stringify!($regr),
             stringify!($corr),
             $dataset.nsamples()
         );
-        let params = make_gp_params!($regr, $corr);
+        let params = make_gp_params!($regr, $corr).set_kpls_dim($self.kpls_dim());
         let mut errors = Vec::new();
         let input_dim = $dataset.records().shape()[1];
         let n_fold = std::cmp::min($dataset.nsamples(), 5 * input_dim);
@@ -111,7 +121,10 @@ macro_rules! compute_error {
             f64::INFINITY // not enough points => huge error
         } else {
             for (gp, valid) in $dataset.iter_fold(n_fold, |train| {
-                params.fit(&train.records(), &train.targets()).unwrap()
+                params
+                    .set_kpls_dim($self.kpls_dim())
+                    .fit(&train.records(), &train.targets())
+                    .unwrap()
             }) {
                 let pred = gp.predict_values(valid.records()).unwrap();
                 let error = (valid.targets() - pred).norm_l2();
@@ -125,21 +138,21 @@ macro_rules! compute_error {
 }
 
 macro_rules! compute_accuracies_with_corr {
-    ($allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident, $corr:ident) => {{
+    ($self:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident, $corr:ident) => {{
         if $allowed_corr_models.contains(&stringify!($corr)) {
             $map_accuracy.push((
                 format!("{}_{}", stringify!($regr), stringify!($corr)),
-                compute_error!($regr, $corr, $dataset),
+                compute_error!($self, $regr, $corr, $dataset),
             ));
         }
     }};
 }
 
 macro_rules! compute_accuracies_with_regr {
-    ($allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident) => {{
+    ($self:ident, $allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident) => {{
         if $allowed_mean_models.contains(&stringify!($regr)) {
             compute_accuracies_with_corr!(
-                $allowed_mean_models,
+                $self,
                 $allowed_corr_models,
                 $dataset,
                 $map_accuracy,
@@ -147,7 +160,7 @@ macro_rules! compute_accuracies_with_regr {
                 SquaredExponential
             );
             compute_accuracies_with_corr!(
-                $allowed_mean_models,
+                $self,
                 $allowed_corr_models,
                 $dataset,
                 $map_accuracy,
@@ -155,7 +168,7 @@ macro_rules! compute_accuracies_with_regr {
                 AbsoluteExponential
             );
             compute_accuracies_with_corr!(
-                $allowed_mean_models,
+                $self,
                 $allowed_corr_models,
                 $dataset,
                 $map_accuracy,
@@ -163,7 +176,7 @@ macro_rules! compute_accuracies_with_regr {
                 Matern32
             );
             compute_accuracies_with_corr!(
-                $allowed_mean_models,
+                $self,
                 $allowed_corr_models,
                 $dataset,
                 $map_accuracy,
@@ -175,8 +188,9 @@ macro_rules! compute_accuracies_with_regr {
 }
 
 macro_rules! compute_accuracies {
-    ($allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident) => {{
+    ($self:ident, $allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident) => {{
         compute_accuracies_with_regr!(
+            $self,
             $allowed_mean_models,
             $allowed_corr_models,
             $dataset,
@@ -184,6 +198,7 @@ macro_rules! compute_accuracies {
             Constant
         );
         compute_accuracies_with_regr!(
+            $self,
             $allowed_mean_models,
             $allowed_corr_models,
             $dataset,
@@ -191,6 +206,7 @@ macro_rules! compute_accuracies {
             Linear
         );
         compute_accuracies_with_regr!(
+            $self,
             $allowed_mean_models,
             $allowed_corr_models,
             $dataset,

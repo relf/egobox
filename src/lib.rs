@@ -112,6 +112,7 @@ struct Optimizer {
     pub correlation_spec: CorrelationSpec,
     pub infill_strategy: InfillStrategy,
     pub infill_optimizer: InfillOptimizer,
+    pub kpls_dim: Option<usize>,
     // pub x_doe: Option<Array2<f64>>,
     // pub q_ei: QEiStrategy,
 }
@@ -134,7 +135,8 @@ impl Optimizer {
         regr_spec = "RegressionSpec::ALL",
         corr_spec = "CorrelationSpec::ALL",
         infill_strategy = "InfillStrategy::WB2",
-        infill_optimizer = "InfillOptimizer::COBYLA"
+        infill_optimizer = "InfillOptimizer::COBYLA",
+        kpls_dim = "None"
     )]
     fn new(
         xlimits: PyReadonlyArray2<f64>,
@@ -144,6 +146,7 @@ impl Optimizer {
         corr_spec: u8,
         infill_strategy: u8,
         infill_optimizer: u8,
+        kpls_dim: Option<usize>,
     ) -> Self {
         let xlimits = xlimits.to_owned_array();
         Optimizer {
@@ -154,6 +157,7 @@ impl Optimizer {
             correlation_spec: CorrelationSpec(corr_spec),
             infill_strategy: InfillStrategy(infill_strategy),
             infill_optimizer: InfillOptimizer(infill_optimizer),
+            kpls_dim,
         }
     }
 
@@ -229,6 +233,7 @@ impl Optimizer {
             .correlation_spec(moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap())
             .infill_strategy(infill_strategy)
             .infill_optimizer(infill_optimizer)
+            .kpls_dim(self.kpls_dim)
             .minimize();
 
         OptimResult {

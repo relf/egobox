@@ -149,6 +149,14 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
         let r = self.kernel.apply(&self.theta, &dx, &self.w_star);
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
+
+    pub fn kpls_dim(&self) -> Option<usize> {
+        if self.w_star.ncols() < self.xtrain.ncols() {
+            Some(self.w_star.ncols())
+        } else {
+            None
+        }
+    }
 }
 
 impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F, Mean, Kernel> {

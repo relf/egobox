@@ -90,6 +90,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
                 )));
             }
             let expert = self.find_best_expert(nx, &cluster)?;
+            info!("Best expert -> {}", expert);
             experts.push(expert);
         }
 
@@ -137,7 +138,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
             (format!("{}_{}", allowed_means[0], allowed_corrs[0]), None) // shortcut
         } else {
             let mut map_accuracy = Vec::new();
-            compute_accuracies!(allowed_means, allowed_corrs, dataset, map_accuracy);
+            compute_accuracies!(self, allowed_means, allowed_corrs, dataset, map_accuracy);
             let errs: Vec<f64> = map_accuracy.iter().map(|(_, err)| *err).collect();
             debug!("Accuracies {:?}", map_accuracy);
             let argmin = errs
@@ -166,13 +167,16 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
             "Quadratic_Matern52" => make_expert_params!(Quadratic, Matern52),
             _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
         };
+        let mut expert_params = best_expert_params?;
+        expert_params.set_kpls_dim(self.kpls_dim());
+        let expert = expert_params.fit(&xtrain.view(), &ytrain.view());
         info!(
             "Best expert {} accuracy={}",
             best.0,
             best.1
                 .map_or_else(|| String::from("<Not Computed>"), |v| format!("{}", v))
         );
-        best_expert_params?.fit(&xtrain.view(), &ytrain.view())
+        expert
     }
 
     pub fn optimize_heaviside_factor(
