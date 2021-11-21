@@ -1,6 +1,6 @@
-use crate::correlation_models::CorrelationModel;
+use crate::correlation_models::{CorrelationModel, SquaredExponentialKernel};
 use crate::errors::{GpError, Result};
-use crate::mean_models::RegressionModel;
+use crate::mean_models::{ConstantMean, RegressionModel};
 use ndarray_linalg::{Lapack, Scalar};
 
 pub trait Float: linfa::Float + Lapack + Scalar {}
@@ -19,6 +19,18 @@ pub struct GpParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel
     kpls_dim: Option<usize>,
     /// Optionally apply dimension reduction (KPLS) or not
     nugget: F,
+}
+
+impl<F: Float> GpParams<F, ConstantMean, SquaredExponentialKernel> {
+    pub fn default() -> GpParams<F, ConstantMean, SquaredExponentialKernel> {
+        GpParams {
+            theta: F::cast(1e-2),
+            mean: ConstantMean(),
+            kernel: SquaredExponentialKernel(),
+            kpls_dim: None,
+            nugget: F::cast(100.0) * F::epsilon(),
+        }
+    }
 }
 
 impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F, Mean, Kernel> {

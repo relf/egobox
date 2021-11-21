@@ -369,10 +369,13 @@ mod tests {
     use super::*;
     use crate::{correlation_models::*, mean_models::*};
     use approx::assert_abs_diff_eq;
+    use argmin_testfunctions::rosenbrock;
     use doe::{SamplingMethod, LHS};
     use ndarray::{arr2, array, Array, Zip};
+    use ndarray_linalg::Norm;
     use ndarray_npy::{read_npy, write_npy};
     use ndarray_rand::rand::SeedableRng;
+    use ndarray_stats::DeviationExt;
     use paste::paste;
     use rand_isaac::Isaac64Rng;
 
@@ -494,5 +497,71 @@ mod tests {
             let ytrue = griewank(&xtest.row(0).to_owned());
             assert_abs_diff_eq!(Array::from_elem((1, 1), ytrue), ytest, epsilon = 1.);
         }
+    }
+
+    fn tensor_product_exp(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+        x.mapv(|v| v.exp())
+            .map_axis(Axis(1), |row| row.product())
+            .insert_axis(Axis(1))
+    }
+
+    #[test]
+    fn test_kpls_tp_exp() {
+        let dim = 3;
+        let nt = 300;
+        let lim = array![[-1., 1.]];
+        let xlimits = lim.broadcast((dim, 2)).unwrap();
+        let rng = Isaac64Rng::seed_from_u64(42);
+        let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
+        let yt = tensor_product_exp(&xt);
+
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+            ConstantMean::default(),
+            SquaredExponentialKernel::default(),
+        )
+        .set_kpls_dim(Some(1))
+        .fit(&xt, &yt)
+        .expect("GP training");
+
+        let xv = LHS::new(&xlimits).sample(100);
+        let yv = tensor_product_exp(&xv);
+
+        let ytest = gp.predict_values(&xv).unwrap();
+        let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
+        assert_abs_diff_eq!(err, 0., epsilon = 2e-2);
+    }
+
+    fn rosenb(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
+        let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
+        Zip::from(y.rows_mut())
+            .and(x.rows())
+            .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]));
+        y
+    }
+
+    #[test]
+    fn test_kpls_rosenb() {
+        let dim = 20;
+        let nt = 200;
+        let lim = array![[-1., 1.]];
+        let xlimits = lim.broadcast((dim, 2)).unwrap();
+        let rng = Isaac64Rng::seed_from_u64(42);
+        let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
+        let yt = rosenb(&xt);
+
+        let gp = GaussianProcess::<f64, ConstantMean, Matern32Kernel>::params(
+            ConstantMean::default(),
+            Matern52Kernel::default(),
+        )
+        .set_kpls_dim(Some(1))
+        .fit(&xt, &yt)
+        .expect("GP training");
+
+        let xv = LHS::new(&xlimits).sample(500);
+        let yv = rosenb(&xv);
+
+        let ytest = gp.predict_values(&xv).unwrap();
+        let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
+        assert_abs_diff_eq!(err, 0., epsilon = 2e-1);
     }
 }
