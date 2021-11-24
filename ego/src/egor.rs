@@ -22,7 +22,7 @@ pub struct Egor<O: GroupFunc, R: Rng> {
     pub n_parallel: usize,
     pub n_doe: usize,
     pub n_cstr: usize,
-    pub x_doe: Option<Array2<f64>>,
+    pub doe: Option<Array2<f64>>,
     pub xlimits: Array2<f64>,
     pub q_ei: QEiStrategy,
     pub infill: InfillStrategy,
@@ -52,7 +52,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             n_parallel: 1,
             n_doe: 10,
             n_cstr: 0,
-            x_doe: None,
+            doe: None,
             xlimits: xlimits.to_owned(),
             q_ei: QEiStrategy::KrigingBeliever,
             infill: InfillStrategy::WB2,
@@ -90,8 +90,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         self
     }
 
-    pub fn x_doe(&mut self, x_doe: &Array2<f64>) -> &mut Self {
-        self.x_doe = Some(x_doe.to_owned());
+    pub fn doe(&mut self, doe: Option<Array2<f64>>) -> &mut Self {
+        self.doe = doe.map(|x| x.to_owned());
         self
     }
 
@@ -132,7 +132,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             n_parallel: self.n_parallel,
             n_doe: self.n_doe,
             n_cstr: self.n_cstr,
-            x_doe: self.x_doe,
+            doe: self.doe,
             xlimits: self.xlimits,
             q_ei: self.q_ei,
             infill: self.infill,
@@ -160,14 +160,29 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         let rng = self.rng.clone();
         let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
 
-        let (mut x_data, n_iter) = if let Some(xdoe) = &self.x_doe {
-            (xdoe.to_owned(), self.n_eval - xdoe.nrows())
+        let (mut y_data, mut x_data, n_iter) = if let Some(doe) = &self.doe {
+            if doe.ncols() == self.xlimits.nrows() {
+                // only x are specified
+                (
+                    self.obj_eval(&doe),
+                    doe.to_owned(),
+                    self.n_eval - doe.nrows(),
+                )
+            } else {
+                // split doe in x and y
+                (
+                    doe.slice(s![.., self.xlimits.nrows()..]).to_owned(),
+                    doe.slice(s![.., ..self.xlimits.nrows()]).to_owned(),
+                    self.n_eval,
+                )
+            }
         } else {
-            (sampling.sample(self.n_doe), self.n_eval - self.n_doe)
+            let x = sampling.sample(self.n_doe);
+            (self.obj_eval(&x), x, self.n_eval - self.n_doe)
         };
 
-        let mut y_data = self.obj_eval(&x_data);
-
+        const MAX_RETRY: i32 = 10;
+        let mut no_point_added_retries = MAX_RETRY;
         for i in 1..=n_iter {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
             let rejected_count = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
@@ -180,8 +195,14 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 );
             }
             if rejected_count == x_dat.nrows() {
-                info!("No new point added")
+                info!("No new point added");
+                no_point_added_retries -= 1;
+                if no_point_added_retries == 0 {
+                    info!("Max number of retries ({}) without adding point", MAX_RETRY);
+                    break;
+                }
             } else {
+                no_point_added_retries = MAX_RETRY;
                 let count = (self.n_parallel - rejected_count) as i32;
                 let x_to_eval = x_data.slice(s![-count.., ..]);
                 info!(
@@ -485,7 +506,7 @@ mod tests {
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
             .n_eval(15)
-            .x_doe(&array![[0.], [7.], [25.]])
+            .doe(Some(array![[0.], [7.], [25.]]))
             .minimize();
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
@@ -505,13 +526,13 @@ mod tests {
         let mut ego = Egor::new(xsinx, &array![[0.0, 25.0]]);
         let ego = ego.infill_strategy(InfillStrategy::EI);
 
-        let mut x_doe = array![[0.], [7.], [20.], [25.]];
-        let mut y_doe = xsinx(&x_doe.view());
+        let mut doe = array![[0.], [7.], [20.], [25.]];
+        let mut y_doe = xsinx(&doe.view());
         for _i in 0..10 {
-            let x_suggested = ego.suggest(&x_doe, &y_doe);
+            let x_suggested = ego.suggest(&doe, &y_doe);
 
-            x_doe = concatenate![Axis(0), x_doe, x_suggested];
-            y_doe = xsinx(&x_doe.view());
+            doe = concatenate![Axis(0), doe, x_suggested];
+            y_doe = xsinx(&doe.view());
         }
 
         let expected = -15.1;
@@ -534,7 +555,7 @@ mod tests {
         let doe = LHS::new(&xlimits).sample(10);
         let res = Egor::new(rosenb, &xlimits)
             .infill_strategy(InfillStrategy::EI)
-            .x_doe(&doe)
+            .doe(Some(doe))
             .n_eval(30)
             .minimize();
         println!("Rosenbrock optim result = {:?}", res);
@@ -579,7 +600,7 @@ mod tests {
             .n_cstr(2)
             .infill_strategy(InfillStrategy::EI)
             .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
-            .x_doe(&doe)
+            .doe(Some(doe))
             .n_eval(40)
             .minimize();
         println!("G24 optim result = {:?}", res);

@@ -2,14 +2,25 @@ use doe::{SamplingMethod, LHS};
 use ego::Egor;
 use moe;
 use ndarray::{Array2, ArrayView2};
+use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use pyo3_log;
+use rand_isaac::Isaac64Rng;
 
 /// Formats the sum of two numbers as string.
 #[pyfunction]
-fn lhs<'py>(py: Python<'py>, xlimits: PyReadonlyArray2<f64>, a: usize) -> &'py PyArray2<f64> {
-    let actual = LHS::new(&xlimits.as_array()).sample(a);
+fn lhs<'py>(
+    py: Python<'py>,
+    xlimits: PyReadonlyArray2<f64>,
+    n_samples: usize,
+    seed: Option<u64>,
+) -> &'py PyArray2<f64> {
+    let rng = match seed {
+        Some(seed) => Isaac64Rng::seed_from_u64(seed),
+        None => Isaac64Rng::from_entropy(),
+    };
+    let actual = LHS::new_with_rng(&xlimits.as_array(), rng).sample(n_samples);
     actual.into_pyarray(py)
 }
 
@@ -80,7 +91,12 @@ impl InfillOptimizer {
 ///         Number of runs of infill strategy optimizations (best result taken)
 ///
 ///     n_doe (int > 0):
-///         Number of samples of initial LHS sampling (used when DOE not provided by the user)
+///         Number of samples of initial LHS sampling (used when DOE not provided by the user).
+///
+///     doe (array[ns, nt]):
+///         Initial DOE containing ns samples:
+///             either nt = nx then only x are specified and ns evals are done to get y doe values,
+///             or nt = nx + ny then x = doe[:, :nx] and y = doe[:, nx:] are specified  
 ///
 ///     regr_spec (RegressionSpec flags, an int in [1, 7]):
 ///         Specification of regression models used in gaussian processes.
@@ -100,6 +116,11 @@ impl InfillOptimizer {
 ///     infill_optimizer (InfillOptimizer enum, an int [1, 2])
 ///         Internal optimizer used to optimize infill criteria.
 ///         Can be either InfillOptimizer.COBYLA (1) or InfillOptimizer.SLSQP (2)
+///
+///     kpls_dim (0 < int < nx)
+///         Number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
+///         This is used to address high-dimensional problems typically when nx > 9.
+///
 #[pyclass]
 #[pyo3(
     text_signature = "(xlimits, n_start=20, n_doe=10, regression_spec=7, correlation_spec=15, infill_strategy=1, infill_optimizer=1)"
@@ -108,12 +129,12 @@ struct Optimizer {
     pub xlimits: Array2<f64>,
     pub n_start: usize,
     pub n_doe: usize,
+    pub doe: Option<Array2<f64>>,
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub infill_strategy: InfillStrategy,
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
-    // pub x_doe: Option<Array2<f64>>,
     // pub q_ei: QEiStrategy,
 }
 
@@ -132,6 +153,7 @@ impl Optimizer {
         xlimits,
         n_start = "20",
         n_doe = "10",
+        doe = "None",
         regr_spec = "RegressionSpec::ALL",
         corr_spec = "CorrelationSpec::ALL",
         infill_strategy = "InfillStrategy::WB2",
@@ -142,6 +164,7 @@ impl Optimizer {
         xlimits: PyReadonlyArray2<f64>,
         n_start: usize,
         n_doe: usize,
+        doe: Option<PyReadonlyArray2<f64>>,
         regr_spec: u8,
         corr_spec: u8,
         infill_strategy: u8,
@@ -149,10 +172,12 @@ impl Optimizer {
         kpls_dim: Option<usize>,
     ) -> Self {
         let xlimits = xlimits.to_owned_array();
+        let doe = doe.map(|x| x.to_owned_array());
         Optimizer {
             xlimits,
             n_start,
             n_doe,
+            doe,
             regression_spec: RegressionSpec(regr_spec),
             correlation_spec: CorrelationSpec(corr_spec),
             infill_strategy: InfillStrategy(infill_strategy),
@@ -224,11 +249,13 @@ impl Optimizer {
             ),
         };
 
+        let doe = self.doe.as_ref().map(|v| v.to_owned());
         let res = Egor::new(obj, &self.xlimits)
             .n_cstr(n_cstr)
             .n_eval(n_eval)
             .n_start(self.n_start)
             .n_doe(self.n_doe)
+            .doe(doe)
             .regression_spec(moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
             .correlation_spec(moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap())
             .infill_strategy(infill_strategy)

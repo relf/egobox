@@ -1,13 +1,7 @@
 import typing
 import unittest
 import numpy as np
-from egobox import (
-    Optimizer,
-    RegressionSpec,
-    CorrelationSpec,
-    InfillStrategy,
-    InfillOptimizer,
-)
+import egobox as egx
 import time
 import logging
 
@@ -86,18 +80,35 @@ def six_humps(x):
 
 class TestOptimizer(unittest.TestCase):
     def test_xsinx(self):
-        egor = Optimizer(np.array([[0.0, 25.0]]))
+        egor = egx.Optimizer(np.array([[0.0, 25.0]]))
         res = egor.minimize(xsinx, n_eval=15)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
+    def test_xsinx_with_initial_doe(self):
+        xlimits = np.array([[0.0, 25.0]])
+        doe = egx.lhs(xlimits, 10)
+        egor = egx.Optimizer(xlimits, doe=doe)
+        res = egor.minimize(xsinx, n_eval=15)
+        print(f"Optimization f={res.y_opt} at {res.x_opt}")
+        self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
+        self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
+
+        ydoe = xsinx(doe)
+        doe = np.hstack((doe, ydoe))
+        egor = egx.Optimizer(xlimits, doe=doe)
+        res = egor.minimize(xsinx, n_eval=5)
+        print(f"Optimization f={res.y_opt} at {res.x_opt}")
+        self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
+        self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
+
     def test_g24(self):
-        egor = Optimizer(
+        egor = egx.Optimizer(
             np.array([[0.0, 3.0], [0.0, 4.0]]),
-            infill_strategy=InfillStrategy.EI,
-            regr_spec=RegressionSpec.CONSTANT,
-            corr_spec=CorrelationSpec.SQUARED_EXPONENTIAL,
+            infill_strategy=egx.InfillStrategy.EI,
+            regr_spec=egx.RegressionSpec.CONSTANT,
+            corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
         )
         start = time.process_time()
         res = egor.minimize(g24, 2, n_eval=20)
@@ -108,11 +119,11 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(3.1785, res.x_opt[1], delta=3e-3)
 
     def test_g24_kpls(self):
-        egor = Optimizer(
+        egor = egx.Optimizer(
             np.array([[0.0, 3.0], [0.0, 4.0]]),
-            infill_strategy=InfillStrategy.EI,
-            regr_spec=RegressionSpec.LINEAR,
-            corr_spec=CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52,
+            infill_strategy=egx.InfillStrategy.EI,
+            regr_spec=egx.RegressionSpec.LINEAR,
+            corr_spec=egx.CorrelationSpec.MATERN32 | egx.CorrelationSpec.MATERN52,
             kpls_dim=1,
         )
         start = time.process_time()
@@ -121,11 +132,11 @@ class TestOptimizer(unittest.TestCase):
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
     def test_six_humps(self):
-        egor = Optimizer(
+        egor = egx.Optimizer(
             np.array([[-3.0, 3.0], [-2.0, 2.0]]),
-            infill_strategy=InfillStrategy.WB2,
-            regr_spec=RegressionSpec.CONSTANT,
-            corr_spec=CorrelationSpec.SQUARED_EXPONENTIAL,
+            infill_strategy=egx.InfillStrategy.WB2,
+            regr_spec=egx.RegressionSpec.CONSTANT,
+            corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
         )
         start = time.process_time()
         res = egor.minimize(six_humps, n_eval=45)
@@ -137,8 +148,8 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(0.7126, res.x_opt[1], delta=1e-3)
 
     def test_constructor(self):
-        self.assertRaises(TypeError, Optimizer)
-        Optimizer(np.array([[0.0, 25.0]]), 22, n_doe=10)
+        self.assertRaises(TypeError, egx.Optimizer)
+        egx.Optimizer(np.array([[0.0, 25.0]]), 22, n_doe=10)
 
 
 if __name__ == "__main__":

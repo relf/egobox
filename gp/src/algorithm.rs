@@ -13,9 +13,11 @@ use ndarray_linalg::cholesky::*;
 use ndarray_linalg::qr::*;
 use ndarray_linalg::svd::*;
 use ndarray_linalg::triangular::*;
+use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
 use num_traits;
+use rand_isaac::Isaac64Rng;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 
@@ -214,9 +216,12 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
         for mut row in xlimits.rows_mut() {
             row.assign(&arr1(&[F::cast(1e-6), F::cast(20.)]));
         }
-        // xlimits.column_mut(0).assign(&Array1::from_elem(theta0.len(), 1e-6));
-        // xlimits.column_mut(1).assign(&Array1::from_elem(theta0.len(), 20.));
-        let seeds = LHS::new(&xlimits).sample(7);
+        // Use a seed here for reproducibility. Do we need to make it truly random
+        // Probably no, as it is just to get init values spread over
+        // [1e-6, 20] for multistart thanks to LHS method.
+        let seeds = LHS::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .sample(7);
         Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
             .and(seeds.rows())
             .par_for_each(|mut theta, row| theta.assign(&row));

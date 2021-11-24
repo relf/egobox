@@ -41,7 +41,7 @@ pub struct LHS<F: Float, R: Rng + Clone> {
 /// LHS with default random generator set for reproducibility
 impl<F: Float> LHS<F, Isaac64Rng> {
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
-        Self::new_with_rng(xlimits, Isaac64Rng::seed_from_u64(42))
+        Self::new_with_rng(xlimits, Isaac64Rng::from_entropy())
     }
 }
 
@@ -298,7 +298,9 @@ mod tests {
             [6.728039870442292, 0.970303579286283],
             [7.411727120621207, 0.5524919394042328]
         ];
-        let actual = LHS::new(&xlimits).sample(5);
+        let actual = LHS::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
@@ -322,7 +324,10 @@ mod tests {
             [6.728039870442292, 0.970303579286283],
             [7.411727120621207, 0.1556358466576374]
         ];
-        let actual = LHS::new(&xlimits).kind(LHSKind::Classic).sample(5);
+        let actual = LHS::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .kind(LHSKind::Classic)
+            .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
