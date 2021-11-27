@@ -552,7 +552,9 @@ mod tests {
     fn test_rosenbrock_2d() {
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
-        let doe = LHS::new(&xlimits).sample(10);
+        let doe = LHS::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .sample(10);
         let res = Egor::new(rosenb, &xlimits)
             .infill_strategy(InfillStrategy::EI)
             .doe(Some(doe))
@@ -595,7 +597,9 @@ mod tests {
         let x = array![[1., 2.]];
         println!("{:?}", f_g24(&x.view()));
         let xlimits = array![[0., 3.], [0., 4.]];
-        let doe = LHS::new(&xlimits).sample(10);
+        let doe = LHS::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .sample(10);
         let res = Egor::new(f_g24, &xlimits)
             .n_cstr(2)
             .infill_strategy(InfillStrategy::EI)
