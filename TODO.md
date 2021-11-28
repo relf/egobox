@@ -1,11 +1,11 @@
-* __Add KPLS option__
-* __Add initial doe specification__
-* Add options validation
-* Add warm start
-* Add logging result in file
+* ~~Add KPLS option~~
+* ~~Add initial doe specification~~
+* ~~Add warm start~~
+* ~~Add save doe result in file~~
 * Add reclustering
-* Add some parallel computations where relevant 
-* Add KPLS number of component determination
 * Test on SEGOMOE test cases
 * Add benchmarks
+* Add some parallel computations where relevant 
+* Add some options validation
+* Add KPLS number of component determination
 * Test, test, test

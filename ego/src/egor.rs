@@ -11,10 +11,14 @@ use log::{debug, info};
 use moe::{CorrelationSpec, Moe, RegressionSpec};
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_linalg::Scalar;
+use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
+
+const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
+const DOE_FILE: &str = "egor_doe.npy";
 
 pub struct Egor<O: GroupFunc, R: Rng> {
     pub n_eval: usize,
@@ -180,6 +184,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             let x = sampling.sample(self.n_doe);
             (self.obj_eval(&x), x, self.n_eval - self.n_doe)
         };
+        let doe = concatenate![Axis(1), x_data, y_data];
+        write_npy(DOE_INITIAL_FILE, &doe).expect("Write current doe");
 
         const MAX_RETRY: i32 = 10;
         let mut no_point_added_retries = MAX_RETRY;
@@ -215,6 +221,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 Zip::from(y_data.slice_mut(s![-count.., ..]).columns_mut())
                     .and(y_actual.columns())
                     .for_each(|mut y, val| y.assign(&val));
+                let doe = concatenate![Axis(1), x_data, y_data];
+                write_npy(DOE_FILE, &doe).expect("Write current doe");
                 let best_index = self.find_best_result_index(&y_data);
                 info!(
                     "Iteration {}/{}: Best fun(x)={} at x={}",
@@ -493,6 +501,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use ndarray::{array, ArrayView2};
+    use ndarray_npy::read_npy;
     use std::time::Instant;
 
     fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
@@ -501,15 +510,18 @@ mod tests {
 
     #[test]
     fn test_xsinx_ei_egor() {
+        let initial_doe = array![[0.], [7.], [25.]];
         let res = Egor::new(xsinx, &array![[0.0, 25.0]])
             .infill_strategy(InfillStrategy::EI)
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
             .n_eval(15)
-            .doe(Some(array![[0.], [7.], [25.]]))
+            .doe(Some(initial_doe.to_owned()))
             .minimize();
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
+        let saved_doe: Array2<f64> = read_npy(DOE_INITIAL_FILE).unwrap();
+        assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![.., ..1]), epsilon = 1e-6);
     }
 
     #[test]
