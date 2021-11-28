@@ -521,7 +521,7 @@ mod tests {
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
         let saved_doe: Array2<f64> = read_npy(DOE_INITIAL_FILE).unwrap();
-        assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![.., ..1]), epsilon = 1e-6);
+        assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
     }
 
     #[test]

@@ -500,7 +500,7 @@ mod tests {
             let xtest = Array2::zeros((1, dim));
             let ytest = gp.predict_values(&xtest).expect("prediction error");
             let ytrue = griewank(&xtest.row(0).to_owned());
-            assert_abs_diff_eq!(Array::from_elem((1, 1), ytrue), ytest, epsilon = 1.);
+            assert_abs_diff_eq!(Array::from_elem((1, 1), ytrue), ytest, epsilon = 1.1);
         }
     }
 

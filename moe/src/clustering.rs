@@ -335,7 +335,8 @@ mod test {
 
     #[test]
     fn test_find_best_cluster_nb_1d() {
-        let doe = LHS::new(&array![[0., 1.]]);
+        let rng = Isaac64Rng::seed_from_u64(42);
+        let doe = LHS::new(&array![[0., 1.]]).with_rng(rng);
         //write_npy("doe.npy", &doe);
         let xtrain = doe.sample(50);
         //write_npy("xtrain.npy", &xtrain);
