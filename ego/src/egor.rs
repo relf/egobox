@@ -502,6 +502,7 @@ mod tests {
     use argmin_testfunctions::rosenbrock;
     use ndarray::{array, ArrayView2};
     use ndarray_npy::read_npy;
+    use serial_test::serial;
     use std::time::Instant;
 
     fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
@@ -509,6 +510,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_xsinx_ei_egor() {
         let initial_doe = array![[0.], [7.], [25.]];
         let res = Egor::new(xsinx, &array![[0.0, 25.0]])
@@ -525,6 +527,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_xsinx_wb2() {
         let res = Egor::new(xsinx, &array![[0.0, 25.0]])
             .infill_strategy(InfillStrategy::WB2)
@@ -534,6 +537,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_xsinx_suggestions() {
         let mut ego = Egor::new(xsinx, &array![[0.0, 25.0]]);
         let ego = ego.infill_strategy(InfillStrategy::EI);
@@ -561,6 +565,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_rosenbrock_2d() {
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
@@ -605,6 +610,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_egor_g24() {
         let x = array![[1., 2.]];
         println!("{:?}", f_g24(&x.view()));
