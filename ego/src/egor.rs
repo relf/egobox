@@ -34,6 +34,7 @@ pub struct Egor<O: GroupFunc, R: Rng> {
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub kpls_dim: Option<usize>,
+    pub n_clusters: Option<usize>,
     pub obj: O,
     pub rng: R,
 }
@@ -64,6 +65,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
+            n_clusters: Some(1),
             obj: f,
             rng,
         }
@@ -129,6 +131,11 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         self
     }
 
+    pub fn n_clusters(&mut self, n_clusters: Option<usize>) -> &mut Self {
+        self.n_clusters = n_clusters;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<O, R2> {
         Egor {
             n_eval: self.n_eval,
@@ -144,6 +151,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             regression_spec: self.regression_spec,
             correlation_spec: self.correlation_spec,
             kpls_dim: self.kpls_dim,
+            n_clusters: self.n_clusters,
             obj: self.obj,
             rng,
         }
@@ -250,7 +258,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
     ) -> (Array2<f64>, Array2<f64>) {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
-        let obj_model = Moe::params(1)
+        let n_clusters = self.n_clusters.unwrap_or(1);
+        let obj_model = Moe::params(n_clusters)
             .set_kpls_dim(self.kpls_dim)
             .set_regression_spec(self.regression_spec)
             .set_correlation_spec(self.correlation_spec)
@@ -260,7 +269,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         let mut cstr_models: Vec<Box<Moe>> = Vec::with_capacity(self.n_cstr);
         for k in 0..self.n_cstr {
             cstr_models.push(Box::new(
-                Moe::params(1)
+                Moe::params(n_clusters)
                     .set_kpls_dim(self.kpls_dim)
                     .set_regression_spec(self.regression_spec)
                     .set_correlation_spec(self.correlation_spec)

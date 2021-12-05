@@ -121,6 +121,9 @@ impl InfillOptimizer {
 ///         Number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
+///     n_clusters (0 < int)
+///         Number of clusters used by the mixture of surrogate experts.
+///         
 #[pyclass]
 #[pyo3(
     text_signature = "(xlimits, n_start=20, n_doe=10, regression_spec=7, correlation_spec=15, infill_strategy=1, infill_optimizer=1)"
@@ -135,6 +138,7 @@ struct Optimizer {
     pub infill_strategy: InfillStrategy,
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
+    pub n_clusters: Option<usize>,
     // pub q_ei: QEiStrategy,
 }
 
@@ -158,7 +162,8 @@ impl Optimizer {
         corr_spec = "CorrelationSpec::ALL",
         infill_strategy = "InfillStrategy::WB2",
         infill_optimizer = "InfillOptimizer::COBYLA",
-        kpls_dim = "None"
+        kpls_dim = "None",
+        n_clusters = "1"
     )]
     fn new(
         xlimits: PyReadonlyArray2<f64>,
@@ -170,6 +175,7 @@ impl Optimizer {
         infill_strategy: u8,
         infill_optimizer: u8,
         kpls_dim: Option<usize>,
+        n_clusters: Option<usize>,
     ) -> Self {
         let xlimits = xlimits.to_owned_array();
         let doe = doe.map(|x| x.to_owned_array());
@@ -183,6 +189,7 @@ impl Optimizer {
             infill_strategy: InfillStrategy(infill_strategy),
             infill_optimizer: InfillOptimizer(infill_optimizer),
             kpls_dim,
+            n_clusters,
         }
     }
 
@@ -261,6 +268,7 @@ impl Optimizer {
             .infill_strategy(infill_strategy)
             .infill_optimizer(infill_optimizer)
             .kpls_dim(self.kpls_dim)
+            .n_clusters(self.n_clusters)
             .minimize();
 
         OptimResult {

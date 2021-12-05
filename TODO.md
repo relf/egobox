@@ -2,7 +2,9 @@
 * ~~Add initial doe specification~~
 * ~~Add warm start~~
 * ~~Add save doe result in file~~
-* Add reclustering
+* ~~Allow to choose clustering number~~
+* Add automated reclustering
+* Add qEI usage 
 * Test on SEGOMOE test cases
 * Add benchmarks
 * Add some parallel computations where relevant 
