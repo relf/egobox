@@ -70,6 +70,21 @@ impl InfillStrategy {
 }
 
 #[pyclass]
+struct ParInfillStrategy(u8);
+
+#[pymethods]
+impl ParInfillStrategy {
+    #[classattr]
+    const KB: u8 = 1;
+    #[classattr]
+    const KBLB: u8 = 2;
+    #[classattr]
+    const KBUB: u8 = 3;
+    #[classattr]
+    const CLMIN: u8 = 4;
+}
+
+#[pyclass]
 struct InfillOptimizer(u8);
 
 #[pymethods]
@@ -113,6 +128,16 @@ impl InfillOptimizer {
 ///         Infill criteria to decide best next promising point.
 ///         Can be either InfillStrategy.EI (1), InfillStrategy.WB2 (2) or InfillStrategy.WB2S (3)
 ///
+///     n_parallel (int > 0):
+///         Number of parallel evaluations of the function under optimization.
+///
+///     par_infill_strategy (ParInfillStrategy enum, an int in [1, 4])
+///         Parallel infill criteria to get virtual next promising points in order to allow
+///         n parallel evaluations of the function under optimization.
+///         Can be either ParInfillStrategy.KB (1, Kriging Believer),
+///         ParInfillStrategy.KBLB (2, KB Lower Bound), ParInfillStrategy.KBUB (2, KB Lower Bound),
+///         ParInfillStrategy.CLMIN (2, Constant Liar Minimum)
+///
 ///     infill_optimizer (InfillOptimizer enum, an int [1, 2])
 ///         Internal optimizer used to optimize infill criteria.
 ///         Can be either InfillOptimizer.COBYLA (1) or InfillOptimizer.SLSQP (2)
@@ -126,7 +151,7 @@ impl InfillOptimizer {
 ///         
 #[pyclass]
 #[pyo3(
-    text_signature = "(xlimits, n_start=20, n_doe=10, regression_spec=7, correlation_spec=15, infill_strategy=1, infill_optimizer=1)"
+    text_signature = "(xlimits, n_start=20, n_doe=10, regression_spec=7, correlation_spec=15, infill_strategy=1, n_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
 )]
 struct Optimizer {
     pub xlimits: Array2<f64>,
@@ -136,10 +161,11 @@ struct Optimizer {
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub infill_strategy: InfillStrategy,
+    pub n_parallel: usize,
+    pub par_infill_strategy: ParInfillStrategy,
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
-    // pub q_ei: QEiStrategy,
 }
 
 #[pyclass]
@@ -161,6 +187,8 @@ impl Optimizer {
         regr_spec = "RegressionSpec::ALL",
         corr_spec = "CorrelationSpec::ALL",
         infill_strategy = "InfillStrategy::WB2",
+        n_parallel = "1",
+        par_infill_strategy = "ParInfillStrategy::KB",
         infill_optimizer = "InfillOptimizer::COBYLA",
         kpls_dim = "None",
         n_clusters = "1"
@@ -173,6 +201,8 @@ impl Optimizer {
         regr_spec: u8,
         corr_spec: u8,
         infill_strategy: u8,
+        n_parallel: usize,
+        par_infill_strategy: u8,
         infill_optimizer: u8,
         kpls_dim: Option<usize>,
         n_clusters: Option<usize>,
@@ -187,6 +217,8 @@ impl Optimizer {
             regression_spec: RegressionSpec(regr_spec),
             correlation_spec: CorrelationSpec(corr_spec),
             infill_strategy: InfillStrategy(infill_strategy),
+            n_parallel,
+            par_infill_strategy: ParInfillStrategy(par_infill_strategy),
             infill_optimizer: InfillOptimizer(infill_optimizer),
             kpls_dim,
             n_clusters,
@@ -237,11 +269,26 @@ impl Optimizer {
             InfillStrategy::WB2 => ego::InfillStrategy::WB2,
             InfillStrategy::WB2S => ego::InfillStrategy::WB2S,
             _ => panic!(
-                "InfillOptimizer should be either EI ({}), WB2 ({}) or WB2S ({}), got {}",
+                "InfillStrategy should be either EI ({}), WB2 ({}) or WB2S ({}), got {}",
                 InfillStrategy::EI,
                 InfillStrategy::WB2,
                 InfillStrategy::WB2S,
-                self.infill_optimizer.0
+                self.infill_strategy.0
+            ),
+        };
+
+        let qei_strategy = match self.par_infill_strategy.0 {
+            ParInfillStrategy::KB => ego::QEiStrategy::KrigingBeliever,
+            ParInfillStrategy::KBLB => ego::QEiStrategy::KrigingBelieverLowerBound,
+            ParInfillStrategy::KBUB => ego::QEiStrategy::KrigingBelieverUpperBound,
+            ParInfillStrategy::CLMIN => ego::QEiStrategy::ConstantLiarMinimum,
+            _ => panic!(
+                "ParInfillStrategy should be either KB ({}), KBLB ({}), KBUB ({}) or CLMIN ({}), got {}",
+                ParInfillStrategy::KB,
+                ParInfillStrategy::KBLB,
+                ParInfillStrategy::KBUB,
+                ParInfillStrategy::CLMIN,
+                self.par_infill_strategy.0
             ),
         };
 
@@ -266,6 +313,8 @@ impl Optimizer {
             .regression_spec(moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
             .correlation_spec(moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap())
             .infill_strategy(infill_strategy)
+            .n_parallel(self.n_parallel)
+            .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
             .kpls_dim(self.kpls_dim)
             .n_clusters(self.n_clusters)
@@ -287,6 +336,7 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<RegressionSpec>()?;
     m.add_class::<CorrelationSpec>()?;
     m.add_class::<InfillStrategy>()?;
+    m.add_class::<ParInfillStrategy>()?;
     m.add_class::<InfillOptimizer>()?;
     m.add_class::<OptimResult>()?;
     Ok(())
