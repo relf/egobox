@@ -99,6 +99,18 @@ impl InfillOptimizer {
 ///
 /// Parameters
 ///
+///     fun: array[n, nx]) -> array[n, ny]
+///         the function to be minimized
+///         fun(x) = [obj(x), cstr_1(x), ... cstr_k(x)] where
+///            obj is the objective function [n, nx] -> [n, 1]
+///            cstr_i is the ith constraint function [n, nx] -> [n, 1]
+///            an k the number of constraints (n_cstr)
+///            hence ny = 1 (obj) + k (cstrs)
+///         cstr functions are expected be negative (<=0) at the optimum.
+///
+///     n_cstr (int):
+///         the number of constraint functions.
+///
 ///     xlimits (array[nx, 2]):
 ///         Bounds of th nx components of the input x (eg. [[lower_1, upper_1], ..., [lower_nx, upper_nx]])
 ///
@@ -151,10 +163,12 @@ impl InfillOptimizer {
 ///         
 #[pyclass]
 #[pyo3(
-    text_signature = "(xlimits, n_start=20, n_doe=10, regression_spec=7, correlation_spec=15, infill_strategy=1, n_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
+    text_signature = "(fun, xlimits, n_cstr=0, n_start=20, n_doe=10, regression_spec=7, correlation_spec=15, infill_strategy=1, n_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
 )]
 struct Optimizer {
+    pub fun: PyObject,
     pub xlimits: Array2<f64>,
+    pub n_cstr: usize,
     pub n_start: usize,
     pub n_doe: usize,
     pub doe: Option<Array2<f64>>,
@@ -180,7 +194,9 @@ struct OptimResult {
 impl Optimizer {
     #[new]
     #[args(
+        fun,
         xlimits,
+        n_cstr = "0",
         n_start = "20",
         n_doe = "10",
         doe = "None",
@@ -194,7 +210,10 @@ impl Optimizer {
         n_clusters = "1"
     )]
     fn new(
+        py: Python,
+        fun: &PyAny,
         xlimits: PyReadonlyArray2<f64>,
+        n_cstr: usize,
         n_start: usize,
         n_doe: usize,
         doe: Option<PyReadonlyArray2<f64>>,
@@ -210,7 +229,9 @@ impl Optimizer {
         let xlimits = xlimits.to_owned_array();
         let doe = doe.map(|x| x.to_owned_array());
         Optimizer {
+            fun: fun.to_object(py),
             xlimits,
+            n_cstr,
             n_start,
             n_doe,
             doe,
@@ -229,18 +250,6 @@ impl Optimizer {
     ///
     /// Parameters
     ///
-    ///     fun: array[n, nx]) -> array[n, ny]
-    ///         the function to be minimized
-    ///         fun(x) = [obj(x), cstr_1(x), ... cstr_k(x)] where
-    ///            obj is the objective function [n, nx] -> [n, 1]
-    ///            cstr_i is the ith constraint function [n, nx] -> [n, 1]
-    ///            an k the number of constraints (n_cstr)
-    ///            hence ny = 1 (obj) + k (cstrs)
-    ///         cstr functions are expected be negative (<=0) at the optimum.
-    ///
-    ///     n_cstr (int):
-    ///         the number of constraint functions.
-    ///             
     ///     n_eval (int):
     ///         the function evaluation budget, number of fun calls.
     ///
@@ -250,15 +259,15 @@ impl Optimizer {
     ///         x_opt (array[1, nx]): x value  where fun is at its minimum subject to constraint
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
-    #[args(n_eval = "20", n_cstr = "0")]
-    #[pyo3(text_signature = "(fun, n_eval=20, n_cstr=0)")]
-    fn minimize(&self, fun: &PyAny, n_cstr: usize, n_eval: usize) -> OptimResult {
-        let obj: PyObject = fun.into();
+    #[args(n_eval = "20")]
+    #[pyo3(text_signature = "(n_eval=20)")]
+    fn minimize(&self, py: Python, n_eval: usize) -> OptimResult {
+        let fun = self.fun.to_object(py);
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
             let gil = Python::acquire_gil();
             let py = gil.python();
             let args = (x.to_owned().into_pyarray(py),);
-            let res = obj.call1(py, args).unwrap();
+            let res = fun.call1(py, args).unwrap();
             let pyarray: &PyArray2<f64> = res.extract(py).unwrap();
             let val = pyarray.to_owned_array();
             val
@@ -305,7 +314,7 @@ impl Optimizer {
 
         let doe = self.doe.as_ref().map(|v| v.to_owned());
         let res = Egor::new(obj, &self.xlimits)
-            .n_cstr(n_cstr)
+            .n_cstr(self.n_cstr)
             .n_eval(n_eval)
             .n_start(self.n_start)
             .n_doe(self.n_doe)
