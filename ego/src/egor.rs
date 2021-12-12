@@ -41,7 +41,7 @@ pub struct Egor<O: GroupFunc, R: Rng> {
 
 impl<O: GroupFunc> Egor<O, Isaac64Rng> {
     pub fn new(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Egor<O, Isaac64Rng> {
-        Self::new_with_rng(f, xlimits, Isaac64Rng::seed_from_u64(42))
+        Self::new_with_rng(f, xlimits, Isaac64Rng::from_entropy())
     }
 }
 
@@ -55,7 +55,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             n_eval: 20,
             n_start: 20,
             n_parallel: 1,
-            n_doe: 10,
+            n_doe: 0,
             n_cstr: 0,
             doe: None,
             xlimits: xlimits.to_owned(),
@@ -175,6 +175,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         let (mut y_data, mut x_data, n_iter) = if let Some(doe) = &self.doe {
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
+                info!("Compute initial DOE on specified {} points", doe.nrows());
                 (
                     self.obj_eval(&doe),
                     doe.to_owned(),
@@ -182,6 +183,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 )
             } else {
                 // split doe in x and y
+                info!("Use specified DOE {} samples", doe.nrows());
                 (
                     doe.slice(s![.., self.xlimits.nrows()..]).to_owned(),
                     doe.slice(s![.., ..self.xlimits.nrows()]).to_owned(),
@@ -189,8 +191,14 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 )
             }
         } else {
-            let x = sampling.sample(self.n_doe);
-            (self.obj_eval(&x), x, self.n_eval - self.n_doe)
+            let n_doe = if self.n_doe == 0 {
+                (self.xlimits.nrows() + 1).max(5)
+            } else {
+                self.n_doe
+            };
+            info!("Compute initial LHS with {} points", n_doe);
+            let x = sampling.sample(n_doe);
+            (self.obj_eval(&x), x, self.n_eval - n_doe)
         };
         let doe = concatenate![Axis(1), x_data, y_data];
         write_npy(DOE_INITIAL_FILE, &doe).expect("Write current doe");
@@ -582,6 +590,7 @@ mod tests {
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .sample(10);
         let res = Egor::new(rosenb, &xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
             .infill_strategy(InfillStrategy::EI)
             .doe(Some(doe))
             .n_eval(30)
@@ -628,6 +637,7 @@ mod tests {
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .sample(10);
         let res = Egor::new(f_g24, &xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
             .n_cstr(2)
             .infill_strategy(InfillStrategy::EI)
             .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
@@ -636,6 +646,6 @@ mod tests {
             .minimize();
         println!("G24 optim result = {:?}", res);
         let expected = array![2.3295, 3.1785];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-2);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
     }
 }
