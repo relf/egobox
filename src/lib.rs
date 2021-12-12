@@ -117,8 +117,10 @@ impl InfillOptimizer {
 ///     n_start (int > 0):
 ///         Number of runs of infill strategy optimizations (best result taken)
 ///
-///     n_doe (int > 0):
+///     n_doe (int >= 0):
 ///         Number of samples of initial LHS sampling (used when DOE not provided by the user).
+///         When 0 a number of points is computed automatically regarding the number of input variables
+///         of the function under optimization.
 ///
 ///     doe (array[ns, nt]):
 ///         Initial DOE containing ns samples:
@@ -158,12 +160,15 @@ impl InfillOptimizer {
 ///         Number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
-///     n_clusters (0 < int)
+///     n_clusters (int > 0)
 ///         Number of clusters used by the mixture of surrogate experts.
-///         
+///   
+///     seed (int >= 0)
+///         Random generator seed to allow computation reproducibility.
+///      
 #[pyclass]
 #[pyo3(
-    text_signature = "(fun, xlimits, n_cstr=0, n_start=20, n_doe=10, regression_spec=7, correlation_spec=15, infill_strategy=1, n_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
+    text_signature = "(fun, xlimits, n_cstr=0, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, n_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
 )]
 struct Optimizer {
     pub fun: PyObject,
@@ -180,6 +185,7 @@ struct Optimizer {
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
+    pub seed: Option<u64>,
 }
 
 #[pyclass]
@@ -198,7 +204,7 @@ impl Optimizer {
         xlimits,
         n_cstr = "0",
         n_start = "20",
-        n_doe = "10",
+        n_doe = "0",
         doe = "None",
         regr_spec = "RegressionSpec::ALL",
         corr_spec = "CorrelationSpec::ALL",
@@ -207,7 +213,8 @@ impl Optimizer {
         par_infill_strategy = "ParInfillStrategy::KB",
         infill_optimizer = "InfillOptimizer::COBYLA",
         kpls_dim = "None",
-        n_clusters = "1"
+        n_clusters = "1",
+        seed = "None"
     )]
     fn new(
         py: Python,
@@ -225,6 +232,7 @@ impl Optimizer {
         infill_optimizer: u8,
         kpls_dim: Option<usize>,
         n_clusters: Option<usize>,
+        seed: Option<u64>,
     ) -> Self {
         let xlimits = xlimits.to_owned_array();
         let doe = doe.map(|x| x.to_owned_array());
@@ -243,6 +251,7 @@ impl Optimizer {
             infill_optimizer: InfillOptimizer(infill_optimizer),
             kpls_dim,
             n_clusters,
+            seed,
         }
     }
 
@@ -312,8 +321,15 @@ impl Optimizer {
             ),
         };
 
+        let rng = if let Some(seed) = self.seed {
+            Isaac64Rng::seed_from_u64(seed)
+        } else {
+            Isaac64Rng::from_entropy()
+        };
+
         let doe = self.doe.as_ref().map(|v| v.to_owned());
         let res = Egor::new(obj, &self.xlimits)
+            .with_rng(rng)
             .n_cstr(self.n_cstr)
             .n_eval(n_eval)
             .n_start(self.n_start)
