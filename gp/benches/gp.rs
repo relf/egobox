@@ -1,7 +1,8 @@
-extern crate intel_mkl_src;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use doe::{SamplingMethod, LHS};
-use gp::{ConstantMean, GaussianProcess, SquaredExponentialKernel};
+use gp::correlation_models::SquaredExponentialKernel;
+use gp::mean_models::ConstantMean;
+use gp::GaussianProcess;
 use ndarray::{array, Array1, Zip};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
@@ -30,7 +31,7 @@ fn criterion_gp(c: &mut Criterion) {
                 let xlimits = lim.broadcast((dim, 2)).unwrap();
                 let rng = Isaac64Rng::seed_from_u64(42);
                 let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
-                write_npy(&xfilename, xt.to_owned()).expect("cannot save xt");
+                write_npy(&xfilename, &xt).expect("cannot save xt");
                 xt
             }
         };
@@ -38,11 +39,11 @@ fn criterion_gp(c: &mut Criterion) {
             Ok(yt) => yt,
             Err(_) => {
                 let mut yv: Array1<f64> = Array1::zeros(xt.nrows());
-                Zip::from(&mut yv).and(xt.rows()).par_apply(|y, x| {
+                Zip::from(&mut yv).and(xt.rows()).par_for_each(|y, x| {
                     *y = griewak(&x.to_owned());
                 });
                 let yt = yv.into_shape((xt.nrows(), 1)).unwrap();
-                write_npy(&yfilename, yt.to_owned()).expect("cannot save yt");
+                write_npy(&yfilename, &yt).expect("cannot save yt");
                 yt
             }
         };
@@ -50,7 +51,7 @@ fn criterion_gp(c: &mut Criterion) {
         group.bench_function(format!("gp {}", dims[i]), |b| {
             b.iter(|| {
                 black_box(
-                    GaussianProcess::<ConstantMean, SquaredExponentialKernel>::params(
+                    GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
                         ConstantMean::default(),
                         SquaredExponentialKernel::default(),
                     )
