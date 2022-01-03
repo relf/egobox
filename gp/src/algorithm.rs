@@ -6,7 +6,7 @@ use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
 use linfa::traits::Fit;
 use linfa::Dataset;
-use linfa_pls::PlsRegression;
+use linfa_pls::{PlsError, PlsRegression};
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_linalg::cholesky::*;
@@ -175,9 +175,15 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
         let mut w_star = Array2::eye(x.ncols());
         if let Some(n_components) = self.kpls_dim() {
             let ds = Dataset::new(x.to_owned(), y.to_owned());
-            let pls = PlsRegression::<F>::params(*n_components).fit(&ds)?;
-            let (x_rotations, _) = pls.rotations();
-            w_star = x_rotations.to_owned();
+            w_star = PlsRegression::params(*n_components).fit(&ds).map_or_else(
+                |e| match e {
+                    PlsError::PowerMethodConstantResidualError() => {
+                        Ok(Array2::zeros((x.ncols(), *n_components)))
+                    }
+                    err => return Err(err),
+                },
+                |v| Ok(v.rotations().0.to_owned()),
+            )?;
         };
         let x_distances = DistanceMatrix::new(&xtrain.data);
         let sums = x_distances
@@ -375,7 +381,7 @@ mod tests {
     use crate::{correlation_models::*, mean_models::*};
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
-    use doe::{SamplingMethod, LHS};
+    use doe::{LHSKind, SamplingMethod, LHS};
     use ndarray::{arr2, array, Array, Zip};
     use ndarray_linalg::Norm;
     use ndarray_npy::{read_npy, write_npy};
@@ -383,6 +389,29 @@ mod tests {
     use ndarray_stats::DeviationExt;
     use paste::paste;
     use rand_isaac::Isaac64Rng;
+
+    #[test]
+    fn test_constant_function() {
+        let dim = 3;
+        let lim = array![[0., 1.]];
+        let xlimits = lim.broadcast((dim, 2)).unwrap();
+        let rng = Isaac64Rng::seed_from_u64(42);
+        let nt = 30;
+        let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
+        let yt = Array::from_vec(vec![3.14; nt]).insert_axis(Axis(1));
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+            ConstantMean::default(),
+            SquaredExponentialKernel::default(),
+        )
+        .set_initial_theta(0.1)
+        .set_kpls_dim(Some(1))
+        .fit(&xt, &yt)
+        .expect("GP fit error");
+        let rng = Isaac64Rng::seed_from_u64(43);
+        let xtest = LHS::new(&xlimits).with_rng(rng).sample(nt);
+        let ytest = gp.predict_values(&xtest).expect("prediction error");
+        assert_abs_diff_eq!(Array::from_elem((nt, 1), 3.14), ytest, epsilon = 1e-6);
+    }
 
     macro_rules! test_gp {
         ($regr:ident, $corr:ident, $expected:expr) => {
@@ -446,11 +475,11 @@ mod tests {
     test_gp!(Quadratic, Matern52, 21.68);
 
     #[test]
-    fn test_kpls() {
+    fn test_kpls_griewank() {
         let dims = vec![5, 10, 20]; //, 60];
         let nts = vec![100, 300, 400]; //, 800];
 
-        for i in 0..2 {
+        (0..2).for_each(|i| {
             let dim = dims[i];
             let nt = nts[i];
 
@@ -497,11 +526,11 @@ mod tests {
             .fit(&xt, &yt)
             .expect("GP fit error");
 
-            let xtest = Array2::zeros((1, dim));
+            let xtest = Array2::ones((1, dim));
             let ytest = gp.predict_values(&xtest).expect("prediction error");
             let ytrue = griewank(&xtest.row(0).to_owned());
             assert_abs_diff_eq!(Array::from_elem((1, 1), ytrue), ytest, epsilon = 1.1);
-        }
+        });
     }
 
     fn tensor_product_exp(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
