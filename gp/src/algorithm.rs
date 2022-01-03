@@ -18,10 +18,13 @@ use ndarray_stats::QuantileExt;
 use nlopt::*;
 use num_traits;
 use rand_isaac::Isaac64Rng;
+use serde::Serialize;
+use std::fs;
+use std::io::Write;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize)]
 pub struct GpInnerParams<F: Float> {
     /// Gaussian process variance
     sigma2: Array1<F>,
@@ -50,7 +53,8 @@ impl<F: Float> Clone for GpInnerParams<F> {
     }
 }
 
-/// Gaussian
+/// Gaussian Process
+#[derive(Serialize)]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Array1<F>,
@@ -158,6 +162,12 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
         } else {
             None
         }
+    }
+
+    pub fn save(&self, path: &str) -> Result<()> {
+        let mut file = fs::File::create(path).unwrap();
+        file.write_all(serde_json::to_string(self)?.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -381,7 +391,7 @@ mod tests {
     use crate::{correlation_models::*, mean_models::*};
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
-    use doe::{LHSKind, SamplingMethod, LHS};
+    use doe::{SamplingMethod, LHS};
     use ndarray::{arr2, array, Array, Zip};
     use ndarray_linalg::Norm;
     use ndarray_npy::{read_npy, write_npy};
@@ -597,5 +607,19 @@ mod tests {
         let ytest = gp.predict_values(&xv).unwrap();
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
         assert_abs_diff_eq!(err, 0., epsilon = 2e-1);
+    }
+
+    #[test]
+    fn test_save() {
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+            ConstantMean::default(),
+            SquaredExponentialKernel::default(),
+        )
+        .set_initial_theta(0.1)
+        .fit(&xt, &yt)
+        .expect("GP fit error");
+        gp.save("save_gp.json").expect("GP not saved");
     }
 }
