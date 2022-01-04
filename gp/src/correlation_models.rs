@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use linfa::Float;
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 use serde::{Deserialize, Serialize};
@@ -11,13 +13,25 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + Serialize {
     ) -> Array2<F>;
 }
 
-#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
 #[serde(into = "String")]
+#[serde(try_from = "String")]
 pub struct SquaredExponentialKernel();
 
 impl Into<String> for SquaredExponentialKernel {
     fn into(self) -> String {
         "SquaredExponential".to_string()
+    }
+}
+
+impl TryFrom<String> for SquaredExponentialKernel {
+    type Error = &'static str;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        if s == "SquaredExponential" {
+            Ok(Self::default())
+        } else {
+            Err("Bad string value for SquaredExponentialKernel, should be \'SquaredExponential\'")
+        }
     }
 }
 

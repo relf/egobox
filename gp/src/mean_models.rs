@@ -2,12 +2,12 @@ use std::convert::TryFrom;
 
 use linfa::Float;
 use ndarray::{concatenate, s, Array2, ArrayBase, Axis, Data, Ix2};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 pub trait RegressionModel<F: Float>: Clone + Copy + Default + Serialize {
     fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F>;
 }
 
-#[derive(Default, Clone, Copy, Serialize)]
+#[derive(Default, Clone, Copy, Serialize, Deserialize, Debug)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct ConstantMean();
@@ -34,7 +34,7 @@ impl TryFrom<String> for ConstantMean {
         }
     }
 }
-#[derive(Default, Clone, Copy, Serialize)]
+#[derive(Default, Clone, Copy, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct LinearMean();
@@ -63,7 +63,7 @@ impl TryFrom<String> for LinearMean {
     }
 }
 
-#[derive(Default, Clone, Copy, Serialize)]
+#[derive(Default, Clone, Copy, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct QuadraticMean();

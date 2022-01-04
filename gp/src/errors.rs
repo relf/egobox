@@ -19,8 +19,10 @@ pub enum GpError {
     PlsError(String),
     /// When a value is invalid
     InvalidValue(String),
-    /// When error in save occurs
+    /// When error during saving
     SaveError(String),
+    /// When error during loading
+    LoadError(String),
 }
 
 impl Display for GpError {
@@ -35,6 +37,7 @@ impl Display for GpError {
             Self::PlsError(message) => write!(f, "PLS error: {}", message),
             Self::InvalidValue(message) => write!(f, "Value error: {}", message),
             Self::SaveError(message) => write!(f, "Save error: {}", message),
+            Self::LoadError(message) => write!(f, "Load error: {}", message),
         }
     }
 }
