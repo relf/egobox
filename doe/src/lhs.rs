@@ -113,7 +113,7 @@ impl<F: Float, R: Rng + Clone> LHS<F, R> {
         // hard-coded params
         let j_range = 20;
         let p = F::cast(10.);
-        let t0 = F::cast(0.005) * self._phip(&lhs, p);
+        let t0 = F::cast(0.005) * self._phip(lhs, p);
         let tol = F::cast(1e-3);
 
         let mut t = t0;

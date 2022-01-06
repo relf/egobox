@@ -1,6 +1,5 @@
 use linfa_pls::PlsError;
 use ndarray_linalg::error::LinalgError;
-use serde_json;
 use std::error::Error;
 use std::fmt::{self, Display};
 

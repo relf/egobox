@@ -164,7 +164,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
     ) -> Array2<f64> {
         let rng = self.rng.clone();
         let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
-        let (x_dat, _) = self.next_points(0, &x_data, &y_data, &sampling);
+        let (x_dat, _) = self.next_points(0, x_data, y_data, &sampling);
         x_dat
     }
 
@@ -177,7 +177,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
                 (
-                    self.obj_eval(&doe),
+                    self.obj_eval(doe),
                     doe.to_owned(),
                     self.n_eval - doe.nrows(),
                 )
@@ -271,7 +271,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             .set_kpls_dim(self.kpls_dim)
             .set_regression_spec(self.regression_spec)
             .set_correlation_spec(self.correlation_spec)
-            .fit(&x_data, &y_data.slice(s![.., 0..1]))
+            .fit(x_data, &y_data.slice(s![.., 0..1]))
             .expect("GP training failure");
 
         let mut cstr_models: Vec<Box<Moe>> = Vec::with_capacity(self.n_cstr);
@@ -281,14 +281,14 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     .set_kpls_dim(self.kpls_dim)
                     .set_regression_spec(self.regression_spec)
                     .set_correlation_spec(self.correlation_spec)
-                    .fit(&x_data, &y_data.slice(s![.., k + 1..k + 2]))
+                    .fit(x_data, &y_data.slice(s![.., k + 1..k + 2]))
                     .expect("GP training failure"),
             ))
         }
 
         for _ in 0..self.n_parallel {
-            match self.find_best_point(x_data, &y_data, &sampling, &obj_model, &cstr_models) {
-                Ok(xk) => match self.get_virtual_point(&xk, &y_data, &obj_model, &cstr_models) {
+            match self.find_best_point(x_data, y_data, sampling, &obj_model, &cstr_models) {
+                Ok(xk) => match self.get_virtual_point(&xk, y_data, &obj_model, &cstr_models) {
                     Ok(yk) => {
                         y_dat = concatenate![
                             Axis(0),
@@ -317,7 +317,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &LHS<f64, R>,
         obj_model: &Moe,
-        cstr_models: &Vec<Box<Moe>>,
+        cstr_models: &[Box<Moe>],
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
@@ -329,11 +329,11 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             } = params;
             if let Some(grad) = gradient {
                 let f = |x: &Vec<f64>| -> f64 {
-                    self.infill_eval(x, &obj_model, *f_min, *scale_obj, *scale_wb2)
+                    self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
                 };
                 grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
             }
-            self.infill_eval(x, &obj_model, *f_min, *scale_obj, *scale_wb2)
+            self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
         };
 
         let mut cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>>>> = Vec::with_capacity(self.n_cstr);
@@ -366,10 +366,10 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         let mut best_x = None;
 
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-        let scale_obj = compute_obj_scale(&scaling_points, &obj_model);
-        let scale_cstr = compute_cstr_scales(&scaling_points, &cstr_models);
+        let scale_obj = compute_obj_scale(&scaling_points, obj_model);
+        let scale_cstr = compute_cstr_scales(&scaling_points, cstr_models);
         let scale_wb2 = if self.infill == InfillStrategy::WB2S {
-            compute_wb2s_scale(&scaling_points, &obj_model, *f_min)
+            compute_wb2s_scale(&scaling_points, obj_model, *f_min)
         } else {
             1.
         };
@@ -386,14 +386,14 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 Target::Minimize,
                 ObjData {
                     scale_obj,
-                    scale_wb2: scale_wb2,
+                    scale_wb2,
                     scale_cstr: scale_cstr.to_owned(),
                 },
             );
             let lower = self.xlimits.column(0).to_owned();
-            optimizer.set_lower_bounds(&lower.as_slice().unwrap())?;
+            optimizer.set_lower_bounds(lower.as_slice().unwrap())?;
             let upper = self.xlimits.column(1).to_owned();
-            optimizer.set_upper_bounds(&upper.as_slice().unwrap())?;
+            optimizer.set_upper_bounds(upper.as_slice().unwrap())?;
             optimizer.set_maxeval(200)?;
             optimizer.set_ftol_rel(1e-4)?;
             optimizer.set_ftol_abs(1e-4)?;
@@ -420,7 +420,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     Ok((_, opt)) => {
                         if opt < best_opt {
                             best_opt = opt;
-                            let res = x_opt.iter().map(|v| *v).collect::<Vec<f64>>();
+                            let res = x_opt.iter().copied().collect::<Vec<f64>>();
                             best_x = Some(Array::from(res));
                             success = true;
                         }
@@ -439,14 +439,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
             let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
             for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
-                if row
-                    .slice(s![1..])
-                    .iter()
-                    .filter(|v| *v > &1e-6)
-                    .collect::<Vec<&f64>>()
-                    .len()
-                    == 0
-                {
+                if !row.slice(s![1..]).iter().any(|v| *v > 1e-6) {
                     index = i;
                     break;
                 }
@@ -462,7 +455,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         obj_model: &Moe,
-        cstr_models: &Vec<Box<Moe>>,
+        cstr_models: &[Box<Moe>],
     ) -> Result<Vec<f64>> {
         let mut res: Vec<f64> = Vec::with_capacity(3);
         if self.q_ei == QEiStrategy::ConstantLiarMinimum {
@@ -474,8 +467,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             Ok(res)
         } else {
             let x = &xk.to_owned().insert_axis(Axis(0));
-            let pred = obj_model.predict_values(&x)?[[0, 0]];
-            let var = obj_model.predict_variances(&x)?[[0, 0]];
+            let pred = obj_model.predict_values(x)?[[0, 0]];
+            let var = obj_model.predict_variances(x)?[[0, 0]];
             let conf = match self.q_ei {
                 QEiStrategy::KrigingBeliever => 0.,
                 QEiStrategy::KrigingBelieverLowerBound => -3.,
@@ -483,8 +476,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 _ => -1., // never used
             };
             res.push(pred + conf * Scalar::sqrt(var));
-            for ic in 0..self.n_cstr {
-                res.push(cstr_models[ic].predict_values(&x)?[[0, 0]]);
+            for cstr_model in cstr_models {
+                res.push(cstr_model.predict_values(x)?[[0, 0]]);
             }
             Ok(res)
         }
@@ -498,7 +491,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         scale: f64,
         scale_wb2: f64,
     ) -> f64 {
-        let x_f = x.iter().map(|v| *v).collect::<Vec<f64>>();
+        let x_f = x.iter().copied().collect::<Vec<f64>>();
         let obj = match self.infill {
             InfillStrategy::EI => -ei(&x_f, obj_model, f_min),
             InfillStrategy::WB2 => -wb2s(&x_f, obj_model, f_min, 1.),

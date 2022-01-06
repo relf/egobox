@@ -18,8 +18,8 @@ impl<F: Float> RegressionModel<F> for ConstantMean {
     }
 }
 
-impl Into<String> for ConstantMean {
-    fn into(self) -> String {
+impl From<ConstantMean> for String {
+    fn from(_item: ConstantMean) -> Self {
         "Constant".to_string()
     }
 }
@@ -46,8 +46,8 @@ impl<F: Float> RegressionModel<F> for LinearMean {
     }
 }
 
-impl Into<String> for LinearMean {
-    fn into(self) -> String {
+impl From<LinearMean> for String {
+    fn from(_item: LinearMean) -> Self {
         "Linear".to_string()
     }
 }
@@ -79,8 +79,8 @@ impl<F: Float> RegressionModel<F> for QuadraticMean {
     }
 }
 
-impl Into<String> for QuadraticMean {
-    fn into(self) -> String {
+impl From<QuadraticMean> for String {
+    fn from(_item: QuadraticMean) -> Self {
         "Quadratic".to_string()
     }
 }

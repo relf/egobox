@@ -50,10 +50,10 @@ macro_rules! declare_surrogate {
 
             impl Surrogate for [<Gp $regr $corr Surrogate>] {
                 fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_values(x)?)
+                    self.0.predict_values(x)
                 }
                 fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_variances(x)?)
+                    self.0.predict_variances(x)
                 }
             }
 

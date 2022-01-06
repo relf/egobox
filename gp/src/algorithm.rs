@@ -17,7 +17,6 @@ use ndarray_linalg::triangular::*;
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
-use num_traits;
 use paste::paste;
 use rand_isaac::Isaac64Rng;
 use serde::{Deserialize, Serialize};
@@ -81,8 +80,8 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> Clone
     fn clone(&self) -> Self {
         Self {
             theta: self.theta.to_owned(),
-            mean: self.mean.clone(),
-            kernel: self.kernel.clone(),
+            mean: self.mean,
+            kernel: self.kernel,
             inner_params: self.inner_params.clone(),
             w_star: self.w_star.to_owned(),
             xtrain: self.xtrain.clone(),
@@ -102,7 +101,7 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
     }
 
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
-        let corr = self._compute_correlation(&x);
+        let corr = self._compute_correlation(x);
         // Compute the mean at x
         let f = self.mean.apply(x);
         // Scaled predictor
@@ -112,7 +111,7 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
     }
 
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
-        let corr = self._compute_correlation(&x);
+        let corr = self._compute_correlation(x);
         let inners = &self.inner_params;
 
         let corr_t = corr.t().to_owned();
@@ -239,7 +238,7 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
                     PlsError::PowerMethodConstantResidualError() => {
                         Ok(Array2::zeros((x.ncols(), *n_components)))
                     }
-                    err => return Err(err),
+                    err => Err(err),
                 },
                 |v| Ok(v.rotations().0.to_owned()),
             )?;
@@ -425,11 +424,11 @@ pub fn reduced_likelihood<F: Float>(
         reduced_likelihood,
         GpInnerParams {
             sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
-            beta: beta,
+            beta,
             gamma,
-            r_chol: r_chol,
-            ft: ft,
-            ft_qr_r: ft_qr_r,
+            r_chol,
+            ft,
+            ft_qr_r,
         },
     ))
 }

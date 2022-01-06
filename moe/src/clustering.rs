@@ -97,15 +97,13 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
 
         // Cross Validation
         if ok {
-            let mut k = 0;
             for (train, valid) in dataset.fold(5).into_iter() {
-                k = k + 1;
                 if let Ok(mixture) = Moe::params(n_clusters)
                     .set_regression_spec(regression_spec)
                     .set_correlation_spec(correlation_spec)
                     //.set_kpls_dim(Some(1))
                     .set_gmm(Some(gmm.clone()))
-                    .fit(&train.records(), &train.targets())
+                    .fit(train.records(), train.targets())
                 {
                     let xytrain =
                         concatenate(Axis(1), &[train.records().view(), train.targets.view()])
@@ -125,9 +123,9 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                         concatenate(Axis(1), &[records.view(), targets.view()]).unwrap();
                     bic_c.push(gmx.bic(&valid_set));
                     aic_c.push(gmx.aic(&valid_set));
-                    for j in 0..i + 1 {
+                    for cluster in clusters.iter().take(i + 1) {
                         // If there is at least 3 points
-                        ok = clusters[j].len() > 3
+                        ok = cluster.len() > 3
                     }
                     let actual = valid.targets();
                     let mixture = mixture.set_recombination(Recombination::Hard);
@@ -218,20 +216,18 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                 exit_ =
                     auxkph >= auxkh && auxkps >= auxks && auxkpph >= auxkph && auxkpps >= auxkps;
             }
-        } else {
-            if i > 3 {
-                // Stop the search if the means of errors increase three times
-                auxkh = errorih[i - 2];
-                auxkph = errorih[i - 1];
-                auxkpph = errorih[i];
-                auxks = erroris[i - 2];
-                auxkps = erroris[i - 1];
-                auxkpps = erroris[i];
+        } else if i > 3 {
+            // Stop the search if the means of errors increase three times
+            auxkh = errorih[i - 2];
+            auxkph = errorih[i - 1];
+            auxkpph = errorih[i];
+            auxks = erroris[i - 2];
+            auxkps = erroris[i - 1];
+            auxkpps = erroris[i];
 
-                exit_ =
-                    auxkph >= auxkh && auxkps >= auxks && auxkpph >= auxkph && auxkpps >= auxkps;
-            }
+            exit_ = auxkph >= auxkh && auxkps >= auxks && auxkpph >= auxkph && auxkpps >= auxkps;
         }
+
         i += 1;
     }
     // Find The best number of cluster
@@ -276,14 +272,12 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
             cluster = cluster_mses;
             hardi = false;
         }
+    } else if errorih[cluster_mse - 1] < erroris[cluster_mses - 1] {
+        cluster = cluster_mse;
+        hardi = true;
     } else {
-        if errorih[cluster_mse - 1] < erroris[cluster_mses - 1] {
-            cluster = cluster_mse;
-            hardi = true;
-        } else {
-            cluster = cluster_mses;
-            hardi = false;
-        }
+        cluster = cluster_mses;
+        hardi = false;
     }
 
     let number_cluster = cluster;

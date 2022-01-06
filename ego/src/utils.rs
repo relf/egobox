@@ -51,15 +51,15 @@ pub fn compute_wb2s_scale(x: &Array2<f64>, obj_model: &Moe, f_min: f64) -> f64 {
 }
 
 pub fn compute_obj_scale(x: &Array2<f64>, obj_model: &Moe) -> f64 {
-    let preds = obj_model.predict_values(x).unwrap().mapv(|v| f64::abs(v));
+    let preds = obj_model.predict_values(x).unwrap().mapv(f64::abs);
     *preds.max().unwrap_or(&1.0)
 }
 
-pub fn compute_cstr_scales(x: &Array2<f64>, cstr_models: &Vec<Box<Moe>>) -> Array1<f64> {
+pub fn compute_cstr_scales(x: &Array2<f64>, cstr_models: &[Box<Moe>]) -> Array1<f64> {
     let scales: Vec<f64> = cstr_models
         .iter()
         .map(|cstr_model| {
-            let preds = cstr_model.predict_values(x).unwrap().mapv(|v| f64::abs(v));
+            let preds = cstr_model.predict_values(x).unwrap().mapv(f64::abs);
             *preds.max().unwrap_or(&1.0)
         })
         .collect();
@@ -67,8 +67,7 @@ pub fn compute_cstr_scales(x: &Array2<f64>, cstr_models: &Vec<Box<Moe>>) -> Arra
 }
 
 fn norm_cdf(x: f64) -> f64 {
-    let norm = 0.5 * erfc(-x / std::f64::consts::SQRT_2);
-    norm
+    0.5 * erfc(-x / std::f64::consts::SQRT_2)
 }
 
 fn norm_pdf(x: f64) -> f64 {
