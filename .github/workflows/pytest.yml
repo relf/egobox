@@ -33,7 +33,7 @@ jobs:
           default: true
 
       - run: rustup set default-host ${{ matrix.platform.rust-target }}
-      
+
       - name: Install ubuntu packages
         run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
 
@@ -45,12 +45,13 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install maturin numpy
+          pip install maturin numpy pytest poetry
 
       - name: Test Python
         run: |
-            maturin develop --release
-            pytest
+            poetry install
+            poetry run maturin develop
+            poetry run pytest
         shell: bash
         env:
           RUSTFLAGS: -C link-arg=-llapacke -C link-arg=-lcblas
