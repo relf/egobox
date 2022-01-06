@@ -1,5 +1,6 @@
 use linfa_pls::PlsError;
 use ndarray_linalg::error::LinalgError;
+use serde_json;
 use std::error::Error;
 use std::fmt::{self, Display};
 
@@ -18,6 +19,10 @@ pub enum GpError {
     PlsError(String),
     /// When a value is invalid
     InvalidValue(String),
+    /// When error during saving
+    SaveError(String),
+    /// When error during loading
+    LoadError(String),
 }
 
 impl Display for GpError {
@@ -31,6 +36,8 @@ impl Display for GpError {
             // Self::EgoError(message) => write!(f, "EGO error: {}", message),
             Self::PlsError(message) => write!(f, "PLS error: {}", message),
             Self::InvalidValue(message) => write!(f, "Value error: {}", message),
+            Self::SaveError(message) => write!(f, "Save error: {}", message),
+            Self::LoadError(message) => write!(f, "Load error: {}", message),
         }
     }
 }
@@ -46,5 +53,17 @@ impl From<LinalgError> for GpError {
 impl From<PlsError> for GpError {
     fn from(error: PlsError) -> GpError {
         GpError::PlsError(error.to_string())
+    }
+}
+
+impl From<serde_json::Error> for GpError {
+    fn from(error: serde_json::Error) -> GpError {
+        GpError::SaveError(error.to_string())
+    }
+}
+
+impl From<std::io::Error> for GpError {
+    fn from(error: std::io::Error) -> GpError {
+        GpError::SaveError(error.to_string())
     }
 }

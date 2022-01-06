@@ -1,6 +1,7 @@
 use linfa::Float;
 use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
-
+use serde::{Deserialize, Serialize};
+#[derive(Deserialize, Serialize, Debug)]
 pub struct NormalizedMatrix<F: Float> {
     pub data: Array2<F>,
     pub mean: Array1<F>,

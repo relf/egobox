@@ -1,7 +1,8 @@
-use crate::correlation_models::CorrelationModel;
+use crate::correlation_models::*;
 use crate::errors::{GpError, Result};
-use crate::mean_models::RegressionModel;
+use crate::mean_models::*;
 use crate::parameters::{Float, GpParams};
+use crate::surrogate::*;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
 use linfa::traits::Fit;
@@ -17,11 +18,16 @@ use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
 use num_traits;
+use paste::paste;
 use rand_isaac::Isaac64Rng;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::Write;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
+#[serde(bound(deserialize = "Array1<F>: Deserialize<'de>"))]
 pub struct GpInnerParams<F: Float> {
     /// Gaussian process variance
     sigma2: Array1<F>,
@@ -50,7 +56,8 @@ impl<F: Float> Clone for GpInnerParams<F> {
     }
 }
 
-/// Gaussian
+/// Gaussian Process
+#[derive(Serialize)]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Array1<F>,
@@ -158,6 +165,58 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
         } else {
             None
         }
+    }
+
+    pub fn save(&self, path: &str) -> Result<()> {
+        let mut file = fs::File::create(path).unwrap();
+        file.write_all(serde_json::to_string(self)?.as_bytes())?;
+        Ok(())
+    }
+}
+
+macro_rules! make_surrogate {
+    ($regr:ident, $corr:ident, $data:ident) => {
+        paste! {
+            Ok(Box::new([<Gp $regr $corr Surrogate>](
+                GaussianProcess {
+                    mean: [<$regr Mean>](),
+                    kernel: [<$corr Kernel>](),
+                    theta: serde_json::from_value(serde_json::json!($data["theta"])).unwrap(),
+                    inner_params: serde_json::from_value(serde_json::json!($data["inner_params"])).unwrap(),
+                    w_star:  serde_json::from_value(serde_json::json!($data["w_star"])).unwrap(),
+                    xtrain: serde_json::from_value(serde_json::json!($data["xtrain"])).unwrap(),
+                    ytrain: serde_json::from_value(serde_json::json!($data["ytrain"])).unwrap()
+                }
+            )) as Box<dyn Surrogate>)
+        }
+    };
+}
+
+pub fn load(path: &str) -> Result<Box<dyn Surrogate>> {
+    let data = fs::read_to_string(path)?;
+    let data: serde_json::Value = serde_json::from_str(&data)?;
+    let gp_kind = format!(
+        "{}_{}",
+        data["mean"].as_str().unwrap(),
+        data["kernel"].as_str().unwrap()
+    );
+    match gp_kind.as_str() {
+        "Constant_SquaredExponential" => make_surrogate!(Constant, SquaredExponential, data),
+        "Constant_AbsoluteExponential" => make_surrogate!(Constant, AbsoluteExponential, data),
+        "Constant_Matern32" => make_surrogate!(Constant, Matern32, data),
+        "Constant_Matern52" => make_surrogate!(Constant, Matern52, data),
+        "Linear_SquaredExponential" => make_surrogate!(Linear, SquaredExponential, data),
+        "Linear_AbsoluteExponential" => make_surrogate!(Linear, AbsoluteExponential, data),
+        "Linear_Matern32" => make_surrogate!(Linear, Matern32, data),
+        "Linear_Matern52" => make_surrogate!(Linear, Matern52, data),
+        "Quadratic_SquaredExponential" => make_surrogate!(Quadratic, SquaredExponential, data),
+        "Quadratic_AbsoluteExponential" => make_surrogate!(Quadratic, AbsoluteExponential, data),
+        "Quadratic_Matern32" => make_surrogate!(Quadratic, Matern32, data),
+        "Quadratic_Matern52" => make_surrogate!(Quadratic, Matern52, data),
+        _ => Err(GpError::LoadError(format!(
+            "Bad mean or kernel values: {}",
+            gp_kind
+        ))),
     }
 }
 
@@ -378,10 +437,9 @@ pub fn reduced_likelihood<F: Float>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{correlation_models::*, mean_models::*};
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
-    use doe::{LHSKind, SamplingMethod, LHS};
+    use doe::{SamplingMethod, LHS};
     use ndarray::{arr2, array, Array, Zip};
     use ndarray_linalg::Norm;
     use ndarray_npy::{read_npy, write_npy};
@@ -569,7 +627,9 @@ mod tests {
         let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
         Zip::from(y.rows_mut())
             .and(x.rows())
-            .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]));
+            .par_for_each(|mut yi, xi| {
+                yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]);
+            });
         y
     }
 
@@ -594,6 +654,30 @@ mod tests {
         let xv = LHS::new(&xlimits).sample(500);
         let yv = rosenb(&xv);
 
+        let ytest = gp.predict_values(&xv).unwrap();
+        let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
+        assert_abs_diff_eq!(err, 0., epsilon = 2e-1);
+    }
+
+    fn xsinx(x: &Array2<f64>) -> Array2<f64> {
+        (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
+    }
+
+    #[test]
+    fn test_save() {
+        let xlimits = array![[0., 25.]];
+        let xt = LHS::new(&xlimits).sample(10);
+        let yt = xsinx(&xt);
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+            ConstantMean::default(),
+            SquaredExponentialKernel::default(),
+        )
+        .fit(&xt, &yt)
+        .expect("GP fit error");
+        gp.save("save_gp.json").expect("GP not saved");
+        let gp = load("save_gp.json").expect("GP not loaded");
+        let xv = LHS::new(&xlimits).sample(20);
+        let yv = xsinx(&xv);
         let ytest = gp.predict_values(&xv).unwrap();
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
         assert_abs_diff_eq!(err, 0., epsilon = 2e-1);

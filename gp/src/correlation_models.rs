@@ -1,7 +1,10 @@
+use std::convert::TryFrom;
+
 use linfa::Float;
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use serde::{Deserialize, Serialize};
 
-pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
+pub trait CorrelationModel<F: Float>: Clone + Copy + Default + Serialize {
     fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -10,8 +13,27 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
     ) -> Array2<F>;
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
+#[serde(into = "String")]
+#[serde(try_from = "String")]
 pub struct SquaredExponentialKernel();
+
+impl Into<String> for SquaredExponentialKernel {
+    fn into(self) -> String {
+        "SquaredExponential".to_string()
+    }
+}
+
+impl TryFrom<String> for SquaredExponentialKernel {
+    type Error = &'static str;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        if s == "SquaredExponential" {
+            Ok(Self::default())
+        } else {
+            Err("Bad string value for SquaredExponentialKernel, should be \'SquaredExponential\'")
+        }
+    }
+}
 
 impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
     fn apply(
@@ -27,8 +49,15 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(into = "String")]
 pub struct AbsoluteExponentialKernel();
+
+impl Into<String> for AbsoluteExponentialKernel {
+    fn into(self) -> String {
+        "AbsoluteExponential".to_string()
+    }
+}
 
 impl<F: Float> CorrelationModel<F> for AbsoluteExponentialKernel {
     fn apply(
@@ -44,8 +73,15 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialKernel {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(into = "String")]
 pub struct Matern32Kernel();
+
+impl Into<String> for Matern32Kernel {
+    fn into(self) -> String {
+        "Matern32".to_string()
+    }
+}
 
 impl<F: Float> CorrelationModel<F> for Matern32Kernel {
     fn apply(
@@ -67,8 +103,15 @@ impl<F: Float> CorrelationModel<F> for Matern32Kernel {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(into = "String")]
 pub struct Matern52Kernel();
+
+impl Into<String> for Matern52Kernel {
+    fn into(self) -> String {
+        "Matern52".to_string()
+    }
+}
 
 impl<F: Float> CorrelationModel<F> for Matern52Kernel {
     fn apply(
