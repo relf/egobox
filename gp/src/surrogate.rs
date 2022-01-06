@@ -83,4 +83,3 @@ declare_surrogate!(Quadratic, SquaredExponential);
 declare_surrogate!(Quadratic, AbsoluteExponential);
 declare_surrogate!(Quadratic, Matern32);
 declare_surrogate!(Quadratic, Matern52);
-
