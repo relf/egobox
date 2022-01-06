@@ -16,7 +16,7 @@ jobs:
         python-version: [3.7, 3.8, 3.9]
         platform: [
           { os: "ubuntu-latest", python-architecture: "x64", rust-target: "x86_64-unknown-linux-gnu" },
-          # { os: "windows-latest", python-architecture: "x64", rust-target: "x86_64-pc-windows-msvc" },
+          { os: "windows-latest", python-architecture: "x64", rust-target: "x86_64-pc-windows-msvc" },
        ]
     steps:
       - uses: actions/checkout@v2
@@ -34,7 +34,8 @@ jobs:
 
       - run: rustup set default-host ${{ matrix.platform.rust-target }}
 
-      - name: Install ubuntu packages
+      - name: Install ubuntu packages if needed
+        if: ${{ matrix.platform.os == 'ubuntu-latest' }} 
         run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
 
       - name: Build with default features
@@ -50,7 +51,7 @@ jobs:
       - name: Test Python
         run: |
             poetry install
-            poetry run maturin develop
+            poetry run maturin develop --release
             poetry run pytest
         shell: bash
         env:
