@@ -6,14 +6,27 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  testing:
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          components: rustfmt, clippy
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy -- -D warnings
+
+  test:
     name: testing
     runs-on: ubuntu-latest
     strategy:
       matrix:
         toolchain:
           - stable
-
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
