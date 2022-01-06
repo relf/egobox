@@ -1,11 +1,9 @@
 use doe::{SamplingMethod, LHS};
 use ego::Egor;
-use moe;
 use ndarray::{Array2, ArrayView2};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
-use pyo3_log;
 use rand_isaac::Isaac64Rng;
 
 /// Formats the sum of two numbers as string.
@@ -216,6 +214,7 @@ impl Optimizer {
         n_clusters = "1",
         seed = "None"
     )]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python,
         fun: &PyAny,
@@ -278,8 +277,7 @@ impl Optimizer {
             let args = (x.to_owned().into_pyarray(py),);
             let res = fun.call1(py, args).unwrap();
             let pyarray: &PyArray2<f64> = res.extract(py).unwrap();
-            let val = pyarray.to_owned_array();
-            val
+            pyarray.to_owned_array()
         };
 
         let infill_strategy = match self.infill_strategy.0 {

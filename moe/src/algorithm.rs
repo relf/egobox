@@ -3,7 +3,6 @@ use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expert::*;
 use crate::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
-use env_logger;
 use log::{debug, info, trace};
 
 use gp::{correlation_models::*, mean_models::*, Float, GaussianProcess};
@@ -98,7 +97,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
             let factor =
                 self.optimize_heaviside_factor(&experts, &gmx, &xtest.unwrap(), &ytest.unwrap());
             self.set_recombination(Recombination::Smooth(Some(factor)))
-                .fit(&xt, &yt)
+                .fit(xt, yt)
         } else {
             Ok(Moe {
                 recombination: self.recombination(),
@@ -181,7 +180,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
 
     pub fn optimize_heaviside_factor(
         &self,
-        experts: &Vec<Box<dyn Expert>>,
+        experts: &[Box<dyn Expert>],
         gmx: &GaussianMixture<f64>,
         xtest: &Array2<f64>,
         ytest: &Array2<f64>,
@@ -193,7 +192,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
             let errors = scale_factors.map(move |&factor| {
                 let gmx2 = gmx.clone();
                 let gmx2 = gmx2.with_heaviside_factor(factor);
-                let pred = predict_values_smooth(&experts, &gmx2, &xtest).unwrap();
+                let pred = predict_values_smooth(experts, &gmx2, xtest).unwrap();
                 pred.sub(ytest).mapv(|x| x * x).sum().sqrt() / xtest.mapv(|x| x * x).sum().sqrt()
             });
 
@@ -208,7 +207,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
     }
 }
 
-fn check_number_of_points<F>(clusters: &Vec<Array2<F>>, dim: usize) -> Result<()> {
+fn check_number_of_points<F>(clusters: &[Array2<F>], dim: usize) -> Result<()> {
     let min_number_point = factorial(dim + 2) / (factorial(dim) * factorial(2));
     for cluster in clusters {
         if cluster.len() < min_number_point {
@@ -252,7 +251,7 @@ pub fn sort_by_cluster<F: Float>(
 }
 
 pub fn predict_values_smooth(
-    experts: &Vec<Box<dyn Expert>>,
+    experts: &[Box<dyn Expert>],
     gmx: &GaussianMixture<f64>,
     observations: &Array2<f64>,
 ) -> Result<Array2<f64>> {
@@ -263,7 +262,7 @@ pub fn predict_values_smooth(
         .and(observations.rows())
         .and(probas.rows())
         .for_each(|y, x, p| {
-            let obs = x.clone().insert_axis(Axis(0));
+            let obs = x.insert_axis(Axis(0));
             let subpreds: Array1<f64> = experts
                 .iter()
                 .map(|gp| gp.predict_values(&obs).unwrap()[[0, 0]])
@@ -330,12 +329,12 @@ impl Moe {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_variances_hard(&x),
-            Recombination::Smooth(_) => self.predict_variances_smooth(&x),
+            Recombination::Hard => self.predict_variances_hard(x),
+            Recombination::Smooth(_) => self.predict_variances_smooth(x),
         }
     }
 
-    pub fn save_expert_predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> () {
+    pub fn save_expert_predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) {
         self.experts.iter().enumerate().for_each(|(i, expert)| {
             let preds = expert.predict_values(&x.view()).unwrap();
             write_npy(format!("preds_expert_{}.npy", i), &preds).expect("expert pred saved");
@@ -353,7 +352,7 @@ impl Moe {
             .and(observations.rows())
             .and(probas.rows())
             .for_each(|y, x, p| {
-                let obs = x.clone().insert_axis(Axis(0));
+                let obs = x.insert_axis(Axis(0));
                 let subpreds: Array1<f64> = self
                     .experts
                     .iter()
@@ -375,7 +374,7 @@ impl Moe {
             .and(observations.rows())
             .and(probas.rows())
             .for_each(|y, x, p| {
-                let obs = x.clone().insert_axis(Axis(0));
+                let obs = x.insert_axis(Axis(0));
                 let subpreds: Array1<f64> = self
                     .experts
                     .iter()

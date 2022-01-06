@@ -15,11 +15,10 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + Serialize {
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
 #[serde(into = "String")]
-#[serde(try_from = "String")]
 pub struct SquaredExponentialKernel();
 
-impl Into<String> for SquaredExponentialKernel {
-    fn into(self) -> String {
+impl From<SquaredExponentialKernel> for String {
+    fn from(_item: SquaredExponentialKernel) -> String {
         "SquaredExponential".to_string()
     }
 }
@@ -53,8 +52,8 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
 #[serde(into = "String")]
 pub struct AbsoluteExponentialKernel();
 
-impl Into<String> for AbsoluteExponentialKernel {
-    fn into(self) -> String {
+impl From<AbsoluteExponentialKernel> for String {
+    fn from(_item: AbsoluteExponentialKernel) -> String {
         "AbsoluteExponential".to_string()
     }
 }
@@ -77,8 +76,8 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialKernel {
 #[serde(into = "String")]
 pub struct Matern32Kernel();
 
-impl Into<String> for Matern32Kernel {
-    fn into(self) -> String {
+impl From<Matern32Kernel> for String {
+    fn from(_item: Matern32Kernel) -> String {
         "Matern32".to_string()
     }
 }
@@ -107,8 +106,8 @@ impl<F: Float> CorrelationModel<F> for Matern32Kernel {
 #[serde(into = "String")]
 pub struct Matern52Kernel();
 
-impl Into<String> for Matern52Kernel {
-    fn into(self) -> String {
+impl From<Matern52Kernel> for String {
+    fn from(_item: Matern52Kernel) -> String {
         "Matern52".to_string()
     }
 }

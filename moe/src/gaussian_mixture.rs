@@ -152,7 +152,7 @@ impl<F: Float> GaussianMixture<F> {
         &self,
         observations: &ArrayBase<D, Ix2>,
     ) -> (Array1<F>, Array2<F>) {
-        let weighted_log_prob = self.estimate_weighted_log_prob(&observations);
+        let weighted_log_prob = self.estimate_weighted_log_prob(observations);
         let log_prob_norm = weighted_log_prob
             .mapv(|v| v.exp())
             .sum_axis(Axis(1))
@@ -166,12 +166,12 @@ impl<F: Float> GaussianMixture<F> {
         &self,
         observations: &ArrayBase<D, Ix2>,
     ) -> Array2<F> {
-        self.estimate_log_prob(&observations) + self.estimate_log_weights()
+        self.estimate_log_prob(observations) + self.estimate_log_weights()
     }
 
     // Compute log probabilities for each samples wrt to the model which is gaussian
     fn estimate_log_prob<D: Data<Elem = F>>(&self, observations: &ArrayBase<D, Ix2>) -> Array2<F> {
-        self.estimate_log_gaussian_prob(&observations)
+        self.estimate_log_gaussian_prob(observations)
     }
 
     // Compute the log LikelihoodComputation in case of the gaussian probabilities
