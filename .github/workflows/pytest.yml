@@ -36,9 +36,25 @@ jobs:
 
       - run: rustup set default-host ${{ matrix.platform.rust-target }}
 
-      - name: Install ubuntu packages if needed
+      - name: Install Blas/Lapck on Ubuntu
         if: ${{ matrix.platform.os == 'ubuntu-latest' }} 
         run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
+
+      - name: Cache LLVM and Clang on Windows
+        if: ${{ matrix.platform.os == 'windows-latest' }} 
+        id: cache-llvm
+        uses: actions/cache@v2
+        with:
+          path: |
+            C:/Program Files/LLVM
+            ./llvm
+          key: llvm-12.0.1
+      - name: Install LLVM and Clang on Windows
+        if: ${{ matrix.platform.os == 'windows-latest' }} 
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "12.0.1"
+          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
       - name: Build with default features
         run: cargo build --verbose
