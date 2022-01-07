@@ -58,7 +58,6 @@ jobs:
           pip install maturin numpy pytest poetry
 
       - name: Test Python
-        if: ${{ matrix.platform.os == 'ubuntu-latest' }} 
         run: |
             poetry install
             poetry run maturin develop --release
