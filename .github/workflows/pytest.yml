@@ -15,8 +15,10 @@ jobs:
       matrix:
         python-version: [3.7, 3.8, 3.9]
         platform: [
-          { os: "ubuntu-latest", python-architecture: "x64", rust-target: "x86_64-unknown-linux-gnu" },
-          { os: "windows-latest", python-architecture: "x64", rust-target: "x86_64-pc-windows-msvc" },
+          { os: "ubuntu-latest", python-architecture: "x64", rust-target: "x86_64-unknown-linux-gnu", 
+            rust-flags: "-C link-arg=-llapacke -C link-arg=-lcblas" },
+          { os: "windows-latest", python-architecture: "x64", rust-target: "x86_64-pc-windows-msvc", 
+            rust-flags: "" },
        ]
     steps:
       - uses: actions/checkout@v2
@@ -41,7 +43,7 @@ jobs:
       - name: Build with default features
         run: cargo build --verbose
         env:
-          RUSTFLAGS: -C link-arg=-llapacke -C link-arg=-lcblas
+          RUSTFLAGS: ${{ matrix.platform.rust-flags }}
 
       - name: Install test dependencies
         run: |
@@ -49,13 +51,14 @@ jobs:
           pip install maturin numpy pytest poetry
 
       - name: Test Python
+        if: ${{ matrix.platform.os == 'ubuntu-latest' }} 
         run: |
             poetry install
             poetry run maturin develop --release
             poetry run pytest
         shell: bash
         env:
-          RUSTFLAGS: -C link-arg=-llapacke -C link-arg=-lcblas
+          RUSTFLAGS: ${{ matrix.platform.rust-flags }} 
 
     env:
       RUST_BACKTRACE: 1
