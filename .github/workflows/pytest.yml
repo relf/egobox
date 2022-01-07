@@ -48,7 +48,7 @@ jobs:
           directory: ${{ runner.temp }}/llvm
 
       - name: Build with default features
-        run: cargo build --verbose
+        run: cargo build --release
         env:
           RUSTFLAGS: ${{ matrix.platform.rust-flags }}
 
