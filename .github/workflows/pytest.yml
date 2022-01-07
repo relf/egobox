@@ -45,6 +45,7 @@ jobs:
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "11.0"
+          directory: ${{ runner.temp }}/llvm
 
       - name: Build with default features
         run: cargo build --verbose
