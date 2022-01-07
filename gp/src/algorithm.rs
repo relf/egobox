@@ -2,7 +2,7 @@ use crate::correlation_models::*;
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::parameters::{Float, GpParams};
-use crate::surrogate::*;
+use crate::surrogates::*;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
 use linfa::traits::Fit;
@@ -455,7 +455,7 @@ mod tests {
         let rng = Isaac64Rng::seed_from_u64(42);
         let nt = 30;
         let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
-        let yt = Array::from_vec(vec![3.14; nt]).insert_axis(Axis(1));
+        let yt = Array::from_vec(vec![3.1; nt]).insert_axis(Axis(1));
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
             ConstantMean::default(),
             SquaredExponentialKernel::default(),
@@ -467,7 +467,7 @@ mod tests {
         let rng = Isaac64Rng::seed_from_u64(43);
         let xtest = LHS::new(&xlimits).with_rng(rng).sample(nt);
         let ytest = gp.predict_values(&xtest).expect("prediction error");
-        assert_abs_diff_eq!(Array::from_elem((nt, 1), 3.14), ytest, epsilon = 1e-6);
+        assert_abs_diff_eq!(Array::from_elem((nt, 1), 3.1), ytest, epsilon = 1e-6);
     }
 
     macro_rules! test_gp {
@@ -677,7 +677,7 @@ mod tests {
         let gp = load("save_gp.json").expect("GP not loaded");
         let xv = LHS::new(&xlimits).sample(20);
         let yv = xsinx(&xv);
-        let ytest = gp.predict_values(&xv).unwrap();
+        let ytest = gp.predict_values(&xv.view()).unwrap();
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
         assert_abs_diff_eq!(err, 0., epsilon = 2e-1);
     }

@@ -7,5 +7,4 @@ mod parameters;
 
 pub use algorithm::*;
 pub use errors::*;
-pub use expert::*;
 pub use parameters::*;

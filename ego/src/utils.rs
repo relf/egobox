@@ -116,8 +116,8 @@ mod tests {
     #[test]
     fn test_is_update_ok() {
         let data = array![[0., 1.], [2., 3.]];
-        assert_eq!(true, is_update_ok(&data, &array![3., 4.]));
-        assert_eq!(false, is_update_ok(&data, &array![1e-7, 1.]));
+        assert!(is_update_ok(&data, &array![3., 4.]));
+        assert!(!is_update_ok(&data, &array![1e-7, 1.]));
     }
 
     #[test]

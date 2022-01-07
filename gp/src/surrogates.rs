@@ -1,16 +1,18 @@
 use crate::errors::Result;
 use crate::{correlation_models::*, mean_models::*, GaussianProcess, GpParams};
-use ndarray::Array2;
+use ndarray::{Array2, ArrayView2};
 use paste::paste;
 
 pub trait SurrogateParams {
+    fn set_initial_theta(&mut self, theta: f64);
     fn set_kpls_dim(&mut self, kpls_dim: Option<usize>);
+    fn set_nugget(&mut self, nugget: f64);
     fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Surrogate>>;
 }
 
 pub trait Surrogate: std::fmt::Display {
-    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
-    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
+    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
 }
 
 macro_rules! declare_surrogate {
@@ -28,8 +30,16 @@ macro_rules! declare_surrogate {
             }
 
             impl SurrogateParams for [<Gp $regr $corr SurrogateParams>] {
+                fn set_initial_theta(&mut self, theta: f64) {
+                    self.0 = self.0.set_initial_theta(theta);
+                }
+
                 fn set_kpls_dim(&mut self, kpls_dim: Option<usize>) {
                     self.0 = self.0.set_kpls_dim(kpls_dim);
+                }
+
+                fn set_nugget(&mut self, nugget: f64) {
+                    self.0 = self.0.set_nugget(nugget);
                 }
 
                 fn fit(
@@ -49,10 +59,10 @@ macro_rules! declare_surrogate {
             );
 
             impl Surrogate for [<Gp $regr $corr Surrogate>] {
-                fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+                fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     self.0.predict_values(x)
                 }
-                fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+                fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     self.0.predict_variances(x)
                 }
             }
