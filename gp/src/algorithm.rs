@@ -1,19 +1,17 @@
 use crate::correlation_models::*;
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
-use crate::parameters::{Float, GpParams};
+use crate::parameters::GpParams;
 use crate::surrogates::*;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
+use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::traits::Fit;
-use linfa::Dataset;
+use linfa::{Dataset, Float};
 use linfa_pls::{PlsError, PlsRegression};
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
-use ndarray_linalg::cholesky::*;
-use ndarray_linalg::qr::*;
-use ndarray_linalg::svd::*;
-use ndarray_linalg::triangular::*;
+use ndarray_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
@@ -26,7 +24,7 @@ use std::io::Write;
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 
 #[derive(Default, Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "Array1<F>: Deserialize<'de>"))]
+#[serde(bound(deserialize = "F: Deserialize<'de>"))]
 pub struct GpInnerParams<F: Float> {
     /// Gaussian process variance
     sigma2: Array1<F>,
@@ -57,6 +55,7 @@ impl<F: Float> Clone for GpInnerParams<F> {
 
 /// Gaussian Process
 #[derive(Serialize)]
+#[serde(bound(serialize = "F: Serialize"))]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Array1<F>,
@@ -90,7 +89,7 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> Clone
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
+impl<F: Float + Serialize, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
     GaussianProcess<F, Mean, Kernel>
 {
     pub fn params<NewMean: RegressionModel<F>, NewKernel: CorrelationModel<F>>(
@@ -118,13 +117,17 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
         let rt = inners
             .r_chol
             .to_owned()
-            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t)?;
+            .with_lapack()
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t.with_lapack())?
+            .without_lapack();
         let lhs = inners.ft.t().dot(&rt) - self.mean.apply(x).t();
         let u = inners
             .ft_qr_r
             .to_owned()
             .t()
-            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs)?;
+            .with_lapack()
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs.with_lapack())?
+            .without_lapack();
 
         let a = &inners.sigma2;
         let b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
@@ -381,10 +384,10 @@ pub fn reduced_likelihood<F: Float>(
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
     }
 
-    let fxl = fx.to_owned();
+    let fxl = fx.to_owned().with_lapack();
 
     // R cholesky decomposition
-    let r_chol = r_mx.cholesky(UPLO::Lower)?;
+    let r_chol = r_mx.with_lapack().cholesky(UPLO::Lower)?;
 
     // Solve generalized least squared problem
     let ft = r_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &fxl)?;
@@ -409,11 +412,15 @@ pub fn reduced_likelihood<F: Float>(
             ));
         }
     }
-    let yt = r_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &ytrain.data.to_owned())?;
+    let yt = r_chol.solve_triangular(
+        UPLO::Lower,
+        Diag::NonUnit,
+        &ytrain.data.to_owned().with_lapack(),
+    )?;
     let beta = ft_qr_r.solve_triangular_into(UPLO::Upper, Diag::NonUnit, ft_qr_q.t().dot(&yt))?;
 
     let rho = yt - ft.dot(&beta);
-    let rho_sqr: Array1<F> = rho.mapv(|v| v * v).sum_axis(Axis(0));
+    let rho_sqr = rho.mapv(|v| v * v).sum_axis(Axis(0));
     let gamma = r_chol
         .t()
         .solve_triangular_into(UPLO::Upper, Diag::NonUnit, rho)?;
@@ -421,19 +428,26 @@ pub fn reduced_likelihood<F: Float>(
     // The determinant of R is equal to the squared product of
     // the diagonal elements of its Cholesky decomposition r_chol
     let n_obs: F = F::cast(x_distances.n_obs);
-    let logdet = r_chol.to_owned().diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
+    let logdet = r_chol
+        .to_owned()
+        .without_lapack()
+        .diag()
+        .mapv(|v: F| v.log10())
+        .sum()
+        * F::cast(2.)
+        / n_obs;
     // Reduced likelihood
-    let sigma2 = rho_sqr / n_obs;
+    let sigma2: Array1<F> = rho_sqr.without_lapack() / n_obs;
     let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
     Ok((
         reduced_likelihood,
         GpInnerParams {
             sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
-            beta,
-            gamma,
-            r_chol,
-            ft,
-            ft_qr_r,
+            beta: beta.without_lapack(),
+            gamma: gamma.without_lapack(),
+            r_chol: r_chol.without_lapack(),
+            ft: ft.without_lapack(),
+            ft_qr_r: ft_qr_r.without_lapack(),
         },
     ))
 }

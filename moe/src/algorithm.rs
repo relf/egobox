@@ -5,9 +5,10 @@ use crate::expert::*;
 use crate::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use log::{debug, info, trace};
 
-use gp::{correlation_models::*, mean_models::*, surrogates::*, Float, GaussianProcess};
+use gp::{correlation_models::*, mean_models::*, surrogates::*, GaussianProcess};
 use linfa::dataset::Records;
-use linfa::{traits::Fit, traits::Predict, Dataset};
+use linfa::traits::{Fit, Predict};
+use linfa::{Dataset, Float};
 use linfa_clustering::GaussianMixtureModel;
 use paste::paste;
 use std::cmp::Ordering;

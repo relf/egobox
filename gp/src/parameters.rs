@@ -1,14 +1,10 @@
 use crate::correlation_models::{CorrelationModel, SquaredExponentialKernel};
 use crate::errors::{GpError, Result};
 use crate::mean_models::{ConstantMean, RegressionModel};
-use ndarray_linalg::{Lapack, Scalar};
-
-pub trait Float: linfa::Float + Lapack + Scalar {}
-impl Float for f32 {}
-impl Float for f64 {}
+use linfa::Float;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GpParams<F: Float + Clone, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
+pub struct GpParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Option<Vec<F>>,
     /// Regression model representing the mean(x)

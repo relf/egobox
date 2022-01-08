@@ -1,4 +1,4 @@
-use gp::Float;
+use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
 
 pub trait ObjFunc: Send + Sync + 'static + Fn(&[f64]) -> f64 {}

@@ -372,7 +372,7 @@ mod test {
             rng,
         );
         let valid = FullFactorial::new(&array![[-1., 1.], [-1., 1.]]);
-        let xvalid = valid.sample(200);
+        let xvalid = valid.sample(100);
         let yvalid = l1norm(&xvalid);
         let moe = Moe::params(n_clusters)
             .set_recombination(recomb)

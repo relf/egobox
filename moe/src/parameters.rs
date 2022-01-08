@@ -5,7 +5,7 @@ use gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
-use gp::Float;
+use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
