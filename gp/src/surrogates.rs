@@ -3,14 +3,14 @@ use crate::{correlation_models::*, mean_models::*, GaussianProcess, GpParams};
 use ndarray::{Array2, ArrayView2};
 use paste::paste;
 
-pub trait SurrogateParams {
+pub trait GpSurrogateParams {
     fn set_initial_theta(&mut self, theta: Vec<f64>);
     fn set_kpls_dim(&mut self, kpls_dim: Option<usize>);
     fn set_nugget(&mut self, nugget: f64);
-    fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Surrogate>>;
+    fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn GpSurrogate>>;
 }
 
-pub trait Surrogate: std::fmt::Display {
+pub trait GpSurrogate: std::fmt::Display {
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
 }
@@ -29,7 +29,7 @@ macro_rules! declare_surrogate {
                 }
             }
 
-            impl SurrogateParams for [<Gp $regr $corr SurrogateParams>] {
+            impl GpSurrogateParams for [<Gp $regr $corr SurrogateParams>] {
                 fn set_initial_theta(&mut self, theta: Vec<f64>) {
                     self.0 = self.0.clone().set_initial_theta(Some(theta));
                 }
@@ -46,7 +46,7 @@ macro_rules! declare_surrogate {
                     &self,
                     x: &Array2<f64>,
                     y: &Array2<f64>,
-                ) -> Result<Box<dyn Surrogate>> {
+                ) -> Result<Box<dyn GpSurrogate>> {
                     Ok(Box::new([<Gp $regr $corr Surrogate>](
                         self.0.clone().fit(x, y)?,
                     )))
@@ -58,7 +58,7 @@ macro_rules! declare_surrogate {
                 pub GaussianProcess<f64, [<$regr Mean>], [<$corr Kernel>]>,
             );
 
-            impl Surrogate for [<Gp $regr $corr Surrogate>] {
+            impl GpSurrogate for [<Gp $regr $corr Surrogate>] {
                 fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     self.0.predict_values(x)
                 }

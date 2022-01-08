@@ -189,12 +189,12 @@ macro_rules! make_surrogate {
                     xtrain: serde_json::from_value(serde_json::json!($data["xtrain"])).unwrap(),
                     ytrain: serde_json::from_value(serde_json::json!($data["ytrain"])).unwrap()
                 }
-            )) as Box<dyn Surrogate>)
+            )) as Box<dyn GpSurrogate>)
         }
     };
 }
 
-pub fn load(path: &str) -> Result<Box<dyn Surrogate>> {
+pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
     let data = fs::read_to_string(path)?;
     let data: serde_json::Value = serde_json::from_str(&data)?;
     let gp_kind = format!(

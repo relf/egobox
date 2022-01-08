@@ -12,7 +12,7 @@ macro_rules! make_gp_params {
 macro_rules! make_surrogate_params {
     ($regr:ident, $corr:ident) => {
         paste! {
-            Ok(Box::new([<Gp $regr $corr SurrogateParams>]::new(make_gp_params!($regr, $corr))) as Box<dyn SurrogateParams>)
+            Ok(Box::new([<Gp $regr $corr SurrogateParams>]::new(make_gp_params!($regr, $corr))) as Box<dyn GpSurrogateParams>)
         }
     };
 }
