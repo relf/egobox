@@ -1,54 +1,26 @@
-use gp::GpError;
-use ndarray_linalg::error::LinalgError;
-use std::error::Error;
-use std::fmt::{self, Display};
+// use gp::GpError;
+// use ndarray_linalg::error::LinalgError;
+use thiserror::Error;
+// use std::fmt::{self, Display};
 
 pub type Result<T> = std::result::Result<T, MoeError>;
 
 /// An error when using MOE algorithm
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum MoeError {
     /// When linear algebra computation fails
-    LinalgError(String),
+    #[error("Linear Algebra error")]
+    LinalgError(#[from] ndarray_linalg::error::LinalgError),
     /// When clustering fails
+    #[error("Empty cluster: {0}")]
     EmptyCluster(String),
     /// When Gaussian Process fails
-    GpError(String),
+    #[error("GP error")]
+    GpError(#[from] gp::GpError),
     /// When best expert search fails
+    #[error("Expert error: {0}")]
     ExpertError(String),
     /// When error on clustering
+    #[error("Clustering error: {0}")]
     ClusteringError(String),
-}
-
-impl Display for MoeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::LinalgError(message) => write!(f, "Linear Algebra error: {}", message),
-            // Self::PlsError(message) => write!(f, "PLS error: {}", message),
-            Self::EmptyCluster(message) => write!(f, "Empty cluster: {}", message),
-            Self::GpError(message) => {
-                write!(f, "Gaussian process computation error: {}", message)
-            }
-            Self::ExpertError(message) => {
-                write!(f, "Best expert computation error: {}", message)
-            }
-            Self::ClusteringError(message) => {
-                write!(f, "Clustering error: {}", message)
-            }
-        }
-    }
-}
-
-impl Error for MoeError {}
-
-impl From<LinalgError> for MoeError {
-    fn from(error: LinalgError) -> MoeError {
-        MoeError::LinalgError(error.to_string())
-    }
-}
-
-impl From<GpError> for MoeError {
-    fn from(error: GpError) -> MoeError {
-        MoeError::GpError(error.to_string())
-    }
 }

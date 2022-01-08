@@ -1,68 +1,34 @@
 use linfa_pls::PlsError;
 use ndarray_linalg::error::LinalgError;
-use std::error::Error;
-use std::fmt::{self, Display};
+use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, GpError>;
 
 /// An error when modeling a GMM algorithm
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum GpError {
     /// When LikelihoodComputation computation fails
+    #[error("LikelihoodComputation computation error: {0}")]
     LikelihoodComputationError(String),
     /// When linear algebra computation fails
-    LinalgError(String),
+    #[error("Linear Algebra error")]
+    LinalgError(#[from] LinalgError),
     /// When clustering fails
+    #[error("Empty cluster: {0}")]
     EmptyCluster(String),
     /// When PLS fails
-    PlsError(String),
+    #[error("PLS error: {0}")]
+    PlsError(#[from] PlsError),
     /// When a value is invalid
+    #[error("PLS error: {0}")]
     InvalidValue(String),
     /// When error during saving
-    SaveError(String),
+    #[error("Save error: {0}")]
+    SaveError(#[from] serde_json::Error),
     /// When error during loading
+    #[error("Load IO error")]
+    LoadIoError(#[from] std::io::Error),
+    /// When error during loading
+    #[error("Load error: {0}")]
     LoadError(String),
-}
-
-impl Display for GpError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::LikelihoodComputationError(message) => {
-                write!(f, "LikelihoodComputation computation error: {}", message)
-            }
-            Self::LinalgError(message) => write!(f, "Linear Algebra error: {}", message),
-            Self::EmptyCluster(message) => write!(f, "Empty cluster: {}", message),
-            // Self::EgoError(message) => write!(f, "EGO error: {}", message),
-            Self::PlsError(message) => write!(f, "PLS error: {}", message),
-            Self::InvalidValue(message) => write!(f, "Value error: {}", message),
-            Self::SaveError(message) => write!(f, "Save error: {}", message),
-            Self::LoadError(message) => write!(f, "Load error: {}", message),
-        }
-    }
-}
-
-impl Error for GpError {}
-
-impl From<LinalgError> for GpError {
-    fn from(error: LinalgError) -> GpError {
-        GpError::LinalgError(error.to_string())
-    }
-}
-
-impl From<PlsError> for GpError {
-    fn from(error: PlsError) -> GpError {
-        GpError::PlsError(error.to_string())
-    }
-}
-
-impl From<serde_json::Error> for GpError {
-    fn from(error: serde_json::Error) -> GpError {
-        GpError::SaveError(error.to_string())
-    }
-}
-
-impl From<std::io::Error> for GpError {
-    fn from(error: std::io::Error) -> GpError {
-        GpError::SaveError(error.to_string())
-    }
 }

@@ -29,6 +29,7 @@ finitediff = { version="0.1", features = ["ndarray"] }
 rawpointer = { version = "0.2" }
 log = "0.4"
 env_logger = "0.9"
+thiserror = "1"
 
 [dev-dependencies]
 linfa-datasets = { git="https://github.com/relf/linfa.git", features = ["linnerud"] }

@@ -218,7 +218,7 @@ fn check_number_of_points<F>(clusters: &[Array2<F>], dim: usize) -> Result<()> {
     let min_number_point = factorial(dim + 2) / (factorial(dim) * factorial(2));
     for cluster in clusters {
         if cluster.len() < min_number_point {
-            return Err(MoeError::GpError(format!(
+            return Err(MoeError::ClusteringError(format!(
                 "Not enough points in training set. Need {} points, got {}",
                 min_number_point,
                 cluster.len()

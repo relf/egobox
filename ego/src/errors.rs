@@ -1,52 +1,26 @@
-use gp::GpError;
-use moe::MoeError;
 use nlopt::FailState;
-use std::error::Error;
-use std::fmt::{self, Display};
+use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, EgoError>;
 
 /// An error when modeling a GMM algorithm
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum EgoError {
     /// When LikelihoodComputation computation fails
-    GpError(String),
+    #[error("GP error")]
+    GpError(#[from] gp::GpError),
     /// When EGO fails
+    #[error("EGO error: {0}")]
     EgoError(String),
     /// When PLS fails
+    #[error("Value error: {0}")]
     InvalidValue(String),
     /// When nlopt fails
+    #[error("NLOpt optimizer error")]
     NloptFailure,
     /// When Moe error occurs
-    MoeError(String),
-}
-
-impl Display for EgoError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::GpError(message) => {
-                write!(f, "Gaussian process computation error: {}", message)
-            }
-            Self::EgoError(message) => write!(f, "EGO error: {}", message),
-            Self::InvalidValue(message) => write!(f, "Value error: {}", message),
-            Self::NloptFailure => write!(f, "NlOpt error"),
-            Self::MoeError(message) => write!(f, "Moe error: {}", message),
-        }
-    }
-}
-
-impl Error for EgoError {}
-
-impl From<GpError> for EgoError {
-    fn from(error: GpError) -> EgoError {
-        EgoError::GpError(error.to_string())
-    }
-}
-
-impl From<MoeError> for EgoError {
-    fn from(error: MoeError) -> EgoError {
-        EgoError::MoeError(error.to_string())
-    }
+    #[error("MOE error")]
+    MoeError(#[from] moe::MoeError),
 }
 
 impl From<FailState> for EgoError {
