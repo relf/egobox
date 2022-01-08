@@ -254,7 +254,12 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
             );
         }
 
-        let theta0 = Array1::from_elem(w_star.ncols(), self.initial_theta());
+        let theta0 = self
+            .initial_theta()
+            .clone()
+            .map_or(Array1::from_elem(w_star.ncols(), F::cast(1e-2)), |v| {
+                Array::from_vec(v)
+            });
         let fx = self.mean().apply(x);
         let y_t = ytrain.clone();
         let base: f64 = 10.;
@@ -460,7 +465,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialKernel::default(),
         )
-        .set_initial_theta(0.1)
+        .set_initial_theta(Some(vec![0.1]))
         .set_kpls_dim(Some(1))
         .fit(&xt, &yt)
         .expect("GP fit error");
@@ -483,7 +488,7 @@ mod tests {
                         [<$regr Mean>]::default(),
                         [<$corr Kernel>]::default(),
                     )
-                    .set_initial_theta(0.1)
+                    .set_initial_theta(Some(vec![0.1]))
                     .fit(&xt, &yt)
                     .expect("GP fit error");
                     assert_abs_diff_eq!($expected, gp.theta[0], epsilon = 1e-2);

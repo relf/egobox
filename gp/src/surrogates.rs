@@ -4,7 +4,7 @@ use ndarray::{Array2, ArrayView2};
 use paste::paste;
 
 pub trait SurrogateParams {
-    fn set_initial_theta(&mut self, theta: f64);
+    fn set_initial_theta(&mut self, theta: Vec<f64>);
     fn set_kpls_dim(&mut self, kpls_dim: Option<usize>);
     fn set_nugget(&mut self, nugget: f64);
     fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Surrogate>>;
@@ -18,7 +18,7 @@ pub trait Surrogate: std::fmt::Display {
 macro_rules! declare_surrogate {
     ($regr:ident, $corr:ident) => {
         paste! {
-            #[derive(Clone, Copy)]
+            #[derive(Clone)]
             pub struct [<Gp $regr $corr SurrogateParams>](
                 GpParams<f64, [<$regr Mean>], [<$corr Kernel>]>,
             );
@@ -30,16 +30,16 @@ macro_rules! declare_surrogate {
             }
 
             impl SurrogateParams for [<Gp $regr $corr SurrogateParams>] {
-                fn set_initial_theta(&mut self, theta: f64) {
-                    self.0 = self.0.set_initial_theta(theta);
+                fn set_initial_theta(&mut self, theta: Vec<f64>) {
+                    self.0 = self.0.clone().set_initial_theta(Some(theta));
                 }
 
                 fn set_kpls_dim(&mut self, kpls_dim: Option<usize>) {
-                    self.0 = self.0.set_kpls_dim(kpls_dim);
+                    self.0 = self.0.clone().set_kpls_dim(kpls_dim);
                 }
 
                 fn set_nugget(&mut self, nugget: f64) {
-                    self.0 = self.0.set_nugget(nugget);
+                    self.0 = self.0.clone().set_nugget(nugget);
                 }
 
                 fn fit(
@@ -48,7 +48,7 @@ macro_rules! declare_surrogate {
                     y: &Array2<f64>,
                 ) -> Result<Box<dyn Surrogate>> {
                     Ok(Box::new([<Gp $regr $corr Surrogate>](
-                        self.0.fit(x, y)?,
+                        self.0.clone().fit(x, y)?,
                     )))
                 }
             }

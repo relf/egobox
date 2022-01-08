@@ -7,10 +7,10 @@ pub trait Float: linfa::Float + Lapack + Scalar {}
 impl Float for f32 {}
 impl Float for f64 {}
 
-#[derive(Clone, Copy)]
-pub struct GpParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
+#[derive(Clone, Debug, PartialEq)]
+pub struct GpParams<F: Float + Clone, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
-    theta: F,
+    theta: Option<Vec<F>>,
     /// Regression model representing the mean(x)
     mean: Mean,
     /// Correlation model representing the spatial correlation between errors at e(x) and e(x')
@@ -24,7 +24,7 @@ pub struct GpParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel
 impl<F: Float> GpParams<F, ConstantMean, SquaredExponentialKernel> {
     pub fn default() -> GpParams<F, ConstantMean, SquaredExponentialKernel> {
         GpParams {
-            theta: F::cast(1e-2),
+            theta: None,
             mean: ConstantMean(),
             kernel: SquaredExponentialKernel(),
             kpls_dim: None,
@@ -36,7 +36,7 @@ impl<F: Float> GpParams<F, ConstantMean, SquaredExponentialKernel> {
 impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F, Mean, Kernel> {
     pub fn new(mean: Mean, kernel: Kernel) -> GpParams<F, Mean, Kernel> {
         GpParams {
-            theta: F::cast(1e-2),
+            theta: None,
             mean,
             kernel,
             kpls_dim: None,
@@ -45,8 +45,8 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
     }
 
     /// Get starting theta value for optimization
-    pub fn initial_theta(&self) -> F {
-        self.theta
+    pub fn initial_theta(&self) -> &Option<Vec<F>> {
+        &self.theta
     }
 
     /// Get mean model  
@@ -72,7 +72,7 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
     /// Set initial value for theta hyper parameter.
     ///
     /// During training process, the internal optimization is started from `initial_theta`.
-    pub fn set_initial_theta(mut self, theta: F) -> Self {
+    pub fn set_initial_theta(mut self, theta: Option<Vec<F>>) -> Self {
         self.theta = theta;
         self
     }

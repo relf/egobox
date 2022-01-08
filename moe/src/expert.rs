@@ -36,6 +36,7 @@ macro_rules! compute_error {
         } else {
             for (gp, valid) in $dataset.iter_fold(n_fold, |train| {
                 params
+                    .clone()
                     .set_kpls_dim($self.kpls_dim())
                     .fit(&train.records(), &train.targets())
                     .unwrap()
