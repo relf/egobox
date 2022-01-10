@@ -7,7 +7,7 @@ pub trait RegressionModel<F: Float>: Clone + Copy + Default {
     fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F>;
 }
 
-#[derive(Default, Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct ConstantMean();
@@ -34,7 +34,7 @@ impl TryFrom<String> for ConstantMean {
         }
     }
 }
-#[derive(Default, Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct LinearMean();
@@ -63,7 +63,7 @@ impl TryFrom<String> for LinearMean {
     }
 }
 
-#[derive(Default, Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct QuadraticMean();

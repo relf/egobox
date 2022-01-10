@@ -13,7 +13,7 @@ pub trait GpSurrogateParams {
     fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn GpSurrogate>>;
 }
 
-pub trait GpSurrogate: std::fmt::Display {
+pub trait GpSurrogate: std::fmt::Display + std::fmt::Debug {
     fn predict_values(&self, x: &ArrayView2<f64>) -> gp::Result<Array2<f64>>;
     fn predict_variances(&self, x: &ArrayView2<f64>) -> gp::Result<Array2<f64>>;
     fn save(&self, path: &str) -> Result<()>;
@@ -57,7 +57,7 @@ macro_rules! declare_surrogate {
                 }
             }
 
-            #[derive(Clone, Serialize, Deserialize)]
+            #[derive(Clone, Debug, Serialize, Deserialize)]
             pub struct [<Gp $regr $corr Surrogate>](
                 pub GaussianProcess<f64, [<$regr Mean>], [<$corr Kernel>]>,
             );
@@ -207,5 +207,11 @@ mod tests {
         let ytest = gp.predict_values(&xv.view()).unwrap();
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
         assert_abs_diff_eq!(err, 0., epsilon = 2e-1);
+    }
+
+    #[test]
+    fn test_load_fail() {
+        let gp = load("notfound.json");
+        assert!(gp.is_err());
     }
 }

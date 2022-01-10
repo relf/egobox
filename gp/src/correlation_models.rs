@@ -13,7 +13,7 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
     ) -> Array2<F>;
 }
 
-#[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct SquaredExponentialKernel();
@@ -49,7 +49,7 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
     }
 }
 
-#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct AbsoluteExponentialKernel();
@@ -85,7 +85,7 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialKernel {
     }
 }
 
-#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct Matern32Kernel();
@@ -127,7 +127,7 @@ impl<F: Float> CorrelationModel<F> for Matern32Kernel {
     }
 }
 
-#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct Matern52Kernel();

@@ -50,7 +50,7 @@ impl<F: Float> Clone for GpInnerParams<F> {
 }
 
 /// Gaussian Process
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
