@@ -1,7 +1,7 @@
 mod algorithm;
 mod clustering;
 mod errors;
-mod expert;
+mod expertise_macros;
 mod gaussian_mixture;
 mod parameters;
 mod surrogates;

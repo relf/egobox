@@ -2,7 +2,7 @@ use super::gaussian_mixture::GaussianMixture;
 use super::{make_gp_params, make_surrogate_params};
 use crate::errors::MoeError;
 use crate::errors::Result;
-use crate::expert::*;
+use crate::expertise_macros::*;
 use crate::surrogates::*;
 use crate::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use log::{debug, info, trace};
