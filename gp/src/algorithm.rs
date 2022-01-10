@@ -2,7 +2,6 @@ use crate::correlation_models::*;
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::parameters::GpParams;
-use crate::surrogates::*;
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
 use linfa::dataset::{WithLapack, WithoutLapack};
@@ -15,11 +14,8 @@ use ndarray_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
-use paste::paste;
 use rand_isaac::Isaac64Rng;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::io::Write;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 
@@ -54,14 +50,19 @@ impl<F: Float> Clone for GpInnerParams<F> {
 }
 
 /// Gaussian Process
-#[derive(Serialize)]
-#[serde(bound(serialize = "F: Serialize"))]
+#[derive(Serialize, Deserialize)]
+#[serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Array1<F>,
     /// Regression model
+    #[serde(bound(serialize = "Mean: Serialize", deserialize = "Mean: Deserialize<'de>"))]
     mean: Mean,
     /// Correlation kernel
+    #[serde(bound(
+        serialize = "Kernel: Serialize",
+        deserialize = "Kernel: Deserialize<'de>"
+    ))]
     kernel: Kernel,
     /// Gaussian process internal fitted params
     inner_params: GpInnerParams<F>,
@@ -168,58 +169,6 @@ impl<F: Float + Serialize, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>
             None
         }
     }
-
-    pub fn save(&self, path: &str) -> Result<()> {
-        let mut file = fs::File::create(path).unwrap();
-        file.write_all(serde_json::to_string(self)?.as_bytes())?;
-        Ok(())
-    }
-}
-
-macro_rules! make_surrogate {
-    ($regr:ident, $corr:ident, $data:ident) => {
-        paste! {
-            Ok(Box::new([<Gp $regr $corr Surrogate>](
-                GaussianProcess {
-                    mean: [<$regr Mean>](),
-                    kernel: [<$corr Kernel>](),
-                    theta: serde_json::from_value(serde_json::json!($data["theta"])).unwrap(),
-                    inner_params: serde_json::from_value(serde_json::json!($data["inner_params"])).unwrap(),
-                    w_star:  serde_json::from_value(serde_json::json!($data["w_star"])).unwrap(),
-                    xtrain: serde_json::from_value(serde_json::json!($data["xtrain"])).unwrap(),
-                    ytrain: serde_json::from_value(serde_json::json!($data["ytrain"])).unwrap()
-                }
-            )) as Box<dyn GpSurrogate>)
-        }
-    };
-}
-
-pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
-    let data = fs::read_to_string(path)?;
-    let data: serde_json::Value = serde_json::from_str(&data)?;
-    let gp_kind = format!(
-        "{}_{}",
-        data["mean"].as_str().unwrap(),
-        data["kernel"].as_str().unwrap()
-    );
-    match gp_kind.as_str() {
-        "Constant_SquaredExponential" => make_surrogate!(Constant, SquaredExponential, data),
-        "Constant_AbsoluteExponential" => make_surrogate!(Constant, AbsoluteExponential, data),
-        "Constant_Matern32" => make_surrogate!(Constant, Matern32, data),
-        "Constant_Matern52" => make_surrogate!(Constant, Matern52, data),
-        "Linear_SquaredExponential" => make_surrogate!(Linear, SquaredExponential, data),
-        "Linear_AbsoluteExponential" => make_surrogate!(Linear, AbsoluteExponential, data),
-        "Linear_Matern32" => make_surrogate!(Linear, Matern32, data),
-        "Linear_Matern52" => make_surrogate!(Linear, Matern52, data),
-        "Quadratic_SquaredExponential" => make_surrogate!(Quadratic, SquaredExponential, data),
-        "Quadratic_AbsoluteExponential" => make_surrogate!(Quadratic, AbsoluteExponential, data),
-        "Quadratic_Matern32" => make_surrogate!(Quadratic, Matern32, data),
-        "Quadratic_Matern52" => make_surrogate!(Quadratic, Matern52, data),
-        _ => Err(GpError::LoadError(format!(
-            "Bad mean or kernel values: {}",
-            gp_kind
-        ))),
-    }
 }
 
 impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F, Mean, Kernel> {
@@ -310,6 +259,27 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
             theta: opt_theta.to_owned(),
             mean: *self.mean(),
             kernel: *self.kernel(),
+            inner_params,
+            w_star,
+            xtrain,
+            ytrain,
+        })
+    }
+
+    pub fn load(
+        mean: Mean,
+        kernel: Kernel,
+        theta: Array1<F>,
+        inner_params: GpInnerParams<F>,
+        w_star: Array2<F>,
+        xtrain: NormalizedMatrix<F>,
+        ytrain: NormalizedMatrix<F>,
+    ) -> Result<GaussianProcess<F, Mean, Kernel>> {
+        //T ODO: add some consistency checks
+        Ok(GaussianProcess {
+            mean,
+            kernel,
+            theta,
             inner_params,
             w_star,
             xtrain,
@@ -673,30 +643,6 @@ mod tests {
         let yv = rosenb(&xv);
 
         let ytest = gp.predict_values(&xv).unwrap();
-        let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
-        assert_abs_diff_eq!(err, 0., epsilon = 2e-1);
-    }
-
-    fn xsinx(x: &Array2<f64>) -> Array2<f64> {
-        (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
-    }
-
-    #[test]
-    fn test_save() {
-        let xlimits = array![[0., 25.]];
-        let xt = LHS::new(&xlimits).sample(10);
-        let yt = xsinx(&xt);
-        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
-            ConstantMean::default(),
-            SquaredExponentialKernel::default(),
-        )
-        .fit(&xt, &yt)
-        .expect("GP fit error");
-        gp.save("save_gp.json").expect("GP not saved");
-        let gp = load("save_gp.json").expect("GP not loaded");
-        let xv = LHS::new(&xlimits).sample(20);
-        let yv = xsinx(&xv);
-        let ytest = gp.predict_values(&xv.view()).unwrap();
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
         assert_abs_diff_eq!(err, 0., epsilon = 2e-1);
     }

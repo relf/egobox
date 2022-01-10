@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use linfa::Float;
 use ndarray::{concatenate, s, Array2, ArrayBase, Axis, Data, Ix2};
 use serde::{Deserialize, Serialize};
-pub trait RegressionModel<F: Float>: Clone + Copy + Default + Serialize {
+pub trait RegressionModel<F: Float>: Clone + Copy + Default {
     fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F>;
 }
 
