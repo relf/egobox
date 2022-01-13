@@ -20,6 +20,12 @@ use rand_isaac::Isaac64Rng;
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
 
+#[derive(Clone, Copy, Debug)]
+pub struct Optimum {
+    value: f64,
+    tolerance: f64,
+}
+
 pub struct Egor<O: GroupFunc, R: Rng> {
     pub n_eval: usize,
     pub n_start: usize,
@@ -35,6 +41,7 @@ pub struct Egor<O: GroupFunc, R: Rng> {
     pub correlation_spec: CorrelationSpec,
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
+    pub solution: Option<Optimum>,
     pub obj: O,
     pub rng: R,
 }
@@ -66,6 +73,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
             n_clusters: Some(1),
+            solution: None,
             obj: f,
             rng,
         }
@@ -136,6 +144,11 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         self
     }
 
+    pub fn solution(&mut self, solution: Option<Optimum>) -> &mut Self {
+        self.solution = solution;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<O, R2> {
         Egor {
             n_eval: self.n_eval,
@@ -152,6 +165,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             correlation_spec: self.correlation_spec,
             kpls_dim: self.kpls_dim,
             n_clusters: self.n_clusters,
+            solution: self.solution,
             obj: self.obj,
             rng,
         }
@@ -216,11 +230,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     if rejected_count > 1 { "s" } else { "" }
                 );
             }
-            debug!(
-                "Nb new pts rejected = {} / {}",
-                rejected_count,
-                x_dat.nrows()
-            );
+            debug!("New pts rejected = {} / {}", rejected_count, x_dat.nrows());
             if rejected_count == x_dat.nrows() {
                 no_point_added_retries -= 1;
                 if no_point_added_retries == 0 {
@@ -248,9 +258,15 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     "Iteration {}/{}: Best fun(x)={} at x={}",
                     i,
                     n_iter,
-                    y_data.row(best_index).to_owned(),
-                    x_data.row(best_index).to_owned()
-                )
+                    y_data.row(best_index),
+                    x_data.row(best_index)
+                );
+                if let Some(sol) = self.solution {
+                    if (y_data[[best_index, 0]] - sol.value).abs() < sol.tolerance {
+                        info!("Solution reached");
+                        break;
+                    }
+                }
             }
         }
         let best_index = self.find_best_result_index(&y_data);
@@ -423,7 +439,6 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 let mut x_opt = x_start.row(i).to_vec();
                 match optimizer.optimize(&mut x_opt) {
                     Ok((_, opt)) => {
-                        info!("y_opt={}", opt);
                         if opt < best_opt {
                             best_opt = opt;
                             let res = x_opt.iter().copied().collect::<Vec<f64>>();
@@ -537,6 +552,10 @@ mod tests {
             .correlation_spec(CorrelationSpec::ALL)
             .n_eval(15)
             .doe(Some(initial_doe.to_owned()))
+            .solution(Some(Optimum {
+                value: -15.1,
+                tolerance: 1e-1,
+            }))
             .minimize();
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
@@ -595,6 +614,10 @@ mod tests {
             .infill_strategy(InfillStrategy::EI)
             .doe(Some(doe))
             .n_eval(30)
+            .solution(Some(Optimum {
+                value: 0.0,
+                tolerance: 1e-1,
+            }))
             .minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
@@ -644,6 +667,10 @@ mod tests {
             .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .doe(Some(doe))
             .n_eval(40)
+            // .solution(Some(Optimum {
+            //     value: -5.5080,
+            //     tolerance: 1e-3,
+            // }))
             .minimize();
         println!("G24 optim result = {:?}", res);
         let expected = array![2.3295, 3.1785];

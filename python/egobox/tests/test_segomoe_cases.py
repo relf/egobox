@@ -1,3 +1,5 @@
+import os
+import sys
 import unittest
 import numpy as np
 import egobox as egx
@@ -9,7 +11,7 @@ try:
 except ImportError:
     SEGOMOE_NOT_INSTALLED = True
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 def create_egor(case, **options):
@@ -27,7 +29,7 @@ def create_egor(case, **options):
     )
 
 
-class TestEgorOnSegomoeCases(unittest.TestCase):
+class TestEgor(unittest.TestCase):
     @unittest.skipIf(SEGOMOE_NOT_INSTALLED, "SEGOMOE not installed")
     def test_branin(self):
         options = {"seed": 42, "n_doe": 8}
@@ -46,6 +48,19 @@ class TestEgorOnSegomoeCases(unittest.TestCase):
         }
         egor, expected = create_egor("Hesse", **options)
         res = egor.minimize(n_eval=30)
+        self.assertAlmostEqual(expected["value"], res.y_opt[0], delta=expected["tol"])
+
+    @unittest.skipIf(SEGOMOE_NOT_INSTALLED, "SEGOMOE not installed")
+    def test_mopta(self):
+        options = {
+            "seed": 42,
+            "kpls_dim": 3,
+            "n_doe": 20,
+            "regr_spec": 1,
+            "corr_spec": 1,
+        }
+        egor, expected = create_egor("Mopta_12D", **options)
+        res = egor.minimize(n_eval=50)
         self.assertAlmostEqual(expected["value"], res.y_opt[0], delta=expected["tol"])
 
 
