@@ -80,7 +80,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         let dataset_clustering = gmx.predict(xt);
         let clusters = sort_by_cluster(self.n_clusters(), &data, &dataset_clustering);
 
-        check_number_of_points(&clusters, data.ncols())?;
+        check_number_of_points(&clusters, xt.ncols())?;
 
         // Fit GPs on clustered data
         let mut experts = Vec::new();
