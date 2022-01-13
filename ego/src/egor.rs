@@ -216,8 +216,12 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     if rejected_count > 1 { "s" } else { "" }
                 );
             }
+            debug!(
+                "Nb new pts rejected = {} / {}",
+                rejected_count,
+                x_dat.nrows()
+            );
             if rejected_count == x_dat.nrows() {
-                info!("No new point added");
                 no_point_added_retries -= 1;
                 if no_point_added_retries == 0 {
                     info!("Max number of retries ({}) without adding point", MAX_RETRY);
@@ -285,7 +289,6 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     .expect("GP training failure"),
             ))
         }
-
         for _ in 0..self.n_parallel {
             match self.find_best_point(x_data, y_data, sampling, &obj_model, &cstr_models) {
                 Ok(xk) => match self.get_virtual_point(&xk, y_data, &obj_model, &cstr_models) {
@@ -297,13 +300,15 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                         ];
                         x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
                     }
-                    Err(_) => {
+                    Err(err) => {
                         // Error while predict at best point: ignore
+                        info!("Error while getting virtual point: {}", err);
                         break;
                     }
                 },
-                Err(_) => {
+                Err(err) => {
                     // Cannot find best point: ignore
+                    debug!("Find best point error: {}", err);
                     break;
                 }
             }
@@ -418,6 +423,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 let mut x_opt = x_start.row(i).to_vec();
                 match optimizer.optimize(&mut x_opt) {
                     Ok((_, opt)) => {
+                        info!("y_opt={}", opt);
                         if opt < best_opt {
                             best_opt = opt;
                             let res = x_opt.iter().copied().collect::<Vec<f64>>();
@@ -425,7 +431,9 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                             success = true;
                         }
                     }
-                    Err((_, _)) => {}
+                    Err((err, code)) => {
+                        debug!("Nlopt Err: {:?} (y_opt={})", err, code);
+                    }
                 }
             }
             n_optim += 1;
