@@ -1,22 +1,3 @@
-macro_rules! make_gp_params {
-    ($regr:ident, $corr:ident) => {
-        paste! {
-            GaussianProcess::<f64, [<$regr Mean>], [<$corr Kernel>] >::params(
-                [<$regr Mean>]::default(),
-                [<$corr Kernel>]::default(),
-            )
-        }
-    };
-}
-
-macro_rules! make_surrogate_params {
-    ($regr:ident, $corr:ident) => {
-        paste! {
-            Ok(Box::new([<Gp $regr $corr SurrogateParams>]::new(make_gp_params!($regr, $corr))) as Box<dyn GpSurrogateParams>)
-        }
-    };
-}
-
 macro_rules! compute_error {
     ($self:ident, $regr:ident, $corr:ident, $dataset:ident) => {{
         trace!(
@@ -135,5 +116,3 @@ pub(crate) use compute_accuracies;
 pub(crate) use compute_accuracies_with_corr;
 pub(crate) use compute_accuracies_with_regr;
 pub(crate) use compute_error;
-pub(crate) use make_gp_params;
-pub(crate) use make_surrogate_params;

@@ -1,11 +1,13 @@
 use super::gaussian_mixture::GaussianMixture;
+use super::{make_gp_params, make_surrogate_params};
 use crate::errors::MoeError;
 use crate::errors::Result;
-use crate::expert::*;
+use crate::expertise_macros::*;
+use crate::surrogates::*;
 use crate::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use log::{debug, info, trace};
 
-use gp::{correlation_models::*, mean_models::*, surrogates::*, GaussianProcess};
+use gp::{correlation_models::*, mean_models::*, GaussianProcess};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict};
 use linfa::{Dataset, Float};
@@ -78,7 +80,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         let dataset_clustering = gmx.predict(xt);
         let clusters = sort_by_cluster(self.n_clusters(), &data, &dataset_clustering);
 
-        check_number_of_points(&clusters, data.ncols())?;
+        check_number_of_points(&clusters, xt.ncols())?;
 
         // Fit GPs on clustered data
         let mut experts = Vec::new();
@@ -152,25 +154,29 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
             match best.0.as_str() {
                 "Constant_SquaredExponential" => {
-                    make_surrogate_params!(Constant, SquaredExponential)
+                    Ok(make_surrogate_params!(Constant, SquaredExponential))
                 }
                 "Constant_AbsoluteExponential" => {
-                    make_surrogate_params!(Constant, AbsoluteExponential)
+                    Ok(make_surrogate_params!(Constant, AbsoluteExponential))
                 }
-                "Constant_Matern32" => make_surrogate_params!(Constant, Matern32),
-                "Constant_Matern52" => make_surrogate_params!(Constant, Matern52),
-                "Linear_SquaredExponential" => make_surrogate_params!(Linear, SquaredExponential),
-                "Linear_AbsoluteExponential" => make_surrogate_params!(Linear, AbsoluteExponential),
-                "Linear_Matern32" => make_surrogate_params!(Linear, Matern32),
-                "Linear_Matern52" => make_surrogate_params!(Linear, Matern52),
+                "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
+                "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
+                "Linear_SquaredExponential" => {
+                    Ok(make_surrogate_params!(Linear, SquaredExponential))
+                }
+                "Linear_AbsoluteExponential" => {
+                    Ok(make_surrogate_params!(Linear, AbsoluteExponential))
+                }
+                "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
+                "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
                 "Quadratic_SquaredExponential" => {
-                    make_surrogate_params!(Quadratic, SquaredExponential)
+                    Ok(make_surrogate_params!(Quadratic, SquaredExponential))
                 }
                 "Quadratic_AbsoluteExponential" => {
-                    make_surrogate_params!(Quadratic, AbsoluteExponential)
+                    Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
                 }
-                "Quadratic_Matern32" => make_surrogate_params!(Quadratic, Matern32),
-                "Quadratic_Matern52" => make_surrogate_params!(Quadratic, Matern52),
+                "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
+                "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
                 _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
             };
         let mut expert_params = best_expert_params?;

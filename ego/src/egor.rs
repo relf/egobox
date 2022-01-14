@@ -20,6 +20,12 @@ use rand_isaac::Isaac64Rng;
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
 
+#[derive(Clone, Copy, Debug)]
+pub struct ApproxValue {
+    pub value: f64,
+    pub tolerance: f64,
+}
+
 pub struct Egor<O: GroupFunc, R: Rng> {
     pub n_eval: usize,
     pub n_start: usize,
@@ -35,6 +41,7 @@ pub struct Egor<O: GroupFunc, R: Rng> {
     pub correlation_spec: CorrelationSpec,
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
+    pub expected: Option<ApproxValue>,
     pub obj: O,
     pub rng: R,
 }
@@ -66,6 +73,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
             n_clusters: Some(1),
+            expected: None,
             obj: f,
             rng,
         }
@@ -136,6 +144,11 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         self
     }
 
+    pub fn expect(&mut self, expected: Option<ApproxValue>) -> &mut Self {
+        self.expected = expected;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<O, R2> {
         Egor {
             n_eval: self.n_eval,
@@ -152,6 +165,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             correlation_spec: self.correlation_spec,
             kpls_dim: self.kpls_dim,
             n_clusters: self.n_clusters,
+            expected: self.expected,
             obj: self.obj,
             rng,
         }
@@ -216,8 +230,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     if rejected_count > 1 { "s" } else { "" }
                 );
             }
+            debug!("New pts rejected = {} / {}", rejected_count, x_dat.nrows());
             if rejected_count == x_dat.nrows() {
-                info!("No new point added");
                 no_point_added_retries -= 1;
                 if no_point_added_retries == 0 {
                     info!("Max number of retries ({}) without adding point", MAX_RETRY);
@@ -244,13 +258,19 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     "Iteration {}/{}: Best fun(x)={} at x={}",
                     i,
                     n_iter,
-                    y_data.row(best_index).to_owned(),
-                    x_data.row(best_index).to_owned()
-                )
+                    y_data.row(best_index),
+                    x_data.row(best_index)
+                );
+                if let Some(sol) = self.expected {
+                    if (y_data[[best_index, 0]] - sol.value).abs() < sol.tolerance {
+                        info!("ApproxValue reached");
+                        break;
+                    }
+                }
             }
         }
         let best_index = self.find_best_result_index(&y_data);
-        debug!("{:?}", concatenate![Axis(1), x_data, y_data]);
+        info!("{:?}", concatenate![Axis(1), x_data, y_data]);
         OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
             y_opt: y_data.row(best_index).to_owned(),
@@ -285,7 +305,6 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     .expect("GP training failure"),
             ))
         }
-
         for _ in 0..self.n_parallel {
             match self.find_best_point(x_data, y_data, sampling, &obj_model, &cstr_models) {
                 Ok(xk) => match self.get_virtual_point(&xk, y_data, &obj_model, &cstr_models) {
@@ -297,13 +316,15 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                         ];
                         x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
                     }
-                    Err(_) => {
+                    Err(err) => {
                         // Error while predict at best point: ignore
+                        info!("Error while getting virtual point: {}", err);
                         break;
                     }
                 },
-                Err(_) => {
+                Err(err) => {
                     // Cannot find best point: ignore
+                    debug!("Find best point error: {}", err);
                     break;
                 }
             }
@@ -425,7 +446,9 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                             success = true;
                         }
                     }
-                    Err((_, _)) => {}
+                    Err((err, code)) => {
+                        debug!("Nlopt Err: {:?} (y_opt={})", err, code);
+                    }
                 }
             }
             n_optim += 1;
@@ -529,6 +552,10 @@ mod tests {
             .correlation_spec(CorrelationSpec::ALL)
             .n_eval(15)
             .doe(Some(initial_doe.to_owned()))
+            .expect(Some(ApproxValue {
+                value: -15.1,
+                tolerance: 1e-1,
+            }))
             .minimize();
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
@@ -587,6 +614,10 @@ mod tests {
             .infill_strategy(InfillStrategy::EI)
             .doe(Some(doe))
             .n_eval(30)
+            .expect(Some(ApproxValue {
+                value: 0.0,
+                tolerance: 1e-1,
+            }))
             .minimize();
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
@@ -636,6 +667,10 @@ mod tests {
             .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .doe(Some(doe))
             .n_eval(40)
+            // .expect(Some(ApproxValue {
+            //     value: -5.5080,
+            //     tolerance: 1e-3,
+            // }))
             .minimize();
         println!("G24 optim result = {:?}", res);
         let expected = array![2.3295, 3.1785];

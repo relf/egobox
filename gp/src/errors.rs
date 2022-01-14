@@ -22,13 +22,4 @@ pub enum GpError {
     /// When a value is invalid
     #[error("PLS error: {0}")]
     InvalidValue(String),
-    /// When error during saving
-    #[error("Save error: {0}")]
-    SaveError(#[from] serde_json::Error),
-    /// When error during loading
-    #[error("Load IO error")]
-    LoadIoError(#[from] std::io::Error),
-    /// When error during loading
-    #[error("Load error: {0}")]
-    LoadError(String),
 }

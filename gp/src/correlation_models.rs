@@ -4,7 +4,7 @@ use linfa::Float;
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 use serde::{Deserialize, Serialize};
 
-pub trait CorrelationModel<F: Float>: Clone + Copy + Default + Serialize {
+pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
     fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -13,8 +13,9 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + Serialize {
     ) -> Array2<F>;
 }
 
-#[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
+#[serde(try_from = "String")]
 pub struct SquaredExponentialKernel();
 
 impl From<SquaredExponentialKernel> for String {
@@ -48,13 +49,25 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
     }
 }
 
-#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
+#[serde(try_from = "String")]
 pub struct AbsoluteExponentialKernel();
 
 impl From<AbsoluteExponentialKernel> for String {
     fn from(_item: AbsoluteExponentialKernel) -> String {
         "AbsoluteExponential".to_string()
+    }
+}
+
+impl TryFrom<String> for AbsoluteExponentialKernel {
+    type Error = &'static str;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        if s == "AbsoluteExponential" {
+            Ok(Self::default())
+        } else {
+            Err("Bad string value for AbsoluteExponentialKernel, should be \'AbsoluteExponential\'")
+        }
     }
 }
 
@@ -72,13 +85,25 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialKernel {
     }
 }
 
-#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
+#[serde(try_from = "String")]
 pub struct Matern32Kernel();
 
 impl From<Matern32Kernel> for String {
     fn from(_item: Matern32Kernel) -> String {
         "Matern32".to_string()
+    }
+}
+
+impl TryFrom<String> for Matern32Kernel {
+    type Error = &'static str;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        if s == "Matern32" {
+            Ok(Self::default())
+        } else {
+            Err("Bad string value for Matern32Kernel, should be \'Matern32\'")
+        }
     }
 }
 
@@ -102,13 +127,25 @@ impl<F: Float> CorrelationModel<F> for Matern32Kernel {
     }
 }
 
-#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
+#[serde(try_from = "String")]
 pub struct Matern52Kernel();
 
 impl From<Matern52Kernel> for String {
     fn from(_item: Matern52Kernel) -> String {
         "Matern52".to_string()
+    }
+}
+
+impl TryFrom<String> for Matern52Kernel {
+    type Error = &'static str;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        if s == "Matern52" {
+            Ok(Self::default())
+        } else {
+            Err("Bad string value for Matern52Kernel, should be \'Matern52\'")
+        }
     }
 }
 

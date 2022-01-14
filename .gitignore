@@ -23,3 +23,8 @@ Cargo.lock
 python/egobox/egobox.pyd
 **/__pycache__
 **/*.json
+
+# MOPTA execution
+input.txt
+output.txt
+mopta08*

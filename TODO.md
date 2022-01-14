@@ -5,7 +5,8 @@
 * ~~Allow to choose clustering number~~
 * ~~Add save/load trained GP models~~
 * ~~Add qEI usage~~
-* Test on SEGOMOE test cases
+* ~~Test on SEGOMOE test cases~~
+* Add hot start
 * Add automated reclustering
 * Add benchmarks
 * Add derivatives of GP models
