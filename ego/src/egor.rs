@@ -21,9 +21,9 @@ const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
 
 #[derive(Clone, Copy, Debug)]
-pub struct Optimum {
-    value: f64,
-    tolerance: f64,
+pub struct ApproxValue {
+    pub value: f64,
+    pub tolerance: f64,
 }
 
 pub struct Egor<O: GroupFunc, R: Rng> {
@@ -41,7 +41,7 @@ pub struct Egor<O: GroupFunc, R: Rng> {
     pub correlation_spec: CorrelationSpec,
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
-    pub solution: Option<Optimum>,
+    pub expected: Option<ApproxValue>,
     pub obj: O,
     pub rng: R,
 }
@@ -73,7 +73,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
             n_clusters: Some(1),
-            solution: None,
+            expected: None,
             obj: f,
             rng,
         }
@@ -144,8 +144,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         self
     }
 
-    pub fn solution(&mut self, solution: Option<Optimum>) -> &mut Self {
-        self.solution = solution;
+    pub fn expect(&mut self, expected: Option<ApproxValue>) -> &mut Self {
+        self.expected = expected;
         self
     }
 
@@ -165,7 +165,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             correlation_spec: self.correlation_spec,
             kpls_dim: self.kpls_dim,
             n_clusters: self.n_clusters,
-            solution: self.solution,
+            expected: self.expected,
             obj: self.obj,
             rng,
         }
@@ -261,16 +261,16 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     y_data.row(best_index),
                     x_data.row(best_index)
                 );
-                if let Some(sol) = self.solution {
+                if let Some(sol) = self.expected {
                     if (y_data[[best_index, 0]] - sol.value).abs() < sol.tolerance {
-                        info!("Solution reached");
+                        info!("ApproxValue reached");
                         break;
                     }
                 }
             }
         }
         let best_index = self.find_best_result_index(&y_data);
-        debug!("{:?}", concatenate![Axis(1), x_data, y_data]);
+        info!("{:?}", concatenate![Axis(1), x_data, y_data]);
         OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
             y_opt: y_data.row(best_index).to_owned(),
@@ -552,7 +552,7 @@ mod tests {
             .correlation_spec(CorrelationSpec::ALL)
             .n_eval(15)
             .doe(Some(initial_doe.to_owned()))
-            .solution(Some(Optimum {
+            .expect(Some(ApproxValue {
                 value: -15.1,
                 tolerance: 1e-1,
             }))
@@ -614,7 +614,7 @@ mod tests {
             .infill_strategy(InfillStrategy::EI)
             .doe(Some(doe))
             .n_eval(30)
-            .solution(Some(Optimum {
+            .expect(Some(ApproxValue {
                 value: 0.0,
                 tolerance: 1e-1,
             }))
@@ -667,7 +667,7 @@ mod tests {
             .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .doe(Some(doe))
             .n_eval(40)
-            // .solution(Some(Optimum {
+            // .expect(Some(ApproxValue {
             //     value: -5.5080,
             //     tolerance: 1e-3,
             // }))

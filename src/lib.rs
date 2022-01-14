@@ -1,5 +1,4 @@
 use doe::{SamplingMethod, LHS};
-use ego::Egor;
 use ndarray::{Array2, ArrayView2};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
@@ -93,6 +92,25 @@ impl InfillOptimizer {
     const SLSQP: u8 = 2;
 }
 
+#[pyclass]
+#[derive(Clone, Copy)]
+#[pyo3(text_signature = "(val, tol=1e-6)")]
+struct ExpectedOptimum {
+    #[pyo3(get)]
+    val: f64,
+    #[pyo3(get)]
+    tol: f64,
+}
+
+#[pymethods]
+impl ExpectedOptimum {
+    #[new]
+    #[args(value, tolerance = "1e-6")]
+    fn new(val: f64, tol: f64) -> Self {
+        ExpectedOptimum { val, tol }
+    }
+}
+
 /// Optimizer constructor
 ///
 /// Parameters
@@ -183,6 +201,7 @@ struct Optimizer {
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
+    pub expected: Option<ExpectedOptimum>,
     pub seed: Option<u64>,
 }
 
@@ -212,6 +231,7 @@ impl Optimizer {
         infill_optimizer = "InfillOptimizer::COBYLA",
         kpls_dim = "None",
         n_clusters = "1",
+        expected = "None",
         seed = "None"
     )]
     #[allow(clippy::too_many_arguments)]
@@ -231,6 +251,7 @@ impl Optimizer {
         infill_optimizer: u8,
         kpls_dim: Option<usize>,
         n_clusters: Option<usize>,
+        expected: Option<ExpectedOptimum>,
         seed: Option<u64>,
     ) -> Self {
         let xlimits = xlimits.to_owned_array();
@@ -250,6 +271,7 @@ impl Optimizer {
             infill_optimizer: InfillOptimizer(infill_optimizer),
             kpls_dim,
             n_clusters,
+            expected,
             seed,
         }
     }
@@ -325,8 +347,13 @@ impl Optimizer {
             Isaac64Rng::from_entropy()
         };
 
+        let expected = self.expected.map(|opt| ego::ApproxValue {
+            value: opt.val,
+            tolerance: opt.tol,
+        });
+
         let doe = self.doe.as_ref().map(|v| v.to_owned());
-        let res = Egor::new(obj, &self.xlimits)
+        let res = ego::Egor::new(obj, &self.xlimits)
             .with_rng(rng)
             .n_cstr(self.n_cstr)
             .n_eval(n_eval)
@@ -341,6 +368,7 @@ impl Optimizer {
             .infill_optimizer(infill_optimizer)
             .kpls_dim(self.kpls_dim)
             .n_clusters(self.n_clusters)
+            .expect(expected)
             .minimize();
 
         OptimResult {
@@ -362,5 +390,6 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<ParInfillStrategy>()?;
     m.add_class::<InfillOptimizer>()?;
     m.add_class::<OptimResult>()?;
+    m.add_class::<ExpectedOptimum>()?;
     Ok(())
 }

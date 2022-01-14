@@ -11,7 +11,7 @@ try:
 except ImportError:
     SEGOMOE_NOT_INSTALLED = True
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 def create_egor(case, **options):
@@ -58,6 +58,7 @@ class TestEgor(unittest.TestCase):
             "n_doe": 20,
             "regr_spec": 1,
             "corr_spec": 1,
+            "expected": egx.ExpectedOptimum(val=272.72, tol=1e-2),
         }
         egor, expected = create_egor("Mopta_12D", **options)
         res = egor.minimize(n_eval=50)
