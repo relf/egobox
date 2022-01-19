@@ -6,7 +6,7 @@ macro_rules! compute_error {
             stringify!($corr),
             $dataset.nsamples()
         );
-        let params = make_gp_params!($regr, $corr).set_kpls_dim($self.kpls_dim());
+        let params = make_gp_params!($regr, $corr).kpls_dim($self.kpls_dim());
         let mut errors = Vec::new();
         let input_dim = $dataset.records().shape()[1];
         let n_fold = std::cmp::min($dataset.nsamples(), 5 * input_dim);
@@ -18,8 +18,8 @@ macro_rules! compute_error {
             for (gp, valid) in $dataset.iter_fold(n_fold, |train| {
                 params
                     .clone()
-                    .set_kpls_dim($self.kpls_dim())
-                    .fit(&train.records(), &train.targets())
+                    .kpls_dim($self.kpls_dim())
+                    .fit(&train)
                     .unwrap()
             }) {
                 let pred = gp.predict_values(valid.records()).unwrap();
