@@ -22,4 +22,6 @@ pub enum GpError {
     /// When a value is invalid
     #[error("PLS error: {0}")]
     InvalidValue(String),
+    #[error(transparent)]
+    LinfaError(#[from] linfa::error::Error),
 }

@@ -2,6 +2,7 @@ use doe::{SamplingMethod, LHS};
 use gp::correlation_models::*;
 use gp::mean_models::*;
 use gp::GaussianProcess;
+use linfa::prelude::{Dataset, Fit};
 use ndarray::{array, Array1, Array2, Zip};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
@@ -60,7 +61,7 @@ fn main() {
         )
         //.with_kpls_dim(1)
         //.with_initial_theta(1.0)
-        .fit(&xt, &yt)
+        .fit(&Dataset::new(xt, yt))
         .expect("GP fit error");
         println!("Time fitting is: {:?}", start2.elapsed());
 

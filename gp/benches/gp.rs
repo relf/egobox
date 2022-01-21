@@ -3,6 +3,7 @@ use doe::{SamplingMethod, LHS};
 use gp::correlation_models::SquaredExponentialKernel;
 use gp::mean_models::ConstantMean;
 use gp::GaussianProcess;
+use linfa::prelude::{Dataset, Fit};
 use ndarray::{array, Array1, Zip};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
@@ -57,7 +58,7 @@ fn criterion_gp(c: &mut Criterion) {
                     )
                     //.with_kpls_dim(1)
                     //.with_initial_theta(1.0)
-                    .fit(&xt, &yt)
+                    .fit(&Dataset::new(xt.to_owned(), yt.to_owned()))
                     .expect("GP fit error"),
                 )
             });

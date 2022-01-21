@@ -1,5 +1,6 @@
 use crate::errors::{MoeError, Result};
-use gp::{correlation_models::*, mean_models::*, GaussianProcess, GpParams};
+use gp::{correlation_models::*, mean_models::*, GaussianProcess, GpParams, GpValidParams};
+use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array2, ArrayView2};
 use paste::paste;
 use serde::{Deserialize, Serialize};
@@ -7,9 +8,9 @@ use std::fs;
 use std::io::Write;
 
 pub trait GpSurrogateParams {
-    fn set_initial_theta(&mut self, theta: Vec<f64>);
-    fn set_kpls_dim(&mut self, kpls_dim: Option<usize>);
-    fn set_nugget(&mut self, nugget: f64);
+    fn initial_theta(&mut self, theta: Vec<f64>);
+    fn kpls_dim(&mut self, kpls_dim: Option<usize>);
+    fn nugget(&mut self, nugget: f64);
     fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn GpSurrogate>>;
 }
 
@@ -34,16 +35,16 @@ macro_rules! declare_surrogate {
             }
 
             impl GpSurrogateParams for [<Gp $regr $corr SurrogateParams>] {
-                fn set_initial_theta(&mut self, theta: Vec<f64>) {
-                    self.0 = self.0.clone().set_initial_theta(Some(theta));
+                fn initial_theta(&mut self, theta: Vec<f64>) {
+                    self.0 = self.0.clone().initial_theta(Some(theta));
                 }
 
-                fn set_kpls_dim(&mut self, kpls_dim: Option<usize>) {
-                    self.0 = self.0.clone().set_kpls_dim(kpls_dim);
+                fn kpls_dim(&mut self, kpls_dim: Option<usize>) {
+                    self.0 = self.0.clone().kpls_dim(kpls_dim);
                 }
 
-                fn set_nugget(&mut self, nugget: f64) {
-                    self.0 = self.0.clone().set_nugget(nugget);
+                fn nugget(&mut self, nugget: f64) {
+                    self.0 = self.0.clone().nugget(nugget);
                 }
 
                 fn fit(
@@ -52,7 +53,7 @@ macro_rules! declare_surrogate {
                     y: &Array2<f64>,
                 ) -> Result<Box<dyn GpSurrogate>> {
                     Ok(Box::new([<Gp $regr $corr Surrogate>](
-                        self.0.clone().fit(x, y)?,
+                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,
                     )))
                 }
             }
@@ -136,7 +137,7 @@ macro_rules! make_surrogate {
         paste! {
             Box::new(
                 [<Gp $regr $corr Surrogate>](
-                GpParams::<f64, [<$regr Mean>], [<$corr Kernel>]>::load(
+                GpValidParams::<f64, [<$regr Mean>], [<$corr Kernel>]>::load(
                 [<$regr Mean>](), [<$corr Kernel>](),
                 serde_json::from_value(serde_json::json!($data["theta"])).unwrap(),
                 serde_json::from_value(serde_json::json!($data["inner_params"])).unwrap(),

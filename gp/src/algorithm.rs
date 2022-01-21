@@ -1,12 +1,11 @@
 use crate::correlation_models::*;
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
-use crate::parameters::GpParams;
+use crate::parameters::{GpParams, GpValidParams};
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use doe::{SamplingMethod, LHS};
 use linfa::dataset::{WithLapack, WithoutLapack};
-use linfa::traits::Fit;
-use linfa::{Dataset, Float};
+use linfa::prelude::{Dataset, DatasetBase, Fit, Float};
 use linfa_pls::{PlsError, PlsRegression};
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
@@ -171,13 +170,27 @@ impl<F: Float + Serialize, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F, Mean, Kernel> {
-    pub fn fit(
-        self,
-        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-        y: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> Result<GaussianProcess<F, Mean, Kernel>> {
-        self.validate(x.ncols())?;
+impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>, D: Data<Elem = F>>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for GpValidParams<F, Mean, Kernel>
+{
+    type Object = GaussianProcess<F, Mean, Kernel>;
+
+    fn fit(
+        &self,
+        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
+    ) -> Result<Self::Object> {
+        let x = dataset.records();
+        let y = dataset.targets();
+        if let Some(d) = self.kpls_dim() {
+            if *d > x.ncols() {
+                return Err(GpError::InvalidValue(format!(
+                    "Dimension reduction {} should be smaller than actual \
+                    training input dimensions {}",
+                    d,
+                    x.ncols()
+                )));
+            };
+        }
 
         let xtrain = NormalizedMatrix::new(x);
         let ytrain = NormalizedMatrix::new(y);
@@ -265,7 +278,11 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
             ytrain,
         })
     }
+}
 
+impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
+    GpValidParams<F, Mean, Kernel>
+{
     pub fn load(
         mean: Mean,
         kernel: Kernel,
@@ -449,9 +466,9 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialKernel::default(),
         )
-        .set_initial_theta(Some(vec![0.1]))
-        .set_kpls_dim(Some(1))
-        .fit(&xt, &yt)
+        .initial_theta(Some(vec![0.1]))
+        .kpls_dim(Some(1))
+        .fit(&Dataset::new(xt, yt))
         .expect("GP fit error");
         let rng = Isaac64Rng::seed_from_u64(43);
         let xtest = LHS::new(&xlimits).with_rng(rng).sample(nt);
@@ -472,8 +489,8 @@ mod tests {
                         [<$regr Mean>]::default(),
                         [<$corr Kernel>]::default(),
                     )
-                    .set_initial_theta(Some(vec![0.1]))
-                    .fit(&xt, &yt)
+                    .initial_theta(Some(vec![0.1]))
+                    .fit(&Dataset::new(xt, yt))
                     .expect("GP fit error");
                     assert_abs_diff_eq!($expected, gp.theta[0], epsilon = 1e-2);
                     let yvals = gp
@@ -568,8 +585,8 @@ mod tests {
                 ConstantMean::default(),
                 SquaredExponentialKernel::default(),
             )
-            .set_kpls_dim(Some(3))
-            .fit(&xt, &yt)
+            .kpls_dim(Some(3))
+            .fit(&Dataset::new(xt, yt))
             .expect("GP fit error");
 
             let xtest = Array2::ones((1, dim));
@@ -599,8 +616,8 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialKernel::default(),
         )
-        .set_kpls_dim(Some(1))
-        .fit(&xt, &yt)
+        .kpls_dim(Some(1))
+        .fit(&Dataset::new(xt, yt))
         .expect("GP training");
 
         let xv = LHS::new(&xlimits).sample(100);
@@ -635,8 +652,8 @@ mod tests {
             ConstantMean::default(),
             Matern52Kernel::default(),
         )
-        .set_kpls_dim(Some(1))
-        .fit(&xt, &yt)
+        .kpls_dim(Some(1))
+        .fit(&Dataset::new(xt, yt))
         .expect("GP training");
 
         let xv = LHS::new(&xlimits).sample(500);

@@ -180,7 +180,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
                 _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
             };
         let mut expert_params = best_expert_params?;
-        expert_params.set_kpls_dim(self.kpls_dim());
+        expert_params.kpls_dim(self.kpls_dim());
         let expert = expert_params.fit(&xtrain, &ytrain);
         info!(
             "Best expert {} accuracy={}",
