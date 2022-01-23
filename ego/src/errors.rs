@@ -12,7 +12,7 @@ pub enum EgoError {
     /// When EGO fails
     #[error("EGO error: {0}")]
     EgoError(String),
-    /// When PLS fails
+    /// When an invalid value is encountered
     #[error("Value error: {0}")]
     InvalidValue(String),
     /// When nlopt fails
@@ -21,6 +21,15 @@ pub enum EgoError {
     /// When Moe error occurs
     #[error("MOE error")]
     MoeError(#[from] moe::MoeError),
+    /// When IO fails
+    #[error("IO error")]
+    IoError(#[from] std::io::Error),
+    /// When IO fails
+    #[error("IO error")]
+    ReadNpyError(#[from] ndarray_npy::ReadNpyError),
+    /// When IO fails
+    #[error("IO error")]
+    WriteNpyError(#[from] ndarray_npy::WriteNpyError),
 }
 
 impl From<FailState> for EgoError {

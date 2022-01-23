@@ -11,7 +11,7 @@ use log::{debug, info};
 use moe::{CorrelationSpec, Moe, RegressionSpec};
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_linalg::Scalar;
-use ndarray_npy::write_npy;
+use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use nlopt::*;
@@ -42,6 +42,8 @@ pub struct Egor<O: GroupFunc, R: Rng> {
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
     pub expected: Option<ApproxValue>,
+    pub outdir: Option<String>,
+    pub hot_start: bool,
     pub obj: O,
     pub rng: R,
 }
@@ -74,6 +76,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             kpls_dim: None,
             n_clusters: Some(1),
             expected: None,
+            outdir: None,
+            hot_start: false,
             obj: f,
             rng,
         }
@@ -149,6 +153,16 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         self
     }
 
+    pub fn outdir(&mut self, outdir: Option<String>) -> &mut Self {
+        self.outdir = outdir;
+        self
+    }
+
+    pub fn hot_start(&mut self, hot_start: bool) -> &mut Self {
+        self.hot_start = hot_start;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<O, R2> {
         Egor {
             n_eval: self.n_eval,
@@ -166,6 +180,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             kpls_dim: self.kpls_dim,
             n_clusters: self.n_clusters,
             expected: self.expected,
+            outdir: self.outdir,
+            hot_start: self.hot_start,
             obj: self.obj,
             rng,
         }
@@ -182,11 +198,28 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         x_dat
     }
 
-    pub fn minimize(&mut self) -> OptimResult<f64> {
+    pub fn minimize(&mut self) -> Result<OptimResult<f64>> {
         let rng = self.rng.clone();
         let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
 
-        let (mut y_data, mut x_data, n_iter) = if let Some(doe) = &self.doe {
+        let hstart_doe: Option<Array2<f64>> = if self.hot_start && self.outdir.is_some() {
+            let path: &String = self.outdir.as_ref().unwrap();
+            let filepath = std::path::Path::new(&path).join(DOE_FILE);
+            if filepath.is_file() {
+                Some(read_npy(filepath)?)
+            } else if std::path::Path::new(&path).join(DOE_INITIAL_FILE).is_file() {
+                let filepath = std::path::Path::new(&path).join(DOE_INITIAL_FILE);
+                Some(read_npy(filepath)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let doe = hstart_doe.as_ref().or_else(|| self.doe.as_ref());
+
+        let (mut y_data, mut x_data, n_iter) = if let Some(doe) = doe {
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
@@ -215,7 +248,12 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             (self.obj_eval(&x), x, self.n_eval - n_doe)
         };
         let doe = concatenate![Axis(1), x_data, y_data];
-        write_npy(DOE_INITIAL_FILE, &doe).expect("Write current doe");
+        if self.outdir.is_some() {
+            let path = self.outdir.as_ref().unwrap();
+            std::fs::create_dir_all(path)?;
+            let filepath = std::path::Path::new(path).join(DOE_INITIAL_FILE);
+            write_npy(filepath, &doe).expect("Write current doe");
+        }
 
         const MAX_RETRY: i32 = 10;
         let mut no_point_added_retries = MAX_RETRY;
@@ -252,7 +290,9 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     .and(y_actual.columns())
                     .for_each(|mut y, val| y.assign(&val));
                 let doe = concatenate![Axis(1), x_data, y_data];
-                write_npy(DOE_FILE, &doe).expect("Write current doe");
+                if self.outdir.is_some() {
+                    write_npy(DOE_FILE, &doe).expect("Write current doe");
+                }
                 let best_index = self.find_best_result_index(&y_data);
                 info!(
                     "Iteration {}/{}: Best fun(x)={} at x={}",
@@ -271,10 +311,10 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         }
         let best_index = self.find_best_result_index(&y_data);
         info!("{:?}", concatenate![Axis(1), x_data, y_data]);
-        OptimResult {
+        Ok(OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
             y_opt: y_data.row(best_index).to_owned(),
-        }
+        })
     }
 
     fn next_points(
@@ -556,7 +596,9 @@ mod tests {
                 value: -15.1,
                 tolerance: 1e-1,
             }))
-            .minimize();
+            .outdir(Some(".".to_string()))
+            .minimize()
+            .expect("Minimize failure");
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
         let saved_doe: Array2<f64> = read_npy(DOE_INITIAL_FILE).unwrap();
@@ -568,7 +610,8 @@ mod tests {
     fn test_xsinx_wb2() {
         let res = Egor::new(xsinx, &array![[0.0, 25.0]])
             .infill_strategy(InfillStrategy::WB2)
-            .minimize();
+            .minimize()
+            .expect("Minimize failure");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
@@ -618,7 +661,8 @@ mod tests {
                 value: 0.0,
                 tolerance: 1e-1,
             }))
-            .minimize();
+            .minimize()
+            .expect("Minimize failure");
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];
@@ -671,7 +715,8 @@ mod tests {
             //     value: -5.5080,
             //     tolerance: 1e-3,
             // }))
-            .minimize();
+            .minimize()
+            .expect("Minimize failure");
         println!("G24 optim result = {:?}", res);
         let expected = array![2.3295, 3.1785];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);

@@ -179,6 +179,15 @@ impl ExpectedOptimum {
 ///     n_clusters (int > 0)
 ///         Number of clusters used by the mixture of surrogate experts.
 ///   
+///     expected (ExpectedOptimum)
+///         Known optimum used as stopping criterion.
+///
+///     outdir (String)
+///         Directory to write optimization history and used as search path for hot start doe
+///
+///     hot_start (bool)
+///         Start by loading initial doe from <outdir> directory
+///
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///      
@@ -202,6 +211,8 @@ struct Optimizer {
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
     pub expected: Option<ExpectedOptimum>,
+    pub outdir: Option<String>,
+    pub hot_start: bool,
     pub seed: Option<u64>,
 }
 
@@ -232,6 +243,8 @@ impl Optimizer {
         kpls_dim = "None",
         n_clusters = "1",
         expected = "None",
+        outdir = "None",
+        hot_start = "false",
         seed = "None"
     )]
     #[allow(clippy::too_many_arguments)]
@@ -252,6 +265,8 @@ impl Optimizer {
         kpls_dim: Option<usize>,
         n_clusters: Option<usize>,
         expected: Option<ExpectedOptimum>,
+        outdir: Option<String>,
+        hot_start: bool,
         seed: Option<u64>,
     ) -> Self {
         let xlimits = xlimits.to_owned_array();
@@ -272,6 +287,8 @@ impl Optimizer {
             kpls_dim,
             n_clusters,
             expected,
+            outdir,
+            hot_start,
             seed,
         }
     }
@@ -369,7 +386,10 @@ impl Optimizer {
             .kpls_dim(self.kpls_dim)
             .n_clusters(self.n_clusters)
             .expect(expected)
-            .minimize();
+            .outdir(self.outdir.as_ref().cloned())
+            .hot_start(self.hot_start)
+            .minimize()
+            .expect("Minimize failure");
 
         OptimResult {
             x_opt: res.x_opt.to_vec(),
