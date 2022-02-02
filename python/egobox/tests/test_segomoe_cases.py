@@ -59,6 +59,7 @@ class TestEgor(unittest.TestCase):
             "regr_spec": 1,
             "corr_spec": 1,
             "expected": egx.ExpectedOptimum(val=272.72, tol=1e-2),
+            "outdir": "./out",
         }
         egor, expected = create_egor("Mopta_12D", **options)
         res = egor.minimize(n_eval=50)

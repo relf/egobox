@@ -206,9 +206,11 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             let path: &String = self.outdir.as_ref().unwrap();
             let filepath = std::path::Path::new(&path).join(DOE_FILE);
             if filepath.is_file() {
+                info!("Reading DOE from {:?}", filepath);
                 Some(read_npy(filepath)?)
             } else if std::path::Path::new(&path).join(DOE_INITIAL_FILE).is_file() {
                 let filepath = std::path::Path::new(&path).join(DOE_INITIAL_FILE);
+                info!("Reading DOE from {:?}", filepath);
                 Some(read_npy(filepath)?)
             } else {
                 None
@@ -226,7 +228,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 (
                     self.obj_eval(doe),
                     doe.to_owned(),
-                    self.n_eval - doe.nrows(),
+                    self.n_eval.saturating_sub(doe.nrows()),
                 )
             } else {
                 // split doe in x and y
@@ -234,7 +236,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 (
                     doe.slice(s![.., self.xlimits.nrows()..]).to_owned(),
                     doe.slice(s![.., ..self.xlimits.nrows()]).to_owned(),
-                    self.n_eval,
+                    self.n_eval.saturating_sub(doe.nrows()),
                 )
             }
         } else {
@@ -252,7 +254,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             let path = self.outdir.as_ref().unwrap();
             std::fs::create_dir_all(path)?;
             let filepath = std::path::Path::new(path).join(DOE_INITIAL_FILE);
-            write_npy(filepath, &doe).expect("Write current doe");
+            info!("Save initial doe in {:?}", filepath);
+            write_npy(filepath, &doe).expect("Write initial doe");
         }
 
         const MAX_RETRY: i32 = 10;
@@ -291,7 +294,11 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     .for_each(|mut y, val| y.assign(&val));
                 let doe = concatenate![Axis(1), x_data, y_data];
                 if self.outdir.is_some() {
-                    write_npy(DOE_FILE, &doe).expect("Write current doe");
+                    let path = self.outdir.as_ref().unwrap();
+                    std::fs::create_dir_all(path)?;
+                    let filepath = std::path::Path::new(path).join(DOE_FILE);
+                    info!("Save doe in {:?}", filepath);
+                    write_npy(filepath, &doe).expect("Write current doe");
                 }
                 let best_index = self.find_best_result_index(&y_data);
                 info!(
@@ -303,7 +310,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                 );
                 if let Some(sol) = self.expected {
                     if (y_data[[best_index, 0]] - sol.value).abs() < sol.tolerance {
-                        info!("ApproxValue reached");
+                        info!("Expected optimum : {:?}", sol);
+                        info!("Expected optimum reached!");
                         break;
                     }
                 }
