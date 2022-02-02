@@ -55,9 +55,9 @@ fn main() {
             }
         };
         let start2 = Instant::now();
-        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             ConstantMean::default(),
-            SquaredExponentialKernel::default(),
+            SquaredExponentialCorr::default(),
         )
         //.with_kpls_dim(1)
         //.with_initial_theta(1.0)

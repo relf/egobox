@@ -1,37 +1,35 @@
-use crate::correlation_models::{CorrelationModel, SquaredExponentialKernel};
+use crate::correlation_models::{CorrelationModel, SquaredExponentialCorr};
 use crate::errors::{GpError, Result};
 use crate::mean_models::{ConstantMean, RegressionModel};
 use linfa::{Float, ParamGuard};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
+pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Option<Vec<F>>,
     /// Regression model representing the mean(x)
     mean: Mean,
     /// Correlation model representing the spatial correlation between errors at e(x) and e(x')
-    kernel: Kernel,
+    corr: Corr,
     /// Optionally apply dimension reduction (KPLS) or not
     kpls_dim: Option<usize>,
     /// Optionally apply dimension reduction (KPLS) or not
     nugget: F,
 }
 
-impl<F: Float> GpValidParams<F, ConstantMean, SquaredExponentialKernel> {
-    pub fn default() -> GpValidParams<F, ConstantMean, SquaredExponentialKernel> {
+impl<F: Float> GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
+    pub fn default() -> GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
         GpValidParams {
             theta: None,
             mean: ConstantMean(),
-            kernel: SquaredExponentialKernel(),
+            corr: SquaredExponentialCorr(),
             kpls_dim: None,
             nugget: F::cast(100.0) * F::epsilon(),
         }
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
-    GpValidParams<F, Mean, Kernel>
-{
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParams<F, Mean, Corr> {
     /// Get starting theta value for optimization
     pub fn initial_theta(&self) -> &Option<Vec<F>> {
         &self.theta
@@ -42,9 +40,9 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
         &self.mean
     }
 
-    /// Get correlation kernel k(x, x')
-    pub fn kernel(&self) -> &Kernel {
-        &self.kernel
+    /// Get correlation corr k(x, x')
+    pub fn corr(&self) -> &Corr {
+        &self.corr
     }
 
     /// Get number of components used by PLS
@@ -61,16 +59,16 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
 #[derive(Clone, Debug)]
 /// The set of hyperparameters that can be specified for the execution of
 /// the [GMM algorithm](struct.GaussianMixtureModel.html).
-pub struct GpParams<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>(
-    GpValidParams<F, Mean, Kernel>,
+pub struct GpParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>(
+    GpValidParams<F, Mean, Corr>,
 );
 
-impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F, Mean, Kernel> {
-    pub fn new(mean: Mean, kernel: Kernel) -> GpParams<F, Mean, Kernel> {
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, Mean, Corr> {
+    pub fn new(mean: Mean, corr: Corr) -> GpParams<F, Mean, Corr> {
         Self(GpValidParams {
             theta: None,
             mean,
-            kernel,
+            corr,
             kpls_dim: None,
             nugget: F::cast(100.0) * F::epsilon(),
         })
@@ -90,9 +88,9 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
         self
     }
 
-    /// Set kernel.
-    pub fn kernel(mut self, kernel: Kernel) -> Self {
-        self.0.kernel = kernel;
+    /// Set corr.
+    pub fn corr(mut self, corr: Corr) -> Self {
+        self.0.corr = corr;
         self
     }
 
@@ -111,10 +109,10 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> GpParams<F
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> ParamGuard
-    for GpParams<F, Mean, Kernel>
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> ParamGuard
+    for GpParams<F, Mean, Corr>
 {
-    type Checked = GpValidParams<F, Mean, Kernel>;
+    type Checked = GpValidParams<F, Mean, Corr>;
     type Error = GpError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {

@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use gp::correlation_models::{
-    AbsoluteExponentialKernel, Matern32Kernel, Matern52Kernel, SquaredExponentialKernel,
+    AbsoluteExponentialCorr, Matern32Corr, Matern52Corr, SquaredExponentialCorr,
 };
 #[allow(unused_imports)]
 use gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};

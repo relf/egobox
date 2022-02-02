@@ -51,18 +51,15 @@ impl<F: Float> Clone for GpInnerParams<F> {
 /// Gaussian Process
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))]
-pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> {
+pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Array1<F>,
     /// Regression model
     #[serde(bound(serialize = "Mean: Serialize", deserialize = "Mean: Deserialize<'de>"))]
     mean: Mean,
     /// Correlation kernel
-    #[serde(bound(
-        serialize = "Kernel: Serialize",
-        deserialize = "Kernel: Deserialize<'de>"
-    ))]
-    kernel: Kernel,
+    #[serde(bound(serialize = "Corr: Serialize", deserialize = "Corr: Deserialize<'de>"))]
+    corr: Corr,
     /// Gaussian process internal fitted params
     inner_params: GpInnerParams<F>,
     /// Weights in case of KPLS dimension reduction coming from PLS regression (orig_dim, kpls_dim)
@@ -73,14 +70,14 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Kernel: Correlati
     ytrain: NormalizedMatrix<F>,
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> Clone
-    for GaussianProcess<F, Mean, Kernel>
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
+    for GaussianProcess<F, Mean, Corr>
 {
     fn clone(&self) -> Self {
         Self {
             theta: self.theta.to_owned(),
             mean: self.mean,
-            kernel: self.kernel,
+            corr: self.corr,
             inner_params: self.inner_params.clone(),
             w_star: self.w_star.to_owned(),
             xtrain: self.xtrain.clone(),
@@ -89,14 +86,14 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>> Clone
     }
 }
 
-impl<F: Float + Serialize, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
-    GaussianProcess<F, Mean, Kernel>
+impl<F: Float + Serialize, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
+    GaussianProcess<F, Mean, Corr>
 {
-    pub fn params<NewMean: RegressionModel<F>, NewKernel: CorrelationModel<F>>(
+    pub fn params<NewMean: RegressionModel<F>, NewCorr: CorrelationModel<F>>(
         mean: NewMean,
-        kernel: NewKernel,
-    ) -> GpParams<F, NewMean, NewKernel> {
-        GpParams::new(mean, kernel)
+        corr: NewCorr,
+    ) -> GpParams<F, NewMean, NewCorr> {
+        GpParams::new(mean, corr)
     }
 
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
@@ -157,7 +154,7 @@ impl<F: Float + Serialize, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>
             dx.slice_mut(s![a..b, ..]).assign(&dxrows);
         }
         // Compute the correlation function
-        let r = self.kernel.apply(&self.theta, &dx, &self.w_star);
+        let r = self.corr.apply(&self.theta, &dx, &self.w_star);
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 
@@ -170,10 +167,10 @@ impl<F: Float + Serialize, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>, D: Data<Elem = F>>
-    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for GpValidParams<F, Mean, Kernel>
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem = F>>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for GpValidParams<F, Mean, Corr>
 {
-    type Object = GaussianProcess<F, Mean, Kernel>;
+    type Object = GaussianProcess<F, Mean, Corr>;
 
     fn fit(
         &self,
@@ -233,7 +230,7 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>, D: Data<El
                 Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
                     .unwrap();
             let theta = theta.mapv(F::cast);
-            let rxx = self.kernel().apply(&theta, &x_distances.d, &w_star);
+            let rxx = self.corr().apply(&theta, &x_distances.d, &w_star);
             match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
                 Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
                 Err(_) => {
@@ -266,12 +263,12 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>, D: Data<El
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(F::cast);
 
-        let rxx = self.kernel().apply(opt_theta, &x_distances.d, &w_star);
+        let rxx = self.corr().apply(opt_theta, &x_distances.d, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
             theta: opt_theta.to_owned(),
             mean: *self.mean(),
-            kernel: *self.kernel(),
+            corr: *self.corr(),
             inner_params,
             w_star,
             xtrain,
@@ -280,22 +277,20 @@ impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>, D: Data<El
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Kernel: CorrelationModel<F>>
-    GpValidParams<F, Mean, Kernel>
-{
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParams<F, Mean, Corr> {
     pub fn load(
         mean: Mean,
-        kernel: Kernel,
+        corr: Corr,
         theta: Array1<F>,
         inner_params: GpInnerParams<F>,
         w_star: Array2<F>,
         xtrain: NormalizedMatrix<F>,
         ytrain: NormalizedMatrix<F>,
-    ) -> Result<GaussianProcess<F, Mean, Kernel>> {
+    ) -> Result<GaussianProcess<F, Mean, Corr>> {
         //T ODO: add some consistency checks
         Ok(GaussianProcess {
             mean,
-            kernel,
+            corr,
             theta,
             inner_params,
             w_star,
@@ -311,7 +306,7 @@ where
     F: Float,
 {
     let base: f64 = 10.;
-    // block to drop optimizer and allow self.kernel borrowing after
+    // block to drop optimizer and allow self.corr borrowing after
     let mut optimizer = Nlopt::new(Algorithm::Cobyla, theta0.len(), objfn, Target::Minimize, ());
     let mut index;
     for i in 0..theta0.len() {
@@ -462,9 +457,9 @@ mod tests {
         let nt = 30;
         let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
         let yt = Array::from_vec(vec![3.1; nt]).insert_axis(Axis(1));
-        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             ConstantMean::default(),
-            SquaredExponentialKernel::default(),
+            SquaredExponentialCorr::default(),
         )
         .initial_theta(Some(vec![0.1]))
         .kpls_dim(Some(1))
@@ -485,9 +480,9 @@ mod tests {
                     let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
                     let xplot = Array::linspace(0., 4., 100).insert_axis(Axis(1));
                     let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
-                    let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Kernel>] >::params(
+                    let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
                         [<$regr Mean>]::default(),
-                        [<$corr Kernel>]::default(),
+                        [<$corr Corr>]::default(),
                     )
                     .initial_theta(Some(vec![0.1]))
                     .fit(&Dataset::new(xt, yt))
@@ -581,9 +576,9 @@ mod tests {
                 }
             };
 
-            let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+            let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
                 ConstantMean::default(),
-                SquaredExponentialKernel::default(),
+                SquaredExponentialCorr::default(),
             )
             .kpls_dim(Some(3))
             .fit(&Dataset::new(xt, yt))
@@ -612,9 +607,9 @@ mod tests {
         let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
         let yt = tensor_product_exp(&xt);
 
-        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             ConstantMean::default(),
-            SquaredExponentialKernel::default(),
+            SquaredExponentialCorr::default(),
         )
         .kpls_dim(Some(1))
         .fit(&Dataset::new(xt, yt))
@@ -648,9 +643,9 @@ mod tests {
         let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
         let yt = rosenb(&xt);
 
-        let gp = GaussianProcess::<f64, ConstantMean, Matern32Kernel>::params(
+        let gp = GaussianProcess::<f64, ConstantMean, Matern32Corr>::params(
             ConstantMean::default(),
-            Matern52Kernel::default(),
+            Matern52Corr::default(),
         )
         .kpls_dim(Some(1))
         .fit(&Dataset::new(xt, yt))

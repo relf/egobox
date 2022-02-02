@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use doe::{SamplingMethod, LHS};
-use gp::correlation_models::SquaredExponentialKernel;
+use gp::correlation_models::SquaredExponentialCorr;
 use gp::mean_models::ConstantMean;
 use gp::GaussianProcess;
 use linfa::prelude::{Dataset, Fit};
@@ -52,9 +52,9 @@ fn criterion_gp(c: &mut Criterion) {
         group.bench_function(format!("gp {}", dims[i]), |b| {
             b.iter(|| {
                 black_box(
-                    GaussianProcess::<f64, ConstantMean, SquaredExponentialKernel>::params(
+                    GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
                         ConstantMean::default(),
-                        SquaredExponentialKernel::default(),
+                        SquaredExponentialCorr::default(),
                     )
                     //.with_kpls_dim(1)
                     //.with_initial_theta(1.0)

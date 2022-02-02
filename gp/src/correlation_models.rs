@@ -16,26 +16,26 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
-pub struct SquaredExponentialKernel();
+pub struct SquaredExponentialCorr();
 
-impl From<SquaredExponentialKernel> for String {
-    fn from(_item: SquaredExponentialKernel) -> String {
+impl From<SquaredExponentialCorr> for String {
+    fn from(_item: SquaredExponentialCorr) -> String {
         "SquaredExponential".to_string()
     }
 }
 
-impl TryFrom<String> for SquaredExponentialKernel {
+impl TryFrom<String> for SquaredExponentialCorr {
     type Error = &'static str;
     fn try_from(s: String) -> Result<Self, Self::Error> {
         if s == "SquaredExponential" {
             Ok(Self::default())
         } else {
-            Err("Bad string value for SquaredExponentialKernel, should be \'SquaredExponential\'")
+            Err("Bad string value for SquaredExponentialCorr, should be \'SquaredExponential\'")
         }
     }
 }
 
-impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
+impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
     fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -52,26 +52,26 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialKernel {
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
-pub struct AbsoluteExponentialKernel();
+pub struct AbsoluteExponentialCorr();
 
-impl From<AbsoluteExponentialKernel> for String {
-    fn from(_item: AbsoluteExponentialKernel) -> String {
+impl From<AbsoluteExponentialCorr> for String {
+    fn from(_item: AbsoluteExponentialCorr) -> String {
         "AbsoluteExponential".to_string()
     }
 }
 
-impl TryFrom<String> for AbsoluteExponentialKernel {
+impl TryFrom<String> for AbsoluteExponentialCorr {
     type Error = &'static str;
     fn try_from(s: String) -> Result<Self, Self::Error> {
         if s == "AbsoluteExponential" {
             Ok(Self::default())
         } else {
-            Err("Bad string value for AbsoluteExponentialKernel, should be \'AbsoluteExponential\'")
+            Err("Bad string value for AbsoluteExponentialCorr, should be \'AbsoluteExponential\'")
         }
     }
 }
 
-impl<F: Float> CorrelationModel<F> for AbsoluteExponentialKernel {
+impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
     fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -88,26 +88,26 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialKernel {
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
-pub struct Matern32Kernel();
+pub struct Matern32Corr();
 
-impl From<Matern32Kernel> for String {
-    fn from(_item: Matern32Kernel) -> String {
+impl From<Matern32Corr> for String {
+    fn from(_item: Matern32Corr) -> String {
         "Matern32".to_string()
     }
 }
 
-impl TryFrom<String> for Matern32Kernel {
+impl TryFrom<String> for Matern32Corr {
     type Error = &'static str;
     fn try_from(s: String) -> Result<Self, Self::Error> {
         if s == "Matern32" {
             Ok(Self::default())
         } else {
-            Err("Bad string value for Matern32Kernel, should be \'Matern32\'")
+            Err("Bad string value for Matern32Corr, should be \'Matern32\'")
         }
     }
 }
 
-impl<F: Float> CorrelationModel<F> for Matern32Kernel {
+impl<F: Float> CorrelationModel<F> for Matern32Corr {
     fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -130,26 +130,26 @@ impl<F: Float> CorrelationModel<F> for Matern32Kernel {
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
-pub struct Matern52Kernel();
+pub struct Matern52Corr();
 
-impl From<Matern52Kernel> for String {
-    fn from(_item: Matern52Kernel) -> String {
+impl From<Matern52Corr> for String {
+    fn from(_item: Matern52Corr) -> String {
         "Matern52".to_string()
     }
 }
 
-impl TryFrom<String> for Matern52Kernel {
+impl TryFrom<String> for Matern52Corr {
     type Error = &'static str;
     fn try_from(s: String) -> Result<Self, Self::Error> {
         if s == "Matern52" {
             Ok(Self::default())
         } else {
-            Err("Bad string value for Matern52Kernel, should be \'Matern52\'")
+            Err("Bad string value for Matern52Corr, should be \'Matern52\'")
         }
     }
 }
 
-impl<F: Float> CorrelationModel<F> for Matern52Kernel {
+impl<F: Float> CorrelationModel<F> for Matern52Corr {
     fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -180,7 +180,7 @@ mod tests {
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let dm = DistanceMatrix::new(&xt);
-        let res = SquaredExponentialKernel::default().apply(&arr1(&[0.1]), &dm.d, &array![[1.]]);
+        let res = SquaredExponentialCorr::default().apply(&arr1(&[0.1]), &dm.d, &array![[1.]]);
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],
@@ -201,7 +201,7 @@ mod tests {
         let xt = array![[0., 1.], [2., 3.], [4., 5.]];
         let dm = DistanceMatrix::new(&xt);
         dbg!(&dm);
-        let res = SquaredExponentialKernel::default().apply(
+        let res = SquaredExponentialCorr::default().apply(
             &arr1(&[1., 2.]),
             &dm.d,
             &array![[1., 0.], [0., 1.]],
@@ -216,7 +216,7 @@ mod tests {
         let dm = DistanceMatrix::new(&xt);
         dbg!(&dm);
         let res =
-            Matern32Kernel::default().apply(&arr1(&[1., 2.]), &dm.d, &array![[1., 0.], [0., 1.]]);
+            Matern32Corr::default().apply(&arr1(&[1., 2.]), &dm.d, &array![[1., 0.], [0., 1.]]);
         let expected = array![[1.08539595e-03], [1.10776401e-07], [1.08539595e-03]];
         assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }
@@ -226,7 +226,7 @@ mod tests {
         let xt = array![[0., 1.], [2., 3.], [4., 5.]];
         let dm = DistanceMatrix::new(&xt);
         let res =
-            Matern52Kernel::default().apply(&arr1(&[1., 2.]), &dm.d, &array![[1., 0.], [0., 1.]]);
+            Matern52Corr::default().apply(&arr1(&[1., 2.]), &dm.d, &array![[1., 0.], [0., 1.]]);
         let expected = array![[6.62391590e-04], [1.02117882e-08], [6.62391590e-04]];
         assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }

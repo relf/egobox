@@ -25,11 +25,11 @@ macro_rules! declare_surrogate {
         paste! {
             #[derive(Clone)]
             pub struct [<Gp $regr $corr SurrogateParams>](
-                GpParams<f64, [<$regr Mean>], [<$corr Kernel>]>,
+                GpParams<f64, [<$regr Mean>], [<$corr Corr>]>,
             );
 
             impl [<Gp $regr $corr SurrogateParams>] {
-                pub fn new(gp_params: GpParams<f64, [<$regr Mean>], [<$corr Kernel>]>) -> [<Gp $regr $corr SurrogateParams>] {
+                pub fn new(gp_params: GpParams<f64, [<$regr Mean>], [<$corr Corr>]>) -> [<Gp $regr $corr SurrogateParams>] {
                     [<Gp $regr $corr SurrogateParams>](gp_params)
                 }
             }
@@ -60,7 +60,7 @@ macro_rules! declare_surrogate {
 
             #[derive(Clone, Debug, Serialize, Deserialize)]
             pub struct [<Gp $regr $corr Surrogate>](
-                pub GaussianProcess<f64, [<$regr Mean>], [<$corr Kernel>]>,
+                pub GaussianProcess<f64, [<$regr Mean>], [<$corr Corr>]>,
             );
 
             impl GpSurrogate for [<Gp $regr $corr Surrogate>] {
@@ -112,9 +112,9 @@ declare_surrogate!(Quadratic, Matern52);
 macro_rules! make_gp_params {
     ($regr:ident, $corr:ident) => {
         paste! {
-            GaussianProcess::<f64, [<$regr Mean>], [<$corr Kernel>] >::params(
+            GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
                 [<$regr Mean>]::default(),
-                [<$corr Kernel>]::default(),
+                [<$corr Corr>]::default(),
             )
         }
     };
@@ -137,8 +137,8 @@ macro_rules! make_surrogate {
         paste! {
             Box::new(
                 [<Gp $regr $corr Surrogate>](
-                GpValidParams::<f64, [<$regr Mean>], [<$corr Kernel>]>::load(
-                [<$regr Mean>](), [<$corr Kernel>](),
+                GpValidParams::<f64, [<$regr Mean>], [<$corr Corr>]>::load(
+                [<$regr Mean>](), [<$corr Corr>](),
                 serde_json::from_value(serde_json::json!($data["theta"])).unwrap(),
                 serde_json::from_value(serde_json::json!($data["inner_params"])).unwrap(),
                 serde_json::from_value(serde_json::json!($data["w_star"])).unwrap(),
@@ -156,7 +156,7 @@ pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
     let gp_kind = format!(
         "{}_{}",
         data["mean"].as_str().unwrap(),
-        data["kernel"].as_str().unwrap()
+        data["corr"].as_str().unwrap()
     );
     match gp_kind.as_str() {
         "Constant_SquaredExponential" => Ok(make_surrogate!(Constant, SquaredExponential, data)),
