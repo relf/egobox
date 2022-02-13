@@ -136,7 +136,7 @@ class TestOptimizer(unittest.TestCase):
         start = time.process_time()
         res = egor.minimize(n_eval=20)
         end = time.process_time()
-        self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=6e-2)
+        self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=5e-1)
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
     def test_six_humps(self):
