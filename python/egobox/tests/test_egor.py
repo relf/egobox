@@ -85,10 +85,10 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
-    def test_xsinx_with_initial_doe(self):
+    def test_xsinx_with_hotstart(self):
         xlimits = np.array([[0.0, 25.0]])
         doe = egx.lhs(xlimits, 10)
-        egor = egx.Optimizer(xsinx, xlimits, doe=doe, seed=42)
+        egor = egx.Optimizer(xsinx, xlimits, doe=doe, seed=42, outdir="./test_dir")
         res = egor.minimize(n_eval=15)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
@@ -96,7 +96,9 @@ class TestOptimizer(unittest.TestCase):
 
         ydoe = xsinx(doe)
         doe = np.hstack((doe, ydoe))
-        egor = egx.Optimizer(xsinx, xlimits, doe=doe)
+        egor = egx.Optimizer(
+            xsinx, xlimits, doe=doe, outdir="./test_dir", hot_start=True
+        )
         res = egor.minimize(n_eval=5)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-2)
