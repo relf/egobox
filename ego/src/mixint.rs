@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use doe::{SamplingMethod, LHS};
-use ndarray::{array, s, Array, Array2, Axis, Zip};
+use moe::{Moe, MoeParams, RegressionSpec};
+use ndarray::{s, Array, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;
@@ -13,6 +14,9 @@ pub enum Vspec {
     Enum(Vec<String>),
 }
 
+/// Expand xlimits to add continuous dimensions for enumerate x features
+/// Each level of an enumerate gives a new continuous dimension in [0, 1].
+/// Each integer dimensions are relaxed continuously.
 fn unfold_xlimits_with_continuous_limits(spec: &[Vspec]) -> Array2<f64> {
     let mut res = vec![];
     spec.iter().for_each(|s| match s {
@@ -24,6 +28,13 @@ fn unfold_xlimits_with_continuous_limits(spec: &[Vspec]) -> Array2<f64> {
     Array::from_shape_vec((res.len() / 2, 2), res).unwrap()
 }
 
+/// Reduce categorical inputs from discrete unfolded space to
+/// initial x dimension space where categorical x dimensions are valued by the index
+/// in the corresponding enumerate list.
+/// For instance, if an input dimension is typed ["blue", "red", "green"] a sample/row of
+/// the input x may contain the mask [..., 0, 0, 1, ...] which will be contracted in [..., 2, ...]
+/// meaning the "green" value.
+/// This function is the opposite of unfold_with_enum_mask().
 fn fold_with_enum_index(spec: &[Vspec], x: &Array2<f64>) -> Array2<f64> {
     let mut xfold = Array::zeros((x.nrows(), spec.len()));
     let mut unfold_index = 0;
@@ -42,6 +53,42 @@ fn fold_with_enum_index(spec: &[Vspec], x: &Array2<f64>) -> Array2<f64> {
     xfold
 }
 
+fn compute_unfolded_dimension(spec: &[Vspec]) -> usize {
+    spec.iter()
+        .map(|s| match s {
+            Vspec::Enum(v) => v.len(),
+            _ => 1,
+        })
+        .reduce(|acc, l| -> usize { acc + l })
+        .unwrap()
+}
+
+/// Expand categorical inputs from initial x dimension space where categorical x dimensions
+/// are valued by the index in the corresponding enumerate list to the discrete unfolded space.
+/// For instance, if an input dimension is typed ["blue", "red", "green"] a sample/row of
+/// the input x may contain [..., 2, ...] which will be expanded in [..., 0, 0, 1, ...].
+/// This function is the opposite of fold_with_enum_index().
+fn unfold_with_enum_mask(spec: &[Vspec], x: &Array2<f64>) -> Array2<f64> {
+    let mut xunfold = Array::zeros((x.nrows(), compute_unfolded_dimension(spec)));
+    let mut unfold_index = 0;
+    spec.iter().for_each(|s| match s {
+        Vspec::Cont(_, _) | Vspec::Int(_, _) | Vspec::Ord(_) => {
+            xunfold
+                .column_mut(unfold_index)
+                .assign(&x.column(unfold_index));
+            unfold_index += 1;
+        }
+        Vspec::Enum(v) => {
+            let unfold = Array::zeros((x.nrows(), v.len()));
+            xunfold
+                .slice_mut(s![.., unfold_index..unfold_index + v.len()])
+                .assign(&unfold);
+            unfold_index += v.len();
+        }
+    });
+    xunfold
+}
+
 fn take_closest(v: &[i32], val: f64) -> i32 {
     let idx = Array::from_vec(v.to_vec())
         .map(|refval| (val - *refval as f64).abs())
@@ -50,7 +97,13 @@ fn take_closest(v: &[i32], val: f64) -> i32 {
     v[idx]
 }
 
-fn cast_to_discrete_values(spec: &[Vspec], x: &mut Array2<f64>) {
+/// Project continuously relaxed values to their closer assessable values.
+/// Note: categorical (or enum) x dimensions are still expanded that is
+/// there are still as many columns as categorical possible values for the given x dimension.
+/// For instance, if an input dimension is typed ["blue", "red", "green"] in xlimits a sample/row of
+/// the input x may contain the values (or mask) [..., 0, 0, 1, ...] to specify "green" for
+/// this original dimension.
+pub fn cast_to_discrete_values(spec: &[Vspec], x: &mut Array2<f64>) {
     let mut xcol = 0;
     spec.iter().for_each(|s| match s {
         Vspec::Cont(_, _) => xcol += 1,
@@ -118,7 +171,47 @@ impl SamplingMethod<f64> for MixintSampling {
     }
 }
 
-// struct MixintSurrogate {}
+pub struct MixintMoeParams {
+    moe_params: MoeParams<f64, Isaac64Rng>,
+    spec: Vec<Vspec>,
+    input_in_folded_space: bool,
+}
+
+impl MixintMoeParams {
+    fn new(moe_params: MoeParams<f64, Isaac64Rng>, spec: &[Vspec]) -> Self {
+        MixintMoeParams {
+            moe_params,
+            spec: spec.to_vec(),
+            input_in_folded_space: true,
+        }
+    }
+
+    fn fit(self, xt: &Array2<f64>, yt: &Array2<f64>) -> MixintMoe {
+        let mut xcast = if self.input_in_folded_space {
+            unfold_with_enum_mask(&self.spec, xt)
+        } else {
+            xt.to_owned()
+        };
+        cast_to_discrete_values(&self.spec, &mut xcast);
+        MixintMoe {
+            moe: self
+                .moe_params
+                .set_regression_spec(RegressionSpec::CONSTANT)
+                .fit(&xcast, yt)
+                .unwrap(),
+            spec: self.spec,
+            input_in_folded_space: true,
+        }
+    }
+}
+
+struct MixintMoe {
+    moe: Moe,
+    spec: Vec<Vspec>,
+    input_in_folded_space: bool,
+}
+
+impl MixintMoe {}
 
 pub struct MixintContext {
     spec: Vec<Vspec>,
@@ -153,6 +246,7 @@ impl MixintContext {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use ndarray::array;
 
     #[test]
     fn test() {
