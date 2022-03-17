@@ -219,7 +219,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             None
         };
 
-        let doe = hstart_doe.as_ref().or_else(|| self.doe.as_ref());
+        let doe = hstart_doe.as_ref().or(self.doe.as_ref());
 
         let (mut y_data, mut x_data, n_iter) = if let Some(doe) = doe {
             if doe.ncols() == self.xlimits.nrows() {
@@ -489,7 +489,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
                     Ok((_, opt)) => {
                         if opt < best_opt {
                             best_opt = opt;
-                            let res = x_opt.iter().copied().collect::<Vec<f64>>();
+                            let res = x_opt.to_vec();
                             best_x = Some(Array::from(res));
                             success = true;
                         }
@@ -562,7 +562,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         scale: f64,
         scale_wb2: f64,
     ) -> f64 {
-        let x_f = x.iter().copied().collect::<Vec<f64>>();
+        let x_f = x.to_vec();
         let obj = match self.infill {
             InfillStrategy::EI => -ei(&x_f, obj_model, f_min),
             InfillStrategy::WB2 => -wb2s(&x_f, obj_model, f_min, 1.),
