@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use doe::{SamplingMethod, LHS};
-use moe::{Moe, MoeParams, RegressionSpec};
+use moe::{CorrelationSpec, Moe, MoeParams, RegressionSpec};
 use ndarray::{s, Array, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -79,7 +79,13 @@ fn unfold_with_enum_mask(spec: &[Vspec], x: &Array2<f64>) -> Array2<f64> {
             unfold_index += 1;
         }
         Vspec::Enum(v) => {
-            let unfold = Array::zeros((x.nrows(), v.len()));
+            let mut unfold = Array::zeros((x.nrows(), v.len()));
+            Zip::from(unfold.rows_mut())
+                .and(x.rows())
+                .for_each(|mut row, xrow| {
+                    let index = xrow[[unfold_index]] as usize;
+                    row[[index]] = 1.;
+                });
             xunfold
                 .slice_mut(s![.., unfold_index..unfold_index + v.len()])
                 .assign(&unfold);
@@ -138,6 +144,7 @@ pub fn cast_to_discrete_values(spec: &[Vspec], x: &mut Array2<f64>) {
 pub struct MixintSampling {
     lhs: LHS<f64, Isaac64Rng>,
     spec: Vec<Vspec>,
+    /// whether data are in given in folded space (enum indexes) or not (enum masks)
     work_in_folded_space: bool,
 }
 
@@ -176,7 +183,8 @@ type SurrogateParams = MoeParams<f64, Isaac64Rng>;
 pub struct MixintMoeParams {
     moe_params: SurrogateParams,
     spec: Vec<Vspec>,
-    input_in_folded_space: bool,
+    /// whether x data are in given in folded space (enum indexes) or not (enum masks)
+    work_in_folded_space: bool,
 }
 
 impl MixintMoeParams {
@@ -184,12 +192,12 @@ impl MixintMoeParams {
         MixintMoeParams {
             moe_params,
             spec: spec.to_vec(),
-            input_in_folded_space: true,
+            work_in_folded_space: true,
         }
     }
 
     fn fit(self, x: &Array2<f64>, y: &Array2<f64>) -> MixintMoe {
-        let mut xcast = if self.input_in_folded_space {
+        let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.spec, x)
         } else {
             x.to_owned()
@@ -202,7 +210,7 @@ impl MixintMoeParams {
                 .fit(&xcast, y)
                 .unwrap(),
             spec: self.spec,
-            input_in_folded_space: true,
+            work_in_folded_space: true,
         }
     }
 }
@@ -210,22 +218,24 @@ impl MixintMoeParams {
 struct MixintMoe {
     moe: Moe,
     spec: Vec<Vspec>,
-    input_in_folded_space: bool,
+    work_in_folded_space: bool,
 }
 
 impl MixintMoe {
     fn predict_values(&self, x: &Array2<f64>) -> Array2<f64> {
-        let mut xcast = if self.input_in_folded_space {
+        let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.spec, x)
         } else {
             x.to_owned()
         };
+        println!("{:?}", xcast);
         cast_to_discrete_values(&self.spec, &mut xcast);
+        println!("{:?}", xcast);
         self.moe.predict_values(&xcast).unwrap()
     }
 
     fn predict_variances(&self, x: &Array2<f64>) -> Array2<f64> {
-        let mut xcast = if self.input_in_folded_space {
+        let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.spec, x)
         } else {
             x.to_owned()
@@ -237,11 +247,19 @@ impl MixintMoe {
 
 pub struct MixintContext {
     spec: Vec<Vspec>,
+    work_in_folded_space: bool,
 }
 
 impl MixintContext {
     fn new(spec: Vec<Vspec>) -> Self {
-        MixintContext { spec }
+        MixintContext {
+            spec,
+            work_in_folded_space: true,
+        }
+    }
+
+    fn get_unfolded_dim(&self) -> usize {
+        compute_unfolded_dimension(&self.spec)
     }
 
     fn create_sampling(&self, seed: Option<u64>) -> MixintSampling {
@@ -255,7 +273,7 @@ impl MixintContext {
         MixintSampling {
             lhs,
             spec: self.spec.clone(),
-            work_in_folded_space: true,
+            work_in_folded_space: self.work_in_folded_space,
         }
     }
 
@@ -266,7 +284,7 @@ impl MixintContext {
         y: &Array2<f64>,
     ) -> MixintMoe {
         let mixi_moe_params = MixintMoeParams::new(moe_params, &self.spec);
-        mixi_moe_params.fit(&x, &y)
+        mixi_moe_params.fit(x, y)
     }
 }
 
@@ -291,6 +309,7 @@ mod tests {
 
         let mixi = MixintContext::new(specs);
         let mixi_lhs = mixi.create_sampling(Some(0));
+
         let actual = mixi_lhs.sample(10);
         let expected = array![
             [2.5506163720107278, 0.0, -9.0, 1.0],
@@ -307,19 +326,72 @@ mod tests {
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 
-    fn xsinx(x: &Array2<f64>) -> Array2<f64> {
-        (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
-    }
-
-    fn test_mixint_moe() {
-        let specs = vec![Vspec::Int(0, 25)];
+    #[test]
+    fn test_mixint_moe_1d() {
+        let specs = vec![Vspec::Int(0, 4)];
 
         let mixi = MixintContext::new(specs);
-        let _mixi_lhs = mixi.create_sampling(Some(0));
 
         let moe_params = SurrogateParams::new(1);
-        let xt = array![[0.], [5.], [10.], [15.], [20.]];
-        let yt = xsinx(&xt);
-        let _mixi_moe = mixi.create_surrogate(moe_params, &xt, &yt);
+        let xt = array![[0.], [2.], [3.0], [4.]];
+        let yt = array![[0.], [1.5], [0.9], [1.]];
+        let mixi_moe = mixi.create_surrogate(moe_params, &xt, &yt);
+
+        let num = 5;
+        let xtest = Array::linspace(0.0, 4.0, num).insert_axis(Axis(1));
+        let ytest = mixi_moe.predict_values(&xtest);
+        let yvar = mixi_moe.predict_variances(&xtest);
+        println!("{:?}", ytest);
+        assert_abs_diff_eq!(
+            array![[0.], [0.8296067096163109], [1.5], [0.9], [1.]],
+            ytest,
+            epsilon = 1e-6
+        );
+        println!("{:?}", yvar);
+        assert_abs_diff_eq!(
+            array![[0.], [0.35290670137172425], [0.], [0.], [0.]],
+            yvar,
+            epsilon = 1e-6
+        );
+    }
+
+    fn ftest(x: &Array2<f64>) -> Array2<f64> {
+        let mut y = (x.column(0).to_owned() * x.column(0)).insert_axis(Axis(1));
+        y = &y + (x.column(1).to_owned() * x.column(1)).insert_axis(Axis(1));
+        y = &y * (x.column(2).insert_axis(Axis(1)).mapv(|v| v + 1.));
+        y
+    }
+
+    #[test]
+    fn test_mixint_moe_3d() {
+        let specs = vec![
+            Vspec::Int(0, 5),
+            Vspec::Cont(0., 4.),
+            Vspec::Enum(vec![
+                "blue".to_string(),
+                "red".to_string(),
+                "green".to_string(),
+                "yellow".to_string(),
+            ]),
+        ];
+
+        let mixi = MixintContext::new(specs);
+        let mixi_lhs = mixi.create_sampling(Some(0));
+
+        let n = mixi.get_unfolded_dim() * 5;
+        let xt = mixi_lhs.sample(n);
+        let yt = ftest(&xt);
+
+        let moe_params =
+            SurrogateParams::new(1).set_correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
+        let mixi_moe = mixi.create_surrogate(moe_params, &xt, &yt);
+
+        let ntest = 10;
+        let mixi_lhs = mixi.create_sampling(Some(42));
+
+        let xtest = mixi_lhs.sample(ntest);
+        let ytest = mixi_moe.predict_values(&xtest);
+        let ytrue = ftest(&xtest);
+        assert_abs_diff_eq!(ytrue, ytest, epsilon = 1.5);
     }
 }
