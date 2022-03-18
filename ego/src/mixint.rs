@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use doe::{SamplingMethod, LHS};
-use moe::{CorrelationSpec, Moe, MoeParams, RegressionSpec};
+use moe::{Moe, MoeParams, RegressionSpec};
 use ndarray::{s, Array, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
