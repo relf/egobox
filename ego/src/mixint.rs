@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use doe::{SamplingMethod, LHS};
-use moe::{Moe, MoeParams, RegressionSpec};
+use moe::{Moe, MoeFit, MoeParams, MoePredict, RegressionSpec, Result};
 use ndarray::{s, Array, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -24,7 +24,7 @@ pub enum Xtype {
 /// Expand xlimits to add continuous dimensions for enumerate x features
 /// Each level of an enumerate gives a new continuous dimension in [0, 1].
 /// Each integer dimensions are relaxed continuously.
-fn unfold_xlimits_with_continuous_limits(xtypes: &[Xtype]) -> Array2<f64> {
+pub fn unfold_xlimits_with_continuous_limits(xtypes: &[Xtype]) -> Array2<f64> {
     let mut res = vec![];
     xtypes.iter().for_each(|s| match s {
         Xtype::Cont(lb, ub) => res.extend([*lb, *ub]),
@@ -178,7 +178,7 @@ pub struct MixintSampling {
 }
 
 impl MixintSampling {
-    fn new(xtypes: Vec<Xtype>) -> Self {
+    pub fn new(xtypes: Vec<Xtype>) -> Self {
         MixintSampling {
             lhs: LHS::new(&unfold_xlimits_with_continuous_limits(&xtypes)),
             xtypes: xtypes.clone(),
@@ -217,15 +217,23 @@ pub struct MixintMoeParams {
 }
 
 impl MixintMoeParams {
-    fn new(moe_params: SurrogateParams, xtypes: &[Xtype]) -> Self {
+    pub fn new(moe_params: SurrogateParams, xtypes: &[Xtype]) -> Self {
         MixintMoeParams {
             moe_params,
             xtypes: xtypes.to_vec(),
             work_in_folded_space: true,
         }
     }
+}
 
-    fn fit(self, x: &Array2<f64>, y: &Array2<f64>) -> MixintMoe {
+impl MoeFit for MixintMoeParams {
+    fn fit_for_predict(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn MoePredict>> {
+        Ok(Box::new(self.fit(x, y)) as Box<dyn MoePredict>)
+    }
+}
+
+impl MixintMoeParams {
+    fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> MixintMoe {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -235,23 +243,24 @@ impl MixintMoeParams {
         MixintMoe {
             moe: self
                 .moe_params
+                .clone()
                 .set_regression_spec(RegressionSpec::CONSTANT)
                 .fit(&xcast, y)
                 .unwrap(),
-            xtypes: self.xtypes,
+            xtypes: self.xtypes.clone(),
             work_in_folded_space: true,
         }
     }
 }
 
-struct MixintMoe {
+pub struct MixintMoe {
     moe: Moe,
     xtypes: Vec<Xtype>,
     work_in_folded_space: bool,
 }
 
-impl MixintMoe {
-    fn predict_values(&self, x: &Array2<f64>) -> Array2<f64> {
+impl MoePredict for MixintMoe {
+    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -260,17 +269,17 @@ impl MixintMoe {
         println!("{:?}", xcast);
         cast_to_discrete_values(&self.xtypes, &mut xcast);
         println!("{:?}", xcast);
-        self.moe.predict_values(&xcast).unwrap()
+        self.moe.predict_values(&xcast)
     }
 
-    fn predict_variances(&self, x: &Array2<f64>) -> Array2<f64> {
+    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
             x.to_owned()
         };
         cast_to_discrete_values(&self.xtypes, &mut xcast);
-        self.moe.predict_variances(&xcast).unwrap()
+        self.moe.predict_variances(&xcast)
     }
 }
 
@@ -280,18 +289,18 @@ pub struct MixintContext {
 }
 
 impl MixintContext {
-    fn new(xtypes: Vec<Xtype>) -> Self {
+    pub fn new(xtypes: &[Xtype]) -> Self {
         MixintContext {
-            xtypes,
+            xtypes: xtypes.to_vec(),
             work_in_folded_space: true,
         }
     }
 
-    fn get_unfolded_dim(&self) -> usize {
+    pub fn get_unfolded_dim(&self) -> usize {
         compute_unfolded_dimension(&self.xtypes)
     }
 
-    fn create_sampling(&self, seed: Option<u64>) -> MixintSampling {
+    pub fn create_sampling(&self, seed: Option<u64>) -> MixintSampling {
         let lhs = seed.map_or(
             LHS::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)),
             |seed| {
@@ -306,7 +315,7 @@ impl MixintContext {
         }
     }
 
-    fn create_surrogate(
+    pub fn create_surrogate(
         &self,
         moe_params: SurrogateParams,
         x: &Array2<f64>,
@@ -337,7 +346,7 @@ mod tests {
             Xtype::Ord(vec![1, 3, 5, 8]),
         ];
 
-        let mixi = MixintContext::new(xtypes);
+        let mixi = MixintContext::new(&xtypes);
         let mixi_lhs = mixi.create_sampling(Some(0));
 
         let actual = mixi_lhs.sample(10);
@@ -360,7 +369,7 @@ mod tests {
     fn test_mixint_moe_1d() {
         let xtypes = vec![Xtype::Int(0, 4)];
 
-        let mixi = MixintContext::new(xtypes);
+        let mixi = MixintContext::new(&xtypes);
 
         let moe_params = SurrogateParams::new(1);
         let xt = array![[0.], [2.], [3.0], [4.]];
@@ -369,8 +378,10 @@ mod tests {
 
         let num = 5;
         let xtest = Array::linspace(0.0, 4.0, num).insert_axis(Axis(1));
-        let ytest = mixi_moe.predict_values(&xtest);
-        let yvar = mixi_moe.predict_variances(&xtest);
+        let ytest = mixi_moe.predict_values(&xtest).expect("Predict val fail");
+        let yvar = mixi_moe
+            .predict_variances(&xtest)
+            .expect("Predict var fail");
         println!("{:?}", ytest);
         assert_abs_diff_eq!(
             array![[0.], [0.8296067096163109], [1.5], [0.9], [1.]],
@@ -405,7 +416,7 @@ mod tests {
             ]),
         ];
 
-        let mixi = MixintContext::new(xtypes);
+        let mixi = MixintContext::new(&xtypes);
         let mixi_lhs = mixi.create_sampling(Some(0));
 
         let n = mixi.get_unfolded_dim() * 5;
@@ -420,7 +431,7 @@ mod tests {
         let mixi_lhs = mixi.create_sampling(Some(42));
 
         let xtest = mixi_lhs.sample(ntest);
-        let ytest = mixi_moe.predict_values(&xtest);
+        let ytest = mixi_moe.predict_values(&xtest).expect("Predict val fail");
         let ytrue = ftest(&xtest);
         assert_abs_diff_eq!(ytrue, ytest, epsilon = 1.5);
     }

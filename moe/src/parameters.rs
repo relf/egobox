@@ -1,3 +1,4 @@
+use crate::errors::Result;
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use gp::correlation_models::{
@@ -7,6 +8,7 @@ use gp::correlation_models::{
 use gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
 use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
+use ndarray::Array2;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
@@ -40,6 +42,16 @@ bitflags! {
     }
 }
 
+pub trait MoePredict {
+    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
+    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
+}
+
+pub trait MoeFit {
+    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn MoePredict>>;
+}
+
+#[derive(Clone)]
 pub struct MoeParams<F: Float, R: Rng + Clone> {
     n_clusters: usize,
     recombination: Recombination<F>,

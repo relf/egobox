@@ -1,6 +1,6 @@
 use csv::ReaderBuilder;
 use doe::{FullFactorial, SamplingMethod};
-use moe::Moe;
+use moe::{Moe, MoePredict};
 use ndarray::{arr2, s, Array2, Axis};
 use ndarray_csv::Array2Reader;
 use ndarray_npy::write_npy;
@@ -20,8 +20,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let data_train: Array2<f64> = reader.deserialize_array2((200, 3))?;
 
-    let xtrain = data_train.slice(s![.., ..2]);
-    let ytrain = data_train.slice(s![.., 2..]);
+    let xtrain = data_train.slice(s![.., ..2]).to_owned();
+    let ytrain = data_train.slice(s![.., 2..]).to_owned();
     let moe = Moe::params(4).fit(&xtrain, &ytrain)?;
 
     let xlimits = arr2(&[[-1., 1.], [-1., 1.]]);

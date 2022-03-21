@@ -3,8 +3,10 @@ use super::{make_gp_params, make_surrogate_params};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
+use crate::parameters::{
+    CorrelationSpec, MoeFit, MoeParams, MoePredict, Recombination, RegressionSpec,
+};
 use crate::surrogates::*;
-use crate::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use log::{debug, info, trace};
 
 use gp::{correlation_models::*, mean_models::*, GaussianProcess};
@@ -33,12 +35,15 @@ macro_rules! check_allowed {
     };
 }
 
+impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
+    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn MoePredict>> {
+        self.fit(xt, yt)
+            .map(|moe| Box::new(moe) as Box<dyn MoePredict>)
+    }
+}
+
 impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
-    pub fn fit(
-        self,
-        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Moe> {
+    pub fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
@@ -99,7 +104,8 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         if self.recombination() == Recombination::Smooth(None) {
             let factor =
                 self.optimize_heaviside_factor(&experts, &gmx, &xtest.unwrap(), &ytest.unwrap());
-            self.set_recombination(Recombination::Smooth(Some(factor)))
+            self.clone()
+                .set_recombination(Recombination::Smooth(Some(factor)))
                 .fit(xt, yt)
         } else {
             Ok(Moe {
@@ -308,6 +314,22 @@ impl std::fmt::Display for Moe {
     }
 }
 
+impl MoePredict for Moe {
+    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        match self.recombination {
+            Recombination::Hard => self.predict_values_hard(x),
+            Recombination::Smooth(_) => self.predict_values_smooth(x),
+        }
+    }
+
+    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        match self.recombination {
+            Recombination::Hard => self.predict_variances_hard(x),
+            Recombination::Smooth(_) => self.predict_variances_smooth(x),
+        }
+    }
+}
+
 impl Moe {
     pub fn params(n_clusters: usize) -> MoeParams<f64, Isaac64Rng> {
         MoeParams::new(n_clusters)
@@ -328,23 +350,6 @@ impl Moe {
             Recombination::Smooth(Some(_)) => recombination,
         };
         self
-    }
-
-    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
-        match self.recombination {
-            Recombination::Hard => self.predict_values_hard(x),
-            Recombination::Smooth(_) => self.predict_values_smooth(x),
-        }
-    }
-
-    pub fn predict_variances(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Array2<f64>> {
-        match self.recombination {
-            Recombination::Hard => self.predict_variances_hard(x),
-            Recombination::Smooth(_) => self.predict_variances_smooth(x),
-        }
     }
 
     pub fn save_expert_predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) {

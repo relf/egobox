@@ -8,7 +8,7 @@ use doe::{LHSKind, SamplingMethod, LHS};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
 use log::{debug, info};
-use moe::{CorrelationSpec, Moe, RegressionSpec};
+use moe::{CorrelationSpec, Moe, MoeFit, MoePredict, RegressionSpec};
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_linalg::Scalar;
 use ndarray_npy::{read_npy, write_npy};
@@ -26,7 +26,8 @@ pub struct ApproxValue {
     pub tolerance: f64,
 }
 
-pub struct Egor<O: GroupFunc, R: Rng> {
+#[derive(Clone)]
+pub struct Egor<'a, O: GroupFunc, R: Rng> {
     pub n_eval: usize,
     pub n_start: usize,
     pub n_parallel: usize,
@@ -44,17 +45,18 @@ pub struct Egor<O: GroupFunc, R: Rng> {
     pub expected: Option<ApproxValue>,
     pub outdir: Option<String>,
     pub hot_start: bool,
+    pub moe_params: Option<&'a dyn MoeFit>,
     pub obj: O,
     pub rng: R,
 }
 
-impl<O: GroupFunc> Egor<O, Isaac64Rng> {
-    pub fn new(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Egor<O, Isaac64Rng> {
+impl<'a, O: GroupFunc> Egor<'a, O, Isaac64Rng> {
+    pub fn new(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Egor<'a, O, Isaac64Rng> {
         Self::new_with_rng(f, xlimits, Isaac64Rng::from_entropy())
     }
 }
 
-impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
+impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     pub fn new_with_rng(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
@@ -78,6 +80,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             expected: None,
             outdir: None,
             hot_start: false,
+            moe_params: None,
             obj: f,
             rng,
         }
@@ -163,7 +166,12 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         self
     }
 
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<O, R2> {
+    pub fn moe_params(&mut self, moe_params: Option<&'a dyn MoeFit>) -> &mut Self {
+        self.moe_params = moe_params;
+        self
+    }
+
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<'a, O, R2> {
         Egor {
             n_eval: self.n_eval,
             n_start: self.n_start,
@@ -182,16 +190,13 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
             expected: self.expected,
             outdir: self.outdir,
             hot_start: self.hot_start,
+            moe_params: self.moe_params,
             obj: self.obj,
             rng,
         }
     }
 
-    pub fn suggest(
-        &self,
-        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Array2<f64> {
+    pub fn suggest(&self, x_data: &Array2<f64>, y_data: &Array2<f64>) -> Array2<f64> {
         let rng = self.rng.clone();
         let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
         let (x_dat, _) = self.next_points(0, x_data, y_data, &sampling);
@@ -326,50 +331,54 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
     }
 
     fn next_points(
-        &self,
+        &'a self,
         _n: usize,
-        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        x_data: &Array2<f64>,
+        y_data: &Array2<f64>,
         sampling: &LHS<f64, R>,
     ) -> (Array2<f64>, Array2<f64>) {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
         let n_clusters = self.n_clusters.unwrap_or(1);
-        let obj_model = Moe::params(n_clusters)
+
+        let default_params = &Moe::params(n_clusters)
             .set_kpls_dim(self.kpls_dim)
             .set_regression_spec(self.regression_spec)
             .set_correlation_spec(self.correlation_spec)
-            .fit(x_data, &y_data.slice(s![.., 0..1]))
+            as &dyn MoeFit;
+        let params = self.moe_params.unwrap_or(default_params);
+
+        let obj_model = params
+            .fit_for_predict(x_data, &y_data.slice(s![.., 0..1]).to_owned())
             .expect("GP training failure");
 
-        let mut cstr_models: Vec<Box<Moe>> = Vec::with_capacity(self.n_cstr);
+        let mut cstr_models: Vec<Box<dyn MoePredict>> = Vec::with_capacity(self.n_cstr);
         for k in 0..self.n_cstr {
-            cstr_models.push(Box::new(
-                Moe::params(n_clusters)
-                    .set_kpls_dim(self.kpls_dim)
-                    .set_regression_spec(self.regression_spec)
-                    .set_correlation_spec(self.correlation_spec)
-                    .fit(x_data, &y_data.slice(s![.., k + 1..k + 2]))
+            cstr_models.push(
+                params
+                    .fit_for_predict(&x_data, &y_data.slice(s![.., k + 1..k + 2]).to_owned())
                     .expect("GP training failure"),
-            ))
+            )
         }
         for _ in 0..self.n_parallel {
-            match self.find_best_point(x_data, y_data, sampling, &obj_model, &cstr_models) {
-                Ok(xk) => match self.get_virtual_point(&xk, y_data, &obj_model, &cstr_models) {
-                    Ok(yk) => {
-                        y_dat = concatenate![
-                            Axis(0),
-                            y_dat,
-                            Array2::from_shape_vec((1, 1 + self.n_cstr), yk).unwrap()
-                        ];
-                        x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+            match self.find_best_point(x_data, y_data, sampling, obj_model.as_ref(), &cstr_models) {
+                Ok(xk) => {
+                    match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), &cstr_models) {
+                        Ok(yk) => {
+                            y_dat = concatenate![
+                                Axis(0),
+                                y_dat,
+                                Array2::from_shape_vec((1, 1 + self.n_cstr), yk).unwrap()
+                            ];
+                            x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+                        }
+                        Err(err) => {
+                            // Error while predict at best point: ignore
+                            info!("Error while getting virtual point: {}", err);
+                            break;
+                        }
                     }
-                    Err(err) => {
-                        // Error while predict at best point: ignore
-                        info!("Error while getting virtual point: {}", err);
-                        break;
-                    }
-                },
+                }
                 Err(err) => {
                     // Cannot find best point: ignore
                     debug!("Find best point error: {}", err);
@@ -385,8 +394,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &LHS<f64, R>,
-        obj_model: &Moe,
-        cstr_models: &[Box<Moe>],
+        obj_model: &dyn MoePredict,
+        cstr_models: &[Box<dyn MoePredict>],
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
@@ -525,8 +534,8 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
         &self,
         xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        obj_model: &Moe,
-        cstr_models: &[Box<Moe>],
+        obj_model: &dyn MoePredict,
+        cstr_models: &[Box<dyn MoePredict>],
     ) -> Result<Vec<f64>> {
         let mut res: Vec<f64> = Vec::with_capacity(3);
         if self.q_ei == QEiStrategy::ConstantLiarMinimum {
@@ -557,7 +566,7 @@ impl<O: GroupFunc, R: Rng + Clone> Egor<O, R> {
     fn infill_eval(
         &self,
         x: &[f64],
-        obj_model: &Moe,
+        obj_model: &dyn MoePredict,
         f_min: f64,
         scale: f64,
         scale_wb2: f64,
