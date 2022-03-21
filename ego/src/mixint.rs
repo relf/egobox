@@ -42,7 +42,7 @@ pub fn unfold_xlimits_with_continuous_limits(xtypes: &[Xtype]) -> Array2<f64> {
 /// the input x may contain the mask [..., 0, 0, 1, ...] which will be contracted in [..., 2, ...]
 /// meaning the "green" value.
 /// This function is the opposite of unfold_with_enum_mask().
-fn fold_with_enum_index(xtypes: &[Xtype], x: &Array2<f64>) -> Array2<f64> {
+pub fn fold_with_enum_index(xtypes: &[Xtype], x: &Array2<f64>) -> Array2<f64> {
     let mut xfold = Array::zeros((x.nrows(), xtypes.len()));
     let mut unfold_index = 0;
     Zip::indexed(xfold.columns_mut()).for_each(|j, mut col| match &xtypes[j] {
@@ -207,7 +207,7 @@ impl SamplingMethod<f64> for MixintSampling {
     }
 }
 
-type SurrogateParams = MoeParams<f64, Isaac64Rng>;
+pub type SurrogateParams = MoeParams<f64, Isaac64Rng>;
 
 pub struct MixintMoeParams {
     moe_params: SurrogateParams,
@@ -217,12 +217,16 @@ pub struct MixintMoeParams {
 }
 
 impl MixintMoeParams {
-    pub fn new(moe_params: SurrogateParams, xtypes: &[Xtype]) -> Self {
+    pub fn new(xtypes: &[Xtype], moe_params: &SurrogateParams) -> Self {
         MixintMoeParams {
-            moe_params,
+            moe_params: moe_params.clone(),
             xtypes: xtypes.to_vec(),
             work_in_folded_space: true,
         }
+    }
+
+    pub fn xtypes(&self) -> &[Xtype] {
+        &self.xtypes
     }
 }
 
@@ -317,11 +321,11 @@ impl MixintContext {
 
     pub fn create_surrogate(
         &self,
-        moe_params: SurrogateParams,
+        moe_params: &SurrogateParams,
         x: &Array2<f64>,
         y: &Array2<f64>,
     ) -> MixintMoe {
-        let mixi_moe_params = MixintMoeParams::new(moe_params, &self.xtypes);
+        let mixi_moe_params = MixintMoeParams::new(&self.xtypes, moe_params);
         mixi_moe_params.fit(x, y)
     }
 }
@@ -374,7 +378,7 @@ mod tests {
         let moe_params = SurrogateParams::new(1);
         let xt = array![[0.], [2.], [3.0], [4.]];
         let yt = array![[0.], [1.5], [0.9], [1.]];
-        let mixi_moe = mixi.create_surrogate(moe_params, &xt, &yt);
+        let mixi_moe = mixi.create_surrogate(&moe_params, &xt, &yt);
 
         let num = 5;
         let xtest = Array::linspace(0.0, 4.0, num).insert_axis(Axis(1));
@@ -425,7 +429,7 @@ mod tests {
 
         let moe_params =
             SurrogateParams::new(1).set_correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
-        let mixi_moe = mixi.create_surrogate(moe_params, &xt, &yt);
+        let mixi_moe = mixi.create_surrogate(&moe_params, &xt, &yt);
 
         let ntest = 10;
         let mixi_lhs = mixi.create_sampling(Some(42));

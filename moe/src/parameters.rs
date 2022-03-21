@@ -65,7 +65,13 @@ pub struct MoeParams<F: Float, R: Rng + Clone> {
 impl<F: Float> MoeParams<F, Isaac64Rng> {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
-        Self::new_with_rng(n_clusters, Isaac64Rng::seed_from_u64(42))
+        Self::new_with_rng(n_clusters, Isaac64Rng::from_entropy())
+    }
+}
+
+impl<F: Float> Default for MoeParams<F, Isaac64Rng> {
+    fn default() -> MoeParams<F, Isaac64Rng> {
+        MoeParams::new(1)
     }
 }
 
