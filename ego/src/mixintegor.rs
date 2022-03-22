@@ -2,29 +2,57 @@ use crate::egor::*;
 use crate::errors::*;
 use crate::mixint::*;
 use crate::types::*;
-use moe::{Moe, MoeParams};
-use ndarray::Array;
+use ndarray::{Array2, Axis};
 use rand_isaac::Isaac64Rng;
 
-struct MixintEgor<'a, O: GroupFunc> {
+pub struct MixintEgor<'a, O: GroupFunc> {
     xtypes: Vec<Xtype>,
-    pub egor: Egor<'a, O, Isaac64Rng>,
+    egor: Egor<'a, O, Isaac64Rng>,
 }
 
 impl<'a, O: GroupFunc> MixintEgor<'a, O> {
-    pub fn new(moe_params: &'a MixintMoeParams, f: O) -> Self {
-        let xlimits = unfold_xlimits_with_continuous_limits(moe_params.xtypes());
-        let mut egor = Egor::new(f, &xlimits);
-        let egor = egor.moe_params(Some(moe_params));
+    pub fn new(mix_params: &'a MixintMoeParams, evaluator: &'a MixintEvaluator, f: O) -> Self {
+        let xlimits = unfold_xlimits_with_continuous_limits(mix_params.xtypes());
+        let egor = Egor::new(f, &xlimits)
+            .moe_params(Some(mix_params))
+            .evaluator(Some(evaluator))
+            .clone();
         MixintEgor {
-            xtypes: moe_params.xtypes().to_vec(),
-            egor: egor.clone(),
+            xtypes: mix_params.xtypes().to_vec(),
+            egor,
         }
     }
 
-    pub fn minimize(&mut self) -> Result<OptimResult<f64>> {
+    pub fn minimize(&self) -> Result<OptimResult<f64>> {
         let res = self.egor.minimize();
-        res
+        res.map(|opt| -> OptimResult<f64> {
+            let x_opt = opt.x_opt.to_owned().insert_axis(Axis(0));
+            let x_opt = get_cast_to_discrete_values(&self.xtypes, &x_opt);
+            let x_opt = fold_with_enum_index(&self.xtypes, &x_opt);
+            OptimResult {
+                x_opt: x_opt.row(0).to_owned(),
+                y_opt: opt.y_opt.to_owned(),
+            }
+        })
+    }
+}
+
+pub struct MixintEvaluator {
+    xtypes: Vec<Xtype>,
+}
+
+impl Evaluator for MixintEvaluator {
+    fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
+        let fold = fold_with_enum_index(&self.xtypes, x);
+        get_cast_to_discrete_values(&self.xtypes, &fold)
+    }
+}
+
+impl MixintEvaluator {
+    pub fn new(xtypes: &[Xtype]) -> Self {
+        MixintEvaluator {
+            xtypes: xtypes.to_vec(),
+        }
     }
 }
 
@@ -45,15 +73,46 @@ mod tests {
     }
 
     #[test]
-    fn test_mixintegor() {
+    fn test_mixintegor_ei() {
         let n_eval = 10;
-        let doe = array![[0.], [10.], [20.]];
+        let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![Xtype::Int(0, 25)];
 
         let moe_params = MoeParams::default();
         let moe_params = MixintMoeParams::new(&xtypes, &moe_params);
-        let mut mixintegor = MixintEgor::new(&moe_params, mixsinx);
-        mixintegor.egor.doe(Some(doe)).n_eval(n_eval);
+        let evaluator = MixintEvaluator::new(&xtypes);
+        let mut mixintegor = MixintEgor::new(&moe_params, &evaluator, mixsinx);
+        mixintegor
+            .egor
+            .doe(Some(doe))
+            .n_eval(n_eval)
+            .expect(Some(ApproxValue {
+                value: -15.1,
+                tolerance: 1e-1,
+            }))
+            .infill_strategy(InfillStrategy::EI);
+
+        let res = mixintegor.minimize();
+        println!("{:?}", res)
+    }
+
+    #[test]
+    fn test_mixintegor_wb2() {
+        let n_eval = 10;
+        let xtypes = vec![Xtype::Int(0, 25)];
+
+        let moe_params = MoeParams::default();
+        let moe_params = MixintMoeParams::new(&xtypes, &moe_params);
+        let evaluator = MixintEvaluator::new(&xtypes);
+        let mut mixintegor = MixintEgor::new(&moe_params, &evaluator, mixsinx);
+        mixintegor
+            .egor
+            .n_eval(n_eval)
+            .expect(Some(ApproxValue {
+                value: -15.1,
+                tolerance: 1e-1,
+            }))
+            .infill_strategy(InfillStrategy::WB2);
 
         let res = mixintegor.minimize();
         println!("{:?}", res)

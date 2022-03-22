@@ -149,6 +149,12 @@ pub fn cast_to_discrete_values(xtypes: &[Xtype], x: &mut Array2<f64>) {
     });
 }
 
+pub fn get_cast_to_discrete_values(xtypes: &[Xtype], x: &Array2<f64>) -> Array2<f64> {
+    let mut xcast = x.to_owned();
+    cast_to_discrete_values(xtypes, &mut xcast);
+    xcast
+}
+
 pub fn cast_to_enum_value(xtypes: &[Xtype], i: usize, enum_i: usize) -> Option<String> {
     if let Xtype::Enum(v) = xtypes[i].clone() {
         return Some(v[enum_i].clone());
@@ -182,7 +188,7 @@ impl MixintSampling {
         MixintSampling {
             lhs: LHS::new(&unfold_xlimits_with_continuous_limits(&xtypes)),
             xtypes: xtypes.clone(),
-            work_in_folded_space: true,
+            work_in_folded_space: false,
         }
     }
 }
@@ -221,8 +227,13 @@ impl MixintMoeParams {
         MixintMoeParams {
             moe_params: moe_params.clone(),
             xtypes: xtypes.to_vec(),
-            work_in_folded_space: true,
+            work_in_folded_space: false,
         }
+    }
+
+    pub fn work_in_folded_space(&mut self, wfs: bool) -> &mut Self {
+        self.work_in_folded_space = wfs;
+        self
     }
 
     pub fn xtypes(&self) -> &[Xtype] {
@@ -252,7 +263,7 @@ impl MixintMoeParams {
                 .fit(&xcast, y)
                 .unwrap(),
             xtypes: self.xtypes.clone(),
-            work_in_folded_space: true,
+            work_in_folded_space: self.work_in_folded_space,
         }
     }
 }
@@ -270,9 +281,7 @@ impl MoePredict for MixintMoe {
         } else {
             x.to_owned()
         };
-        println!("{:?}", xcast);
         cast_to_discrete_values(&self.xtypes, &mut xcast);
-        println!("{:?}", xcast);
         self.moe.predict_values(&xcast)
     }
 
@@ -325,8 +334,9 @@ impl MixintContext {
         x: &Array2<f64>,
         y: &Array2<f64>,
     ) -> MixintMoe {
-        let mixi_moe_params = MixintMoeParams::new(&self.xtypes, moe_params);
-        mixi_moe_params.fit(x, y)
+        let mut params = MixintMoeParams::new(&self.xtypes, moe_params);
+        let params = params.work_in_folded_space(self.work_in_folded_space);
+        params.fit(x, y)
     }
 }
 

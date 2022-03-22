@@ -26,6 +26,10 @@ pub struct ApproxValue {
     pub tolerance: f64,
 }
 
+pub trait Evaluator {
+    fn eval(&self, x: &Array2<f64>) -> Array2<f64>;
+}
+
 #[derive(Clone)]
 pub struct Egor<'a, O: GroupFunc, R: Rng> {
     pub n_eval: usize,
@@ -46,6 +50,7 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     pub outdir: Option<String>,
     pub hot_start: bool,
     pub moe_params: Option<&'a dyn MoeFit>,
+    pub evaluator: Option<&'a dyn Evaluator>,
     pub obj: O,
     pub rng: R,
 }
@@ -81,6 +86,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             outdir: None,
             hot_start: false,
             moe_params: None,
+            evaluator: None,
             obj: f,
             rng,
         }
@@ -171,6 +177,11 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         self
     }
 
+    pub fn evaluator(&mut self, evaluator: Option<&'a dyn Evaluator>) -> &mut Self {
+        self.evaluator = evaluator;
+        self
+    }
+
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<'a, O, R2> {
         Egor {
             n_eval: self.n_eval,
@@ -191,6 +202,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             outdir: self.outdir,
             hot_start: self.hot_start,
             moe_params: self.moe_params,
+            evaluator: self.evaluator,
             obj: self.obj,
             rng,
         }
@@ -203,7 +215,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         x_dat
     }
 
-    pub fn minimize(&mut self) -> Result<OptimResult<f64>> {
+    pub fn minimize(&self) -> Result<OptimResult<f64>> {
         let rng = self.rng.clone();
         let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
 
@@ -231,7 +243,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
                 (
-                    self.obj_eval(doe),
+                    self.eval(doe),
                     doe.to_owned(),
                     self.n_eval.saturating_sub(doe.nrows()),
                 )
@@ -252,7 +264,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             };
             info!("Compute initial LHS with {} points", n_doe);
             let x = sampling.sample(n_doe);
-            (self.obj_eval(&x), x, self.n_eval - n_doe)
+            (self.eval(&x), x, self.n_eval - n_doe)
         };
         let doe = concatenate![Axis(1), x_data, y_data];
         if self.outdir.is_some() {
@@ -283,17 +295,18 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                     info!("Max number of retries ({}) without adding point", MAX_RETRY);
                     break;
                 }
+                info!("End iteration {}/{}", i, n_iter);
             } else {
                 no_point_added_retries = MAX_RETRY;
                 let count = (self.n_parallel - rejected_count) as i32;
-                let x_to_eval = x_data.slice(s![-count.., ..]);
+                let x_to_eval = x_data.slice(s![-count.., ..]).to_owned();
                 info!(
                     "Add {} point{}:",
                     count,
                     if rejected_count > 1 { "s" } else { "" }
                 );
                 info!("  {:?}", x_dat);
-                let y_actual = self.obj_eval(&x_to_eval);
+                let y_actual = self.eval(&x_to_eval);
                 Zip::from(y_data.slice_mut(s![-count.., ..]).columns_mut())
                     .and(y_actual.columns())
                     .for_each(|mut y, val| y.assign(&val));
@@ -307,7 +320,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                 }
                 let best_index = self.find_best_result_index(&y_data);
                 info!(
-                    "Iteration {}/{}: Best fun(x)={} at x={}",
+                    "End iteration {}/{}: Best fun(x)={} at x={}",
                     i,
                     n_iter,
                     y_data.row(best_index),
@@ -356,7 +369,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         for k in 0..self.n_cstr {
             cstr_models.push(
                 params
-                    .fit_for_predict(&x_data, &y_data.slice(s![.., k + 1..k + 2]).to_owned())
+                    .fit_for_predict(x_data, &y_data.slice(s![.., k + 1..k + 2]).to_owned())
                     .expect("GP training failure"),
             )
         }
@@ -579,9 +592,15 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         };
         obj / scale
     }
+}
 
-    fn obj_eval(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        (&self.obj)(&x.view())
+impl<'a, O: GroupFunc, R: Rng + Clone> Evaluator for Egor<'a, O, R> {
+    fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
+        if let Some(evaluator) = self.evaluator {
+            (&self.obj)(&evaluator.eval(x).view())
+        } else {
+            (&self.obj)(&x.view())
+        }
     }
 }
 

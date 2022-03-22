@@ -89,8 +89,9 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
 
         // Fit GPs on clustered data
         let mut experts = Vec::new();
+        let nb_clusters = clusters.len();
         for cluster in clusters {
-            if cluster.nrows() < 3 {
+            if nb_clusters > 1 && cluster.nrows() < 3 {
                 return Err(MoeError::ClusteringError(format!(
                     "Not enough points in cluster, requires at least 3, got {}",
                     cluster.nrows()
@@ -227,14 +228,16 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
 }
 
 fn check_number_of_points<F>(clusters: &[Array2<F>], dim: usize) -> Result<()> {
-    let min_number_point = factorial(dim + 2) / (factorial(dim) * factorial(2));
-    for cluster in clusters {
-        if cluster.len() < min_number_point {
-            return Err(MoeError::ClusteringError(format!(
-                "Not enough points in training set. Need {} points, got {}",
-                min_number_point,
-                cluster.len()
-            )));
+    if clusters.len() > 1 {
+        let min_number_point = factorial(dim + 2) / (factorial(dim) * factorial(2));
+        for cluster in clusters {
+            if cluster.len() < min_number_point {
+                return Err(MoeError::ClusteringError(format!(
+                    "Not enough points in training set. Need {} points, got {}",
+                    min_number_point,
+                    cluster.len()
+                )));
+            }
         }
     }
     Ok(())
