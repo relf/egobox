@@ -111,6 +111,43 @@ impl ExpectedOptimum {
     }
 }
 
+#[pyclass]
+#[derive(Clone, Copy, Debug)]
+struct VarType(u8);
+
+#[pymethods]
+impl VarType {
+    #[classattr]
+    const FLOAT: u8 = 1;
+    #[classattr]
+    const INT: u8 = 2;
+    #[classattr]
+    const ORD: u8 = 3;
+    #[classattr]
+    const ENUM: u8 = 4;
+    #[new]
+    fn new(xtype: u8) -> Self {
+        VarType(xtype)
+    }
+}
+
+#[pyclass]
+#[derive(FromPyObject, Debug)]
+struct VarSpec {
+    #[pyo3(get)]
+    xtype: VarType,
+    #[pyo3(get)]
+    xlimits: Vec<f64>,
+}
+
+#[pymethods]
+impl VarSpec {
+    #[new]
+    fn new(xtype: VarType, xlimits: Vec<f64>) -> Self {
+        VarSpec { xtype, xlimits }
+    }
+}
+
 /// Optimizer constructor
 ///
 /// Parameters
@@ -198,6 +235,7 @@ impl ExpectedOptimum {
 struct Optimizer {
     pub fun: PyObject,
     pub xlimits: Array2<f64>,
+    pub xtypes: PyObject,
     pub n_cstr: usize,
     pub n_start: usize,
     pub n_doe: usize,
@@ -230,6 +268,7 @@ impl Optimizer {
     #[args(
         fun,
         xlimits,
+        xtypes,
         n_cstr = "0",
         n_start = "20",
         n_doe = "0",
@@ -250,8 +289,9 @@ impl Optimizer {
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python,
-        fun: &PyAny,
+        fun: PyObject,
         xlimits: PyReadonlyArray2<f64>,
+        xtypes: PyObject,
         n_cstr: usize,
         n_start: usize,
         n_doe: usize,
@@ -274,6 +314,7 @@ impl Optimizer {
         Optimizer {
             fun: fun.to_object(py),
             xlimits,
+            xtypes,
             n_cstr,
             n_start,
             n_doe,
@@ -370,6 +411,10 @@ impl Optimizer {
         });
 
         let doe = self.doe.as_ref().map(|v| v.to_owned());
+
+        let xtypes: Vec<VarSpec> = self.xtypes.extract(py).unwrap();
+        println!("{:?}", &xtypes);
+
         let res = ego::Egor::new(obj, &self.xlimits)
             .with_rng(rng)
             .n_cstr(self.n_cstr)
@@ -409,6 +454,8 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<InfillStrategy>()?;
     m.add_class::<ParInfillStrategy>()?;
     m.add_class::<InfillOptimizer>()?;
+    m.add_class::<VarType>()?;
+    m.add_class::<VarSpec>()?;
     m.add_class::<OptimResult>()?;
     m.add_class::<ExpectedOptimum>()?;
     Ok(())
