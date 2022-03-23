@@ -7,13 +7,6 @@ use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;
 
 #[derive(Debug, Clone)]
-pub enum Xval {
-    Float(f64),
-    Int(i32),
-    Str(String),
-}
-
-#[derive(Debug, Clone)]
 pub enum Xtype {
     Cont(f64, f64),
     Int(i32, i32),
@@ -180,7 +173,7 @@ pub struct MixintSampling {
     lhs: LHS<f64, Isaac64Rng>,
     xtypes: Vec<Xtype>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
-    work_in_folded_space: bool,
+    output_in_folded_space: bool,
 }
 
 impl MixintSampling {
@@ -188,8 +181,13 @@ impl MixintSampling {
         MixintSampling {
             lhs: LHS::new(&unfold_xlimits_with_continuous_limits(&xtypes)),
             xtypes: xtypes.clone(),
-            work_in_folded_space: false,
+            output_in_folded_space: false,
         }
+    }
+
+    pub fn work_in_folded_space(&mut self, output_in_folded_space: bool) -> &mut Self {
+        self.output_in_folded_space = output_in_folded_space;
+        self
     }
 }
 
@@ -205,7 +203,7 @@ impl SamplingMethod<f64> for MixintSampling {
     fn sample(&self, ns: usize) -> Array2<f64> {
         let mut doe = self.lhs.sample(ns);
         cast_to_discrete_values(&self.xtypes, &mut doe);
-        if self.work_in_folded_space {
+        if self.output_in_folded_space {
             fold_with_enum_index(&self.xtypes, &doe)
         } else {
             doe
@@ -324,7 +322,7 @@ impl MixintContext {
         MixintSampling {
             lhs,
             xtypes: self.xtypes.clone(),
-            work_in_folded_space: self.work_in_folded_space,
+            output_in_folded_space: self.work_in_folded_space,
         }
     }
 

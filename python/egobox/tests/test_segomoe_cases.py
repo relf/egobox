@@ -17,14 +17,14 @@ logging.basicConfig(level=logging.INFO)
 def create_egor(case, **options):
     opts = {}
     case = _import_case(case, opts)()
-    xlimits = np.array([[v["lb"], v["ub"]] for v in case["vars"]])
+    xspecs = egx.to_specs([[v["lb"], v["ub"]] for v in case["vars"]])
     n_cstr = len(case["con"])
     fun = case["f_grouped"]
     f_grouped = lambda x: np.atleast_2d(
         np.array([fun(xi)[0] for xi in np.atleast_2d(x)])
     )
     return (
-        egx.Optimizer(fun=f_grouped, xlimits=xlimits, n_cstr=n_cstr, **options),
+        egx.Optimizer(fun=f_grouped, xspecs=xspecs, n_cstr=n_cstr, **options),
         case["sol"],
     )
 

@@ -37,6 +37,7 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     pub n_parallel: usize,
     pub n_doe: usize,
     pub n_cstr: usize,
+    pub cstr_tol: f64,
     pub doe: Option<Array2<f64>>,
     pub xlimits: Array2<f64>,
     pub q_ei: QEiStrategy,
@@ -73,6 +74,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             n_parallel: 1,
             n_doe: 0,
             n_cstr: 0,
+            cstr_tol: 1e-6,
             doe: None,
             xlimits: xlimits.to_owned(),
             q_ei: QEiStrategy::KrigingBeliever,
@@ -114,6 +116,11 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
 
     pub fn n_cstr(&mut self, n_cstr: usize) -> &mut Self {
         self.n_cstr = n_cstr;
+        self
+    }
+
+    pub fn cstr_tol(&mut self, tol: f64) -> &mut Self {
+        self.cstr_tol = tol;
         self
     }
 
@@ -189,6 +196,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             n_parallel: self.n_parallel,
             n_doe: self.n_doe,
             n_cstr: self.n_cstr,
+            cstr_tol: self.cstr_tol,
             doe: self.doe,
             xlimits: self.xlimits,
             q_ei: self.q_ei,
@@ -532,7 +540,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
             let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
             for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
-                if !row.slice(s![1..]).iter().any(|v| *v > 1e-6) {
+                if !row.slice(s![1..]).iter().any(|v| *v > self.cstr_tol) {
                     index = i;
                     break;
                 }

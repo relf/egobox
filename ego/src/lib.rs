@@ -8,5 +8,6 @@ mod utils;
 
 pub use crate::egor::*;
 pub use crate::errors::*;
+pub use crate::mixint::*;
 pub use crate::mixintegor::*;
 pub use crate::types::*;

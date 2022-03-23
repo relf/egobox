@@ -3,17 +3,33 @@ use crate::errors::*;
 use crate::mixint::*;
 use crate::types::*;
 use ndarray::{Array2, Axis};
+use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
-pub struct MixintEgor<'a, O: GroupFunc> {
+pub struct MixintEgor<'a, O: GroupFunc, R: Rng + Clone> {
     xtypes: Vec<Xtype>,
-    egor: Egor<'a, O, Isaac64Rng>,
+    pub egor: Egor<'a, O, R>,
 }
 
-impl<'a, O: GroupFunc> MixintEgor<'a, O> {
-    pub fn new(mix_params: &'a MixintMoeParams, evaluator: &'a MixintEvaluator, f: O) -> Self {
+impl<'a, O: GroupFunc> MixintEgor<'a, O, Isaac64Rng> {
+    pub fn new(
+        f: O,
+        mix_params: &'a MixintMoeParams,
+        evaluator: &'a MixintEvaluator,
+    ) -> MixintEgor<'a, O, Isaac64Rng> {
+        Self::new_with_rng(f, mix_params, evaluator, Isaac64Rng::from_entropy())
+    }
+}
+
+impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
+    pub fn new_with_rng(
+        f: O,
+        mix_params: &'a MixintMoeParams,
+        evaluator: &'a MixintEvaluator,
+        rng: R,
+    ) -> Self {
         let xlimits = unfold_xlimits_with_continuous_limits(mix_params.xtypes());
-        let egor = Egor::new(f, &xlimits)
+        let egor = Egor::new_with_rng(f, &xlimits, rng)
             .moe_params(Some(mix_params))
             .evaluator(Some(evaluator))
             .clone();
@@ -81,7 +97,7 @@ mod tests {
         let moe_params = MoeParams::default();
         let moe_params = MixintMoeParams::new(&xtypes, &moe_params);
         let evaluator = MixintEvaluator::new(&xtypes);
-        let mut mixintegor = MixintEgor::new(&moe_params, &evaluator, mixsinx);
+        let mut mixintegor = MixintEgor::new(mixsinx, &moe_params, &evaluator);
         mixintegor
             .egor
             .doe(Some(doe))
@@ -104,7 +120,7 @@ mod tests {
         let moe_params = MoeParams::default();
         let moe_params = MixintMoeParams::new(&xtypes, &moe_params);
         let evaluator = MixintEvaluator::new(&xtypes);
-        let mut mixintegor = MixintEgor::new(&moe_params, &evaluator, mixsinx);
+        let mut mixintegor = MixintEgor::new(mixsinx, &moe_params, &evaluator);
         mixintegor
             .egor
             .n_eval(n_eval)
