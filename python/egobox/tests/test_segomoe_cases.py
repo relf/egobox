@@ -32,7 +32,7 @@ def create_egor(case, **options):
 class TestEgor(unittest.TestCase):
     @unittest.skipIf(SEGOMOE_NOT_INSTALLED, "SEGOMOE not installed")
     def test_branin(self):
-        options = {"seed": 42, "n_doe": 8}
+        options = {"seed": 42, "n_doe": 8, "cstr_tol": 1e-4}
         egor, expected = create_egor("Mod_Branin", **options)
         res = egor.minimize(n_eval=50)
         self.assertAlmostEqual(expected["value"], res.y_opt[0], delta=expected["tol"])
