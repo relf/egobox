@@ -458,7 +458,13 @@ impl Optimizer {
             })
             .collect();
 
-        let moe_params = moe::MoeParams::default();
+        let moe_params = moe::MoeParams::default()
+            .set_nclusters(self.n_clusters.unwrap_or(1))
+            .set_kpls_dim(self.kpls_dim)
+            .set_regression_spec(moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+            .set_correlation_spec(
+                moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+            );
         let moe_params = ego::MixintMoeParams::new(&xtypes, &moe_params);
         let evaluator = ego::MixintEvaluator::new(&xtypes);
         let mut mixintegor = ego::MixintEgor::new_with_rng(obj, &moe_params, &evaluator, rng);

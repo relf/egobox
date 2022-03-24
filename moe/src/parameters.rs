@@ -116,7 +116,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self.rng.clone()
     }
 
-    pub fn set_clusters(mut self, n_clusters: usize) -> Self {
+    pub fn set_nclusters(mut self, n_clusters: usize) -> Self {
         self.n_clusters = n_clusters;
         self
     }
