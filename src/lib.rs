@@ -440,8 +440,6 @@ impl Optimizer {
             panic!("Error: xspecs argument cannot be empty")
         }
 
-        let res;
-
         let xtypes: Vec<ego::Xtype> = xspecs
             .iter()
             .map(|spec| match spec.vtype {
@@ -488,7 +486,7 @@ impl Optimizer {
             .outdir(self.outdir.as_ref().cloned())
             .hot_start(self.hot_start);
 
-        res = mixintegor.minimize().expect("Minimization failed");
+        let res = mixintegor.minimize().expect("Minimization failed");
 
         OptimResult {
             x_opt: res.x_opt.to_vec(),
