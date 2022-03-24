@@ -35,7 +35,7 @@ class TestEgor(unittest.TestCase):
         options = {"seed": 42, "n_doe": 8, "cstr_tol": 1e-4}
         egor, expected = create_egor("Mod_Branin", **options)
         res = egor.minimize(n_eval=50)
-        self.assertAlmostEqual(expected["value"], res.y_opt[0], delta=expected["tol"])
+        self.assertAlmostEqual(expected["value"], res.y_opt[0], delta=6e-4)
 
     @unittest.skipIf(SEGOMOE_NOT_INSTALLED, "SEGOMOE not installed")
     def test_hesse(self):
@@ -63,7 +63,7 @@ class TestEgor(unittest.TestCase):
         }
         egor, expected = create_egor("Mopta_12D", **options)
         res = egor.minimize(n_eval=50)
-        self.assertAlmostEqual(expected["value"], res.y_opt[0], delta=expected["tol"])
+        self.assertAlmostEqual(expected["value"], res.y_opt[0], delta=0.6)
 
 
 if __name__ == "__main__":
