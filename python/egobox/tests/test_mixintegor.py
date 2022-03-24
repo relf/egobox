@@ -16,13 +16,13 @@ def xsinx(x: np.ndarray) -> np.ndarray:
 
 class TestMixintEgor(unittest.TestCase):
     def test_xsinx(self):
-        xtypes = [egx.VarSpec(egx.VarType(egx.VarType.INT), [0.0, 25.0])]
+        xtypes = [egx.Vspec(egx.Vtype(egx.Vtype.INT), [0.0, 25.0])]
 
-        egor = egx.Optimizer(xsinx, np.array([[0.0, 25.0]]), xtypes, seed=42)
-        res = egor.minimize(n_eval=20)
-        # print(f"Optimization f={res.y_opt} at {res.x_opt}")
-        # self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
-        # self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
+        egor = egx.Optimizer(xsinx, xtypes, seed=42, n_doe=5)
+        res = egor.minimize(n_eval=10)
+        print(f"Optimization f={res.y_opt} at {res.x_opt}")
+        self.assertAlmostEqual(-15.125, res.y_opt[0], delta=5e-3)
+        self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-1)
 
 
 if __name__ == "__main__":
