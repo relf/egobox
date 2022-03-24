@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::algorithm::{sort_by_cluster, Moe};
 use crate::gaussian_mixture::GaussianMixture;
-use crate::parameters::{CorrelationSpec, Recombination, RegressionSpec};
+use crate::parameters::{CorrelationSpec, MoePredict, Recombination, RegressionSpec};
 use log::debug;
 
 use linfa::dataset::{Dataset, DatasetView};

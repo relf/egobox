@@ -1,3 +1,4 @@
+use crate::errors::Result;
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use gp::correlation_models::{
@@ -7,6 +8,7 @@ use gp::correlation_models::{
 use gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
 use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
+use ndarray::Array2;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
@@ -40,6 +42,16 @@ bitflags! {
     }
 }
 
+pub trait MoePredict {
+    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
+    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
+}
+
+pub trait MoeFit {
+    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn MoePredict>>;
+}
+
+#[derive(Clone)]
 pub struct MoeParams<F: Float, R: Rng + Clone> {
     n_clusters: usize,
     recombination: Recombination<F>,
@@ -53,7 +65,13 @@ pub struct MoeParams<F: Float, R: Rng + Clone> {
 impl<F: Float> MoeParams<F, Isaac64Rng> {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
-        Self::new_with_rng(n_clusters, Isaac64Rng::seed_from_u64(42))
+        Self::new_with_rng(n_clusters, Isaac64Rng::from_entropy())
+    }
+}
+
+impl<F: Float> Default for MoeParams<F, Isaac64Rng> {
+    fn default() -> MoeParams<F, Isaac64Rng> {
+        MoeParams::new(1)
     }
 }
 
@@ -98,7 +116,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self.rng.clone()
     }
 
-    pub fn set_clusters(mut self, n_clusters: usize) -> Self {
+    pub fn set_nclusters(mut self, n_clusters: usize) -> Self {
         self.n_clusters = n_clusters;
         self
     }

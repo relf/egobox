@@ -38,7 +38,7 @@ pub struct LHS<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-/// LHS with default random generator set for reproducibility
+/// LHS with default random generator
 impl<F: Float> LHS<F, Isaac64Rng> {
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
         Self::new_with_rng(xlimits, Isaac64Rng::from_entropy())

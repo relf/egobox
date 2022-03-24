@@ -1,24 +1,46 @@
-use doe::{SamplingMethod, LHS};
+use doe::SamplingMethod;
 use ndarray::{Array2, ArrayView2};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rand_isaac::Isaac64Rng;
 
-/// Formats the sum of two numbers as string.
 #[pyfunction]
-fn lhs<'py>(
-    py: Python<'py>,
-    xlimits: PyReadonlyArray2<f64>,
-    n_samples: usize,
-    seed: Option<u64>,
-) -> &'py PyArray2<f64> {
-    let rng = match seed {
-        Some(seed) => Isaac64Rng::seed_from_u64(seed),
-        None => Isaac64Rng::from_entropy(),
-    };
-    let actual = LHS::new_with_rng(&xlimits.as_array(), rng).sample(n_samples);
-    actual.into_pyarray(py)
+fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject> {
+    if xlimits.is_empty() || xlimits[0].is_empty() {
+        let err = "Error: xspecs argument cannot be empty";
+        return Err(PyValueError::new_err(err.to_string()));
+    }
+    Ok(xlimits
+        .iter()
+        .map(|xlimit| Vspec::new(Vtype(Vtype::FLOAT), xlimit.clone()))
+        .collect::<Vec<Vspec>>()
+        .into_py(py))
+}
+
+#[pyfunction]
+fn lhs(py: Python, xspecs: PyObject, n_samples: usize, seed: Option<u64>) -> &PyArray2<f64> {
+    let specs: Vec<Vspec> = xspecs.extract(py).expect("Error in xspecs conversion");
+    if specs.is_empty() {
+        panic!("Error: xspecs argument cannot be empty")
+    }
+    let xtypes: Vec<ego::Xtype> = specs
+        .iter()
+        .map(|spec| match spec.vtype {
+            Vtype(Vtype::FLOAT) => ego::Xtype::Cont(spec.vlimits[0], spec.vlimits[1]),
+            Vtype(Vtype::INT) => ego::Xtype::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32),
+            Vtype(i) => panic!(
+                "Bad variable type: should be either Vtype.FLOAT {} or Vtype.INT {}, got {}",
+                Vtype::FLOAT,
+                Vtype::INT,
+                i
+            ),
+        })
+        .collect();
+    let lhs = ego::MixintContext::new(&xtypes).create_sampling(seed);
+    let doe = lhs.sample(n_samples);
+    doe.into_pyarray(py)
 }
 
 #[pyclass]
@@ -111,6 +133,42 @@ impl ExpectedOptimum {
     }
 }
 
+#[pyclass]
+#[derive(Clone, Copy, Debug)]
+struct Vtype(u8);
+
+#[pymethods]
+impl Vtype {
+    #[classattr]
+    const FLOAT: u8 = 1;
+    #[classattr]
+    const INT: u8 = 2;
+    #[new]
+    fn new(vtype: u8) -> Self {
+        Vtype(vtype)
+    }
+    fn id(&self) -> u8 {
+        self.0
+    }
+}
+
+#[pyclass]
+#[derive(FromPyObject, Debug)]
+struct Vspec {
+    #[pyo3(get)]
+    vtype: Vtype,
+    #[pyo3(get)]
+    vlimits: Vec<f64>,
+}
+
+#[pymethods]
+impl Vspec {
+    #[new]
+    fn new(vtype: Vtype, vlimits: Vec<f64>) -> Self {
+        Vspec { vtype, vlimits }
+    }
+}
+
 /// Optimizer constructor
 ///
 /// Parameters
@@ -127,8 +185,11 @@ impl ExpectedOptimum {
 ///     n_cstr (int):
 ///         the number of constraint functions.
 ///
-///     xlimits (array[nx, 2]):
-///         Bounds of th nx components of the input x (eg. [[lower_1, upper_1], ..., [lower_nx, upper_nx]])
+///     cstr_tol (float):
+///         tolerance on constraints violation (cstr < tol).
+///
+///     xspecs (list(Vspec)) where Vspec(vtype=FLOAT|INT, vlimits=[lower bound, upper bound]):
+///         Bounds of the nx components of the input x (eg. len(xspecs) == nx)
 ///
 ///     n_start (int > 0):
 ///         Number of runs of infill strategy optimizations (best result taken)
@@ -193,12 +254,13 @@ impl ExpectedOptimum {
 ///      
 #[pyclass]
 #[pyo3(
-    text_signature = "(fun, xlimits, n_cstr=0, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, n_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
+    text_signature = "(fun, n_cstr=0, cstr_tol=1e-6, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, n_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
 )]
 struct Optimizer {
     pub fun: PyObject,
-    pub xlimits: Array2<f64>,
+    pub xspecs: PyObject,
     pub n_cstr: usize,
+    pub cstr_tol: f64,
     pub n_start: usize,
     pub n_doe: usize,
     pub doe: Option<Array2<f64>>,
@@ -229,8 +291,9 @@ impl Optimizer {
     #[new]
     #[args(
         fun,
-        xlimits,
+        xspecs,
         n_cstr = "0",
+        cstr_tol = "1e-6",
         n_start = "20",
         n_doe = "0",
         doe = "None",
@@ -250,9 +313,10 @@ impl Optimizer {
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python,
-        fun: &PyAny,
-        xlimits: PyReadonlyArray2<f64>,
+        fun: PyObject,
+        xspecs: PyObject,
         n_cstr: usize,
+        cstr_tol: f64,
         n_start: usize,
         n_doe: usize,
         doe: Option<PyReadonlyArray2<f64>>,
@@ -269,12 +333,12 @@ impl Optimizer {
         hot_start: bool,
         seed: Option<u64>,
     ) -> Self {
-        let xlimits = xlimits.to_owned_array();
         let doe = doe.map(|x| x.to_owned_array());
         Optimizer {
             fun: fun.to_object(py),
-            xlimits,
+            xspecs,
             n_cstr,
+            cstr_tol,
             n_start,
             n_doe,
             doe,
@@ -370,12 +434,45 @@ impl Optimizer {
         });
 
         let doe = self.doe.as_ref().map(|v| v.to_owned());
-        let res = ego::Egor::new(obj, &self.xlimits)
-            .with_rng(rng)
+
+        let xspecs: Vec<Vspec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
+        if xspecs.is_empty() {
+            panic!("Error: xspecs argument cannot be empty")
+        }
+
+        let xtypes: Vec<ego::Xtype> = xspecs
+            .iter()
+            .map(|spec| match spec.vtype {
+                Vtype(Vtype::FLOAT) => ego::Xtype::Cont(spec.vlimits[0], spec.vlimits[1]),
+                Vtype(Vtype::INT) => {
+                    ego::Xtype::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
+                }
+                Vtype(i) => panic!(
+                    "Bad variable type: should be either Vtype.FLOAT {} or Vtype.INT {}, got {}",
+                    Vtype::FLOAT,
+                    Vtype::INT,
+                    i
+                ),
+            })
+            .collect();
+
+        let moe_params = moe::MoeParams::default()
+            .set_nclusters(self.n_clusters.unwrap_or(1))
+            .set_kpls_dim(self.kpls_dim)
+            .set_regression_spec(moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+            .set_correlation_spec(
+                moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+            );
+        let moe_params = ego::MixintMoeParams::new(&xtypes, &moe_params);
+        let evaluator = ego::MixintEvaluator::new(&xtypes);
+        let mut mixintegor = ego::MixintEgor::new_with_rng(obj, &moe_params, &evaluator, rng);
+        mixintegor
+            .egor
             .n_cstr(self.n_cstr)
             .n_eval(n_eval)
             .n_start(self.n_start)
             .n_doe(self.n_doe)
+            .cstr_tol(self.cstr_tol)
             .doe(doe)
             .regression_spec(moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
             .correlation_spec(moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap())
@@ -387,9 +484,9 @@ impl Optimizer {
             .n_clusters(self.n_clusters)
             .expect(expected)
             .outdir(self.outdir.as_ref().cloned())
-            .hot_start(self.hot_start)
-            .minimize()
-            .expect("Minimize failure");
+            .hot_start(self.hot_start);
+
+        let res = mixintegor.minimize().expect("Minimization failed");
 
         OptimResult {
             x_opt: res.x_opt.to_vec(),
@@ -402,6 +499,7 @@ impl Optimizer {
 fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
 
+    m.add_function(wrap_pyfunction!(to_specs, m)?)?;
     m.add_function(wrap_pyfunction!(lhs, m)?)?;
     m.add_class::<Optimizer>()?;
     m.add_class::<RegressionSpec>()?;
@@ -409,6 +507,8 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<InfillStrategy>()?;
     m.add_class::<ParInfillStrategy>()?;
     m.add_class::<InfillOptimizer>()?;
+    m.add_class::<Vtype>()?;
+    m.add_class::<Vspec>()?;
     m.add_class::<OptimResult>()?;
     m.add_class::<ExpectedOptimum>()?;
     Ok(())

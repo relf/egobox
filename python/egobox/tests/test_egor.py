@@ -79,14 +79,14 @@ def six_humps(x):
 
 class TestOptimizer(unittest.TestCase):
     def test_xsinx(self):
-        egor = egx.Optimizer(xsinx, np.array([[0.0, 25.0]]), seed=42)
+        egor = egx.Optimizer(xsinx, egx.to_specs([[0.0, 25.0]]), seed=42)
         res = egor.minimize(n_eval=20)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
     def test_xsinx_with_hotstart(self):
-        xlimits = np.array([[0.0, 25.0]])
+        xlimits = egx.to_specs([[0.0, 25.0]])
         doe = egx.lhs(xlimits, 10)
         egor = egx.Optimizer(xsinx, xlimits, doe=doe, seed=42, outdir="./test_dir")
         res = egor.minimize(n_eval=15)
@@ -107,7 +107,7 @@ class TestOptimizer(unittest.TestCase):
     def test_g24(self):
         egor = egx.Optimizer(
             g24,
-            np.array([[0.0, 3.0], [0.0, 4.0]]),
+            egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             n_cstr=2,
             infill_strategy=egx.InfillStrategy.EI,
             regr_spec=egx.RegressionSpec.CONSTANT,
@@ -125,8 +125,9 @@ class TestOptimizer(unittest.TestCase):
     def test_g24_kpls(self):
         egor = egx.Optimizer(
             g24,
-            np.array([[0.0, 3.0], [0.0, 4.0]]),
+            egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             n_cstr=2,
+            cstr_tol=1e-3,
             regr_spec=egx.RegressionSpec.CONSTANT,
             corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL
             | egx.CorrelationSpec.ABSOLUTE_EXPONENTIAL,
@@ -142,7 +143,7 @@ class TestOptimizer(unittest.TestCase):
     def test_six_humps(self):
         egor = egx.Optimizer(
             six_humps,
-            np.array([[-3.0, 3.0], [-2.0, 2.0]]),
+            egx.to_specs([[-3.0, 3.0], [-2.0, 2.0]]),
             infill_strategy=egx.InfillStrategy.WB2,
             regr_spec=egx.RegressionSpec.CONSTANT,
             corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
@@ -159,7 +160,7 @@ class TestOptimizer(unittest.TestCase):
 
     def test_constructor(self):
         self.assertRaises(TypeError, egx.Optimizer)
-        egx.Optimizer(xsinx, np.array([[0.0, 25.0]]), 22, n_doe=10)
+        egx.Optimizer(xsinx, egx.to_specs([[0.0, 25.0]]), 22, n_doe=10)
 
 
 if __name__ == "__main__":
