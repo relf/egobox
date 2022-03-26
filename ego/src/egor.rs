@@ -4,7 +4,7 @@ use crate::types::*;
 use crate::utils::update_data;
 use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale};
 use crate::utils::{ei, wb2s};
-use doe::{LHSKind, SamplingMethod, LHS};
+use doe::{Lhs, LhsKind, SamplingMethod};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
 use log::{debug, info};
@@ -218,14 +218,14 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
 
     pub fn suggest(&self, x_data: &Array2<f64>, y_data: &Array2<f64>) -> Array2<f64> {
         let rng = self.rng.clone();
-        let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
+        let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
         let (x_dat, _) = self.next_points(0, x_data, y_data, &sampling);
         x_dat
     }
 
     pub fn minimize(&self) -> Result<OptimResult<f64>> {
         let rng = self.rng.clone();
-        let sampling = LHS::new(&self.xlimits).with_rng(rng).kind(LHSKind::Maximin);
+        let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
 
         let hstart_doe: Option<Array2<f64>> = if self.hot_start && self.outdir.is_some() {
             let path: &String = self.outdir.as_ref().unwrap();
@@ -356,7 +356,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         _n: usize,
         x_data: &Array2<f64>,
         y_data: &Array2<f64>,
-        sampling: &LHS<f64, R>,
+        sampling: &Lhs<f64, R>,
     ) -> (Array2<f64>, Array2<f64>) {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
@@ -414,7 +414,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        sampling: &LHS<f64, R>,
+        sampling: &Lhs<f64, R>,
         obj_model: &dyn MoePredict,
         cstr_models: &[Box<dyn MoePredict>],
     ) -> Result<Array1<f64>> {
@@ -693,7 +693,7 @@ mod tests {
     fn test_rosenbrock_2d() {
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
-        let doe = LHS::new(&xlimits)
+        let doe = Lhs::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .sample(10);
         let res = Egor::new(rosenb, &xlimits)
@@ -745,7 +745,7 @@ mod tests {
         let x = array![[1., 2.]];
         println!("{:?}", f_g24(&x.view()));
         let xlimits = array![[0., 3.], [0., 4.]];
-        let doe = LHS::new(&xlimits)
+        let doe = Lhs::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .sample(10);
         let res = Egor::new(f_g24, &xlimits)

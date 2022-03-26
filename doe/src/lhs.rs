@@ -10,7 +10,7 @@ use rand_isaac::Isaac64Rng;
 use std::cmp;
 
 /// Kinds of Latin Hypercube Design
-pub enum LHSKind {
+pub enum LhsKind {
     /// sample is choosen randomly within its latin hypercube intervals
     Classic,
     /// sample is the middle of its latin hypercube intervals
@@ -27,25 +27,25 @@ pub enum LHSKind {
 
 /// The LHS design is built as follows: each dimension space is divided into ns sections
 /// where ns is the number of sampling points, and one point in selected in each section.
-/// The selection method gives different kind of LHS (see [LHSKind])
-pub struct LHS<F: Float, R: Rng + Clone> {
+/// The selection method gives different kind of LHS (see [LhsKind])
+pub struct Lhs<F: Float, R: Rng + Clone> {
     /// Sampling space definition as a (nx, 2) matrix
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of x
     xlimits: Array2<F>,
     /// The requested kind of LHS
-    kind: LHSKind,
+    kind: LhsKind,
     /// Random generator used for reproducibility (not used in case of Centered LHS)
     rng: R,
 }
 
 /// LHS with default random generator
-impl<F: Float> LHS<F, Isaac64Rng> {
+impl<F: Float> Lhs<F, Isaac64Rng> {
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
         Self::new_with_rng(xlimits, Isaac64Rng::from_entropy())
     }
 }
 
-impl<F: Float, R: Rng + Clone> SamplingMethod<F> for LHS<F, R> {
+impl<F: Float, R: Rng + Clone> SamplingMethod<F> for Lhs<F, R> {
     fn sampling_space(&self) -> &Array2<F> {
         &self.xlimits
     }
@@ -53,11 +53,11 @@ impl<F: Float, R: Rng + Clone> SamplingMethod<F> for LHS<F, R> {
     fn normalized_sample(&self, ns: usize) -> Array2<F> {
         let mut rng = self.rng.clone();
         match &self.kind {
-            LHSKind::Classic => self._classic_lhs(ns, &mut rng),
-            LHSKind::Centered => self._centered_lhs(ns, &mut rng),
-            LHSKind::Maximin => self._maximin_lhs(ns, &mut rng, false, 5),
-            LHSKind::CenteredMaximin => self._maximin_lhs(ns, &mut rng, true, 5),
-            LHSKind::Optimized => {
+            LhsKind::Classic => self._classic_lhs(ns, &mut rng),
+            LhsKind::Centered => self._centered_lhs(ns, &mut rng),
+            LhsKind::Maximin => self._maximin_lhs(ns, &mut rng, false, 5),
+            LhsKind::CenteredMaximin => self._maximin_lhs(ns, &mut rng, true, 5),
+            LhsKind::Optimized => {
                 let doe = self._classic_lhs(ns, &mut rng);
                 let nx = self.xlimits.nrows();
                 let outer_loop = cmp::min((1.5 * nx as f64) as usize, 30);
@@ -68,7 +68,7 @@ impl<F: Float, R: Rng + Clone> SamplingMethod<F> for LHS<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> LHS<F, R> {
+impl<F: Float, R: Rng + Clone> Lhs<F, R> {
     /// Constructor with given design space and random generator
     ///
     /// ### Parameters
@@ -81,22 +81,22 @@ impl<F: Float, R: Rng + Clone> LHS<F, R> {
         if xlimits.ncols() != 2 {
             panic!("xlimits must have 2 columns (lower, upper)");
         }
-        LHS {
+        Lhs {
             xlimits: xlimits.to_owned(),
-            kind: LHSKind::Optimized,
+            kind: LhsKind::Optimized,
             rng,
         }
     }
 
     /// Sets the kind of LHS
-    pub fn kind(mut self, kind: LHSKind) -> Self {
+    pub fn kind(mut self, kind: LhsKind) -> Self {
         self.kind = kind;
         self
     }
 
     /// Sets the random generator
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> LHS<F, R2> {
-        LHS {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Lhs<F, R2> {
+        Lhs {
             xlimits: self.xlimits,
             kind: self.kind,
             rng,
@@ -298,7 +298,7 @@ mod tests {
             [6.728039870442292, 0.970303579286283],
             [7.411727120621207, 0.5524919394042328]
         ];
-        let actual = LHS::new(&xlimits)
+        let actual = Lhs::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
@@ -309,7 +309,7 @@ mod tests {
         let start = Instant::now();
         let xlimits = arr2(&[[0., 1.], [0., 1.]]);
         let n = 10;
-        let _actual = LHS::new(&xlimits).sample(n);
+        let _actual = Lhs::new(&xlimits).sample(n);
         let duration = start.elapsed();
         println!("Time elapsed in optimized LHS is: {:?}", duration);
     }
@@ -324,9 +324,9 @@ mod tests {
             [6.728039870442292, 0.970303579286283],
             [7.411727120621207, 0.1556358466576374]
         ];
-        let actual = LHS::new(&xlimits)
+        let actual = Lhs::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
-            .kind(LHSKind::Classic)
+            .kind(LhsKind::Classic)
             .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
@@ -335,9 +335,9 @@ mod tests {
     fn test_centered_lhs() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![[5.5, 0.7], [6.5, 0.5], [8.5, 0.9], [9.5, 0.3], [7.5, 0.1]];
-        let actual = LHS::new(&xlimits)
+        let actual = Lhs::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(0))
-            .kind(LHSKind::Centered)
+            .kind(LhsKind::Centered)
             .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
@@ -346,9 +346,9 @@ mod tests {
     fn test_centered_maximin_lhs() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![[9.5, 0.5], [8.5, 0.3], [5.5, 0.7], [6.5, 0.1], [7.5, 0.9]];
-        let actual = LHS::new(&xlimits)
+        let actual = Lhs::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(0))
-            .kind(LHSKind::CenteredMaximin)
+            .kind(LhsKind::CenteredMaximin)
             .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
@@ -372,6 +372,6 @@ mod tests {
         ];
         let p = 10.;
         let mut rng = Isaac64Rng::seed_from_u64(42);
-        let _res = LHS::new(&xlimits)._phip_swap(&mut p0, k, phip, p, &mut rng);
+        let _res = Lhs::new(&xlimits)._phip_swap(&mut p0, k, phip, p, &mut rng);
     }
 }

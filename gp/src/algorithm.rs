@@ -3,7 +3,7 @@ use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::parameters::{GpParams, GpValidParams};
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
-use doe::{SamplingMethod, LHS};
+use doe::{Lhs, SamplingMethod};
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float};
 use linfa_pls::{PlsError, PlsRegression};
@@ -250,7 +250,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         // Use a seed here for reproducibility. Do we need to make it truly random
         // Probably no, as it is just to get init values spread over
         // [1e-6, 20] for multistart thanks to LHS method.
-        let seeds = LHS::new(&xlimits)
+        let seeds = Lhs::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .sample(7);
         Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
@@ -439,7 +439,7 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
-    use doe::{SamplingMethod, LHS};
+    use doe::{Lhs, SamplingMethod};
     use ndarray::{arr2, array, Array, Zip};
     use ndarray_linalg::Norm;
     use ndarray_npy::{read_npy, write_npy};
@@ -455,7 +455,7 @@ mod tests {
         let xlimits = lim.broadcast((dim, 2)).unwrap();
         let rng = Isaac64Rng::seed_from_u64(42);
         let nt = 30;
-        let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
+        let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let yt = Array::from_vec(vec![3.1; nt]).insert_axis(Axis(1));
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             ConstantMean::default(),
@@ -466,7 +466,7 @@ mod tests {
         .fit(&Dataset::new(xt, yt))
         .expect("GP fit error");
         let rng = Isaac64Rng::seed_from_u64(43);
-        let xtest = LHS::new(&xlimits).with_rng(rng).sample(nt);
+        let xtest = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let ytest = gp.predict_values(&xtest).expect("prediction error");
         assert_abs_diff_eq!(Array::from_elem((nt, 1), 3.1), ytest, epsilon = 1e-6);
     }
@@ -557,7 +557,7 @@ mod tests {
                     let lim = array![[-600., 600.]];
                     let xlimits = lim.broadcast((dim, 2)).unwrap();
                     let rng = Isaac64Rng::seed_from_u64(42);
-                    let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
+                    let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
                     write_npy(&xfilename, &xt).expect("cannot save xt");
                     xt
                 }
@@ -604,7 +604,7 @@ mod tests {
         let lim = array![[-1., 1.]];
         let xlimits = lim.broadcast((dim, 2)).unwrap();
         let rng = Isaac64Rng::seed_from_u64(42);
-        let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
+        let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let yt = tensor_product_exp(&xt);
 
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
@@ -615,7 +615,7 @@ mod tests {
         .fit(&Dataset::new(xt, yt))
         .expect("GP training");
 
-        let xv = LHS::new(&xlimits).sample(100);
+        let xv = Lhs::new(&xlimits).sample(100);
         let yv = tensor_product_exp(&xv);
 
         let ytest = gp.predict_values(&xv).unwrap();
@@ -640,7 +640,7 @@ mod tests {
         let lim = array![[-1., 1.]];
         let xlimits = lim.broadcast((dim, 2)).unwrap();
         let rng = Isaac64Rng::seed_from_u64(42);
-        let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
+        let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let yt = rosenb(&xt);
 
         let gp = GaussianProcess::<f64, ConstantMean, Matern32Corr>::params(
@@ -651,7 +651,7 @@ mod tests {
         .fit(&Dataset::new(xt, yt))
         .expect("GP training");
 
-        let xv = LHS::new(&xlimits).sample(500);
+        let xv = Lhs::new(&xlimits).sample(500);
         let yv = rosenb(&xv);
 
         let ytest = gp.predict_values(&xv).unwrap();

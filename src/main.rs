@@ -1,4 +1,4 @@
-use doe::{SamplingMethod, LHS};
+use doe::{Lhs, SamplingMethod};
 use gp::correlation_models::*;
 use gp::mean_models::*;
 use gp::GaussianProcess;
@@ -36,7 +36,7 @@ fn main() {
                 let lim = array![[-600., 600.]];
                 let xlimits = lim.broadcast((dim, 2)).unwrap();
                 let rng = Isaac64Rng::seed_from_u64(42);
-                let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
+                let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
                 write_npy(&xfilename, &xt).expect("cannot save xt");
                 xt
             }

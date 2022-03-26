@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use doe::{SamplingMethod, LHS};
+use doe::{Lhs, SamplingMethod};
 use gp::correlation_models::SquaredExponentialCorr;
 use gp::mean_models::ConstantMean;
 use gp::GaussianProcess;
@@ -31,7 +31,7 @@ fn criterion_gp(c: &mut Criterion) {
                 let lim = array![[-600., 600.]];
                 let xlimits = lim.broadcast((dim, 2)).unwrap();
                 let rng = Isaac64Rng::seed_from_u64(42);
-                let xt = LHS::new(&xlimits).with_rng(rng).sample(nt);
+                let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
                 write_npy(&xfilename, &xt).expect("cannot save xt");
                 xt
             }

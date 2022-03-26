@@ -184,7 +184,7 @@ pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use doe::{SamplingMethod, LHS};
+    use doe::{Lhs, SamplingMethod};
     use ndarray::array;
     use ndarray_linalg::Norm;
     use ndarray_stats::DeviationExt;
@@ -196,14 +196,14 @@ mod tests {
     #[test]
     fn test_save_load() {
         let xlimits = array![[0., 25.]];
-        let xt = LHS::new(&xlimits).sample(10);
+        let xt = Lhs::new(&xlimits).sample(10);
         let yt = xsinx(&xt);
         let gp = make_surrogate_params!(Constant, SquaredExponential)
             .fit(&xt, &yt)
             .expect("GP fit error");
         gp.save("save_gp.json").expect("GP not saved");
         let gp = load("save_gp.json").expect("GP not loaded");
-        let xv = LHS::new(&xlimits).sample(20);
+        let xv = Lhs::new(&xlimits).sample(20);
         let yv = xsinx(&xv);
         let ytest = gp.predict_values(&xv.view()).unwrap();
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();

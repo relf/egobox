@@ -302,7 +302,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
 mod test {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use doe::{FullFactorial, SamplingMethod, LHS};
+    use doe::{FullFactorial, Lhs, SamplingMethod};
     use ndarray::{array, Array1, Array2, Axis, Zip};
     use ndarray_linalg::norm::*;
     use ndarray_npy::write_npy;
@@ -330,7 +330,7 @@ mod test {
     #[test]
     fn test_find_best_cluster_nb_1d() {
         let rng = Isaac64Rng::seed_from_u64(42);
-        let doe = LHS::new(&array![[0., 1.]]).with_rng(rng);
+        let doe = Lhs::new(&array![[0., 1.]]).with_rng(rng);
         //write_npy("doe.npy", &doe);
         let xtrain = doe.sample(50);
         //write_npy("xtrain.npy", &xtrain);
@@ -359,7 +359,7 @@ mod test {
 
     #[test]
     fn test_find_best_cluster_nb_2d() {
-        let doe = LHS::new(&array![[-1., 1.], [-1., 1.]]);
+        let doe = Lhs::new(&array![[-1., 1.], [-1., 1.]]);
         let xtrain = doe.sample(200);
         let ytrain = l1norm(&xtrain);
         let rng = Isaac64Rng::seed_from_u64(42);

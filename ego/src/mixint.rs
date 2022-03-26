@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use doe::{SamplingMethod, LHS};
+use doe::{Lhs, SamplingMethod};
 use moe::{Moe, MoeFit, MoeParams, MoePredict, RegressionSpec, Result};
 use ndarray::{s, Array, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
@@ -170,7 +170,7 @@ pub fn cast_to_enum_value(xtypes: &[Xtype], i: usize, enum_i: usize) -> Option<S
 // }
 
 pub struct MixintSampling {
-    lhs: LHS<f64, Isaac64Rng>,
+    lhs: Lhs<f64, Isaac64Rng>,
     xtypes: Vec<Xtype>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
     output_in_folded_space: bool,
@@ -179,7 +179,7 @@ pub struct MixintSampling {
 impl MixintSampling {
     pub fn new(xtypes: Vec<Xtype>) -> Self {
         MixintSampling {
-            lhs: LHS::new(&unfold_xlimits_with_continuous_limits(&xtypes)),
+            lhs: Lhs::new(&unfold_xlimits_with_continuous_limits(&xtypes)),
             xtypes: xtypes.clone(),
             output_in_folded_space: false,
         }
@@ -313,10 +313,10 @@ impl MixintContext {
 
     pub fn create_sampling(&self, seed: Option<u64>) -> MixintSampling {
         let lhs = seed.map_or(
-            LHS::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)),
+            Lhs::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)),
             |seed| {
                 let rng = Isaac64Rng::seed_from_u64(seed);
-                LHS::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)).with_rng(rng)
+                Lhs::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)).with_rng(rng)
             },
         );
         MixintSampling {

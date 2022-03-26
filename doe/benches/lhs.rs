@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use doe::{SamplingMethod, LHS};
+use doe::{Lhs, SamplingMethod};
 use ndarray::arr2;
 
 fn criterion_lhs(c: &mut Criterion) {
@@ -9,7 +9,7 @@ fn criterion_lhs(c: &mut Criterion) {
     for size in sizes {
         group.bench_function(format!("lhs {}", size), |b| {
             let xlimits = arr2(&[[0., 1.], [0., 1.]]);
-            b.iter(|| black_box(LHS::new(&xlimits).sample(size)));
+            b.iter(|| black_box(Lhs::new(&xlimits).sample(size)));
         });
     }
     group.finish();
