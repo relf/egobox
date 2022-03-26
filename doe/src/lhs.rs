@@ -73,8 +73,8 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
     ///
     /// ### Parameters
     ///
-    /// `xlimits`: (nx, 2) matrix where nx is the dimension of the sample x and the ith row
-    /// is the interval of the ith component of x.
+    /// `xlimits`: (nx, 2) matrix where nx is the dimension of the samples and the ith row
+    /// is the definition interval of the ith component of x.
     ///
     /// `rng`: random generator used for Classic and Optimized LHS
     pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>, rng: R) -> Self {
@@ -184,7 +184,6 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
 
     fn _phip_swap(&self, x: &mut Array2<F>, k: usize, phip: F, p: F, rng: &mut R) -> F {
         // Choose two random rows
-        //let mut rng = thread_rng();
         let i1 = rng.gen_range(0..x.nrows());
         let mut i2 = rng.gen_range(0..x.nrows());
         while i2 == i1 {

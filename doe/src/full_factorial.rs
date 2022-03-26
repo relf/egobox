@@ -6,7 +6,7 @@ use ndarray_stats::QuantileExt;
 /// The FullFactorial design consists of all possible combinations
 /// of levels for all components within the design space.
 pub struct FullFactorial<F: Float> {
-    /// Sampling space definition as a (nx, 2) matrix
+    /// Design space definition as a (nx, 2) matrix
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of a sample x
     xlimits: Array2<F>,
 }
