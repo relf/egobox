@@ -6,19 +6,14 @@ Rust toolbox about efficient global optimization inspired from [SMT](https://git
 
 ## Why Egobox?
 
-I started this library as a way to learn Rust and see if it can be used to implement algorithms like those in the SMT toolbox [^1]. As the first components (doe, gp) emerged, it appeears I could translate Python code almost line by line in Rust (well... after great deal of borrow-checker fight!) and thanks to [Rust ndarray library ecosystem](https://github.com/rust-ndarray). 
+I started this library as a way to learn Rust and see if it can be used to implement algorithms like those in the SMT toolbox[^1]. As the first components (doe, gp) emerged, it appeears I could translate Python code almost line by line in Rust (well... after great deal of borrow-checker fight!) and thanks to [Rust ndarray library ecosystem](https://github.com/rust-ndarray). 
 
 While I did not benchmark exactly my Rust code against SMT Python one, from my debugging sessions I notice I do not get a great speed up. The point is that actually I do not compare Rust vs Python but vs Python/C/Fortran. Algorithms in doe and gp relies widely on linear algebra and killer libraries numpy/scipy which are strongly optimized.
 
-My guess here was that interest for this code could come from Rust algorithms built upon these initial bricks hence I started to implement mixture of experts algorithm (moe) and on top bayesian optimization EGO algorithm which gives its name to the library [^2][^3].
+My guess here was that interest for this code could come from Rust algorithms built upon these initial bricks hence I started to implement mixture of experts algorithm (moe) and on top bayesian optimization EGO algorithm which gives its name to the library[^2][^3].
 
-Finally, thanks to [PyO3 project](https://pyo3.rs), Rust is great for building Python extensions, I bind the EGO algorithms giving resulting in an Ego algorithm written in Rust (aka Egor).
+Finally, thanks to [PyO3 project](https://pyo3.rs), making Rust well suited for building Python extensions, I bind the EGO algorithm giving an EGO algorithm written in Rust (aka Egor) accessible from Python.
 
-[^1] M. A. Bouhlel and J. T. Hwang and N. Bartoli and R. Lafage and J. Morlier and J. R. R. A. Martins. A Python surrogate modeling framework with derivatives. Advances in Engineering Software, 2019.
-
-[^2] Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive black-box functions. Journal of Global optimization, 13(4), 455-492.
-
-[^3] Priem, R., Bartoli, N., Diouane, Y., Lefebvre, T., Dubreuil, S., Salaün, M., & Morlier, J. (2018, September). SEGOMOE: Super Efficient Global Optimization with Mixture of Experts. In Workshop CIMI Optimization & Learning.
 ## Cite
 
 If you happen to find this Rust library useful for your research, you can cite this project as follows: 
@@ -32,8 +27,8 @@ If you happen to find this Rust library useful for your research, you can cite t
 }
 ```
 
-[^1] M. A. Bouhlel and J. T. Hwang and N. Bartoli and R. Lafage and J. Morlier and J. R. R. A. Martins. A Python surrogate modeling framework with derivatives. Advances in Engineering Software, 2019.
+[^1]: M. A. Bouhlel and J. T. Hwang and N. Bartoli and R. Lafage and J. Morlier and J. R. R. A. Martins. A Python surrogate modeling framework with derivatives. Advances in Engineering Software, 2019.
 
-[^2] Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive black-box functions. Journal of Global optimization, 13(4), 455-492.
+[^2]: Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive black-box functions. Journal of Global optimization, 13(4), 455-492.
 
-[^3] Priem, R., Bartoli, N., Diouane, Y., Lefebvre, T., Dubreuil, S., Salaün, M., & Morlier, J. (2018, September). SEGOMOE: Super Efficient Global Optimization with Mixture of Experts. In Workshop CIMI Optimization & Learning.
+[^3]: Priem, R., Bartoli, N., Diouane, Y., Lefebvre, T., Dubreuil, S., Salaün, M., & Morlier, J. (2018, September). SEGOMOE: Super Efficient Global Optimization with Mixture of Experts. In Workshop CIMI Optimization & Learning.
