@@ -1,18 +1,18 @@
 [package]
-name = "egobox"
+name = "egor"
 version = "0.2.0"
 authors = ["relf <remi.lafage@onera.fr>"]
 edition = "2018"
 
 [lib]
-name = "egobox"
+name = "egor"
 crate-type = ["cdylib"]
 
 [dependencies]
-doe = { path="doe" }
-gp = { path="gp" }
-moe = { path="moe" }
-ego = { path="ego" }
+egor-doe = { path="egor-doe" }
+egor-gp = { path="egor-gp" }
+egor-moe = { path="egor-moe" }
+egor-ego = { path="egor-ego" }
 
 linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
 linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
@@ -43,10 +43,10 @@ argmin_testfunctions = "0.1"
 
 [workspace]
 members = [
-  "doe", 
-  "gp",
-  "moe",
-  "ego"
+  "egor-doe", 
+  "egor-gp",
+  "egor-moe",
+  "egor-ego"
 ]
 
 [package.metadata.maturin]

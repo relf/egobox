@@ -1,4 +1,4 @@
-use doe::SamplingMethod;
+use egor_doe::SamplingMethod;
 use ndarray::{Array2, ArrayView2};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
@@ -25,11 +25,13 @@ fn lhs(py: Python, xspecs: PyObject, n_samples: usize, seed: Option<u64>) -> &Py
     if specs.is_empty() {
         panic!("Error: xspecs argument cannot be empty")
     }
-    let xtypes: Vec<ego::Xtype> = specs
+    let xtypes: Vec<egor_ego::Xtype> = specs
         .iter()
         .map(|spec| match spec.vtype {
-            Vtype(Vtype::FLOAT) => ego::Xtype::Cont(spec.vlimits[0], spec.vlimits[1]),
-            Vtype(Vtype::INT) => ego::Xtype::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32),
+            Vtype(Vtype::FLOAT) => egor_ego::Xtype::Cont(spec.vlimits[0], spec.vlimits[1]),
+            Vtype(Vtype::INT) => {
+                egor_ego::Xtype::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
+            }
             Vtype(i) => panic!(
                 "Bad variable type: should be either Vtype.FLOAT {} or Vtype.INT {}, got {}",
                 Vtype::FLOAT,
@@ -38,7 +40,7 @@ fn lhs(py: Python, xspecs: PyObject, n_samples: usize, seed: Option<u64>) -> &Py
             ),
         })
         .collect();
-    let lhs = ego::MixintContext::new(&xtypes).create_sampling(seed);
+    let lhs = egor_ego::MixintContext::new(&xtypes).create_sampling(seed);
     let doe = lhs.sample(n_samples);
     doe.into_pyarray(py)
 }
@@ -49,13 +51,13 @@ struct RegressionSpec(u8);
 #[pymethods]
 impl RegressionSpec {
     #[classattr]
-    const ALL: u8 = moe::RegressionSpec::ALL.bits();
+    const ALL: u8 = egor_moe::RegressionSpec::ALL.bits();
     #[classattr]
-    const CONSTANT: u8 = moe::RegressionSpec::CONSTANT.bits();
+    const CONSTANT: u8 = egor_moe::RegressionSpec::CONSTANT.bits();
     #[classattr]
-    const LINEAR: u8 = moe::RegressionSpec::LINEAR.bits();
+    const LINEAR: u8 = egor_moe::RegressionSpec::LINEAR.bits();
     #[classattr]
-    const QUADRATIC: u8 = moe::RegressionSpec::QUADRATIC.bits();
+    const QUADRATIC: u8 = egor_moe::RegressionSpec::QUADRATIC.bits();
 }
 
 #[pyclass]
@@ -64,15 +66,15 @@ struct CorrelationSpec(u8);
 #[pymethods]
 impl CorrelationSpec {
     #[classattr]
-    const ALL: u8 = moe::CorrelationSpec::ALL.bits();
+    const ALL: u8 = egor_moe::CorrelationSpec::ALL.bits();
     #[classattr]
-    const SQUARED_EXPONENTIAL: u8 = moe::CorrelationSpec::SQUAREDEXPONENTIAL.bits();
+    const SQUARED_EXPONENTIAL: u8 = egor_moe::CorrelationSpec::SQUAREDEXPONENTIAL.bits();
     #[classattr]
-    const ABSOLUTE_EXPONENTIAL: u8 = moe::CorrelationSpec::ABSOLUTEEXPONENTIAL.bits();
+    const ABSOLUTE_EXPONENTIAL: u8 = egor_moe::CorrelationSpec::ABSOLUTEEXPONENTIAL.bits();
     #[classattr]
-    const MATERN32: u8 = moe::CorrelationSpec::MATERN32.bits();
+    const MATERN32: u8 = egor_moe::CorrelationSpec::MATERN32.bits();
     #[classattr]
-    const MATERN52: u8 = moe::CorrelationSpec::MATERN52.bits();
+    const MATERN52: u8 = egor_moe::CorrelationSpec::MATERN52.bits();
 }
 
 #[pyclass]
@@ -384,9 +386,9 @@ impl Optimizer {
         };
 
         let infill_strategy = match self.infill_strategy.0 {
-            InfillStrategy::EI => ego::InfillStrategy::EI,
-            InfillStrategy::WB2 => ego::InfillStrategy::WB2,
-            InfillStrategy::WB2S => ego::InfillStrategy::WB2S,
+            InfillStrategy::EI => egor_ego::InfillStrategy::EI,
+            InfillStrategy::WB2 => egor_ego::InfillStrategy::WB2,
+            InfillStrategy::WB2S => egor_ego::InfillStrategy::WB2S,
             _ => panic!(
                 "InfillStrategy should be either EI ({}), WB2 ({}) or WB2S ({}), got {}",
                 InfillStrategy::EI,
@@ -397,10 +399,10 @@ impl Optimizer {
         };
 
         let qei_strategy = match self.par_infill_strategy.0 {
-            ParInfillStrategy::KB => ego::QEiStrategy::KrigingBeliever,
-            ParInfillStrategy::KBLB => ego::QEiStrategy::KrigingBelieverLowerBound,
-            ParInfillStrategy::KBUB => ego::QEiStrategy::KrigingBelieverUpperBound,
-            ParInfillStrategy::CLMIN => ego::QEiStrategy::ConstantLiarMinimum,
+            ParInfillStrategy::KB => egor_ego::QEiStrategy::KrigingBeliever,
+            ParInfillStrategy::KBLB => egor_ego::QEiStrategy::KrigingBelieverLowerBound,
+            ParInfillStrategy::KBUB => egor_ego::QEiStrategy::KrigingBelieverUpperBound,
+            ParInfillStrategy::CLMIN => egor_ego::QEiStrategy::ConstantLiarMinimum,
             _ => panic!(
                 "ParInfillStrategy should be either KB ({}), KBLB ({}), KBUB ({}) or CLMIN ({}), got {}",
                 ParInfillStrategy::KB,
@@ -412,8 +414,8 @@ impl Optimizer {
         };
 
         let infill_optimizer = match self.infill_optimizer.0 {
-            InfillOptimizer::COBYLA => ego::InfillOptimizer::Cobyla,
-            InfillOptimizer::SLSQP => ego::InfillOptimizer::Slsqp,
+            InfillOptimizer::COBYLA => egor_ego::InfillOptimizer::Cobyla,
+            InfillOptimizer::SLSQP => egor_ego::InfillOptimizer::Slsqp,
             _ => panic!(
                 "InfillOptimizer should be either COBYLA ({}) or SLSQP ({}), got {}",
                 InfillOptimizer::COBYLA,
@@ -428,7 +430,7 @@ impl Optimizer {
             Isaac64Rng::from_entropy()
         };
 
-        let expected = self.expected.map(|opt| ego::ApproxValue {
+        let expected = self.expected.map(|opt| egor_ego::ApproxValue {
             value: opt.val,
             tolerance: opt.tol,
         });
@@ -440,12 +442,12 @@ impl Optimizer {
             panic!("Error: xspecs argument cannot be empty")
         }
 
-        let xtypes: Vec<ego::Xtype> = xspecs
+        let xtypes: Vec<egor_ego::Xtype> = xspecs
             .iter()
             .map(|spec| match spec.vtype {
-                Vtype(Vtype::FLOAT) => ego::Xtype::Cont(spec.vlimits[0], spec.vlimits[1]),
+                Vtype(Vtype::FLOAT) => egor_ego::Xtype::Cont(spec.vlimits[0], spec.vlimits[1]),
                 Vtype(Vtype::INT) => {
-                    ego::Xtype::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
+                    egor_ego::Xtype::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
                 }
                 Vtype(i) => panic!(
                     "Bad variable type: should be either Vtype.FLOAT {} or Vtype.INT {}, got {}",
@@ -456,16 +458,18 @@ impl Optimizer {
             })
             .collect();
 
-        let moe_params = moe::MoeParams::default()
+        let moe_params = egor_moe::MoeParams::default()
             .set_nclusters(self.n_clusters.unwrap_or(1))
             .set_kpls_dim(self.kpls_dim)
-            .set_regression_spec(moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+            .set_regression_spec(
+                egor_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
+            )
             .set_correlation_spec(
-                moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+                egor_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             );
-        let moe_params = ego::MixintMoeParams::new(&xtypes, &moe_params);
-        let evaluator = ego::MixintEvaluator::new(&xtypes);
-        let mut mixintegor = ego::MixintEgor::new_with_rng(obj, &moe_params, &evaluator, rng);
+        let moe_params = egor_ego::MixintMoeParams::new(&xtypes, &moe_params);
+        let evaluator = egor_ego::MixintEvaluator::new(&xtypes);
+        let mut mixintegor = egor_ego::MixintEgor::new_with_rng(obj, &moe_params, &evaluator, rng);
         mixintegor
             .egor
             .n_cstr(self.n_cstr)
@@ -474,8 +478,10 @@ impl Optimizer {
             .n_doe(self.n_doe)
             .cstr_tol(self.cstr_tol)
             .doe(doe)
-            .regression_spec(moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-            .correlation_spec(moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap())
+            .regression_spec(egor_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+            .correlation_spec(
+                egor_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+            )
             .infill_strategy(infill_strategy)
             .n_parallel(self.n_parallel)
             .qei_strategy(qei_strategy)
@@ -496,7 +502,7 @@ impl Optimizer {
 }
 
 #[pymodule]
-fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
+fn egor(_py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
 
     m.add_function(wrap_pyfunction!(to_specs, m)?)?;

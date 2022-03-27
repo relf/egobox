@@ -1,0 +1,37 @@
+[package]
+name = "egor-ego"
+version = "0.1.0"
+authors = ["relf <remi.lafage@onera.fr>"]
+edition = "2018"
+
+[dependencies]
+egor-doe = { path="../egor-doe" }
+egor-gp = { path="../egor-gp" }
+egor-moe = { path="../egor-moe" }
+
+linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
+linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
+
+ndarray = { version = "0.15", features = ["rayon", "approx", "blas"]}
+ndarray-linalg = "0.14"
+ndarray-stats = "0.5"
+ndarray-rand = "0.14"
+ndarray-npy = "0.8"
+
+nlopt = "0.5.3"
+rand_isaac = "0.3"
+libm = "0.2"
+finitediff = { version="0.1", features = ["ndarray"] }
+# sort-axis
+rawpointer = { version = "0.2" }
+log = "0.4"
+env_logger = "0.9"
+thiserror = "1"
+
+[dev-dependencies]
+linfa-datasets = { git="https://github.com/relf/linfa.git", features = ["linnerud"] }
+criterion = "0.3"
+serde_json = "1"
+approx = "0.4"
+argmin_testfunctions = "0.1"
+serial_test = "*"

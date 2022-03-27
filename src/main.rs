@@ -1,7 +1,7 @@
-use doe::{Lhs, SamplingMethod};
-use gp::correlation_models::*;
-use gp::mean_models::*;
-use gp::GaussianProcess;
+use egor_doe::{Lhs, SamplingMethod};
+use egor_gp::correlation_models::*;
+use egor_gp::mean_models::*;
+use egor_gp::GaussianProcess;
 use linfa::prelude::{Dataset, Fit};
 use ndarray::{array, Array1, Array2, Zip};
 use ndarray_npy::{read_npy, write_npy};

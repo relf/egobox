@@ -3,7 +3,7 @@ build-backend = "maturin"
 requires = ["poetry_core>=1.0.0"]
 
 [tool.poetry]
-name = "egobox"
+name = "egor"
 version = "0.1.0"
 description = "Egor optimiser"
 authors = ["relf <remi.lafage@onera.fr>"]

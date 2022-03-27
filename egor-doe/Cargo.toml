@@ -1,0 +1,22 @@
+[package]
+name = "egor-doe"
+version = "0.1.0"
+authors = ["relf <remi.lafage@onera.fr>"]
+edition = "2018"
+
+[dependencies]
+linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
+ndarray = { version = "0.15", features = ["rayon", "approx"]}
+ndarray-stats = "0.5"
+ndarray-rand = "0.14"
+rand_isaac = "0.3"
+num-traits = "0.2"
+
+[dev-dependencies]
+criterion = "0.3"
+serde_json = "1"
+approx = "0.4"
+
+[[bench]]
+name = "lhs" 
+harness = false
