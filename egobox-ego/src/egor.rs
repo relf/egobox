@@ -26,33 +26,61 @@ pub struct ApproxValue {
     pub tolerance: f64,
 }
 
+/// An interface for "function under optimization" evaluation
 pub trait Evaluator {
     fn eval(&self, x: &Array2<f64>) -> Array2<f64>;
 }
 
+/// EGO optimization parameterization
 #[derive(Clone)]
 pub struct Egor<'a, O: GroupFunc, R: Rng> {
+    /// Number of function evaluations allocated to find the optimum
+    /// Note: if the initial doe has to be evaluated, doe size should be substract.  
     pub n_eval: usize,
+    /// Number of starts for multistart approach used for hyperparameters optimization
     pub n_start: usize,
+    /// Number of parallel points evaluated for each "function evaluation"
     pub n_parallel: usize,
+    /// Number of initial doe drawn using Latin hypercube sampling
     pub n_doe: usize,
+    /// Number of Constraints
+    /// Note: dim function ouput = 1 objective + n_cstr constraints
     pub n_cstr: usize,
+    /// Constraints violation tolerance meaning cstr < cstr_tol is considered valid
     pub cstr_tol: f64,
+    /// Initial doe can be either [x] inputs only or [x, y]
+    /// Note: x dimension is determined using xlimits
     pub doe: Option<Array2<f64>>,
+    /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
     pub xlimits: Array2<f64>,
+    /// Parallel strategy used to define several points (n_parallel) evaluations at each iteration
     pub q_ei: QEiStrategy,
+    /// Criterium to select next point to evaluate
     pub infill: InfillStrategy,
+    /// The optimizer used to optimize infill criterium
     pub infill_optimizer: InfillOptimizer,
+    /// Regression specification for GP models used by mixture of experts (see [egobox_moe])
     pub regression_spec: RegressionSpec,
+    /// Correlation specification for GP models used by mixture of experts (see [egobox_moe])
     pub correlation_spec: CorrelationSpec,
+    /// Optional dimension reduction (see [egobox_moe])
     pub kpls_dim: Option<usize>,
+    /// Number of clusters used by mixture of experts (see [egobox_moe])
     pub n_clusters: Option<usize>,
+    /// Specification of an expected solution which is used to stop the algorithm once reached
     pub expected: Option<ApproxValue>,
+    /// Directory to save intermediate results: inital doe + evalutions at each iteration
     pub outdir: Option<String>,
+    /// If true use <outdir> to retrieve and start from previous results
     pub hot_start: bool,
+    /// MoE parameters (see [egobox_moe])
+    /// Note: if specified takes precedence over individual settings
     pub moe_params: Option<&'a dyn MoeFit>,
+    /// An evaluator used to run the function under optimization
     pub evaluator: Option<&'a dyn Evaluator>,
+    /// The function under optimization f(x) = [objective, cstr1, ..., cstrn], (n_cstr+1 size)
     pub obj: O,
+    /// A random generator used to get reproductible results
     pub rng: R,
 }
 
@@ -216,6 +244,10 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         }
     }
 
+    /// Given an evaluated doe (x, y) data, return the next promising x point
+    /// where optimum may occurs regarding the infill criterium.
+    /// This function inverse the control of the optimization and can used
+    /// ask-and-tell interface to the EGO optmizer.
     pub fn suggest(&self, x_data: &Array2<f64>, y_data: &Array2<f64>) -> Array2<f64> {
         let rng = self.rng.clone();
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
@@ -223,6 +255,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         x_dat
     }
 
+    /// Minimize using EGO algorithm
     pub fn minimize(&self) -> Result<OptimResult<f64>> {
         let rng = self.rng.clone();
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);

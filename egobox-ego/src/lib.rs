@@ -9,7 +9,7 @@
 //! * specify the initial doe,
 //! * parameterize internal optimization,
 //! * parameterize mixture of experts,
-//! * save intermediate result allowing hot restart,
+//! * save intermediate results and allow hot restart,
 //!
 //! Examples:
 //!
@@ -70,8 +70,8 @@
 //!
 //! let xlimits = array![[0., 3.], [0., 4.]];
 //! let doe = Lhs::new(&xlimits)
-//!        .with_rng(Isaac64Rng::seed_from_u64(42))
-//!        .sample(10);
+//!            .with_rng(Isaac64Rng::seed_from_u64(42))
+//!            .sample(10);
 //! let res = Egor::new(f_g24, &xlimits)
 //!            .with_rng(Isaac64Rng::seed_from_u64(42))
 //!            .n_cstr(2)
@@ -89,10 +89,15 @@
 //! ```
 //!
 //! The implementation relies on [Mixture of Experts](egobox_moe).
+//! While [crate::Egor] optimizer works with continuous data (i.e floats), the class [crate::MixintEgor]
+//! allows to make mixed-integer optimization by decorating `Egor` class.    
 //!
-//! Reference: Bartoli, Nathalie, et al.[Improvement of efficient global optimization with application to
+//! References:
+//!
+//! * Bartoli, Nathalie, et al.[Improvement of efficient global optimization with application to
 //! aircraft wing design](https://www.researchgate.net/publication/303902935_Improvement_of_efficient_global_optimization_with_application_to_aircraft_wing_design)
 //! 7th AIAA/ISSMO Multidisciplinary analysis and optimization conference. 2016.
+//!
 //!
 mod egor;
 mod errors;
