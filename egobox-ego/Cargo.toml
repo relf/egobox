@@ -1,18 +1,13 @@
 [package]
-name = "egobox"
-version = "0.2.0"
+name = "egobox-ego"
+version = "0.1.0"
 authors = ["relf <remi.lafage@onera.fr>"]
 edition = "2018"
 
-[lib]
-name = "egobox"
-crate-type = ["cdylib"]
-
 [dependencies]
-egobox-doe = { path="egobox-doe" }
-egobox-gp = { path="egobox-gp" }
-egobox-moe = { path="egobox-moe" }
-egobox-ego = { path="egobox-ego" }
+egobox-doe = { path="../egobox-doe" }
+egobox-gp = { path="../egobox-gp" }
+egobox-moe = { path="../egobox-moe" }
 
 linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
 linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
@@ -22,17 +17,16 @@ ndarray-linalg = "0.14"
 ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
-numpy = "0.15.0"
-anyhow = "=1.0.48"
 
 nlopt = "0.5.3"
 rand_isaac = "0.3"
 libm = "0.2"
 finitediff = { version="0.1", features = ["ndarray"] }
-env_logger = "0.9"
+# sort-axis
+rawpointer = { version = "0.2" }
 log = "0.4"
-pyo3 = { version = "0.15.1", features = ["extension-module"] }
-pyo3-log = "0.5.0"
+env_logger = "0.9"
+thiserror = "1"
 
 [dev-dependencies]
 linfa-datasets = { git="https://github.com/relf/linfa.git", features = ["linnerud"] }
@@ -40,14 +34,4 @@ criterion = "0.3"
 serde_json = "1"
 approx = "0.4"
 argmin_testfunctions = "0.1"
-
-[workspace]
-members = [
-  "egobox-doe", 
-  "egobox-gp",
-  "egobox-moe",
-  "egobox-ego"
-]
-
-[package.metadata.maturin]
-python-source = "python"
+serial_test = "*"

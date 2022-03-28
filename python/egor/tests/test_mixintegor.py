@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-import egor
+import egobox as egx
 import time
 import logging
 
@@ -14,12 +14,12 @@ def xsinx(x: np.ndarray) -> np.ndarray:
     return y
 
 
-class TestMixintEgor(unittest.TestCase):
+class TestMixintEgx(unittest.TestCase):
     def test_xsinx(self):
-        xtypes = [egor.Vspec(egor.Vtype(egor.Vtype.INT), [0.0, 25.0])]
+        xtypes = [egx.Vspec(egx.Vtype(egx.Vtype.INT), [0.0, 25.0])]
 
-        egopt = egor.Optimizer(xsinx, xtypes, seed=42, n_doe=5)
-        res = egopt.minimize(n_eval=10)
+        egor = egx.Optimizer(xsinx, xtypes, seed=42, n_doe=5)
+        res = egor.minimize(n_eval=10)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=5e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-1)

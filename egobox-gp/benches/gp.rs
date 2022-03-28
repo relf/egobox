@@ -1,35 +1,30 @@
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_gp::correlation_models::*;
-use egobox_gp::mean_models::*;
+use egobox_gp::correlation_models::SquaredExponentialCorr;
+use egobox_gp::mean_models::ConstantMean;
 use egobox_gp::GaussianProcess;
 use linfa::prelude::{Dataset, Fit};
-use ndarray::{array, Array1, Array2, Zip};
+use ndarray::{array, Array1, Zip};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
 use rand_isaac::Isaac64Rng;
-use std::time::Instant;
 
-fn main() {
-    // use ndarray_npy::write_npy;
-
+fn criterion_gp(c: &mut Criterion) {
     let dims = vec![5, 10, 20, 60];
     let nts = vec![100, 300, 400, 800];
 
-    // for i in 3..dims.len() {
-    // for i in 0..dims.len() {
-    for i in 3..4 {
+    let mut group = c.benchmark_group("gp");
+    for i in 0..2 {
         let dim = dims[i];
         let nt = nts[i];
-
-        let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
         let griewak = |x: &Array1<f64>| -> f64 {
+            let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
             x.mapv(|v| v * v).sum() / 4000. - (x / &d).mapv(|v| v.cos()).fold(1., |acc, x| acc * x)
                 + 1.0
         };
         let prefix = "gp";
         let xfilename = format!("{}_xt_{}x{}.npy", prefix, nt, dim);
         let yfilename = format!("{}_yt_{}x{}.npy", prefix, nt, 1);
-
         let xt = match read_npy(&xfilename) {
             Ok(xt) => xt,
             Err(_) => {
@@ -41,7 +36,6 @@ fn main() {
                 xt
             }
         };
-
         let yt = match read_npy(&yfilename) {
             Ok(yt) => yt,
             Err(_) => {
@@ -54,19 +48,24 @@ fn main() {
                 yt
             }
         };
-        let start2 = Instant::now();
-        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
-            ConstantMean::default(),
-            SquaredExponentialCorr::default(),
-        )
-        //.with_kpls_dim(1)
-        //.with_initial_theta(1.0)
-        .fit(&Dataset::new(xt, yt))
-        .expect("GP fit error");
-        println!("Time fitting is: {:?}", start2.elapsed());
 
-        let xtest = Array2::zeros((1, dim));
-        let ytest = gp.predict_values(&xtest).expect("prediction error");
-        println!("ytest = {}", ytest);
+        group.bench_function(format!("gp {}", dims[i]), |b| {
+            b.iter(|| {
+                black_box(
+                    GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+                        ConstantMean::default(),
+                        SquaredExponentialCorr::default(),
+                    )
+                    //.with_kpls_dim(1)
+                    //.with_initial_theta(1.0)
+                    .fit(&Dataset::new(xt.to_owned(), yt.to_owned()))
+                    .expect("GP fit error"),
+                )
+            });
+        });
     }
+    group.finish();
 }
+
+criterion_group!(benches, criterion_gp);
+criterion_main!(benches);
