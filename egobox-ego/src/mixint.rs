@@ -1,3 +1,6 @@
+//! This library implements continuous relaxation functions,
+//! it is a port of [SMT mixed integer module](https://smt.readthedocs.io/en/latest/_src_docs/applications/mixed_integer.html)
+
 #![allow(dead_code)]
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{Moe, MoeFit, MoeParams, MoePredict, RegressionSpec, Result};
@@ -6,11 +9,17 @@ use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;
 
+/// An enumeration to define the type of an input variable component
+/// with its domain definition
 #[derive(Debug, Clone)]
 pub enum Xtype {
+    /// Continuous variable in [lower bound, upper bound]
     Cont(f64, f64),
+    /// Integer variable in lower bound .. upper bound
     Int(i32, i32),
+    /// An Ordered variable in { int_1, int_2, ... int_n }
     Ord(Vec<i32>),
+    /// An Enum variable in { str_1, str_2, ..., str_n }
     Enum(Vec<String>),
 }
 
@@ -53,6 +62,7 @@ pub fn fold_with_enum_index(xtypes: &[Xtype], x: &Array2<f64>) -> Array2<f64> {
     xfold
 }
 
+/// Compute dimension when all variables are continuously relaxed
 fn compute_unfolded_dimension(xtypes: &[Xtype]) -> usize {
     xtypes
         .iter()
@@ -155,6 +165,7 @@ pub fn cast_to_enum_value(xtypes: &[Xtype], i: usize, enum_i: usize) -> Option<S
     None
 }
 
+// TODO
 // pub fn cast_to_mixint(xtypes: &[Xtype], x: &Vec<Vec<Xval>>) -> Array2<f64> {
 //     let mut res = Array::zeros((xtypes.len(), x[1].len()));
 //     res.outer_iter().for_each(|mut row| {
@@ -163,7 +174,6 @@ pub fn cast_to_enum_value(xtypes: &[Xtype], i: usize, enum_i: usize) -> Option<S
 //             .for_each(|val, &xtype| match xtype {
 //                 Cont(_, _) => (),
 //                 Int(_, _) => *val = v,
-
 //             });
 //     });
 //     res

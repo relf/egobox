@@ -6,8 +6,13 @@ use ndarray::{Array2, Axis};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
+/// The MixintEgor structure wraps the [Egor] structure to implement
+/// continuous relaxation allowing to manage function optimization which
+/// takes discrete input variables.  
 pub struct MixintEgor<'a, O: GroupFunc, R: Rng + Clone> {
+    // Specifications of the x input variables being either coninuous (float) or discrete (integer)
     xtypes: Vec<Xtype>,
+    // The EGO algorithm
     pub egor: Egor<'a, O, R>,
 }
 
@@ -39,6 +44,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
         }
     }
 
+    /// Minimize with regard to discrete input variables as specified using [Xtype]
     pub fn minimize(&self) -> Result<OptimResult<f64>> {
         let res = self.egor.minimize();
         res.map(|opt| -> OptimResult<f64> {
@@ -53,6 +59,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
     }
 }
 
+/// An evaluator for the function under optimization taking into account
+/// discrete input variables specification.
 pub struct MixintEvaluator {
     xtypes: Vec<Xtype>,
 }

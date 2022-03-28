@@ -26,6 +26,13 @@ pub struct ApproxValue {
     pub tolerance: f64,
 }
 
+/// Data used by internal infill criteria to be optimized using NlOpt
+pub struct ObjData<F> {
+    pub scale_obj: F,
+    pub scale_cstr: Array1<F>,
+    pub scale_wb2: F,
+}
+
 /// An interface for "function under optimization" evaluation
 pub trait Evaluator {
     fn eval(&self, x: &Array2<f64>) -> Array2<f64>;
