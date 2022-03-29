@@ -24,3 +24,7 @@ python/egobox/egobox.pyd
 input.txt
 output.txt
 mopta08*
+
+# JOSS
+joss/paper.jats
+joss/paper.pdf
