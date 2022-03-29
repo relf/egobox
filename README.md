@@ -22,10 +22,9 @@ I started this library as a way to learn Rust and see if it can be used to imple
 
 This library relies also on the [linfa project](https://github.com/rust-ml/linfa) which aims at being the "scikit-learn project for Rust". Along the way I could contribute to linfa by porting gaussian mixture model (`linfa-clustering/gmm`) and partial least square family methods (`linfa-pls`) confirming the fact that Python algorithms translation in Rust could be pretty straightforward.
 
-While I did not benchmark exactly my Rust code against SMT Python one, from my debugging sessions I notice I do not get a great speed up. The point is that actually I do not compare Rust vs Python but vs Python/C/Fortran. Algorithms in `doe` and `gp` relies widely on linear algebra and killer libraries numpy/scipy which are strongly optimized.
+While I did not benchmark my Rust code against SMT Python one, from my debugging sessions I notice I do not get a great speed up. The point is that actually I do not compare Rust vs Python but vs Python/C/Fortran. Algorithms in `doe` and `gp` relies widely on linear algebra and killer libraries numpy/scipy which are strongly optimized.
 
 My guess here was that interest for this code could come from Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (moe) and on top bayesian optimization EGO algorithm which gives its name to the library[^2].
-
 
 ## Cite
 
