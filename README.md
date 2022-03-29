@@ -24,7 +24,7 @@ This library relies also on the [linfa project](https://github.com/rust-ml/linfa
 
 While I did not benchmark exactly my Rust code against SMT Python one, from my debugging sessions I notice I do not get a great speed up. The point is that actually I do not compare Rust vs Python but vs Python/C/Fortran. Algorithms in `doe` and `gp` relies widely on linear algebra and killer libraries numpy/scipy which are strongly optimized.
 
-My guess here was that interest for this code could come from Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (moe) and on top bayesian optimization EGO algorithm which gives its name to the library[^2][^3].
+My guess here was that interest for this code could come from Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (moe) and on top bayesian optimization EGO algorithm which gives its name to the library[^2].
 
 
 ## Cite
@@ -42,6 +42,4 @@ If you happen to find this Rust library useful for your research, you can cite t
 
 [^1]: M. A. Bouhlel and J. T. Hwang and N. Bartoli and R. Lafage and J. Morlier and J. R. R. A. Martins. A Python surrogate modeling framework with derivatives. Advances in Engineering Software, 2019.
 
-[^2]: Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive black-box functions. Journal of Global optimization, 13(4), 455-492.
-
-[^3]: Priem, R., Bartoli, N., Diouane, Y., Lefebvre, T., Dubreuil, S., Salaün, M., & Morlier, J. (2018, September). SEGOMOE: Super Efficient Global Optimization with Mixture of Experts. In Workshop CIMI Optimization & Learning.
+[^2]: Bartoli, Nathalie, et al. "Adaptive modeling strategy for constrained global optimization with application to aerodynamic wing design." Aerospace Science and technology 90 (2019): 85-102.
