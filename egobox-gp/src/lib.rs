@@ -38,7 +38,9 @@
 //! Partial Least Squares method upon Kriging method also known as KPLS algorithm
 //! * GP models can be saved and loaded using [serde](https://serde.rs/).
 //!
-//! Reference: Bouhlel, Mohamed Amine, et al. [Improving kriging surrogates of high-dimensional design
+//! Reference:
+//!
+//! * Bouhlel, Mohamed Amine, et al. [Improving kriging surrogates of high-dimensional design
 //! models by Partial Least Squares dimension reduction](https://hal.archives-ouvertes.fr/hal-01232938/document)
 //! Structural and Multidisciplinary Optimization 53.5 (2016): 935-952.
 //!

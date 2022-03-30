@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 /*!
 This library implements some Design of Experiments (DoE) methods a.k.a. sampling methods,
 specially the [Latin Hypercube sampling](https://en.wikipedia.org/wiki/Latin_hypercube_sampling)

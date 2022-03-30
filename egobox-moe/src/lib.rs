@@ -9,7 +9,9 @@
 //! using Egor GP models as experts.
 //! It leverages on the Egor GP KPLS features to handle high dimensional problems.
 //!
-//! Reference: Bettebghor, Dimitri, et al. [Surrogate modeling approximation using a mixture of
+//! Reference:
+//!
+//! * Bettebghor, Dimitri, et al. [Surrogate modeling approximation using a mixture of
 //! experts based on EM joint estimation](https://hal.archives-ouvertes.fr/hal-01852300/document)
 //! Structural and multidisciplinary optimization 43.2 (2011): 243-259.
 //!

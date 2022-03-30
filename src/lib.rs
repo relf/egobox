@@ -1,3 +1,8 @@
+#![warn(missing_docs)]
+//! `egobox` Rust optimizer binding for Python.
+//!
+//!
+
 use egobox_doe::SamplingMethod;
 use ndarray::{Array2, ArrayView2};
 use ndarray_rand::rand::SeedableRng;
@@ -6,6 +11,14 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rand_isaac::Isaac64Rng;
 
+/// Utility function converting `xlimits` float data list specifying bounds of x components
+/// to x specified as a list of Vtype.Float types [egobox.Vtype]
+///
+/// ### Parameters
+///     xlimits : nx-size list of [lower_bound, upper_bound] where `nx` is the dimension of x
+///
+/// ### Returns
+///     xtypes: nx-size list of Vspec(Vtype(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
 #[pyfunction]
 fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject> {
     if xlimits.is_empty() || xlimits[0].is_empty() {
