@@ -1,22 +1,22 @@
-# Egobox
+# egobox
 
 [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
 
-Toolbox for Efficient Global Optimization algorithms written in Rust inspired from [SMT](https://github.com/SMTorg/smt). This library provides the port of the following algorithms:
-* DOE sampling methods: LHS, FullFactorial, Randomized
-* GP regression: Kriging and KPLS surrogates
-* MOE: Mixture of experts using kriging models
-* EGO: Efficient Global Optimization 
+Toolbox for Efficient Global Optimization algorithms written in Rust inspired from [SMT](https://github.com/SMTorg/smt). This library provides a port of the following algorithms:
+* `doe`, sampling methods: LHS, FullFactorial, Random
+* `gp`, gaussian process regression: Kriging and KPLS surrogates
+* `moe`, mixture of experts using kriging models
+* `ego`, efficient global optimization with basic constraints and mixed integer handling 
 
-Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka Egor) is binded in Python. You can install the Python package using:
+Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka egor) is binded in Python. You can install the Python package using:
 
 ```bash
 pip install egobox
 ```
 
-See the [tutorial notebook](doc/TutorialEgor.ipynb).
+See the [tutorial notebook](doc/TutorialEgor.ipynb) for usage.
 
-## Why Egobox?
+## Why egobox?
 
 I started this library as a way to learn Rust and see if it can be used to implement algorithms like those in the SMT toolbox[^1]. As the first components (doe, gp) emerged, it appeears I could translate Python code almost line by line in Rust (well... after great deal of borrow-checker fight!) and thanks to [Rust ndarray library ecosystem](https://github.com/rust-ndarray). 
 
