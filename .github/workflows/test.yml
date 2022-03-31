@@ -8,29 +8,44 @@ env:
 jobs:
 
   test:
-    name: testing
-    runs-on: ubuntu-latest
+    name: testing-${{ matrix.toolchain }}-${{ matrix.platform.os }}
+    runs-on: ${{ matrix.platform.os }}
     strategy:
       matrix:
         toolchain:
+          - 1.54.0
           - stable
-        platform: [
-          { os: "ubuntu-latest", python-architecture: "x64", rust-target: "x86_64-unknown-linux-gnu" },
-          { os: "windows-latest", python-architecture: "x64", rust-target: "x86_64-pc-windows-msvc" },
+        platform: [{ os: "ubuntu-18.04", 
+            rust-target: "x86_64-unknown-linux-gnu",
+            rust-flags: "-C link-arg=-llapacke -C link-arg=-lcblas"},
+          { os: "windows-2019", 
+            rust-target: "x86_64-pc-windows-msvc",
+            rust-flags: ""},
         ]
+      fail-fast: false
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
-
-      - name: Install ubuntu packages
-        run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
-          override: true
+          target: ${{ matrix.platform.rust-target }}
+
+      - run: rustup set default-host ${{ matrix.platform.rust-target }}
+
+      - name: Install Blas/Lapack on Ubuntu
+        if: ${{ matrix.platform.os == 'ubuntu-18.04' }} 
+        run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
+
+      - name: Install LLVM and Clang on Windows
+        if: ${{ matrix.platform.os == 'windows-2019' }} 
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "11.0"
+          directory: ${{ runner.temp }}/llvm
 
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
@@ -38,4 +53,4 @@ jobs:
           command: test
           args: --all --release
         env:
-          RUSTFLAGS: -C link-arg=-llapacke -C link-arg=-lcblas
+          RUSTFLAGS: ${{ matrix.platform.rust-flags }}
