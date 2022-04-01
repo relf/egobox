@@ -837,14 +837,14 @@ mod tests {
             .n_eval(30)
             .expect(Some(ApproxValue {
                 value: 0.0,
-                tolerance: 1e-1,
+                tolerance: 1e-2,
             }))
             .minimize()
             .expect("Minimize failure");
         println!("Rosenbrock optim result = {:?}", res);
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-1);
     }
 
     // Objective
