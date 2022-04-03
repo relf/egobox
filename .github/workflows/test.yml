@@ -33,6 +33,13 @@ jobs:
       - name: Log active toolchain
         run: rustup show
 
+      # Rust flags settings required on Unix (!) otherwise linking 
+      # ld error: cannot find -lirc -lintlc -lsvml -limf
+      # or install gfortran
+      - name: Install gfortran on Unix
+        if: ${{ matrix.os == 'ubuntu-18.04' }} 
+        run: sudo apt-get install gfortran 
+
       - name: Install LLVM and Clang on Windows
         if: ${{ matrix.os == 'windows-2019' }} 
         uses: KyleMayes/install-llvm-action@v1
@@ -47,4 +54,6 @@ jobs:
         with:
           command: test
           args: --all --release --features linfa/intel-mkl-static
+      #   env: 
+      #      RUSTFLAGS: ""
 
