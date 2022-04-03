@@ -34,7 +34,7 @@ jobs:
 
       - name: Install Blas/Lapack on Ubuntu
         if: ${{ matrix.os == 'ubuntu-18.04' }} 
-        run: sudo apt-get install libssl-dev gfortran liblapack-dev liblapacke-dev libatlas-base-dev
+        run: sudo apt-get install libopenblas-dev
 
       - name: Install LLVM and Clang on Windows
         if: ${{ matrix.os == 'windows-2019' }} 
