@@ -45,7 +45,7 @@ jobs:
 
       - name: Set RUSTFLAGS on Unix
         if: ${{ matrix.os == 'ubuntu-18.04' }} 
-        run: echo "RUSTFLAGS='-C link-arg=-llapacke -C link-arg=-lcblas'" >> $GITHUB_ENV
+        run: echo "RUSTFLAGS=\"-C link-arg=-llapacke -C link-arg=-lcblas\"" >> $GITHUB_ENV
 
       - name: Run cargo test in release mode on Unix
         uses: actions-rs/cargo@v1
