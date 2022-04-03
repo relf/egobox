@@ -40,11 +40,17 @@ jobs:
           version: "11.0"
           directory: ${{ runner.temp }}/llvm
 
+      - name: echo RUSTFLAGS
+        if: ${{ matrix.os == 'ubuntu-18.04' }} 
+        run: echo $RUSTFLAGS
+
+      # Rust flags settings required on Unix (!) otherwise linking 
+      # ld error: cannot find -lirc -lintlc -lsvml -limf
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --all --release --features linfa/intel-mkl-static
         env:
-          RUSTFLAGS: ""
+          RUSTFLAGS: ""  
 
