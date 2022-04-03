@@ -14,9 +14,11 @@ jobs:
       fail-fast: false
       matrix:
         toolchain:
+          - 1.54.0
           - stable
         os: 
-          - ubuntu-18.04 
+          - ubuntu-18.04
+          - windows-2019
 
     steps:
       - name: Checkout sources
@@ -34,7 +36,7 @@ jobs:
 
       - name: Install Blas/Lapack on Unix
         if: ${{ matrix.os == 'ubuntu-18.04' }} 
-        run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
+        run: sudo apt-get install gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
 
       - name: Install LLVM and Clang on Windows
         if: ${{ matrix.os == 'windows-2019' }} 
@@ -47,7 +49,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-18.04' }} 
         run: echo "RUSTFLAGS=-C link-arg=-llapacke -C link-arg=-lcblas" >> $GITHUB_ENV
 
-      - name: Run cargo test in release mode on Unix
+      - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
         with:
           command: test
