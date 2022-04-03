@@ -53,7 +53,7 @@ jobs:
       - name: Test Python
         run: |
             poetry install
-            poetry run maturin develop --release --cargo-extra-args="--features intel-mkl-static"
+            poetry run maturin develop --release --cargo-extra-args="--features linfa/intel-mkl-static"
             poetry run pytest
         shell: bash
 
