@@ -787,7 +787,7 @@ mod tests {
     #[serial]
     fn test_xsinx_wb2() {
         let res = Egor::new(xsinx, &array![[0.0, 25.0]])
-            .n_eval(10)
+            .n_eval(20)
             .minimize()
             .expect("Minimize failure");
         let expected = array![18.9];
