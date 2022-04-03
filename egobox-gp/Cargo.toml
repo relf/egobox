@@ -4,10 +4,13 @@ version = "0.1.0"
 authors = ["relf <remi.lafage@onera.fr>"]
 edition = "2018"
 
+[features]
+default = []
+
 [dependencies]
 egobox-doe = { path="../egobox-doe" }
 
-linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
+linfa = { git="https://github.com/relf/linfa.git", default-features = false }
 linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx", "serde"]}

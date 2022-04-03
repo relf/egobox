@@ -8,13 +8,27 @@ edition = "2018"
 name = "egobox"
 crate-type = ["cdylib"]
 
+[features]
+default = []
+
+netlib-static = ["linfa/netlib-static"]
+netlib-system = ["linfa/netlib-system"]
+
+openblas-static = ["linfa/openblas-static"]
+openblas-system = ["linfa/openblas-system"]
+
+intel-mkl-static = ["linfa/intel-mkl-static"]
+intel-mkl-system = ["linfa/intel-mkl-system"]
+
+serde = ["linfa/serde"]
+
 [dependencies]
 egobox-doe = { path="egobox-doe" }
 egobox-gp = { path="egobox-gp" }
 egobox-moe = { path="egobox-moe" }
 egobox-ego = { path="egobox-ego" }
 
-linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
+linfa = { git="https://github.com/relf/linfa.git", default-features = false }
 linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx", "blas"]}

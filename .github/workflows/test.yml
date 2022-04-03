@@ -8,21 +8,17 @@ env:
 jobs:
 
   test:
-    name: testing-${{ matrix.toolchain }}-${{ matrix.platform.os }}
-    runs-on: ${{ matrix.platform.os }}
+    name: testing-${{ matrix.toolchain }}-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         toolchain:
-          - 1.54.0
           - stable
-        platform: [{ os: "ubuntu-18.04", 
-            rust-target: "x86_64-unknown-linux-gnu",
-            rust-flags: "-C link-arg=-llapacke -C link-arg=-lcblas"},
-          { os: "windows-2019", 
-            rust-target: "x86_64-pc-windows-msvc",
-            rust-flags: ""},
-        ]
-      fail-fast: false
+        os: 
+          - ubuntu-18.04
+          - windows-2019
+
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -32,25 +28,25 @@ jobs:
         with:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
-          target: ${{ matrix.platform.rust-target }}
+          override: true
 
-      - run: rustup set default-host ${{ matrix.platform.rust-target }}
-
-      - name: Install Blas/Lapack on Ubuntu
-        if: ${{ matrix.platform.os == 'ubuntu-18.04' }} 
-        run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
+      - name: Log active toolchain
+        run: rustup show
 
       - name: Install LLVM and Clang on Windows
-        if: ${{ matrix.platform.os == 'windows-2019' }} 
+        if: ${{ matrix.os == 'windows-2019' }} 
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "11.0"
           directory: ${{ runner.temp }}/llvm
 
+      # Rust flags settings required on Unix (!) otherwise linking 
+      # ld error: cannot find -lirc -lintlc -lsvml -limf
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all --release
+          args: --all --release --features linfa/intel-mkl-static
         env:
-          RUSTFLAGS: ${{ matrix.platform.rust-flags }}
+          RUSTFLAGS: ""
+

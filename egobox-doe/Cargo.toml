@@ -4,8 +4,11 @@ version = "0.1.0"
 authors = ["relf <remi.lafage@onera.fr>"]
 edition = "2018"
 
+[features]
+default = []
+
 [dependencies]
-linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
+linfa = { git="https://github.com/relf/linfa.git", default-features = false }
 ndarray = { version = "0.15", features = ["rayon", "approx"]}
 ndarray-stats = "0.5"
 ndarray-rand = "0.14"

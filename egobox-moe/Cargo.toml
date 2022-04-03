@@ -8,7 +8,7 @@ edition = "2018"
 egobox-doe = { path = "../egobox-doe" }
 egobox-gp = { path = "../egobox-gp" }
 
-linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
+linfa = { git="https://github.com/relf/linfa.git", default-features = false }
 linfa-clustering = { git="https://github.com/relf/linfa.git", default-features = false }
 linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
 

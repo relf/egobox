@@ -8,18 +8,16 @@ env:
 jobs:
 
   pytest:
-    name: python${{ matrix.python-version }}-${{ matrix.platform.python-architecture }} ${{ matrix.platform.os }}
+    name: python${{ matrix.python-version }}-${{ matrix.platform.os }}
     runs-on: ${{ matrix.platform.os }}
     strategy:
       max-parallel: 16
       matrix:
         python-version: [3.7, 3.8, 3.9]
-        platform: [
-          { os: "ubuntu-latest", python-architecture: "x64", rust-target: "x86_64-unknown-linux-gnu", 
-            rust-flags: "-C link-arg=-llapacke -C link-arg=-lcblas" },
-          { os: "windows-latest", python-architecture: "x64", rust-target: "x86_64-pc-windows-msvc", 
-            rust-flags: "" },
-       ]
+        os: 
+          - ubuntu-latest
+          - windows-latest
+
     steps:
       - uses: actions/checkout@v2
 
@@ -34,11 +32,8 @@ jobs:
           toolchain: stable
           default: true
 
-      - run: rustup set default-host ${{ matrix.platform.rust-target }}
-
-      - name: Install Blas/Lapack on Ubuntu
-        if: ${{ matrix.platform.os == 'ubuntu-latest' }} 
-        run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
+      - name: Log active toolchain
+        run: rustup show
 
       - name: Install LLVM and Clang on Windows
         if: ${{ matrix.platform.os == 'windows-latest' }} 
@@ -49,8 +44,6 @@ jobs:
 
       - name: Build with default features
         run: cargo build --release
-        env:
-          RUSTFLAGS: ${{ matrix.platform.rust-flags }}
 
       - name: Install test dependencies
         run: |
@@ -60,11 +53,9 @@ jobs:
       - name: Test Python
         run: |
             poetry install
-            poetry run maturin develop --release
+            poetry run maturin develop --release --cargo-extra-args="--features linfa/intel-mkl-static"
             poetry run pytest
         shell: bash
-        env:
-          RUSTFLAGS: ${{ matrix.platform.rust-flags }} 
 
     env:
       RUST_BACKTRACE: 1
