@@ -9,7 +9,7 @@ egobox-doe = { path="../egobox-doe" }
 egobox-gp = { path="../egobox-gp" }
 egobox-moe = { path="../egobox-moe" }
 
-linfa = { git="https://github.com/relf/linfa.git", features = ["intel-mkl-static"] }
+linfa = { git="https://github.com/relf/linfa.git", default-features = false }
 linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx", "blas"]}

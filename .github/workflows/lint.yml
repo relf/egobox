@@ -18,9 +18,6 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install ubuntu packages
-        run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
-
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -40,6 +37,4 @@ jobs:
         with:
           command: clippy
           args: --all-targets -- -D warnings
-        env:
-          RUSTFLAGS: -C link-arg=-llapacke -C link-arg=-lcblas
 
