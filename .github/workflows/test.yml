@@ -32,6 +32,10 @@ jobs:
       - name: Log active toolchain
         run: rustup show
 
+      - name: Install Blas/Lapack on Ubuntu
+        if: ${{ matrix.os == 'ubuntu-18.04' }} 
+        run: sudo apt-get install libssl-dev gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
+
       - name: Install LLVM and Clang on Windows
         if: ${{ matrix.os == 'windows-2019' }} 
         uses: KyleMayes/install-llvm-action@v1
