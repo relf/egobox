@@ -43,7 +43,7 @@ jobs:
           version: "11.0"
           directory: ${{ runner.temp }}/llvm
 
-      - name: Set RUSTFLAGS 
+      - name: Set RUSTFLAGS on Unix
         if: ${{ matrix.os == 'ubuntu-18.04' }} 
         run: echo "RUSTFLAGS='-C link-arg=-llapacke -C link-arg=-lcblas'" >> $GITHUB_ENV
 
@@ -53,6 +53,6 @@ jobs:
           command: test
           args: --all --release --features linfa/intel-mkl-static
         env:
-          RUSTFLAGS: ${{ RUSTFLAGS }}
+          RUSTFLAGS: ${{ env.RUSTFLAGS }}
 
 
