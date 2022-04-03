@@ -45,5 +45,6 @@ jobs:
         with:
           command: test
           args: --all --release --features linfa/intel-mkl-static
-
+        env:
+          RUSTFLAGS: ""
 
