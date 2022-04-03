@@ -14,11 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         toolchain:
-          - 1.54.0
           - stable
         os: 
           - ubuntu-18.04
-          - windows-2019
 
     steps:
       - name: Checkout sources
@@ -36,7 +34,7 @@ jobs:
 
       - name: Install Blas/Lapack on Unix
         if: ${{ matrix.os == 'ubuntu-18.04' }} 
-        run: sudo apt-get install gfortran libopenblas-dev liblapack-dev liblapacke-dev libatlas-base-dev
+        run: sudo apt-get install gfortran 
 
       - name: Install LLVM and Clang on Windows
         if: ${{ matrix.os == 'windows-2019' }} 
