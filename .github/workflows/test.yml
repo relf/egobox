@@ -17,6 +17,7 @@ jobs:
           - stable
         os: 
           - ubuntu-18.04
+          - windows-2019
 
     steps:
       - name: Checkout sources
@@ -44,7 +45,5 @@ jobs:
         with:
           command: test
           args: --all --release --features linfa/intel-mkl-static
-        env:
-          RUSTFLAGS: ${{ env.RUSTFLAGS }}
 
 
