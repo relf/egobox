@@ -14,11 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         toolchain:
-          - 1.54.0
           - stable
         os: 
           - ubuntu-18.04 
-          - windows-2019 
 
     steps:
       - name: Checkout sources
@@ -46,3 +44,5 @@ jobs:
         with:
           command: test
           args: --all --release --features linfa/intel-mkl-static
+        env:
+          RUSTFLAGS: "-C link-arg=-llapacke -C link-arg=-lcblas"
