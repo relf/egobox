@@ -14,12 +14,24 @@ pub struct Random<F: Float, R: Rng + Clone> {
 }
 
 impl<F: Float> Random<F, Isaac64Rng> {
+    /// Constructor given a design space given a (nx, 2) matrix \[\[lower bound, upper bound\], ...\]
+    ///
+    /// ```
+    /// use egobox_doe::Random;
+    /// use ndarray::arr2;
+    ///
+    /// let doe = Random::new(&arr2(&[[0.0, 1.0], [5.0, 10.0]]));
+    /// ```
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
-        Self::new_with_rng(xlimits, Isaac64Rng::seed_from_u64(42))
+        Self::new_with_rng(xlimits, Isaac64Rng::from_entropy())
     }
 }
 
 impl<F: Float, R: Rng + Clone> Random<F, R> {
+    /// Constructor given a design space given a (nx, 2) matrix \[\[lower bound, upper bound\], ...\]
+    /// and a random generator for reproducibility
+    ///
+    /// **Panics** if xlimits number of columns is different from 2.
     pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>, rng: R) -> Self {
         if xlimits.ncols() != 2 {
             panic!("xlimits must have 2 columns (lower, upper)");
@@ -30,6 +42,7 @@ impl<F: Float, R: Rng + Clone> Random<F, R> {
         }
     }
 
+    /// Set random generator
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Random<F, R2> {
         Random {
             xlimits: self.xlimits,
@@ -70,7 +83,9 @@ mod tests {
             [5.2348966430803925, 0.5846614636962431],
             [8.02670850570956, 0.2310179777619814]
         ];
-        let actual = Random::new(&xlimits).sample(9);
+        let actual = Random::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .sample(9);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 }

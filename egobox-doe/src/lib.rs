@@ -1,4 +1,3 @@
-#![warn(missing_docs)]
 /*!
 This library implements some Design of Experiments (DoE) methods a.k.a. sampling methods,
 specially the [Latin Hypercube sampling](https://en.wikipedia.org/wiki/Latin_hypercube_sampling)
@@ -11,14 +10,19 @@ of each `nx` components of the samples `x`.
 
 Example:
 ```
-# use egobox_doe::{Lhs, LhsKind, SamplingMethod};
-# use ndarray::{arr2};
+use egobox_doe::{FullFactorial, Lhs, LhsKind, Random, SamplingMethod};
+use ndarray::{arr2};
+use ndarray_rand::rand::SeedableRng;
+use rand_isaac::Isaac64Rng;
 
 // Design space is defined as [5., 10.] x [0., 1.], samples are 2-dimensional.
 let xlimits = arr2(&[[5., 10.], [0., 1.]]);
 // We generate five samples using centered Latin Hypercube sampling.
 let samples = Lhs::new(&xlimits).kind(LhsKind::Centered).sample(5);
-// samples = array![[5.5, 0.7], [6.5, 0.5], [8.5, 0.9], [9.5, 0.3], [7.5, 0.1]];
+// or else with FullFactorial sampling
+let samples = FullFactorial::new(&xlimits).sample(5);
+// or else randomly with random generator for reproducibility
+let samples = Random::new(&xlimits).with_rng(Isaac64Rng::seed_from_u64(42)).sample(5);
 ```
 
 This library contains three kinds of sampling methods:

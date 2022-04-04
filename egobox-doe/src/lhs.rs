@@ -40,6 +40,14 @@ pub struct Lhs<F: Float, R: Rng + Clone> {
 
 /// LHS with default random generator
 impl<F: Float> Lhs<F, Isaac64Rng> {
+    /// Constructor given a design space given a (nx, 2) matrix \[\[lower bound, upper bound\], ...\]
+    ///
+    /// ```
+    /// use egobox_doe::Lhs;
+    /// use ndarray::arr2;
+    ///
+    /// let doe = Lhs::new(&arr2(&[[0.0, 1.0], [5.0, 10.0]]));
+    /// ```
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
         Self::new_with_rng(xlimits, Isaac64Rng::from_entropy())
     }

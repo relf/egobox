@@ -6,12 +6,20 @@ use ndarray_stats::QuantileExt;
 /// The FullFactorial design consists of all possible combinations
 /// of levels for all components within the design space.
 pub struct FullFactorial<F: Float> {
-    /// Design space definition as a (nx, 2) matrix
+    /// Design space definition as
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of a sample x
     xlimits: Array2<F>,
 }
 
 impl<F: Float> FullFactorial<F> {
+    /// Constructor given a design space given a (nx, 2) matrix \[\[lower bound, upper bound\], ...\]
+    ///
+    /// ```
+    /// use egobox_doe::FullFactorial;
+    /// use ndarray::arr2;
+    ///
+    /// let doe = FullFactorial::new(&arr2(&[[0.0, 1.0], [5.0, 10.0]]));
+    /// ```
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
         if xlimits.ncols() != 2 {
             panic!("xlimits must have 2 columns (lower, upper)");
