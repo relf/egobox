@@ -20,11 +20,11 @@ See the [tutorial notebook](doc/TutorialEgor.ipynb) for usage.
 
 I started this library as a way to learn Rust and see if it can be used to implement algorithms like those in the SMT toolbox[^1]. As the first components (doe, gp) emerged, it appeears I could translate Python code almost line by line in Rust (well... after great deal of borrow-checker fight!) and thanks to [Rust ndarray library ecosystem](https://github.com/rust-ndarray). 
 
-This library relies also on the [linfa project](https://github.com/rust-ml/linfa) which aims at being the "scikit-learn project for Rust". Along the way I could contribute to linfa by porting gaussian mixture model (`linfa-clustering/gmm`) and partial least square family methods (`linfa-pls`) confirming the fact that Python algorithms translation in Rust could be pretty straightforward.
+This library relies also on the [linfa project](https://github.com/rust-ml/linfa) which aims at being the "scikit-learn-like ML library for Rust". Along the way I could contribute to `linfa` by porting gaussian mixture model (`linfa-clustering/gmm`) and partial least square family methods (`linfa-pls`) confirming the fact that Python algorithms translation in Rust could be pretty straightforward.
 
-While I did not benchmark my Rust code against SMT Python one, from my debugging sessions I notice I do not get a great speed up. The point is that actually I do not compare Rust vs Python but vs Python/C/Fortran. Algorithms in `doe` and `gp` relies widely on linear algebra and killer libraries numpy/scipy which are strongly optimized.
+While I did not benchmark my Rust code against SMT Python one, from my debugging sessions, I noticed I did not get such a great speed up. Actually, algorithms like `doe` and `gp` relies extensively on linear algebra and Python famous libraries `numpy`/`scipy` which are strongly optimized by calling C or Fortran compiled code.
 
-My guess here was that interest for this code could come from Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (moe) and on top bayesian optimization EGO algorithm which gives its name to the library[^2].
+My guess at this point is that interest could come from other Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (moe) and on top bayesian optimization EGO algorithm which gives its name to the library[^2]. Aside from performances, such library benefits from Rust others selling points: reliability and productivity. 
 
 ## Cite
 
