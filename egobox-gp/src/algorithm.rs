@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 
+/// Internal parameters computed Gp during training
+/// used later on in prediction computations
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "F: Deserialize<'de>"))]
 pub struct GpInnerParams<F: Float> {
@@ -89,6 +91,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
 impl<F: Float + Serialize, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
     GaussianProcess<F, Mean, Corr>
 {
+    /// Gp parameters contructor
     pub fn params<NewMean: RegressionModel<F>, NewCorr: CorrelationModel<F>>(
         mean: NewMean,
         corr: NewCorr,
@@ -96,6 +99,8 @@ impl<F: Float + Serialize, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
         GpParams::new(mean, corr)
     }
 
+    /// Predict output values at the n given points specified as (n, ndim) matrix.
+    /// Returns output values as (n, 1) matrix.
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
         let corr = self._compute_correlation(x);
         // Compute the mean at x
@@ -106,6 +111,8 @@ impl<F: Float + Serialize, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
         Ok(&y_ * &self.ytrain.std + &self.ytrain.mean)
     }
 
+    /// Predict variance values at the n given points.
+    /// Returns variance values as (n, 1) matrix.
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
         let corr = self._compute_correlation(x);
         let inners = &self.inner_params;
@@ -158,6 +165,7 @@ impl<F: Float + Serialize, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 
+    /// Retrieve number of PLS components 1 <= n <= x dimension
     pub fn kpls_dim(&self) -> Option<usize> {
         if self.w_star.ncols() < self.xtrain.ncols() {
             Some(self.w_star.ncols())
@@ -172,6 +180,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 {
     type Object = GaussianProcess<F, Mean, Corr>;
 
+    /// Fit GP parameters using maximum likelihood
     fn fit(
         &self,
         dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
@@ -278,7 +287,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 }
 
 impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParams<F, Mean, Corr> {
-    pub fn load(
+    /// Constructor of valid params from values
+    pub fn from(
         mean: Mean,
         corr: Corr,
         theta: Array1<F>,
@@ -287,7 +297,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParam
         xtrain: NormalizedMatrix<F>,
         ytrain: NormalizedMatrix<F>,
     ) -> Result<GaussianProcess<F, Mean, Corr>> {
-        //T ODO: add some consistency checks
+        //TODO: add some consistency checks
         Ok(GaussianProcess {
             mean,
             corr,
@@ -300,7 +310,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParam
     }
 }
 
-pub fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
+fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
     F: Float,

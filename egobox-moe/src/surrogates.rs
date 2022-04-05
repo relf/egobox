@@ -7,28 +7,40 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 
+/// A trait for GP surrogate parameters.
 pub trait GpSurrogateParams {
+    /// Set initial theta
     fn initial_theta(&mut self, theta: Vec<f64>);
+    /// Set number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
+    /// Set the nugget parameter to improve numerical stability
     fn nugget(&mut self, nugget: f64);
+    /// Train the surrogate
     fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn GpSurrogate>>;
 }
 
+/// A trait for GP surrogate.
 pub trait GpSurrogate: std::fmt::Display + std::fmt::Debug {
+    /// Predict output values at n points given as (n, xdim) matrix.
     fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>>;
+    /// Predict variance values at n points given as (n, xdim) matrix.
     fn predict_variances(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>>;
+    /// Save GP model in given file.
     fn save(&self, path: &str) -> Result<()>;
 }
 
 macro_rules! declare_surrogate {
     ($regr:ident, $corr:ident) => {
         paste! {
+
+            /// GP Surrogate parameters with given mean and correlation models. See [egobox_doe::GpParams]
             #[derive(Clone)]
             pub struct [<Gp $regr $corr SurrogateParams>](
                 GpParams<f64, [<$regr Mean>], [<$corr Corr>]>,
             );
 
             impl [<Gp $regr $corr SurrogateParams>] {
+                /// Constructor
                 pub fn new(gp_params: GpParams<f64, [<$regr Mean>], [<$corr Corr>]>) -> [<Gp $regr $corr SurrogateParams>] {
                     [<Gp $regr $corr SurrogateParams>](gp_params)
                 }
@@ -58,6 +70,7 @@ macro_rules! declare_surrogate {
                 }
             }
 
+            /// GP surrogate with given mean and correlation models. See [egobox_doe::GaussianProcess]
             #[derive(Clone, Debug, Serialize, Deserialize)]
             pub struct [<Gp $regr $corr Surrogate>](
                 pub GaussianProcess<f64, [<$regr Mean>], [<$corr Corr>]>,
@@ -108,6 +121,7 @@ declare_surrogate!(Quadratic, AbsoluteExponential);
 declare_surrogate!(Quadratic, Matern32);
 declare_surrogate!(Quadratic, Matern52);
 
+/// Create a GP with given regression and correlation models.
 #[macro_export]
 macro_rules! make_gp_params {
     ($regr:ident, $corr:ident) => {
@@ -120,6 +134,7 @@ macro_rules! make_gp_params {
     };
 }
 
+/// Create GP surrogate parameters with given regression and correlation models.
 #[macro_export]
 macro_rules! make_surrogate_params {
     ($regr:ident, $corr:ident) => {
@@ -131,25 +146,27 @@ macro_rules! make_surrogate_params {
     };
 }
 
+/// Create GP surrogate
 #[macro_export]
 macro_rules! make_surrogate {
     ($regr:ident, $corr:ident, $data:ident) => {
         paste! {
             Box::new(
                 [<Gp $regr $corr Surrogate>](
-                GpValidParams::<f64, [<$regr Mean>], [<$corr Corr>]>::load(
-                [<$regr Mean>](), [<$corr Corr>](),
-                serde_json::from_value(serde_json::json!($data["theta"])).unwrap(),
-                serde_json::from_value(serde_json::json!($data["inner_params"])).unwrap(),
-                serde_json::from_value(serde_json::json!($data["w_star"])).unwrap(),
-                serde_json::from_value(serde_json::json!($data["xtrain"])).unwrap(),
-                serde_json::from_value(serde_json::json!($data["ytrain"])).unwrap()
-                )?
-            )) as Box<dyn GpSurrogate>
+                    GpValidParams::<f64, [<$regr Mean>], [<$corr Corr>]>::from(
+                        [<$regr Mean>](), [<$corr Corr>](),
+                        serde_json::from_value(serde_json::json!($data["theta"])).unwrap(),
+                        serde_json::from_value(serde_json::json!($data["inner_params"])).unwrap(),
+                        serde_json::from_value(serde_json::json!($data["w_star"])).unwrap(),
+                        serde_json::from_value(serde_json::json!($data["xtrain"])).unwrap(),
+                        serde_json::from_value(serde_json::json!($data["ytrain"])).unwrap()
+                    )?)
+                ) as Box<dyn GpSurrogate>
         }
     };
 }
 
+/// Load GP surrogate from given file.
 pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
     let data = fs::read_to_string(path)?;
     let data: serde_json::Value = serde_json::from_str(&data)?;

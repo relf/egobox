@@ -13,7 +13,7 @@ pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationMo
     corr: Corr,
     /// Optionally apply dimension reduction (KPLS) or not
     kpls_dim: Option<usize>,
-    /// Optionally apply dimension reduction (KPLS) or not
+    /// Parameter to improve numerical stability
     nugget: F,
 }
 

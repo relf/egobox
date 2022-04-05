@@ -186,9 +186,7 @@ impl Vspec {
 
 /// Optimizer constructor
 ///
-/// Parameters
-///
-///     fun: array[n, nx]) -> array[n, ny]
+///    fun: array[n, nx]) -> array[n, ny]
 ///         the function to be minimized
 ///         fun(x) = [obj(x), cstr_1(x), ... cstr_k(x)] where
 ///            obj is the objective function [n, nx] -> [n, 1]
@@ -374,13 +372,11 @@ impl Optimizer {
 
     /// This function finds the minimum of a given fun function
     ///
-    /// Parameters
-    ///
-    ///     n_eval (int):
+    /// ### Parameters
+    ///     n_eval:
     ///         the function evaluation budget, number of fun calls.
     ///
-    /// Returns
-    ///
+    /// ### Returns
     ///     optimization result
     ///         x_opt (array[1, nx]): x value  where fun is at its minimum subject to constraint
     ///         y_opt (array[1, nx]): fun(x_opt)
