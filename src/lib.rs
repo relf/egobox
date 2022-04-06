@@ -14,10 +14,10 @@ use rand_isaac::Isaac64Rng;
 /// Utility function converting `xlimits` float data list specifying bounds of x components
 /// to x specified as a list of Vtype.Float types [egobox.Vtype]
 ///
-/// ### Parameters
+/// # Parameters
 ///     xlimits : nx-size list of [lower_bound, upper_bound] where `nx` is the dimension of x
 ///
-/// ### Returns
+/// # Returns
 ///     xtypes: nx-size list of Vspec(Vtype(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
 #[pyfunction]
 fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject> {
@@ -372,11 +372,11 @@ impl Optimizer {
 
     /// This function finds the minimum of a given fun function
     ///
-    /// ### Parameters
+    /// # Parameters
     ///     n_eval:
     ///         the function evaluation budget, number of fun calls.
     ///
-    /// ### Returns
+    /// # Returns
     ///     optimization result
     ///         x_opt (array[1, nx]): x value  where fun is at its minimum subject to constraint
     ///         y_opt (array[1, nx]): fun(x_opt)

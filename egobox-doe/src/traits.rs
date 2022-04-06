@@ -9,18 +9,18 @@ use ndarray::Array2;
 pub trait SamplingMethod<F: Float> {
     /// Returns the bounds of the sample space
     ///
-    /// ### Returns
+    /// # Returns
     ///
     /// * A (nx, 2) matrix where the ith row is the interval of the ith components of a sample.
     fn sampling_space(&self) -> &Array2<F>;
 
     /// Generates a (ns, nx)-shaped array of samples belonging to `[0., 1.]^nx`
     ///
-    /// ### Parameters
+    /// # Parameters
     ///
     /// * `ns`: number of samples
     ///
-    /// ### Returns
+    /// # Returns
     ///
     /// * A (ns, nx) matrix of samples where nx is the dimension of the sample space
     /// each sample belongs to `[0., 1.]^nx` hypercube
@@ -28,11 +28,11 @@ pub trait SamplingMethod<F: Float> {
 
     /// Generates a (ns, nx)-shaped array of samples belonging to `[lower_bound_xi, upper_bound_xi]^nx`
     ///
-    /// ### Parameters
+    /// # Parameters
     ///
     /// * `ns`: number of samples
     ///
-    /// ### Returns
+    /// # Returns
     ///
     /// * A (ns, nx) matrix where nx is the dimension of the sample space.
     /// each sample belongs to `[lower_bound_xi, upper_bound_xi]^nx` where bounds

@@ -288,6 +288,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 
 impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParams<F, Mean, Corr> {
     /// Constructor of valid params from values
+    #[doc(hidden)]
     pub fn from(
         mean: Mean,
         corr: Corr,

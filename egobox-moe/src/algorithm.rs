@@ -43,6 +43,9 @@ impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
+    /// MoE constructor from Parameters
+    ///
+    /// # Errors
     pub fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
@@ -117,7 +120,9 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         }
     }
 
-    pub fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn GpSurrogate>> {
+    /// Select the surrogate which gives the smallest prediction error on the given data
+    /// The error is computed using cross-validation
+    fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn GpSurrogate>> {
         let xtrain = data.slice(s![.., ..nx]).to_owned();
         let ytrain = data.slice(s![.., nx..]).to_owned();
         let mut dataset = Dataset::from((xtrain.clone(), ytrain.clone()));
