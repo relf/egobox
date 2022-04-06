@@ -2,11 +2,15 @@ use linfa::Float;
 use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
 use serde::{Deserialize, Serialize};
 
-/// A structure to original data as (n, xdim)
+/// A structure to store data and its mean and standard deviation vectors
+/// Data is a (n, xdim) matrix
 #[derive(Deserialize, Serialize, Debug)]
 pub struct NormalizedMatrix<F: Float> {
+    /// data
     pub data: Array2<F>,
+    /// mean vector computed from data
     pub mean: Array1<F>,
+    /// standard deviation vector computed from data
     pub std: Array1<F>,
 }
 
@@ -21,6 +25,7 @@ impl<F: Float> Clone for NormalizedMatrix<F> {
 }
 
 impl<F: Float> NormalizedMatrix<F> {
+    /// Constructor
     pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> NormalizedMatrix<F> {
         let (data, mean, std) = normalize(x);
         NormalizedMatrix {
@@ -30,6 +35,7 @@ impl<F: Float> NormalizedMatrix<F> {
         }
     }
 
+    /// Dimension of data points
     pub fn ncols(&self) -> usize {
         self.data.ncols()
     }
