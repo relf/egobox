@@ -33,7 +33,7 @@ macro_rules! declare_surrogate {
     ($regr:ident, $corr:ident) => {
         paste! {
 
-            /// GP Surrogate parameters with given mean and correlation models. See [egobox_doe::GpParams]
+            /// GP Surrogate parameters with given mean and correlation models. See [egobox_gp::GpParams]
             #[derive(Clone)]
             pub struct [<Gp $regr $corr SurrogateParams>](
                 GpParams<f64, [<$regr Mean>], [<$corr Corr>]>,
@@ -70,7 +70,7 @@ macro_rules! declare_surrogate {
                 }
             }
 
-            /// GP surrogate with given mean and correlation models. See [egobox_doe::GaussianProcess]
+            /// GP surrogate with given mean and correlation models. See [egobox_gp::GaussianProcess]
             #[derive(Clone, Debug, Serialize, Deserialize)]
             pub struct [<Gp $regr $corr Surrogate>](
                 pub GaussianProcess<f64, [<$regr Mean>], [<$corr Corr>]>,

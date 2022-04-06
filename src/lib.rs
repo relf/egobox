@@ -1,6 +1,4 @@
-#![warn(missing_docs)]
-//! `egobox` Rust optimizer binding for Python.
-//!
+//! `egobox` Rust optimizer (aka `egor`) binding for Python.
 //!
 
 use egobox_doe::SamplingMethod;

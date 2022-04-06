@@ -89,7 +89,7 @@ pub struct MoeParams<F: Float, R: Rng + Clone> {
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
-    /// [GaussianMixture] model used to
+    /// Gaussian Mixture model used to
     gmm: Option<Box<GaussianMixtureModel<F>>>,
     /// Random number generator
     rng: R,
@@ -154,7 +154,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self.kpls_dim
     }
 
-    /// The [GaussianMixture]
+    /// The Gaussian Mixture
     pub fn gmm(&self) -> &Option<Box<GaussianMixtureModel<F>>> {
         &self.gmm
     }

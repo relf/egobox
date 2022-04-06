@@ -388,7 +388,7 @@ impl Moe {
     }
 
     /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
-    /// [GaussianMixture] is used to get the probability of the point to belongs to one cluster
+    /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
     /// or another (ie responsabilities). Those responsabilities are used to combine
     /// output values predict by each cluster experts.
     pub fn predict_values_smooth(
@@ -399,7 +399,7 @@ impl Moe {
     }
 
     /// Predict variances at a set of points `x` specified as (n, xdim) matrix.
-    /// [GaussianMixture] is used to get the probability of the point to belongs to one cluster
+    /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
     /// or another (ie responsabilities). Those responsabilities are used to combine
     /// variances predict by each cluster experts.
     pub fn predict_variances_smooth(
@@ -425,7 +425,7 @@ impl Moe {
     }
 
     /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
-    /// [GaussianMixture] is used to get the cluster where the point belongs (highest responsability)
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// Then the expert of the cluster is used to predict output value.
     pub fn predict_values_hard(
         &self,
@@ -449,7 +449,7 @@ impl Moe {
     }
 
     /// Predict variance at a set of points `x` specified as (n, xdim) matrix.
-    /// [GaussianMixture] is used to get the cluster where the point belongs (highest responsability)
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// Then the expert of the cluster is used to predict output value.
     pub fn predict_variances_hard(
         &self,
