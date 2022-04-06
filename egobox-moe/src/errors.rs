@@ -3,6 +3,7 @@
 use thiserror::Error;
 // use std::fmt::{self, Display};
 
+/// A result type for Moe algorithm
 pub type Result<T> = std::result::Result<T, MoeError>;
 
 /// An error when using MOE algorithm
