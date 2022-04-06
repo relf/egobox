@@ -2,6 +2,7 @@ use linfa_pls::PlsError;
 use ndarray_linalg::error::LinalgError;
 use thiserror::Error;
 
+/// A result type for GP regression algorithm
 pub type Result<T> = std::result::Result<T, GpError>;
 
 /// An error when modeling a GMM algorithm
@@ -22,6 +23,7 @@ pub enum GpError {
     /// When a value is invalid
     #[error("PLS error: {0}")]
     InvalidValue(String),
+    /// When a linfa error occurs
     #[error(transparent)]
     LinfaError(#[from] linfa::error::Error),
 }

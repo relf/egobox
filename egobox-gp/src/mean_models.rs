@@ -1,12 +1,22 @@
-use std::convert::TryFrom;
+//! A module for regression models used by GP models.
+//! The following kernels are implemented:
+//! * squared exponential,
+//! * absolute exponential,
+//! * matern 3/2,
+//! * matern 5/2.
 
 use linfa::Float;
 use ndarray::{concatenate, s, Array2, ArrayBase, Axis, Data, Ix2};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
+
+/// A trait for using a correlation model in GP regression
 pub trait RegressionModel<F: Float>: Clone + Copy + Default {
+    /// Use the regression model to get the mean behaviour of the GP model.
     fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F>;
 }
 
+/// A constant function as mean of the GP
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
@@ -34,6 +44,8 @@ impl TryFrom<String> for ConstantMean {
         }
     }
 }
+
+/// An affine function as mean of the GP
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
@@ -63,6 +75,7 @@ impl TryFrom<String> for LinearMean {
     }
 }
 
+/// A 2-degree polynomial as mean of the GP
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]

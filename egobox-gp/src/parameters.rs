@@ -3,6 +3,7 @@ use crate::errors::{GpError, Result};
 use crate::mean_models::{ConstantMean, RegressionModel};
 use linfa::{Float, ParamGuard};
 
+/// A set of validated GP parameters.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
@@ -17,8 +18,8 @@ pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationMo
     nugget: F,
 }
 
-impl<F: Float> GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
-    pub fn default() -> GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
+impl<F: Float> Default for GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
+    fn default() -> GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
         GpValidParams {
             theta: None,
             mean: ConstantMean(),
@@ -64,6 +65,7 @@ pub struct GpParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F
 );
 
 impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, Mean, Corr> {
+    /// A constructor for GP parameters given mean and correlation models
     pub fn new(mean: Mean, corr: Corr) -> GpParams<F, Mean, Corr> {
         Self(GpValidParams {
             theta: None,
@@ -82,19 +84,20 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
         self
     }
 
-    /// Set mean.
+    /// Set mean model.
     pub fn mean(mut self, mean: Mean) -> Self {
         self.0.mean = mean;
         self
     }
 
-    /// Set corr.
+    /// Set correlation model.
     pub fn corr(mut self, corr: Corr) -> Self {
         self.0.corr = corr;
         self
     }
 
-    /// Set KPLS.
+    /// Set number of PLS components.
+    /// Should be 0 < n < pb size (i.e. x dimension)
     pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.0.kpls_dim = kpls_dim;
         self

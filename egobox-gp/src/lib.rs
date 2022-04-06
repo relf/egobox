@@ -44,6 +44,7 @@
 //! models by Partial Least Squares dimension reduction](https://hal.archives-ouvertes.fr/hal-01232938/document)
 //! Structural and Multidisciplinary Optimization 53.5 (2016): 935-952.
 //!
+#![warn(missing_docs)]
 mod algorithm;
 pub mod correlation_models;
 mod errors;

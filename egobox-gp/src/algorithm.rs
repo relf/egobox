@@ -363,7 +363,7 @@ where
     }
 }
 
-pub fn reduced_likelihood<F: Float>(
+fn reduced_likelihood<F: Float>(
     fx: &ArrayBase<impl Data<Elem = F>, Ix2>,
     rxx: ArrayBase<impl Data<Elem = F>, Ix2>,
     x_distances: &DistanceMatrix<F>,

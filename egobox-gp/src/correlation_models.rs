@@ -1,10 +1,19 @@
-use std::convert::TryFrom;
+//! A module for correlation models which implements PLS weighting used by GP models.
+//! The following kernels are implemented:
+//! * squared exponential,
+//! * absolute exponential,
+//! * matern 3/2,
+//! * matern 5/2.
 
 use linfa::Float;
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
+/// A trait for using a correlation model in GP regression
 pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
+    /// Use the correlation model to compute correlation matrix given
+    /// `theta` parameters, distances `d` between data points and PLS `weights`.
     fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -16,6 +25,8 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
+
+/// Squared exponential correlation models
 pub struct SquaredExponentialCorr();
 
 impl From<SquaredExponentialCorr> for String {
@@ -48,7 +59,7 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
-
+/// Absolute exponential correlation models
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
@@ -85,6 +96,7 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
     }
 }
 
+/// Matern 3/2 correlation model
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
@@ -127,6 +139,7 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
     }
 }
 
+/// Matern 5/2 correlation model
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
