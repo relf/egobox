@@ -33,10 +33,10 @@ macro_rules! compute_error {
     }};
 }
 
-macro_rules! compute_accuracies_with_corr {
-    ($self:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident, $corr:ident) => {{
+macro_rules! compute_errors_with_corr {
+    ($self:ident, $allowed_corr_models:ident, $dataset:ident, $map_error:ident, $regr:ident, $corr:ident) => {{
         if $allowed_corr_models.contains(&stringify!($corr)) {
-            $map_accuracy.push((
+            $map_error.push((
                 format!("{}_{}", stringify!($regr), stringify!($corr)),
                 compute_error!($self, $regr, $corr, $dataset),
             ));
@@ -44,38 +44,38 @@ macro_rules! compute_accuracies_with_corr {
     }};
 }
 
-macro_rules! compute_accuracies_with_regr {
-    ($self:ident, $allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident, $regr:ident) => {{
+macro_rules! compute_errors_with_regr {
+    ($self:ident, $allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_error:ident, $regr:ident) => {{
         if $allowed_mean_models.contains(&stringify!($regr)) {
-            compute_accuracies_with_corr!(
+            compute_errors_with_corr!(
                 $self,
                 $allowed_corr_models,
                 $dataset,
-                $map_accuracy,
+                $map_error,
                 $regr,
                 SquaredExponential
             );
-            compute_accuracies_with_corr!(
+            compute_errors_with_corr!(
                 $self,
                 $allowed_corr_models,
                 $dataset,
-                $map_accuracy,
+                $map_error,
                 $regr,
                 AbsoluteExponential
             );
-            compute_accuracies_with_corr!(
+            compute_errors_with_corr!(
                 $self,
                 $allowed_corr_models,
                 $dataset,
-                $map_accuracy,
+                $map_error,
                 $regr,
                 Matern32
             );
-            compute_accuracies_with_corr!(
+            compute_errors_with_corr!(
                 $self,
                 $allowed_corr_models,
                 $dataset,
-                $map_accuracy,
+                $map_error,
                 $regr,
                 Matern52
             );
@@ -83,36 +83,36 @@ macro_rules! compute_accuracies_with_regr {
     }};
 }
 
-macro_rules! compute_accuracies {
-    ($self:ident, $allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_accuracy:ident) => {{
-        compute_accuracies_with_regr!(
+macro_rules! compute_errors {
+    ($self:ident, $allowed_mean_models:ident, $allowed_corr_models:ident, $dataset:ident, $map_error:ident) => {{
+        compute_errors_with_regr!(
             $self,
             $allowed_mean_models,
             $allowed_corr_models,
             $dataset,
-            $map_accuracy,
+            $map_error,
             Constant
         );
-        compute_accuracies_with_regr!(
+        compute_errors_with_regr!(
             $self,
             $allowed_mean_models,
             $allowed_corr_models,
             $dataset,
-            $map_accuracy,
+            $map_error,
             Linear
         );
-        compute_accuracies_with_regr!(
+        compute_errors_with_regr!(
             $self,
             $allowed_mean_models,
             $allowed_corr_models,
             $dataset,
-            $map_accuracy,
+            $map_error,
             Quadratic
         );
     }};
 }
 
-pub(crate) use compute_accuracies;
-pub(crate) use compute_accuracies_with_corr;
-pub(crate) use compute_accuracies_with_regr;
 pub(crate) use compute_error;
+pub(crate) use compute_errors;
+pub(crate) use compute_errors_with_corr;
+pub(crate) use compute_errors_with_regr;

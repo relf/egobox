@@ -151,17 +151,17 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         let best = if allowed_means.len() == 1 && allowed_corrs.len() == 1 {
             (format!("{}_{}", allowed_means[0], allowed_corrs[0]), None) // shortcut
         } else {
-            let mut map_accuracy = Vec::new();
-            compute_accuracies!(self, allowed_means, allowed_corrs, dataset, map_accuracy);
-            let errs: Vec<f64> = map_accuracy.iter().map(|(_, err)| *err).collect();
-            debug!("Accuracies {:?}", map_accuracy);
+            let mut map_error = Vec::new();
+            compute_errors!(self, allowed_means, allowed_corrs, dataset, map_error);
+            let errs: Vec<f64> = map_error.iter().map(|(_, err)| *err).collect();
+            debug!("Accuracies {:?}", map_error);
             let argmin = errs
                 .iter()
                 .enumerate()
                 .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
                 .map(|(index, _)| index)
                 .unwrap();
-            (map_accuracy[argmin].0.clone(), Some(map_accuracy[argmin].1))
+            (map_error[argmin].0.clone(), Some(map_error[argmin].1))
         };
         let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
             match best.0.as_str() {
