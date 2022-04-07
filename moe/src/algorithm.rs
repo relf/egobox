@@ -43,9 +43,13 @@ impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
-    /// MoE constructor from Parameters
+    /// MoE constructor from parameters
     ///
     /// # Errors
+    ///
+    /// * [MoeError::ClusteringError]: if there is not enough points regarding the clusters,
+    /// * [MoeError::GpError]: if gaussian process fitting fails
+    ///
     pub fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();

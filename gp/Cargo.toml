@@ -1,42 +1,44 @@
 [package]
-name = "egobox-ego"
+name = "egobox-gp"
 version = "0.2.0"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
-description = "A library for efficient global optimization"
+description = "A library for gaussian process modeling"
 license = "Apache License, Version 2.0"
 repository = "https://github.com/relf/egobox"
-keywords = ["machine-learning", "bayesian", "optimization"]
+keywords = ["machine-learning", "gaussian-process", "kriging", "surrogate"]
 categories = ["algorithms", "mathematics", "science"]
 
+[features]
+default = []
+
 [dependencies]
-egobox-doe = { path="../egobox-doe" }
-egobox-gp = { path="../egobox-gp" }
-egobox-moe = { path="../egobox-moe" }
+egobox-doe = { path="../doe" }
 
 linfa = { git="https://github.com/relf/linfa.git", default-features = false }
 linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx", "blas"]}
+ndarray = { version = "0.15", features = ["rayon", "approx", "serde"]}
 ndarray-linalg = "0.14"
 ndarray-stats = "0.5"
+ndarray_einsum_beta = "0.7"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
-
 nlopt = "0.5.3"
+cobyla = "0.1.2"
 rand_isaac = "0.3"
-libm = "0.2"
-finitediff = { version="0.1", features = ["ndarray"] }
-# sort-axis
-rawpointer = { version = "0.2" }
-log = "0.4"
-env_logger = "0.9"
+paste = "1.0"
+num-traits = "0.2"
+serde = {version = "1", features = ["derive"]}
 thiserror = "1"
 
 [dev-dependencies]
-linfa-datasets = { git="https://github.com/relf/linfa.git", features = ["linnerud"] }
 criterion = "0.3"
 serde_json = "1"
 approx = "0.4"
 argmin_testfunctions = "0.1"
-serial_test = "*"
+
+[[bench]]
+name="gp"
+harness = false
+

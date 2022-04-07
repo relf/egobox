@@ -31,10 +31,10 @@ intel-mkl-system = ["linfa/intel-mkl-system"]
 serde = ["linfa/serde"]
 
 [dependencies]
-egobox-doe = { path="egobox-doe" }
-egobox-gp = { path="egobox-gp" }
-egobox-moe = { path="egobox-moe" }
-egobox-ego = { path="egobox-ego" }
+egobox-doe = { path="./doe" }
+egobox-gp = { path="./gp" }
+egobox-moe = { path="./moe" }
+egobox-ego = { path="./ego" }
 
 linfa = { git="https://github.com/relf/linfa.git", default-features = false }
 linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
@@ -65,10 +65,10 @@ argmin_testfunctions = "0.1"
 
 [workspace]
 members = [
-  "egobox-doe", 
-  "egobox-gp",
-  "egobox-moe",
-  "egobox-ego"
+  "doe", 
+  "gp",
+  "moe",
+  "ego"
 ]
 
 [package.metadata.maturin]

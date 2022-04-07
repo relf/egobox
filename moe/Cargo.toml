@@ -10,8 +10,8 @@ keywords = ["machine-learning", "mixture", "clustering", "surrogate", "gaussian-
 categories = ["algorithms", "mathematics", "science"]
 
 [dependencies]
-egobox-doe = { path = "../egobox-doe" }
-egobox-gp = { path = "../egobox-gp" }
+egobox-doe = { path = "../doe" }
+egobox-gp = { path = "../gp" }
 
 linfa = { git="https://github.com/relf/linfa.git", default-features = false }
 linfa-clustering = { git="https://github.com/relf/linfa.git", default-features = false }

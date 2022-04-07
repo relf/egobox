@@ -112,11 +112,6 @@ impl<F: Float> Default for MoeParams<F, Isaac64Rng> {
 impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// Constructor of Moe parameters specifying randon number generator for reproducibility
     ///
-    /// ```
-    /// # use rand_isaac::Isaac64Rng;
-    /// # use moe::Moe;
-    /// let moe = Moe::new_with_rng(2, Isaac64Rng::seed_from_u64(42))
-    /// ```
     pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<F, R> {
         MoeParams {
             n_clusters,
