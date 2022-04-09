@@ -8,6 +8,24 @@ Toolbox for Efficient Global Optimization algorithms written in Rust inspired fr
 * `moe`, mixture of experts using kriging models
 * `ego`, efficient global optimization with basic constraints and mixed integer handling 
 
+## Usage
+
+Except for `doe`, the others modules `gp`, `moe`, `ego` relies on `linfa` [BLAS/Lapack backend features](https://github.com/rust-ml/linfa#blaslapack-backend). 
+
+Examples can be run as follows:
+
+```bash
+cd doe
+cargo run --example samplings --release
+```
+
+or using the Intel MKL BLAS/Lapack backend
+
+``` bash
+cd gp
+cargo run --example kriging --release --features linfa/intel-mkl-static
+```
+
 Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka egor) is binded in Python. You can install the Python package using:
 
 ```bash
