@@ -7,11 +7,11 @@ use ndarray_npy::write_npy;
 use std::error::Error;
 use std::fs::File;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    fn norm1(x: &Array2<f64>) -> Array2<f64> {
-        x.mapv(|v| v.abs()).sum_axis(Axis(1)).insert_axis(Axis(1))
-    }
+fn norm1(x: &Array2<f64>) -> Array2<f64> {
+    x.mapv(|v| v.abs()).sum_axis(Axis(1)).insert_axis(Axis(1))
+}
 
+fn main() -> Result<(), Box<dyn Error>> {
     let file = File::open("D:/rlafage/workspace/egobox/moe/examples/norm1_D2_200.csv")?;
     let mut reader = ReaderBuilder::new()
         .has_headers(false)
