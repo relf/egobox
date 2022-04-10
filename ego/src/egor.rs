@@ -447,7 +447,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                     count,
                     if rejected_count > 1 { "s" } else { "" }
                 );
-                info!("  {:?}", x_dat);
+                info!("  {}", x_dat);
                 let y_actual = self.eval(&x_to_eval);
                 Zip::from(y_data.slice_mut(s![-count.., ..]).columns_mut())
                     .and(y_actual.columns())
@@ -478,7 +478,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             }
         }
         let best_index = self.find_best_result_index(&y_data);
-        info!("{:?}", concatenate![Axis(1), x_data, y_data]);
+        info!("{}", concatenate![Axis(1), x_data, y_data]);
         Ok(OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
             y_opt: y_data.row(best_index).to_owned(),
