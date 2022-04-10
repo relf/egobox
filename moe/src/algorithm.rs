@@ -106,7 +106,6 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
                 )));
             }
             let expert = self.find_best_expert(nx, &cluster)?;
-            info!("Best expert -> {}", expert);
             experts.push(expert);
         }
 
