@@ -4,18 +4,17 @@
 
 Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt). 
 This library provides a port of the following algorithms:
-* `doe`, sampling methods: LHS, FullFactorial, Random
-* `gp`, gaussian process regression: Kriging and KPLS surrogates
-* `moe`, mixture of experts using kriging models
-* `ego`, efficient global optimization with basic constraints and mixed integer handling 
+* [doe](./doe), sampling methods: LHS, FullFactorial, Random
+* [gp](./gp), gaussian process regression: Kriging and KPLS surrogates
+* [moe](./moe), mixture of experts using kriging models
+* [ego](./doe), efficient global optimization with basic constraints and mixed integer handling 
 
 ## Usage
 
 Examples can be run as follows:
 
 ```bash
-cd doe
-cargo run --example samplings --release
+$ cd doe && cargo run --example samplings --release
 ```
 
 `gp`, `moe` and `ego` modules relies on `linfa` [BLAS/Lapack backend features](https://github.com/rust-ml/linfa#blaslapack-backend). 
@@ -23,24 +22,21 @@ cargo run --example samplings --release
 Using the Intel MKL BLAS/Lapack backend, you can run :
 
 ``` bash
-cd gp
-cargo run --example kriging --release --features linfa/intel-mkl-static
+$ cd gp && cargo run --example kriging --release --features linfa/intel-mkl-static
 ```
 
 ``` bash
-cd moe
-cargo run --example clustering --release --features linfa/intel-mkl-static
+$ cd moe && cargo run --example clustering --release --features linfa/intel-mkl-static
 ```
 
 ``` bash
-cd ego
-cargo run --example ackley --release --features linfa/intel-mkl-static
+$ cd ego && cargo run --example ackley --release --features linfa/intel-mkl-static
 ```
 
 Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka `egor`) is binded in Python. You can install the Python package using:
 
 ```bash
-pip install egobox
+$ pip install egobox
 ```
 
 See the [tutorial notebook](doc/TutorialEgor.ipynb) for usage.

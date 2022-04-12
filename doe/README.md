@@ -3,11 +3,11 @@
 `egobox-doe` provides a Rust implementation of some design of experiments building methods.
 It is a Rust port of sampling methods of the [SMT](https://smt.readthedocs.io) Python library.
 
-# The big picture
+## The big picture
 
 `egobox-doe` is a library crate in the top-level package [egobox](https://github.com/relf/egobox).
 
-# Current state
+## Current state
 
 `egobox-doe` currently provides an implementation of the following methods:
 
@@ -15,7 +15,7 @@ It is a Rust port of sampling methods of the [SMT](https://smt.readthedocs.io) P
 * Full-factorial sampling
 * Latin hypercube sampling: classic, centered, optimized
 
-# Examples
+## Examples
 
 There is an usage example in the examples/ directory. To run, use:
 
@@ -23,7 +23,7 @@ There is an usage example in the examples/ directory. To run, use:
 $ cargo run --release --example samplings
 ```
 
-# License
+## License
 
 Licensed under the Apache License, Version 2.0 http://www.apache.org/licenses/LICENSE-2.0
 
