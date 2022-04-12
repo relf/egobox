@@ -13,9 +13,9 @@ categories = ["algorithms", "mathematics", "science"]
 egobox-doe = { path = "../doe" }
 egobox-gp = { path = "../gp" }
 
-linfa = { git="https://github.com/relf/linfa.git", default-features = false }
-linfa-clustering = { git="https://github.com/relf/linfa.git", default-features = false }
-linfa-pls = { git="https://github.com/relf/linfa.git", default-features = false }
+linfa = { version = "0.5.1", default-features = false }
+linfa-clustering = { version = "0.5.1", default-features = false }
+linfa-pls = { version = "0.5.1", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx", "blas"]}
 ndarray-linalg = "0.14"
