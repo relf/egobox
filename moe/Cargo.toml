@@ -1,6 +1,6 @@
 [package]
 name = "egobox-moe"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A library for mixture of expert gaussian processes"
@@ -10,8 +10,8 @@ keywords = ["machine-learning", "mixture", "clustering", "surrogate", "gaussian-
 categories = ["algorithms", "mathematics", "science"]
 
 [dependencies]
-egobox-doe = { version = "0.2.0", path = "../doe" }
-egobox-gp = { version = "0.2.0", path = "../gp" }
+egobox-doe = { version = "0.2.1", path = "../doe" }
+egobox-gp = { version = "0.2.1", path = "../gp" }
 
 linfa = { version = "0.5.1", default-features = false }
 linfa-clustering = { version = "0.5.1", default-features = false }

@@ -1,6 +1,6 @@
 [package]
 name = "egobox"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A toolbox for efficient global optimization"
@@ -31,10 +31,10 @@ intel-mkl-system = ["linfa/intel-mkl-system"]
 serde = ["linfa/serde"]
 
 [dependencies]
-egobox-doe = { version = "0.2.0", path="./doe" }
-egobox-gp = { version = "0.2.0", path="./gp" }
-egobox-moe = { version = "0.2.0", path="./moe" }
-egobox-ego = { version = "0.2.0", path="./ego" }
+egobox-doe = { version = "0.2.1", path="./doe" }
+egobox-gp = { version = "0.2.1", path="./gp" }
+egobox-moe = { version = "0.2.1", path="./moe" }
+egobox-ego = { version = "0.2.1", path="./ego" }
 
 linfa = { version = "0.5.1", default-features = false }
 linfa-pls = { version = "0.5.1", default-features = false }
