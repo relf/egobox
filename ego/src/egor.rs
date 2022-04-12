@@ -739,9 +739,9 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
 impl<'a, O: GroupFunc, R: Rng + Clone> Evaluator for Egor<'a, O, R> {
     fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
         if let Some(evaluator) = self.evaluator {
-            (&self.obj)(&evaluator.eval(x).view())
+            (self.obj)(&evaluator.eval(x).view())
         } else {
-            (&self.obj)(&x.view())
+            (self.obj)(&x.view())
         }
     }
 }
