@@ -10,9 +10,9 @@ keywords = ["machine-learning", "bayesian", "optimization"]
 categories = ["algorithms", "mathematics", "science"]
 
 [dependencies]
-egobox-doe = { path="../doe" }
-egobox-gp = { path="../gp" }
-egobox-moe = { path="../moe" }
+egobox-doe = { version = "0.2.0", path="../doe" }
+egobox-gp = { version = "0.2.0", path="../gp" }
+egobox-moe = { version = "0.2.0", path="../moe" }
 
 linfa = { version = "0.5.1", default-features = false }
 linfa-pls = { version = "0.5.1", default-features = false }

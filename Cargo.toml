@@ -31,10 +31,10 @@ intel-mkl-system = ["linfa/intel-mkl-system"]
 serde = ["linfa/serde"]
 
 [dependencies]
-egobox-doe = { path="./doe" }
-egobox-gp = { path="./gp" }
-egobox-moe = { path="./moe" }
-egobox-ego = { path="./ego" }
+egobox-doe = { version = "0.2.0", path="./doe" }
+egobox-gp = { version = "0.2.0", path="./gp" }
+egobox-moe = { version = "0.2.0", path="./moe" }
+egobox-ego = { version = "0.2.0", path="./ego" }
 
 linfa = { version = "0.5.1", default-features = false }
 linfa-pls = { version = "0.5.1", default-features = false }
