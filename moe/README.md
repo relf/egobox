@@ -1,5 +1,8 @@
 # Mixture of experts
 
+[![crates.io](https://img.shields.io/crates/v/egobox-moe)](https://crates.io/crates/egobox-moe)
+[![docs](https://docs.rs/egobox-moe/badge.svg)](https://docs.rs/egobox-moe)
+
 `egobox-moe` provides a Rust implementation of mixture of experts algorithm.
 It is a Rust port of mixture of expert of the [SMT](https://smt.readthedocs.io) Python library.
 

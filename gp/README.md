@@ -1,5 +1,8 @@
 # Gaussian processes
 
+[![crates.io](https://img.shields.io/crates/v/egobox-gp)](https://crates.io/crates/egobox-gp)
+[![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)
+
 `egobox-gp` provides a Rust implementation of gaussian process regression.
 It is a Rust port of some kriging algorithms of the [SMT](https://smt.readthedocs.io) Python library.
 

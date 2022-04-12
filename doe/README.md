@@ -1,5 +1,8 @@
 # Design of experiments
 
+[![crates.io](https://img.shields.io/crates/v/egobox-doe)](https://crates.io/crates/egobox-doe)
+[![docs](https://docs.rs/egobox-doe/badge.svg)](https://docs.rs/egobox-doe)
+
 `egobox-doe` provides a Rust implementation of some design of experiments building methods.
 It is a Rust port of sampling methods of the [SMT](https://smt.readthedocs.io) Python library.
 

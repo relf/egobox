@@ -1,5 +1,8 @@
 # Efficient global optimization 
 
+[![crates.io](https://img.shields.io/crates/v/egobox-ego)](https://crates.io/crates/egobox-ego)
+[![docs](https://docs.rs/egobox-ego/badge.svg)](https://docs.rs/egobox-ego)
+
 `egobox-ego` provides a Rust implementation of efficient global optimization algorithm.
 It is a Rust port of EGO of the [SMT](https://smt.readthedocs.io) Python library.
 
