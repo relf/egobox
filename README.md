@@ -2,7 +2,8 @@
 
 [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
 
-Toolbox for Efficient Global Optimization algorithms written in Rust inspired from [SMT](https://github.com/SMTorg/smt). This library provides a port of the following algorithms:
+Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt). 
+This library provides a port of the following algorithms:
 * `doe`, sampling methods: LHS, FullFactorial, Random
 * `gp`, gaussian process regression: Kriging and KPLS surrogates
 * `moe`, mixture of experts using kriging models
@@ -11,8 +12,6 @@ Toolbox for Efficient Global Optimization algorithms written in Rust inspired fr
 ## Usage
 
 Examples can be run as follows:
-
-For the `doe` module, you can run
 
 ```bash
 cd doe
@@ -54,8 +53,7 @@ This library relies also on the [linfa project](https://github.com/rust-ml/linfa
 
 While I did not benchmark my Rust code against SMT Python one, from my debugging sessions, I noticed I did not get such a great speed up. Actually, algorithms like `doe` and `gp` relies extensively on linear algebra and Python famous libraries `numpy`/`scipy` which are strongly optimized by calling C or Fortran compiled code.
 
-My guess at this point is that interest could come from other Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (moe) and on top bayesian optimization EGO algorithm which gives its name to the library[^2]. Aside from performances, such library benefits from Rust others selling points: reliability and productivity. 
-
+My guess at this point is that interest could come from other Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top bayesian optimization EGO algorithm (`ego`) which gives its name to the library[^2]. Aside from performance, such library benefits from Rust others selling points, namely reliability and productivity. 
 ## Cite
 
 If you happen to find this Rust library useful for your research, you can cite this project as follows: 

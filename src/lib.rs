@@ -1,20 +1,13 @@
-//! `egobox`, toolbox for efficient global optimization
+//! `egobox`, Rust toolbox for efficient global optimization
 //!
-//! [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
-//!
-//! Toolbox for Efficient Global Optimization algorithms written in Rust inspired from [SMT](https://github.com/SMTorg/smt). This library provides a port of the following algorithms:
-//! * `doe`, sampling methods: LHS, FullFactorial, Random
-//! * `gp`, gaussian process regression: Kriging and KPLS surrogates
-//! * `moe`, mixture of experts using kriging models
-//! * `ego`, efficient global optimization with basic constraints and mixed integer handling
-//!
-//! Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka egor) is binded in Python. You can install the Python package using:
+//! Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions,
+//! the EGO algorithm written in Rust (aka `egor`) is binded in Python. You can install the Python package using:
 //!
 //! ```bash
 //! pip install egobox
 //! ```
 //!
-//! See the [tutorial notebook](doc/TutorialEgor.ipynb) for usage.
+//! See the [tutorial notebook](https://github.com/relf/egobox/doc/TutorialEgor.ipynb) for usage.
 //!
 
 use egobox_doe::SamplingMethod;
