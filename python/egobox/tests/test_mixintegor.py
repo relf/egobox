@@ -18,7 +18,7 @@ class TestMixintEgx(unittest.TestCase):
     def test_xsinx(self):
         xtypes = [egx.Vspec(egx.Vtype(egx.Vtype.INT), [0.0, 25.0])]
 
-        egor = egx.Optimizer(xsinx, xtypes, seed=42, n_doe=5)
+        egor = egx.Egor(xsinx, xtypes, seed=42, n_doe=5)
         res = egor.minimize(n_eval=10)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=5e-3)

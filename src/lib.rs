@@ -276,7 +276,7 @@ impl Vspec {
 #[pyo3(
     text_signature = "(fun, n_cstr=0, cstr_tol=1e-6, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, n_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
 )]
-struct Optimizer {
+struct Egor {
     pub fun: PyObject,
     pub xspecs: PyObject,
     pub n_cstr: usize,
@@ -307,7 +307,7 @@ struct OptimResult {
 }
 
 #[pymethods]
-impl Optimizer {
+impl Egor {
     #[new]
     #[args(
         fun,
@@ -354,7 +354,7 @@ impl Optimizer {
         seed: Option<u64>,
     ) -> Self {
         let doe = doe.map(|x| x.to_owned_array());
-        Optimizer {
+        Egor {
             fun: fun.to_object(py),
             xspecs,
             n_cstr,
@@ -525,7 +525,7 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(to_specs, m)?)?;
     m.add_function(wrap_pyfunction!(lhs, m)?)?;
-    m.add_class::<Optimizer>()?;
+    m.add_class::<Egor>()?;
     m.add_class::<RegressionSpec>()?;
     m.add_class::<CorrelationSpec>()?;
     m.add_class::<InfillStrategy>()?;

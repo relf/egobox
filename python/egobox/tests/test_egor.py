@@ -79,7 +79,7 @@ def six_humps(x):
 
 class TestOptimizer(unittest.TestCase):
     def test_xsinx(self):
-        egor = egx.Optimizer(xsinx, egx.to_specs([[0.0, 25.0]]), seed=42)
+        egor = egx.Egor(xsinx, egx.to_specs([[0.0, 25.0]]), seed=42)
         res = egor.minimize(n_eval=20)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
@@ -88,7 +88,7 @@ class TestOptimizer(unittest.TestCase):
     def test_xsinx_with_hotstart(self):
         xlimits = egx.to_specs([[0.0, 25.0]])
         doe = egx.lhs(xlimits, 10)
-        egor = egx.Optimizer(xsinx, xlimits, doe=doe, seed=42, outdir="./test_dir")
+        egor = egx.Egor(xsinx, xlimits, doe=doe, seed=42, outdir="./test_dir")
         res = egor.minimize(n_eval=15)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
@@ -96,16 +96,14 @@ class TestOptimizer(unittest.TestCase):
 
         ydoe = xsinx(doe)
         doe = np.hstack((doe, ydoe))
-        egor = egx.Optimizer(
-            xsinx, xlimits, doe=doe, outdir="./test_dir", hot_start=True
-        )
+        egor = egx.Egor(xsinx, xlimits, doe=doe, outdir="./test_dir", hot_start=True)
         res = egor.minimize(n_eval=5)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-2)
 
     def test_g24(self):
-        egor = egx.Optimizer(
+        egor = egx.Egor(
             g24,
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             n_cstr=2,
@@ -123,7 +121,7 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(3.1785, res.x_opt[1], delta=1e-2)
 
     def test_g24_kpls(self):
-        egor = egx.Optimizer(
+        egor = egx.Egor(
             g24,
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             n_cstr=2,
@@ -141,7 +139,7 @@ class TestOptimizer(unittest.TestCase):
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
     def test_six_humps(self):
-        egor = egx.Optimizer(
+        egor = egx.Egor(
             six_humps,
             egx.to_specs([[-3.0, 3.0], [-2.0, 2.0]]),
             infill_strategy=egx.InfillStrategy.WB2,
@@ -159,8 +157,8 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(-0.7126, res.x_opt[1], delta=1e-2)
 
     def test_constructor(self):
-        self.assertRaises(TypeError, egx.Optimizer)
-        egx.Optimizer(xsinx, egx.to_specs([[0.0, 25.0]]), 22, n_doe=10)
+        self.assertRaises(TypeError, egx.Egor)
+        egx.Egor(xsinx, egx.to_specs([[0.0, 25.0]]), 22, n_doe=10)
 
 
 if __name__ == "__main__":
