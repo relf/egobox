@@ -8,8 +8,8 @@ env:
 jobs:
 
   pytest:
-    name: python${{ matrix.python-version }}-${{ matrix.platform.os }}
-    runs-on: ${{ matrix.platform.os }}
+    name: python${{ matrix.python-version }}-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 16
       matrix:
@@ -36,7 +36,7 @@ jobs:
         run: rustup show
 
       - name: Install LLVM and Clang on Windows
-        if: ${{ matrix.platform.os == 'windows-latest' }} 
+        if: ${{ matrix.os == 'windows-latest' }} 
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "11.0"
@@ -48,13 +48,12 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install maturin numpy pytest poetry
+          pip install maturin numpy pytest
 
       - name: Test Python
         run: |
-            poetry install
-            poetry run maturin develop --release --cargo-extra-args="--features linfa/intel-mkl-static"
-            poetry run pytest
+            maturin develop --release --cargo-extra-args="--features linfa/intel-mkl-static"
+            pytest
         shell: bash
 
     env:
