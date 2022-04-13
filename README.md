@@ -9,10 +9,10 @@ Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](ht
 
 `egobox` consists of the following sub-packages.
 
-| Name         | Version | Documentation                                                               | Description                                                                     |
-| :----------- | :-------| :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
+| Name         | Version                                                                                         | Documentation                                                               | Description                                                                     |
+| :----------- | :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
 | [doe](./doe) | [![crates.io](https://img.shields.io/crates/v/egobox-doe)](https://crates.io/crates/egobox-doe) | [![docs](https://docs.rs/egobox-doe/badge.svg)](https://docs.rs/egobox-doe) | sampling methods; contains LHS, FullFactorial, Random)                          |
-| [gp](./gp)   | [![crates.io](https://img.shields.io/crates/v/egobox-gp)](https://crates.io/crates/egobox-gp) | [![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)   | gaussian process regression; contains Kriging and PLS dimension reduction       |
+| [gp](./gp)   | [![crates.io](https://img.shields.io/crates/v/egobox-gp)](https://crates.io/crates/egobox-gp)   | [![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)   | gaussian process regression; contains Kriging and PLS dimension reduction       |
 | [moe](./gp)  | [![crates.io](https://img.shields.io/crates/v/egobox-moe)](https://crates.io/crates/egobox-moe) | [![docs](https://docs.rs/egobox-moe/badge.svg)](https://docs.rs/egobox-moe) | mixture of experts using GP models                                              |
 | [ego](./ego) | [![crates.io](https://img.shields.io/crates/v/egobox-ego)](https://crates.io/crates/egobox-ego) | [![docs](https://docs.rs/egobox-ego/badge.svg)](https://docs.rs/egobox-ego) | efficient global optimization with basic constraints and mixed integer handling |
 
@@ -56,7 +56,7 @@ This library relies also on the [linfa project](https://github.com/rust-ml/linfa
 
 While I did not benchmark my Rust code against SMT Python one, from my debugging sessions, I noticed I did not get such a great speed up. Actually, algorithms like `doe` and `gp` relies extensively on linear algebra and Python famous libraries `numpy`/`scipy` which are strongly optimized by calling C or Fortran compiled code.
 
-My guess at this point is that interest could come from other Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top bayesian optimization EGO algorithm (`ego`) which gives its name to the library[^2]. Aside from performance, such library benefits from Rust others selling points, namely reliability and productivity. 
+My guess at this point is that interest could come from other Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top bayesian optimization EGO algorithm (`ego`) which gives its name to the library[^2][^3]. Aside from performance, such library benefits from Rust others selling points, namely reliability and productivity. 
 ## Cite
 
 If you happen to find this Rust library useful for your research, you can cite this project as follows: 
@@ -73,3 +73,5 @@ If you happen to find this Rust library useful for your research, you can cite t
 [^1]: M. A. Bouhlel and J. T. Hwang and N. Bartoli and R. Lafage and J. Morlier and J. R. R. A. Martins. A Python surrogate modeling framework with derivatives. Advances in Engineering Software, 2019.
 
 [^2]: Bartoli, Nathalie, et al. "Adaptive modeling strategy for constrained global optimization with application to aerodynamic wing design." Aerospace Science and technology 90 (2019): 85-102.
+
+[^3]: Dubreuil, Sylvain, et al. "Towards an efficient global multidisciplinary design optimization algorithm." Structural and Multidisciplinary Optimization 62.4 (2020): 1739-1765.
