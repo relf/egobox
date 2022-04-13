@@ -1,13 +1,20 @@
 # egobox
 
 [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
+[![pytests](https://github.com/relf/egobox/workflows/pytests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Apytests)
+[![linting](https://github.com/relf/egobox/workflows/lint/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Alint)
+
 
 Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt). 
-This library provides a port of the following algorithms:
-* [doe](./doe), sampling methods: LHS, FullFactorial, Random
-* [gp](./gp), gaussian process regression: Kriging and KPLS surrogates
-* [moe](./moe), mixture of experts using kriging models
-* [ego](./doe), efficient global optimization with basic constraints and mixed integer handling 
+
+`egobox` consists of the following sub-packages.
+
+| Name         | Documentation                                                               | Description                                                                     |
+| :----------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
+| [doe](./doe) | [![docs](https://docs.rs/egobox-doe/badge.svg)](https://docs.rs/egobox-doe) | sampling methods; contains LHS, FullFactorial, Random)                          |
+| [gp](./gp)   | [![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)   | gaussian process regression; contains Kriging and PLS dimension reduction       |
+| [moe](./gp)  | [![docs](https://docs.rs/egobox-moe/badge.svg)](https://docs.rs/egobox-moe) | mixture of experts using GP models                                              |
+| [ego](./ego) | [![docs](https://docs.rs/egobox-ego/badge.svg)](https://docs.rs/egobox-ego) | efficient global optimization with basic constraints and mixed integer handling |
 
 ## Usage
 
@@ -33,13 +40,13 @@ $ cd moe && cargo run --example clustering --release --features linfa/intel-mkl-
 $ cd ego && cargo run --example ackley --release --features linfa/intel-mkl-static
 ```
 
-Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka `egor`) is binded in Python. You can install the Python package using:
+Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka `Egor`) is binded in Python. You can install the Python package using:
 
 ```bash
 $ pip install egobox
 ```
 
-See the [tutorial notebook](doc/TutorialEgor.ipynb) for usage.
+See the [tutorial notebook](doc/TutorialEgor.ipynb) for usage of the optimizer.
 
 ## Why egobox?
 
