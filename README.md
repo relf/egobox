@@ -56,13 +56,13 @@ This library relies also on the [linfa project](https://github.com/rust-ml/linfa
 
 While I did not benchmark my Rust code against SMT Python one, from my debugging sessions, I noticed I did not get such a great speed up. Actually, algorithms like `doe` and `gp` relies extensively on linear algebra and Python famous libraries `numpy`/`scipy` which are strongly optimized by calling C or Fortran compiled code.
 
-My guess at this point is that interest could come from other Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top bayesian optimization EGO algorithm (`ego`) which gives its name to the library[^2][^3]. Aside from performance, such library benefits from Rust others selling points, namely reliability and productivity. 
+My guess at this point is that interest could come from other Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top surrogate-based optimization EGO algorithm (`ego`) which gives its name to the library[^2][^3]. Aside from performance, such library benefits from Rust others selling points, namely reliability and productivity. 
 ## Cite
 
 If you happen to find this Rust library useful for your research, you can cite this project as follows: 
 
 ```
-@Misc{,
+@Misc{egobox,
   author = {Rémi Lafage},
   title = {Egobox: efficient global optimization toolbox in Rust},
   year = {2020--},
