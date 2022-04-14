@@ -26,7 +26,7 @@ these hurdles [@Bartoli2019; @Dubreuil2020].
 
 A key component of such surrogate-based algorithm is the existence of an implementation
 of gausian process regression also known as kriging method [@Bouhlel2016]. 
-The Surrogate Modeling Toolbox [@SMT2016; @SMT2019] library addresses such concerns 
+The Surrogate Modeling Toolbox [@SMT2018; @SMT2019] library addresses such concerns 
 using the Python programming language focusing on various surrogate modeling methods 
 and derivatives. 
 
@@ -73,7 +73,7 @@ algorithms. The library is organized in four sub-packages as follows:
 method used to create design of experiments,
 
 * `gp`: gaussian process regression also known as kriging algorithm used
-as surrogate models for costly black-box function,
+as surrogate models for computationally costly black-box functions,
 
 * `moe`: mixture of experts which aims at increasing the accuracy of a surrogate 
 approximation by clustering the design space, training and selecting the best 
