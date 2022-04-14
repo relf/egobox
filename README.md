@@ -18,13 +18,36 @@ Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](ht
 
 ## Usage
 
-Examples can be run as follows:
+Depending on the sub-packages you want to use, you have to add following declarations to your `Cargo.toml`
+
+```
+[dependencies]
+egobox-doe = { version = "0.2.1" }
+egobox-gp  = { version = "0.2.1" }
+egobox-moe = { version = "0.2.1" }
+egobox-ego = { version = "0.2.1" }
+```
+
+## Features
+
+`gp`, `moe` and `ego` relies on `linfa` [BLAS/Lapack backend features](https://github.com/rust-ml/linfa#blaslapack-backend).
+
+For instance, using `gp` with the Intel MKL BLAS/Lapack backend, you have to specify the linfa backend feature :
+
+```
+[dependencies]
+egobox-gp = { version = "0.2.1", features = ["linfa/intel-mkl-static"] }
+```
+
+Note: only end-user projects should specify a provider in `Cargo.toml` (not librairies). In case of library development, the backend is specified on the command line as for examples below.
+
+## Examples
+
+Examples (in `examples/` sub-packages folder) are run as follows:
 
 ```bash
 $ cd doe && cargo run --example samplings --release
 ```
-
-`gp`, `moe` and `ego` modules relies on `linfa` [BLAS/Lapack backend features](https://github.com/rust-ml/linfa#blaslapack-backend). 
 
 Using the Intel MKL BLAS/Lapack backend, you can run :
 
