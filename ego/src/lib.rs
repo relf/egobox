@@ -12,12 +12,13 @@
 //! * parameterize mixture of experts,
 //! * save intermediate results and allow hot restart,
 //!
-//! Example:
+//! # Example
 //!
 //! ```no_run
-//! # use ndarray::{array, Array2, ArrayView2};
-//! # use egobox_ego::Egor;
+//! use ndarray::{array, Array2, ArrayView2};
+//! use egobox_ego::Egor;
 //!
+//! // A one-dimensional test function, x in [0., 25.] and min xsinx(x) ~ -15.1 at x ~ 18.9
 //! fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
 //!     (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
 //! }
@@ -34,9 +35,9 @@
 //! While [Egor] optimizer works with continuous data (i.e floats), the class [MixintEgor]
 //! allows to make basic mixed-integer optimization by decorating `Egor` class.    
 //!
-//! Reference:
+//! # Reference
 //!
-//! * Bartoli, Nathalie, et al. [Adaptive modeling strategy for constrained global
+//! Bartoli, Nathalie, et al. [Adaptive modeling strategy for constrained global
 //! optimization with application to aerodynamic wing design](https://www.sciencedirect.com/science/article/pii/S1270963818306011)
 //!  Aerospace Science and technology 90 (2019): 85-102.
 //!

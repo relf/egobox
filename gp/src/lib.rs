@@ -35,12 +35,44 @@
 //! * For high dimensional problems, the classic GP algorithm does not perform well as
 //! it depends on the inversion of a correlation (n, n) matrix which is an O(n3) operation.
 //! To work around this problem the library implements dimension reduction using
-//! Partial Least Squares method upon Kriging method also known as KPLS algorithm
+//! Partial Least Squares method upon Kriging method also known as KPLS algorithm (see Reference)
 //! * GP models can be saved and loaded using [serde](https://serde.rs/).
 //!
-//! Reference:
+//! # Example
 //!
-//! * Bouhlel, Mohamed Amine, et al. [Improving kriging surrogates of high-dimensional design
+//! ```no_run
+//! use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
+//! use linfa::prelude::*;
+//! use ndarray::{arr2, concatenate, Array, Array2, Axis};
+//!
+//! // one-dimensional test function to approximate
+//! fn xsinx(x: &Array2<f64>) -> Array2<f64> {
+//!     (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
+//! }
+//!
+//! // training data
+//! let xt = arr2(&[[0.0], [5.0], [10.0], [15.0], [18.0], [20.0], [25.0]]);
+//! let yt = xsinx(&xt);
+//!
+//! // GP with constant mean model and squared exponential correlation model
+//! // i.e. Oridinary Kriging model
+//! let kriging = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+//!                 ConstantMean::default(),
+//!                 SquaredExponentialCorr::default())
+//!                 .fit(&Dataset::new(xt, yt))
+//!                 .expect("Kriging trained");
+//!
+//! // Use trained model for making predictions
+//! let xtest = Array::linspace(0., 25., 26).insert_axis(Axis(1));
+//! let ytest = xsinx(&xtest);
+//!
+//! let ypred = kriging.predict_values(&xtest).expect("Kriging prediction");
+//! let yvariances = kriging.predict_variances(&xtest).expect("Kriging prediction");  
+//!```
+//!
+//! # Reference:
+//!
+//! Bouhlel, Mohamed Amine, et al. [Improving kriging surrogates of high-dimensional design
 //! models by Partial Least Squares dimension reduction](https://hal.archives-ouvertes.fr/hal-01232938/document)
 //! Structural and Multidisciplinary Optimization 53.5 (2016): 935-952.
 //!
