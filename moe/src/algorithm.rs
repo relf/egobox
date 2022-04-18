@@ -1,5 +1,5 @@
 use super::gaussian_mixture::GaussianMixture;
-use super::{make_gp_params, make_surrogate_params};
+use super::{_make_gp_params, _make_surrogate_params};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
@@ -170,29 +170,29 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
             match best.0.as_str() {
                 "Constant_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Constant, SquaredExponential))
+                    Ok(_make_surrogate_params!(Constant, SquaredExponential))
                 }
                 "Constant_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Constant, AbsoluteExponential))
+                    Ok(_make_surrogate_params!(Constant, AbsoluteExponential))
                 }
-                "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
-                "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
+                "Constant_Matern32" => Ok(_make_surrogate_params!(Constant, Matern32)),
+                "Constant_Matern52" => Ok(_make_surrogate_params!(Constant, Matern52)),
                 "Linear_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Linear, SquaredExponential))
+                    Ok(_make_surrogate_params!(Linear, SquaredExponential))
                 }
                 "Linear_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Linear, AbsoluteExponential))
+                    Ok(_make_surrogate_params!(Linear, AbsoluteExponential))
                 }
-                "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
-                "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
+                "Linear_Matern32" => Ok(_make_surrogate_params!(Linear, Matern32)),
+                "Linear_Matern52" => Ok(_make_surrogate_params!(Linear, Matern52)),
                 "Quadratic_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Quadratic, SquaredExponential))
+                    Ok(_make_surrogate_params!(Quadratic, SquaredExponential))
                 }
                 "Quadratic_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
+                    Ok(_make_surrogate_params!(Quadratic, AbsoluteExponential))
                 }
-                "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
-                "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
+                "Quadratic_Matern32" => Ok(_make_surrogate_params!(Quadratic, Matern32)),
+                "Quadratic_Matern52" => Ok(_make_surrogate_params!(Quadratic, Matern52)),
                 _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
             };
         let mut expert_params = best_expert_params?;

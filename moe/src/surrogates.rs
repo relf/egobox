@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 
-/// A trait for GP surrogate parameters.
+/// A trait for GP surrogate parameters to build Gp surrogate once fitted.
 pub trait GpSurrogateParams {
     /// Set initial theta
     fn initial_theta(&mut self, theta: Vec<f64>);
-    /// Set number of PLS components
+    /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
     /// Set the nugget parameter to improve numerical stability
     fn nugget(&mut self, nugget: f64);
@@ -19,7 +19,7 @@ pub trait GpSurrogateParams {
     fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn GpSurrogate>>;
 }
 
-/// A trait for GP surrogate.
+/// A trait for GP surrogate used as expert in the mixture.
 pub trait GpSurrogate: std::fmt::Display + std::fmt::Debug {
     /// Predict output values at n points given as (n, xdim) matrix.
     fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>>;
@@ -29,12 +29,16 @@ pub trait GpSurrogate: std::fmt::Display + std::fmt::Debug {
     fn save(&self, path: &str) -> Result<()>;
 }
 
+/// A macro to declare GP surrogate using regression model and correlation model names.
+///
+/// Regression model is either `Constant`, `Linear` or `Quadratic`.
+/// Correlation model is either `SquaredExponential`, `AbsoluteExponential`, `Matern32` or `Matern52`.
 macro_rules! declare_surrogate {
     ($regr:ident, $corr:ident) => {
         paste! {
 
-            /// GP Surrogate parameters with given mean and correlation models. See [egobox_gp::GpParams]
-            #[derive(Clone)]
+            #[doc = "GP surrogate parameters with `" $regr "` regression model and `" $corr "` correlation model. \n\nSee [egobox_gp::GpParams]"]
+            #[derive(Clone, Debug)]
             pub struct [<Gp $regr $corr SurrogateParams>](
                 GpParams<f64, [<$regr Mean>], [<$corr Corr>]>,
             );
@@ -70,7 +74,7 @@ macro_rules! declare_surrogate {
                 }
             }
 
-            /// GP surrogate with given mean and correlation models. See [egobox_gp::GaussianProcess]
+            #[doc = "GP surrogate with `" $regr "` regression model and `" $corr "` correlation model. \n\nSee [egobox_gp::GaussianProcess]"]
             #[derive(Clone, Debug, Serialize, Deserialize)]
             pub struct [<Gp $regr $corr Surrogate>](
                 pub GaussianProcess<f64, [<$regr Mean>], [<$corr Corr>]>,
@@ -121,9 +125,10 @@ declare_surrogate!(Quadratic, AbsoluteExponential);
 declare_surrogate!(Quadratic, Matern32);
 declare_surrogate!(Quadratic, Matern52);
 
-/// Create a GP with given regression and correlation models.
+#[doc(hidden)]
+// Create a GP with given regression and correlation models.
 #[macro_export]
-macro_rules! make_gp_params {
+macro_rules! _make_gp_params {
     ($regr:ident, $corr:ident) => {
         paste! {
             GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
@@ -134,21 +139,24 @@ macro_rules! make_gp_params {
     };
 }
 
-/// Create GP surrogate parameters with given regression and correlation models.
+#[doc(hidden)]
+// Create GP surrogate parameters with given regression and correlation models.
 #[macro_export]
-macro_rules! make_surrogate_params {
+macro_rules! _make_surrogate_params {
     ($regr:ident, $corr:ident) => {
         paste! {
             Box::new([<Gp $regr $corr SurrogateParams>]::new(
-                make_gp_params!($regr, $corr))
+                _make_gp_params!($regr, $corr))
             )
         }
     };
 }
 
-/// Create GP surrogate
+#[doc(hidden)]
+/// Create GP surrogate with given regression and correlation model
+/// and inner json data
 #[macro_export]
-macro_rules! make_surrogate {
+macro_rules! _make_surrogate {
     ($regr:ident, $corr:ident, $data:ident) => {
         paste! {
             Box::new(
@@ -166,7 +174,7 @@ macro_rules! make_surrogate {
     };
 }
 
-/// Load GP surrogate from given file.
+/// Load GP surrogate from given json file.
 pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
     let data = fs::read_to_string(path)?;
     let data: serde_json::Value = serde_json::from_str(&data)?;
@@ -176,20 +184,20 @@ pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
         data["corr"].as_str().unwrap()
     );
     match gp_kind.as_str() {
-        "Constant_SquaredExponential" => Ok(make_surrogate!(Constant, SquaredExponential, data)),
-        "Constant_AbsoluteExponential" => Ok(make_surrogate!(Constant, AbsoluteExponential, data)),
-        "Constant_Matern32" => Ok(make_surrogate!(Constant, Matern32, data)),
-        "Constant_Matern52" => Ok(make_surrogate!(Constant, Matern52, data)),
-        "Linear_SquaredExponential" => Ok(make_surrogate!(Linear, SquaredExponential, data)),
-        "Linear_AbsoluteExponential" => Ok(make_surrogate!(Linear, AbsoluteExponential, data)),
-        "Linear_Matern32" => Ok(make_surrogate!(Linear, Matern32, data)),
-        "Linear_Matern52" => Ok(make_surrogate!(Linear, Matern52, data)),
-        "Quadratic_SquaredExponential" => Ok(make_surrogate!(Quadratic, SquaredExponential, data)),
+        "Constant_SquaredExponential" => Ok(_make_surrogate!(Constant, SquaredExponential, data)),
+        "Constant_AbsoluteExponential" => Ok(_make_surrogate!(Constant, AbsoluteExponential, data)),
+        "Constant_Matern32" => Ok(_make_surrogate!(Constant, Matern32, data)),
+        "Constant_Matern52" => Ok(_make_surrogate!(Constant, Matern52, data)),
+        "Linear_SquaredExponential" => Ok(_make_surrogate!(Linear, SquaredExponential, data)),
+        "Linear_AbsoluteExponential" => Ok(_make_surrogate!(Linear, AbsoluteExponential, data)),
+        "Linear_Matern32" => Ok(_make_surrogate!(Linear, Matern32, data)),
+        "Linear_Matern52" => Ok(_make_surrogate!(Linear, Matern52, data)),
+        "Quadratic_SquaredExponential" => Ok(_make_surrogate!(Quadratic, SquaredExponential, data)),
         "Quadratic_AbsoluteExponential" => {
-            Ok(make_surrogate!(Quadratic, AbsoluteExponential, data))
+            Ok(_make_surrogate!(Quadratic, AbsoluteExponential, data))
         }
-        "Quadratic_Matern32" => Ok(make_surrogate!(Quadratic, Matern32, data)),
-        "Quadratic_Matern52" => Ok(make_surrogate!(Quadratic, Matern52, data)),
+        "Quadratic_Matern32" => Ok(_make_surrogate!(Quadratic, Matern32, data)),
+        "Quadratic_Matern52" => Ok(_make_surrogate!(Quadratic, Matern52, data)),
         _ => Err(MoeError::LoadError(format!(
             "Bad mean or kernel values: {}",
             gp_kind
@@ -215,7 +223,7 @@ mod tests {
         let xlimits = array![[0., 25.]];
         let xt = Lhs::new(&xlimits).sample(10);
         let yt = xsinx(&xt);
-        let gp = make_surrogate_params!(Constant, SquaredExponential)
+        let gp = _make_surrogate_params!(Constant, SquaredExponential)
             .fit(&xt, &yt)
             .expect("GP fit error");
         gp.save("save_gp.json").expect("GP not saved");

@@ -6,7 +6,7 @@ macro_rules! compute_error {
             stringify!($corr),
             $dataset.nsamples()
         );
-        let params = make_gp_params!($regr, $corr).kpls_dim($self.kpls_dim());
+        let params = _make_gp_params!($regr, $corr).kpls_dim($self.kpls_dim());
         let mut errors = Vec::new();
         let input_dim = $dataset.records().shape()[1];
         let n_fold = std::cmp::min($dataset.nsamples(), 5 * input_dim);

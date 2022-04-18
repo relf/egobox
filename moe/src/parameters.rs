@@ -25,8 +25,14 @@ pub enum Recombination<F: Float> {
 }
 
 bitflags! {
-    /// Flags to specify tested regression models during experts selection.
-    /// Flags can be compbine with bit-wise operators. See [bitflags]
+    /// Flags to specify tested regression models during experts selection (see [MoeParams::set_regression_spec]).
+    ///
+    /// Flags can be combine with bit-wise `or` operator to select two or more models.
+    /// ```ignore
+    /// let spec = RegressionSpec::CONSTANT | RegressionSpec::LINEAR;
+    /// ```
+    ///
+    /// See [bitflags::bitflags]
     pub struct RegressionSpec: u8 {
         /// Constant regression
         const CONSTANT = 0x01;
@@ -42,8 +48,14 @@ bitflags! {
 }
 
 bitflags! {
-    /// Flags to specify tested correlation models during experts selection.
-    /// Flags can be compbine with bit-wise operators. See [bitflags]
+    /// Flags to specify tested correlation models during experts selection (see [MoeParams]).
+    ///
+    /// Flags can be combine with bit-wise `or` operator to select two or more models.
+    /// ```ignore
+    /// let spec = CorrelationSpec::MATERN32 | CorrelationSpec::Matern52;
+    /// ```
+    ///
+    /// See [bitflags::bitflags]
     pub struct CorrelationSpec: u8 {
         /// Squared exponential correlation model
         const SQUAREDEXPONENTIAL = 0x01;
@@ -78,7 +90,7 @@ pub trait MoeFit {
 /// Mixture of experts parameters
 #[derive(Clone)]
 pub struct MoeParams<F: Float, R: Rng + Clone> {
-    /// Number of clusters (i.e. experts)
+    /// Number of clusters (i.e. number of experts)
     n_clusters: usize,
     /// [Recombination] mode
     recombination: Recombination<F>,
@@ -96,7 +108,14 @@ pub struct MoeParams<F: Float, R: Rng + Clone> {
 }
 
 impl<F: Float> MoeParams<F, Isaac64Rng> {
-    /// Constructor of Moe parameters
+    /// Constructor of Moe parameters with `n_clusters`.
+    ///
+    /// Default values are provided as follows:
+    ///
+    /// * recombination: `Smooth`
+    /// * regression_spec: `ALL`
+    /// * correlation_spec: `ALL`
+    /// * kpls_dim: `None`
     #[allow(clippy::new_ret_no_self)]
     pub fn new(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
         Self::new_with_rng(n_clusters, Isaac64Rng::from_entropy())
@@ -112,6 +131,7 @@ impl<F: Float> Default for MoeParams<F, Isaac64Rng> {
 impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// Constructor of Moe parameters specifying randon number generator for reproducibility
     ///
+    /// See [MoeParams::new] for default parameters.
     pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<F, R> {
         MoeParams {
             n_clusters,
@@ -124,7 +144,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         }
     }
 
-    /// The number of clusters
+    /// The number of clusters, hence the number of experts of the mixture.
     pub fn n_clusters(&self) -> usize {
         self.n_clusters
     }
@@ -134,12 +154,12 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self.recombination
     }
 
-    /// The GP Regression models
+    /// The allowed GP regression models in the mixture
     pub fn regression_spec(&self) -> RegressionSpec {
         self.regression_spec
     }
 
-    /// The GP Correlation models
+    /// The allowed GP correlation models in the mixture
     pub fn correlation_spec(&self) -> CorrelationSpec {
         self.correlation_spec
     }
@@ -147,11 +167,6 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// The optional number of PLS components
     pub fn kpls_dim(&self) -> Option<usize> {
         self.kpls_dim
-    }
-
-    /// The Gaussian Mixture
-    pub fn gmm(&self) -> &Option<Box<GaussianMixtureModel<F>>> {
-        &self.gmm
     }
 
     /// The random generator
@@ -171,31 +186,40 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self
     }
 
-    /// Sets the regression models used by GP surrogate experts
+    /// Sets the regression models used in the mixture.
+    ///
+    /// Only GP models with regression models allowed by this specification
+    /// will be used in the mixture.  
     pub fn set_regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
         self.regression_spec = regression_spec;
         self
     }
 
-    /// Sets the regression models used by GP surrogate experts
+    /// Sets the correlation models used in the mixture.
+    ///
+    /// Only GP models with correlation models allowed by this specification
+    /// will be used in the mixture.  
     pub fn set_correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
         self.correlation_spec = correlation_spec;
         self
     }
 
-    /// Sets the number of PLS components
+    /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
+    ///
+    /// None means no PLS dimension reduction applied.
     pub fn set_kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.kpls_dim = kpls_dim;
         self
     }
 
-    /// Sets the gaussian mixture
-    pub fn set_gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
+    #[doc(hidden)]
+    /// Sets the gaussian mixture (used to find the optimal number of clusters)
+    pub(crate) fn set_gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
         self.gmm = gmm;
         self
     }
 
-    /// Sets the random number generator
+    /// Sets the random number generator for reproducibility
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<F, R2> {
         MoeParams {
             n_clusters: self.n_clusters,

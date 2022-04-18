@@ -1,3 +1,6 @@
+// This is a copy of Gaussian Mixture Model from linfa_clustering
+// To allow the specification of the heaviside factor used to tune the
+// smoothness of the mixture smooth recombination
 #![allow(dead_code)]
 use crate::Result;
 use linfa::{dataset::WithLapack, dataset::WithoutLapack, traits::*, Float};
