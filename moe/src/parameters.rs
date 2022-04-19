@@ -12,8 +12,12 @@ use ndarray::Array2;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
+#[cfg(feature = "persistent")]
+use serde::{Deserialize, Serialize};
+
 /// Enumeration of recombination modes handled by the mixture
 #[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 pub enum Recombination<F: Float> {
     /// prediction is taken from the expert with highest responsability
     /// resulting in discontinuity

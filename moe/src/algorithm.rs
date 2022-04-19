@@ -1,5 +1,4 @@
 use super::gaussian_mixture::GaussianMixture;
-use super::{_make_gp_params, _make_surrogate_params};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
@@ -20,10 +19,16 @@ use std::ops::Sub;
 
 use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_linalg::norm::Norm;
-use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;
+
+#[cfg(feature = "persistent")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "persistent")]
+use std::fs;
+#[cfg(feature = "persistent")]
+use std::io::Write;
 
 macro_rules! check_allowed {
     ($spec:ident, $model_kind:ident, $model:ident, $list:ident) => {
@@ -170,29 +175,29 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
             match best.0.as_str() {
                 "Constant_SquaredExponential" => {
-                    Ok(_make_surrogate_params!(Constant, SquaredExponential))
+                    Ok(make_surrogate_params!(Constant, SquaredExponential))
                 }
                 "Constant_AbsoluteExponential" => {
-                    Ok(_make_surrogate_params!(Constant, AbsoluteExponential))
+                    Ok(make_surrogate_params!(Constant, AbsoluteExponential))
                 }
-                "Constant_Matern32" => Ok(_make_surrogate_params!(Constant, Matern32)),
-                "Constant_Matern52" => Ok(_make_surrogate_params!(Constant, Matern52)),
+                "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
+                "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
                 "Linear_SquaredExponential" => {
-                    Ok(_make_surrogate_params!(Linear, SquaredExponential))
+                    Ok(make_surrogate_params!(Linear, SquaredExponential))
                 }
                 "Linear_AbsoluteExponential" => {
-                    Ok(_make_surrogate_params!(Linear, AbsoluteExponential))
+                    Ok(make_surrogate_params!(Linear, AbsoluteExponential))
                 }
-                "Linear_Matern32" => Ok(_make_surrogate_params!(Linear, Matern32)),
-                "Linear_Matern52" => Ok(_make_surrogate_params!(Linear, Matern52)),
+                "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
+                "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
                 "Quadratic_SquaredExponential" => {
-                    Ok(_make_surrogate_params!(Quadratic, SquaredExponential))
+                    Ok(make_surrogate_params!(Quadratic, SquaredExponential))
                 }
                 "Quadratic_AbsoluteExponential" => {
-                    Ok(_make_surrogate_params!(Quadratic, AbsoluteExponential))
+                    Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
                 }
-                "Quadratic_Matern32" => Ok(_make_surrogate_params!(Quadratic, Matern32)),
-                "Quadratic_Matern52" => Ok(_make_surrogate_params!(Quadratic, Matern52)),
+                "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
+                "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
                 _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
             };
         let mut expert_params = best_expert_params?;
@@ -314,6 +319,7 @@ fn predict_values_smooth(
 }
 
 /// Mixture of gaussian process experts
+#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 pub struct Moe {
     /// The mode of recombination to get the output prediction from experts prediction
     recombination: Recombination<f64>,
@@ -380,14 +386,6 @@ impl Moe {
             Recombination::Smooth(Some(_)) => recombination,
         };
         self
-    }
-
-    /// Predict with all experts and save prediction to disk
-    pub fn save_expert_predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) {
-        self.experts.iter().enumerate().for_each(|(i, expert)| {
-            let preds = expert.predict_values(&x.view()).unwrap();
-            write_npy(format!("preds_expert_{}.npy", i), &preds).expect("expert pred saved");
-        });
     }
 
     /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
@@ -474,6 +472,26 @@ impl Moe {
             });
         Ok(variances)
     }
+
+    /// Save Moe model in given file.
+    #[cfg(feature = "persistent")]
+    pub fn save(&self, path: &str) -> Result<()> {
+        let mut file = fs::File::create(path).unwrap();
+        let bytes = match serde_json::to_string(self) {
+            Ok(b) => b,
+            Err(err) => return Err(MoeError::SaveError(err)),
+        };
+        file.write_all(bytes.as_bytes())?;
+        Ok(())
+    }
+
+    #[cfg(feature = "persistent")]
+    /// Load Moe from given json file.
+    pub fn load(path: &str) -> Result<Box<Moe>> {
+        let data = fs::read_to_string(path)?;
+        let moe: Moe = serde_json::from_str(&data).unwrap();
+        Ok(Box::new(moe))
+    }
 }
 
 /// Take one out of `quantile` in a set of data rows.
@@ -526,7 +544,6 @@ mod tests {
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        moe.save_expert_predict(&obs);
         let preds = moe.predict_values(&obs).expect("MOE prediction");
         write_npy("obs_hard.npy", &obs).expect("obs saved");
         write_npy("preds_hard.npy", &preds).expect("preds saved");
@@ -618,5 +635,26 @@ mod tests {
             .with_rng(rng)
             .fit(&xt, &yt)
             .expect("MOE fitted");
+    }
+
+    #[cfg(feature = "persistent")]
+    #[test]
+    fn test_save_load_moe() {
+        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
+        let yt = function_test_1d(&xt);
+        let moe = Moe::params(3)
+            .with_rng(rng)
+            .fit(&xt, &yt)
+            .expect("MOE fitted");
+        let xtest = array![[0.6]];
+        let y_expected = moe.predict_values(&xtest).unwrap();
+        moe.save("saved_moe.json").expect("MoE saving");
+        let new_moe = Moe::load("saved_moe.json").expect("MoE loading");
+        assert_abs_diff_eq!(
+            y_expected,
+            new_moe.predict_values(&xtest).unwrap(),
+            epsilon = 1e-6
+        );
     }
 }

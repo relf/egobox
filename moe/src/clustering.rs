@@ -351,7 +351,6 @@ mod tests {
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&obs).unwrap();
-        moe.save_expert_predict(&obs);
         write_npy("best_obs.npy", &obs).expect("saved");
         write_npy("best_preds.npy", &preds).expect("saved");
         assert_eq!(3, nb_clusters);

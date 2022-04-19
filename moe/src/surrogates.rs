@@ -1,12 +1,17 @@
-use crate::errors::{MoeError, Result};
-use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess, GpParams, GpValidParams};
+use crate::errors::Result;
+use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess, GpParams};
 use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array2, ArrayView2};
 use paste::paste;
-use serde::{Deserialize, Serialize};
-use std::fs;
-use std::io::Write;
 
+#[cfg(feature = "persistent")]
+use crate::MoeError;
+#[cfg(feature = "persistent")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "persistent")]
+use std::fs;
+#[cfg(feature = "persistent")]
+use std::io::Write;
 /// A trait for GP surrogate parameters to build Gp surrogate once fitted.
 pub trait GpSurrogateParams {
     /// Set initial theta
@@ -20,12 +25,14 @@ pub trait GpSurrogateParams {
 }
 
 /// A trait for GP surrogate used as expert in the mixture.
+#[cfg_attr(feature = "persistent", typetag::serde(tag = "type"))]
 pub trait GpSurrogate: std::fmt::Display + std::fmt::Debug {
     /// Predict output values at n points given as (n, xdim) matrix.
     fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
     fn predict_variances(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>>;
     /// Save GP model in given file.
+    #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> Result<()>;
 }
 
@@ -75,11 +82,13 @@ macro_rules! declare_surrogate {
             }
 
             #[doc = "GP surrogate with `" $regr "` regression model and `" $corr "` correlation model. \n\nSee [egobox_gp::GaussianProcess]"]
-            #[derive(Clone, Debug, Serialize, Deserialize)]
+            #[derive(Clone, Debug)]
+            #[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
             pub struct [<Gp $regr $corr Surrogate>](
                 pub GaussianProcess<f64, [<$regr Mean>], [<$corr Corr>]>,
             );
 
+            #[cfg_attr(feature = "persistent", typetag::serde)]
             impl GpSurrogate for [<Gp $regr $corr Surrogate>] {
                 fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>> {
                     self.0.predict_values(x)
@@ -87,9 +96,11 @@ macro_rules! declare_surrogate {
                 fn predict_variances(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>> {
                     self.0.predict_variances(x)
                 }
+
+                #[cfg(feature = "persistent")]
                 fn save(&self, path: &str) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
-                    let bytes = match serde_json::to_string(self) {
+                    let bytes = match serde_json::to_string(self as &dyn GpSurrogate) {
                         Ok(b) => b,
                         Err(err) => return Err(MoeError::SaveError(err))
                     };
@@ -126,85 +137,31 @@ declare_surrogate!(Quadratic, Matern32);
 declare_surrogate!(Quadratic, Matern52);
 
 #[doc(hidden)]
-// Create a GP with given regression and correlation models.
-#[macro_export]
-macro_rules! _make_gp_params {
-    ($regr:ident, $corr:ident) => {
-        paste! {
-            GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
-                [<$regr Mean>]::default(),
-                [<$corr Corr>]::default(),
-            )
-        }
-    };
-}
-
-#[doc(hidden)]
 // Create GP surrogate parameters with given regression and correlation models.
-#[macro_export]
-macro_rules! _make_surrogate_params {
+macro_rules! make_surrogate_params {
     ($regr:ident, $corr:ident) => {
         paste! {
             Box::new([<Gp $regr $corr SurrogateParams>]::new(
-                _make_gp_params!($regr, $corr))
-            )
+                GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
+                    [<$regr Mean>]::default(),
+                    [<$corr Corr>]::default(),
+                )
+            ))
         }
     };
 }
 
-#[doc(hidden)]
-/// Create GP surrogate with given regression and correlation model
-/// and inner json data
-#[macro_export]
-macro_rules! _make_surrogate {
-    ($regr:ident, $corr:ident, $data:ident) => {
-        paste! {
-            Box::new(
-                [<Gp $regr $corr Surrogate>](
-                    GpValidParams::<f64, [<$regr Mean>], [<$corr Corr>]>::from(
-                        [<$regr Mean>](), [<$corr Corr>](),
-                        serde_json::from_value(serde_json::json!($data["theta"])).unwrap(),
-                        serde_json::from_value(serde_json::json!($data["inner_params"])).unwrap(),
-                        serde_json::from_value(serde_json::json!($data["w_star"])).unwrap(),
-                        serde_json::from_value(serde_json::json!($data["xtrain"])).unwrap(),
-                        serde_json::from_value(serde_json::json!($data["ytrain"])).unwrap()
-                    )?)
-                ) as Box<dyn GpSurrogate>
-        }
-    };
-}
-
+#[cfg(feature = "persistent")]
 /// Load GP surrogate from given json file.
 pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
     let data = fs::read_to_string(path)?;
-    let data: serde_json::Value = serde_json::from_str(&data)?;
-    let gp_kind = format!(
-        "{}_{}",
-        data["mean"].as_str().unwrap(),
-        data["corr"].as_str().unwrap()
-    );
-    match gp_kind.as_str() {
-        "Constant_SquaredExponential" => Ok(_make_surrogate!(Constant, SquaredExponential, data)),
-        "Constant_AbsoluteExponential" => Ok(_make_surrogate!(Constant, AbsoluteExponential, data)),
-        "Constant_Matern32" => Ok(_make_surrogate!(Constant, Matern32, data)),
-        "Constant_Matern52" => Ok(_make_surrogate!(Constant, Matern52, data)),
-        "Linear_SquaredExponential" => Ok(_make_surrogate!(Linear, SquaredExponential, data)),
-        "Linear_AbsoluteExponential" => Ok(_make_surrogate!(Linear, AbsoluteExponential, data)),
-        "Linear_Matern32" => Ok(_make_surrogate!(Linear, Matern32, data)),
-        "Linear_Matern52" => Ok(_make_surrogate!(Linear, Matern52, data)),
-        "Quadratic_SquaredExponential" => Ok(_make_surrogate!(Quadratic, SquaredExponential, data)),
-        "Quadratic_AbsoluteExponential" => {
-            Ok(_make_surrogate!(Quadratic, AbsoluteExponential, data))
-        }
-        "Quadratic_Matern32" => Ok(_make_surrogate!(Quadratic, Matern32, data)),
-        "Quadratic_Matern52" => Ok(_make_surrogate!(Quadratic, Matern52, data)),
-        _ => Err(MoeError::LoadError(format!(
-            "Bad mean or kernel values: {}",
-            gp_kind
-        ))),
-    }
+    let gp: Box<dyn GpSurrogate> = serde_json::from_str(&data).unwrap();
+    Ok(gp)
 }
 
+pub(crate) use make_surrogate_params;
+
+#[cfg(feature = "persistent")]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,7 +180,7 @@ mod tests {
         let xlimits = array![[0., 25.]];
         let xt = Lhs::new(&xlimits).sample(10);
         let yt = xsinx(&xt);
-        let gp = _make_surrogate_params!(Constant, SquaredExponential)
+        let gp = make_surrogate_params!(Constant, SquaredExponential)
             .fit(&xt, &yt)
             .expect("GP fit error");
         gp.save("save_gp.json").expect("GP not saved");

@@ -26,7 +26,7 @@
 //! * `corr(x, x')` is a correlation function which depends on `distance(x, x')`
 //! and a set of unknown parameters `thetas` to be determined.
 //!
-//! # Highlights
+//! # Implementation
 //!
 //! * Based on [ndarray](https://github.com/rust-ndarray/ndarray)
 //! and [linfa](https://github.com/rust-ml/linfa) and strive to follow [linfa guidelines](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md)
@@ -54,13 +54,13 @@
 //! where
 //!
 //! * `*-system` features: try to find the corresponding backend in your installation.
-//! * `*-static` features: try to download and compile the corresponing backend.
+//! * `*-static` features: try to download and compile the corresponding backend.
 //!
 //! More information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)
 //!
 //! ## serializable
 //!
-//! The `serializable` feature enables the serialization using the [serde crate](https://serde.rs/).
+//! The `serializable` feature enables the serialization of GP models using the [serde crate](https://serde.rs/).
 //!
 //! # Example
 //!

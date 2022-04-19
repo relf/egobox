@@ -56,9 +56,13 @@ egobox-gp = { version = "0.2.1", features = ["linfa/intel-mkl-static"] }
 
 Note: only end-user projects should specify a provider in `Cargo.toml` (not librairies). In case of library development, the backend is specified on the command line as for examples below.
 
-### `serializable` 
+### `serializable-gp` 
 
-The `serializable` feature of enables the serialization of GP models using the [serde crate](https://serde.rs/). 
+The `serializable-gp` feature enables the serialization of GP models using the [serde crate](https://serde.rs/). 
+
+### `persistent-moe` 
+
+The `persistent-moe` feature enables `save()` and `load()` methods for MoE model to/from a json file using the [serde crate](https://serde.rs/). 
 
 ## Examples
 
