@@ -12,8 +12,8 @@
 //! `Y(x) = mu(x) + Z(x)`
 //!
 //! where:
-//! * `mu(x)` is the trend acting as the mean of the process
-//! * `Z(x)` the realization of stochastic Gaussian process ~ `Normal(0, sigma^2)`
+//! * `mu(x)` is the trend i.e. the mean of the gaussian process
+//! * `Z(x)` the realization of stochastic gaussian process ~ `Normal(0, sigma^2)`
 //!
 //! which in turn is written as:
 //!
@@ -26,8 +26,9 @@
 //! * `corr(x, x')` is a correlation function which depends on `distance(x, x')`
 //! and a set of unknown parameters `thetas` to be determined.
 //!
-//! Implementation highlights:
-//! * This library is based on [ndarray](https://github.com/rust-ndarray/ndarray)
+//! # Highlights
+//!
+//! * Based on [ndarray](https://github.com/rust-ndarray/ndarray)
 //! and [linfa](https://github.com/rust-ml/linfa) and strive to follow [linfa guidelines](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md)
 //! * GP mean model can be constant, linear or quadratic
 //! * GP correlation model can be build the following kernels: squared exponential, absolute exponential, matern 3/2, matern 5/2    
@@ -37,6 +38,29 @@
 //! To work around this problem the library implements dimension reduction using
 //! Partial Least Squares method upon Kriging method also known as KPLS algorithm (see Reference)
 //! * GP models can be saved and loaded using [serde](https://serde.rs/).
+//! See `serializable` feature section below.
+//!
+//! # Features
+//!
+//! ## linfa features
+//!
+//! End-user project should select a BLAS/Lapack backend depending its environment;
+//! it can be either:
+//!
+//! * Openblas: `linfa\openblas-system` or `linfa\openblas-static`
+//! * Netlib: `linfa\netlib-system` or `linfa\netlib-static`
+//! * Intel MKL: `linfa\intel-mkl-system` or `linfa\intel-mkl-static`
+//!
+//! where
+//!
+//! * `*-system` features: try to find the corresponding backend in your installation.
+//! * `*-static` features: try to download and compile the corresponing backend.
+//!
+//! More information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)
+//!
+//! ## serializable
+//!
+//! The `serializable` feature enables the serialization using the [serde crate](https://serde.rs/).
 //!
 //! # Example
 //!

@@ -11,8 +11,8 @@ Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](ht
 
 | Name         | Version                                                                                         | Documentation                                                               | Description                                                                     |
 | :----------- | :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
-| [doe](./doe) | [![crates.io](https://img.shields.io/crates/v/egobox-doe)](https://crates.io/crates/egobox-doe) | [![docs](https://docs.rs/egobox-doe/badge.svg)](https://docs.rs/egobox-doe) | sampling methods; contains LHS, FullFactorial, Random methods          |
-| [gp](./gp)   | [![crates.io](https://img.shields.io/crates/v/egobox-gp)](https://crates.io/crates/egobox-gp)   | [![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)   | gaussian process regression; contains Kriging and PLS dimension reduction      |
+| [doe](./doe) | [![crates.io](https://img.shields.io/crates/v/egobox-doe)](https://crates.io/crates/egobox-doe) | [![docs](https://docs.rs/egobox-doe/badge.svg)](https://docs.rs/egobox-doe) | sampling methods; contains LHS, FullFactorial, Random methods                   |
+| [gp](./gp)   | [![crates.io](https://img.shields.io/crates/v/egobox-gp)](https://crates.io/crates/egobox-gp)   | [![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)   | gaussian process regression; contains Kriging and PLS dimension reduction       |
 | [moe](./gp)  | [![crates.io](https://img.shields.io/crates/v/egobox-moe)](https://crates.io/crates/egobox-moe) | [![docs](https://docs.rs/egobox-moe/badge.svg)](https://docs.rs/egobox-moe) | mixture of experts using GP models                                              |
 | [ego](./ego) | [![crates.io](https://img.shields.io/crates/v/egobox-ego)](https://crates.io/crates/egobox-ego) | [![docs](https://docs.rs/egobox-ego/badge.svg)](https://docs.rs/egobox-ego) | efficient global optimization with basic constraints and mixed integer handling |
 
@@ -30,7 +30,22 @@ egobox-ego = { version = "0.2.1" }
 
 ## Features
 
-`gp`, `moe` and `ego` relies on `linfa` [BLAS/Lapack backend features](https://github.com/rust-ml/linfa#blaslapack-backend).
+### linfa BLAS/Lapack backend feature
+
+ relies on `linfa` [BLAS/Lapack backend features](https://github.com/rust-ml/linfa#blaslapack-backend).
+
+End user project using `gp`, `moe` and `ego` should select a BLAS/Lapack backend 
+depending its environment; it can be either: 
+ * Openblas: `linfa\openblas-system` or `linfa\openblas-static`
+ * Netlib: `linfa\netlib-system` or `linfa\netlib-static`
+ * Intel MKL: `linfa\intel-mkl-system` or `linfa\intel-mkl-static`
+
+where
+
+ * `*-system` features: try to find the corresponding backend in your installation.
+ * `*-static` features: try to download and compile the corresponing backend.
+
+More information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)
 
 For instance, using `gp` with the Intel MKL BLAS/Lapack backend, you have to specify the linfa backend feature :
 
@@ -40,6 +55,10 @@ egobox-gp = { version = "0.2.1", features = ["linfa/intel-mkl-static"] }
 ```
 
 Note: only end-user projects should specify a provider in `Cargo.toml` (not librairies). In case of library development, the backend is specified on the command line as for examples below.
+
+### `serializable` 
+
+The `serializable` feature of enables the serialization of GP models using the [serde crate](https://serde.rs/). 
 
 ## Examples
 
