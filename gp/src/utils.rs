@@ -1,10 +1,12 @@
 use linfa::Float;
 use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
+#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 /// A structure to store data and its mean and standard deviation vectors
 /// Data is a (n, xdim) matrix
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct NormalizedMatrix<F: Float> {
     /// data
     pub data: Array2<F>,
