@@ -9,7 +9,10 @@ tags:
 authors:
   - name: Rémi Lafage
     orcid: 0000-0001-5479-2961
-    affiliation: ONERA, Université de Toulouse, France
+    affiliation: 1
+affiliations:
+  - name: ONERA, Université de Toulouse, France
+    index: 1
 date: "29 March 2022"
 bibliography: paper.bib
 ---
