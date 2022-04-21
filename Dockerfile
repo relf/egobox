@@ -8,7 +8,10 @@ RUN cd llvm-project \
     && cd build \
     && cmake -DLLVM_ENABLE_PROJECTS=clang -G "Unix Makefiles" ../llvm \
     && make
+
 ENV LIBCLANG_PATH=/llvm-project/build/lib
+ENV CC=gcc
+ENV CXX=g++
 
 WORKDIR /io
 ENTRYPOINT ["/usr/bin/maturin"]
