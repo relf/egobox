@@ -11,7 +11,7 @@ categories = ["algorithms", "mathematics", "science"]
 
 [dependencies]
 egobox-doe = { version = "0.2.1", path = "../doe" }
-egobox-gp = { version = "0.2.1", path = "../gp" }
+egobox-gp = { version = "0.2.1", path = "../gp", features = ["serializable"] }
 
 linfa = { version = "0.5.1", default-features = false }
 linfa-clustering = { version = "0.5.1", default-features = false }

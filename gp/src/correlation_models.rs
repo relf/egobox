@@ -7,6 +7,7 @@
 
 use linfa::Float;
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -22,10 +23,13 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
     ) -> Array2<F>;
 }
 
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-#[serde(into = "String")]
-#[serde(try_from = "String")]
-
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(into = "String"),
+    serde(try_from = "String")
+)]
 /// Squared exponential correlation models
 pub struct SquaredExponentialCorr();
 
@@ -60,9 +64,13 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
     }
 }
 /// Absolute exponential correlation models
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-#[serde(into = "String")]
-#[serde(try_from = "String")]
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(into = "String"),
+    serde(try_from = "String")
+)]
 pub struct AbsoluteExponentialCorr();
 
 impl From<AbsoluteExponentialCorr> for String {
@@ -97,9 +105,13 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
 }
 
 /// Matern 3/2 correlation model
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-#[serde(into = "String")]
-#[serde(try_from = "String")]
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(into = "String"),
+    serde(try_from = "String")
+)]
 pub struct Matern32Corr();
 
 impl From<Matern32Corr> for String {
@@ -140,9 +152,13 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
 }
 
 /// Matern 5/2 correlation model
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-#[serde(into = "String")]
-#[serde(try_from = "String")]
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(into = "String"),
+    serde(try_from = "String")
+)]
 pub struct Matern52Corr();
 
 impl From<Matern52Corr> for String {

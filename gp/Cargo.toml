@@ -12,13 +12,15 @@ categories = ["algorithms", "mathematics", "science"]
 [features]
 default = []
 
+serializable = ["linfa/serde", "serde"]
+
 [dependencies]
 egobox-doe = { version = "0.2.1", path="../doe" }
 
 linfa = { version = "0.5.1", default-features = false }
 linfa-pls = { version = "0.5.1", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx", "serde"]}
+ndarray = { version = "0.15", features = ["rayon", "approx"]}
 ndarray-linalg = "0.14"
 ndarray-stats = "0.5"
 ndarray_einsum_beta = "0.7"
@@ -29,8 +31,14 @@ cobyla = "0.1.2"
 rand_isaac = "0.3"
 paste = "1.0"
 num-traits = "0.2"
-serde = {version = "1", features = ["derive"]}
 thiserror = "1"
+
+[dependencies.serde]
+package = "serde"
+version = "1.0"
+default-features = false
+features = ["std", "derive"]
+optional = true
 
 [dev-dependencies]
 criterion = "0.3"

@@ -28,7 +28,7 @@ openblas-system = ["linfa/openblas-system"]
 intel-mkl-static = ["linfa/intel-mkl-static"]
 intel-mkl-system = ["linfa/intel-mkl-system"]
 
-serde = ["linfa/serde"]
+serializable = ["linfa/serde", "egobox-gp/serializable"]
 
 [dependencies]
 egobox-doe = { version = "0.2.1", path="./doe" }

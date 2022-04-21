@@ -14,14 +14,19 @@ use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
+#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 
 /// Internal parameters computed Gp during training
 /// used later on in prediction computations
-#[derive(Default, Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "F: Deserialize<'de>"))]
+#[derive(Default, Debug)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(bound(deserialize = "F: Deserialize<'de>"))
+)]
 pub struct GpInnerParams<F: Float> {
     /// Gaussian process variance
     sigma2: Array1<F>,
@@ -51,16 +56,26 @@ impl<F: Float> Clone for GpInnerParams<F> {
 }
 
 /// Gaussian Process
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))]
+#[derive(Debug)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))
+)]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Array1<F>,
     /// Regression model
-    #[serde(bound(serialize = "Mean: Serialize", deserialize = "Mean: Deserialize<'de>"))]
+    #[cfg_attr(
+        feature = "serializable",
+        serde(bound(serialize = "Mean: Serialize", deserialize = "Mean: Deserialize<'de>"))
+    )]
     mean: Mean,
     /// Correlation kernel
-    #[serde(bound(serialize = "Corr: Serialize", deserialize = "Corr: Deserialize<'de>"))]
+    #[cfg_attr(
+        feature = "serializable",
+        serde(bound(serialize = "Corr: Serialize", deserialize = "Corr: Deserialize<'de>"))
+    )]
     corr: Corr,
     /// Gaussian process internal fitted params
     inner_params: GpInnerParams<F>,
@@ -88,9 +103,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
     }
 }
 
-impl<F: Float + Serialize, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
-    GaussianProcess<F, Mean, Corr>
-{
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProcess<F, Mean, Corr> {
     /// Gp parameters contructor
     pub fn params<NewMean: RegressionModel<F>, NewCorr: CorrelationModel<F>>(
         mean: NewMean,

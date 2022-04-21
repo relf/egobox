@@ -1,12 +1,12 @@
 //! A module for regression models used by GP models.
-//! The following kernels are implemented:
-//! * squared exponential,
-//! * absolute exponential,
-//! * matern 3/2,
-//! * matern 5/2.
+//! The following models are implemented:
+//! * constant,
+//! * linear,
+//! * quadratic
 
 use linfa::Float;
 use ndarray::{concatenate, s, Array2, ArrayBase, Axis, Data, Ix2};
+#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -17,9 +17,13 @@ pub trait RegressionModel<F: Float>: Clone + Copy + Default {
 }
 
 /// A constant function as mean of the GP
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-#[serde(into = "String")]
-#[serde(try_from = "String")]
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(into = "String"),
+    serde(try_from = "String")
+)]
 pub struct ConstantMean();
 
 impl<F: Float> RegressionModel<F> for ConstantMean {
@@ -46,9 +50,13 @@ impl TryFrom<String> for ConstantMean {
 }
 
 /// An affine function as mean of the GP
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-#[serde(into = "String")]
-#[serde(try_from = "String")]
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(into = "String"),
+    serde(try_from = "String")
+)]
 pub struct LinearMean();
 
 impl<F: Float> RegressionModel<F> for LinearMean {
@@ -76,9 +84,13 @@ impl TryFrom<String> for LinearMean {
 }
 
 /// A 2-degree polynomial as mean of the GP
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
-#[serde(into = "String")]
-#[serde(try_from = "String")]
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(into = "String"),
+    serde(try_from = "String")
+)]
 pub struct QuadraticMean();
 
 impl<F: Float> RegressionModel<F> for QuadraticMean {
