@@ -1,5 +1,5 @@
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_moe::{Moe, MoePredict, Recombination};
+use egobox_moe::{Expert, Moe, Recombination};
 use ndarray::{arr2, Array2, Axis};
 use std::error::Error;
 

@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 #[cfg(feature = "persistent")]
 use std::io::Write;
-/// A trait for GP surrogate parameters to build Gp surrogate once fitted.
-pub trait GpSurrogateParams {
+/// A trait for surrogate parameters to build surrogate once fitted.
+pub trait SurrogateParams {
     /// Set initial theta
     fn initial_theta(&mut self, theta: Vec<f64>);
     /// Set the number of PLS components
@@ -21,17 +21,17 @@ pub trait GpSurrogateParams {
     /// Set the nugget parameter to improve numerical stability
     fn nugget(&mut self, nugget: f64);
     /// Train the surrogate
-    fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn GpSurrogate>>;
+    fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Surrogate>>;
 }
 
-/// A trait for GP surrogate used as expert in the mixture.
+/// A trait for a surrogate used as expert in the mixture.
 #[cfg_attr(feature = "persistent", typetag::serde(tag = "type"))]
-pub trait GpSurrogate: std::fmt::Display + std::fmt::Debug {
+pub trait Surrogate: std::fmt::Display {
     /// Predict output values at n points given as (n, xdim) matrix.
-    fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>>;
+    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
-    fn predict_variances(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>>;
-    /// Save GP model in given file.
+    fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    /// Save model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> Result<()>;
 }
@@ -57,7 +57,7 @@ macro_rules! declare_surrogate {
                 }
             }
 
-            impl GpSurrogateParams for [<Gp $regr $corr SurrogateParams>] {
+            impl SurrogateParams for [<Gp $regr $corr SurrogateParams>] {
                 fn initial_theta(&mut self, theta: Vec<f64>) {
                     self.0 = self.0.clone().initial_theta(Some(theta));
                 }
@@ -74,7 +74,7 @@ macro_rules! declare_surrogate {
                     &self,
                     x: &Array2<f64>,
                     y: &Array2<f64>,
-                ) -> Result<Box<dyn GpSurrogate>> {
+                ) -> Result<Box<dyn Surrogate>> {
                     Ok(Box::new([<Gp $regr $corr Surrogate>](
                         self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,
                     )))
@@ -89,18 +89,18 @@ macro_rules! declare_surrogate {
             );
 
             #[cfg_attr(feature = "persistent", typetag::serde)]
-            impl GpSurrogate for [<Gp $regr $corr Surrogate>] {
-                fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>> {
-                    self.0.predict_values(x)
+            impl Surrogate for [<Gp $regr $corr Surrogate>] {
+                fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_values(x)?)
                 }
-                fn predict_variances(&self, x: &ArrayView2<f64>) -> egobox_gp::Result<Array2<f64>> {
-                    self.0.predict_variances(x)
+                fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_variances(x)?)
                 }
 
                 #[cfg(feature = "persistent")]
                 fn save(&self, path: &str) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
-                    let bytes = match serde_json::to_string(self as &dyn GpSurrogate) {
+                    let bytes = match serde_json::to_string(self as &dyn Surrogate) {
                         Ok(b) => b,
                         Err(err) => return Err(MoeError::SaveError(err))
                     };
@@ -153,9 +153,9 @@ macro_rules! make_surrogate_params {
 
 #[cfg(feature = "persistent")]
 /// Load GP surrogate from given json file.
-pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
+pub fn load(path: &str) -> Result<Box<dyn Surrogate>> {
     let data = fs::read_to_string(path)?;
-    let gp: Box<dyn GpSurrogate> = serde_json::from_str(&data).unwrap();
+    let gp: Box<dyn Surrogate> = serde_json::from_str(&data).unwrap();
     Ok(gp)
 }
 

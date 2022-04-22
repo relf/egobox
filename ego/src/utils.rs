@@ -1,4 +1,4 @@
-use egobox_moe::MoePredict;
+use egobox_moe::Expert;
 use libm::erfc;
 use ndarray::{concatenate, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_stats::{DeviationExt, QuantileExt};
@@ -8,7 +8,7 @@ use ndarray_stats::{DeviationExt, QuantileExt};
 
 const SQRT_2PI: f64 = 2.5066282746310007;
 
-pub fn ei(x: &[f64], obj_model: &dyn MoePredict, f_min: f64) -> f64 {
+pub fn ei(x: &[f64], obj_model: &dyn Expert, f_min: f64) -> f64 {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap().to_owned();
     if let Ok(p) = obj_model.predict_values(&pt) {
         if let Ok(s) = obj_model.predict_variances(&pt) {
@@ -26,13 +26,13 @@ pub fn ei(x: &[f64], obj_model: &dyn MoePredict, f_min: f64) -> f64 {
     }
 }
 
-pub fn wb2s(x: &[f64], obj_model: &dyn MoePredict, f_min: f64, scale: f64) -> f64 {
+pub fn wb2s(x: &[f64], obj_model: &dyn Expert, f_min: f64, scale: f64) -> f64 {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap().to_owned();
     let ei = ei(x, obj_model, f_min);
     scale * ei - obj_model.predict_values(&pt).unwrap()[[0, 0]]
 }
 
-pub fn compute_wb2s_scale(x: &Array2<f64>, obj_model: &dyn MoePredict, f_min: f64) -> f64 {
+pub fn compute_wb2s_scale(x: &Array2<f64>, obj_model: &dyn Expert, f_min: f64) -> f64 {
     let ratio = 100.; // TODO: make it a parameter
     let ei_x = x.map_axis(Axis(1), |xi| {
         let ei = ei(xi.as_slice().unwrap(), obj_model, f_min);
@@ -50,12 +50,12 @@ pub fn compute_wb2s_scale(x: &Array2<f64>, obj_model: &dyn MoePredict, f_min: f6
     }
 }
 
-pub fn compute_obj_scale(x: &Array2<f64>, obj_model: &dyn MoePredict) -> f64 {
+pub fn compute_obj_scale(x: &Array2<f64>, obj_model: &dyn Expert) -> f64 {
     let preds = obj_model.predict_values(x).unwrap().mapv(f64::abs);
     *preds.max().unwrap_or(&1.0)
 }
 
-pub fn compute_cstr_scales(x: &Array2<f64>, cstr_models: &[Box<dyn MoePredict>]) -> Array1<f64> {
+pub fn compute_cstr_scales(x: &Array2<f64>, cstr_models: &[Box<dyn Expert>]) -> Array1<f64> {
     let scales: Vec<f64> = cstr_models
         .iter()
         .map(|cstr_model| {

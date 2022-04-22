@@ -54,7 +54,7 @@
 //!
 //! ```no_run
 //! use ndarray::{Array2, Array1, Zip, Axis};
-//! use egobox_moe::{Moe, MoePredict, Recombination};
+//! use egobox_moe::{Moe, Expert, Recombination};
 //! use ndarray_rand::{RandomExt, rand::SeedableRng, rand_distr::Uniform};
 //! use rand_isaac::Isaac64Rng;
 //!

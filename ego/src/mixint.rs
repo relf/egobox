@@ -3,7 +3,7 @@
 
 #![allow(dead_code)]
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_moe::{Moe, MoeFit, MoeParams, MoePredict, RegressionSpec, Result};
+use egobox_moe::{Expert, Moe, MoeFit, MoeParams, RegressionSpec, Result};
 use ndarray::{s, Array, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -250,8 +250,8 @@ impl MixintMoeParams {
 }
 
 impl MoeFit for MixintMoeParams {
-    fn fit_for_predict(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn MoePredict>> {
-        Ok(Box::new(self.fit(x, y)) as Box<dyn MoePredict>)
+    fn fit_for_predict(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Expert>> {
+        Ok(Box::new(self.fit(x, y)) as Box<dyn Expert>)
     }
 }
 
@@ -282,7 +282,7 @@ pub struct MixintMoe {
     work_in_folded_space: bool,
 }
 
-impl MoePredict for MixintMoe {
+impl Expert for MixintMoe {
     fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)

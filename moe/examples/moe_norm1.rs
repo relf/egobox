@@ -1,6 +1,6 @@
 use csv::ReaderBuilder;
 use egobox_doe::{FullFactorial, SamplingMethod};
-use egobox_moe::{Moe, MoePredict};
+use egobox_moe::{Expert, Moe};
 use ndarray::{arr2, s, Array2, Axis};
 use ndarray_csv::Array2Reader;
 use ndarray_npy::write_npy;

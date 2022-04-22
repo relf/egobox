@@ -3,7 +3,7 @@ use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
 use crate::parameters::{
-    CorrelationSpec, MoeFit, MoeParams, MoePredict, Recombination, RegressionSpec,
+    CorrelationSpec, Expert, MoeFit, MoeParams, Recombination, RegressionSpec,
 };
 use crate::surrogates::*;
 use log::{debug, info, trace};
@@ -41,9 +41,8 @@ macro_rules! check_allowed {
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
-    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn MoePredict>> {
-        self.fit(xt, yt)
-            .map(|moe| Box::new(moe) as Box<dyn MoePredict>)
+    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>> {
+        self.fit(xt, yt).map(|moe| Box::new(moe) as Box<dyn Expert>)
     }
 }
 
@@ -131,7 +130,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
 
     /// Select the surrogate which gives the smallest prediction error on the given data
     /// The error is computed using cross-validation
-    fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn GpSurrogate>> {
+    fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
         let xtrain = data.slice(s![.., ..nx]).to_owned();
         let ytrain = data.slice(s![.., nx..]).to_owned();
         let mut dataset = Dataset::from((xtrain.clone(), ytrain.clone()));
@@ -172,34 +171,32 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
                 .unwrap();
             (map_error[argmin].0.clone(), Some(map_error[argmin].1))
         };
-        let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
-            match best.0.as_str() {
-                "Constant_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Constant, SquaredExponential))
-                }
-                "Constant_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Constant, AbsoluteExponential))
-                }
-                "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
-                "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
-                "Linear_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Linear, SquaredExponential))
-                }
-                "Linear_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Linear, AbsoluteExponential))
-                }
-                "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
-                "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
-                "Quadratic_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Quadratic, SquaredExponential))
-                }
-                "Quadratic_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
-                }
-                "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
-                "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
-                _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
-            };
+        let best_expert_params: std::result::Result<Box<dyn SurrogateParams>, MoeError> = match best
+            .0
+            .as_str()
+        {
+            "Constant_SquaredExponential" => {
+                Ok(make_surrogate_params!(Constant, SquaredExponential))
+            }
+            "Constant_AbsoluteExponential" => {
+                Ok(make_surrogate_params!(Constant, AbsoluteExponential))
+            }
+            "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
+            "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
+            "Linear_SquaredExponential" => Ok(make_surrogate_params!(Linear, SquaredExponential)),
+            "Linear_AbsoluteExponential" => Ok(make_surrogate_params!(Linear, AbsoluteExponential)),
+            "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
+            "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
+            "Quadratic_SquaredExponential" => {
+                Ok(make_surrogate_params!(Quadratic, SquaredExponential))
+            }
+            "Quadratic_AbsoluteExponential" => {
+                Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
+            }
+            "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
+            "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
+            _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
+        };
         let mut expert_params = best_expert_params?;
         expert_params.kpls_dim(self.kpls_dim());
         let expert = expert_params.fit(&xtrain, &ytrain);
@@ -218,7 +215,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
     /// Used only in case of smooth recombination
     fn optimize_heaviside_factor(
         &self,
-        experts: &[Box<dyn GpSurrogate>],
+        experts: &[Box<dyn Surrogate>],
         gmx: &GaussianMixture<f64>,
         xtest: &Array2<f64>,
         ytest: &Array2<f64>,
@@ -297,7 +294,7 @@ pub(crate) fn sort_by_cluster<F: Float>(
 /// or another (ie responsabilities). Those responsabilities are used to combine
 /// output values predict by each cluster experts.
 fn predict_values_smooth(
-    experts: &[Box<dyn GpSurrogate>],
+    experts: &[Box<dyn Surrogate>],
     gmx: &GaussianMixture<f64>,
     points: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Result<Array2<f64>> {
@@ -324,7 +321,7 @@ pub struct Moe {
     /// The mode of recombination to get the output prediction from experts prediction
     recombination: Recombination<f64>,
     /// The list of the best experts trained on each cluster
-    experts: Vec<Box<dyn GpSurrogate>>,
+    experts: Vec<Box<dyn Surrogate>>,
     /// The gaussian mixture allowing to predict cluster responsabilities for a given point
     gmx: GaussianMixture<f64>,
 }
@@ -346,7 +343,7 @@ impl std::fmt::Display for Moe {
     }
 }
 
-impl MoePredict for Moe {
+impl Expert for Moe {
     fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_values_hard(x),

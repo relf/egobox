@@ -1,4 +1,5 @@
 use crate::errors::Result;
+use crate::surrogates::Surrogate;
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
@@ -78,17 +79,27 @@ bitflags! {
 }
 
 /// A trait for mixture of experts predictor.
-pub trait MoePredict {
+pub trait Expert {
     /// Predict values at a given set of points `x` defined as (n, xdim) matrix
     fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
     /// Predict variances at a given set of points `x` defined as (n, xdim) matrix
     fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
 }
 
+impl<T: Surrogate> Expert for T {
+    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        self.predict_values(&x.view())
+    }
+
+    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        self.predict_variances(&x.view())
+    }
+}
+
 /// A trait for mixture of experts predictor construction (model fitting)
 pub trait MoeFit {
     /// Train the Moe models with given training dataset (x, y)
-    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn MoePredict>>;
+    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>>;
 }
 
 /// Mixture of experts parameters

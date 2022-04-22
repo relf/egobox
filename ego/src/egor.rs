@@ -97,7 +97,7 @@ use crate::utils::update_data;
 use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale};
 use crate::utils::{ei, wb2s};
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
-use egobox_moe::{CorrelationSpec, Moe, MoeFit, MoePredict, RegressionSpec};
+use egobox_moe::{CorrelationSpec, Expert, Moe, MoeFit, RegressionSpec};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
 use log::{debug, info};
@@ -507,7 +507,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             .fit_for_predict(x_data, &y_data.slice(s![.., 0..1]).to_owned())
             .expect("GP training failure");
 
-        let mut cstr_models: Vec<Box<dyn MoePredict>> = Vec::with_capacity(self.n_cstr);
+        let mut cstr_models: Vec<Box<dyn Expert>> = Vec::with_capacity(self.n_cstr);
         for k in 0..self.n_cstr {
             cstr_models.push(
                 params
@@ -549,8 +549,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &Lhs<f64, R>,
-        obj_model: &dyn MoePredict,
-        cstr_models: &[Box<dyn MoePredict>],
+        obj_model: &dyn Expert,
+        cstr_models: &[Box<dyn Expert>],
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
@@ -689,8 +689,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         &self,
         xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        obj_model: &dyn MoePredict,
-        cstr_models: &[Box<dyn MoePredict>],
+        obj_model: &dyn Expert,
+        cstr_models: &[Box<dyn Expert>],
     ) -> Result<Vec<f64>> {
         let mut res: Vec<f64> = Vec::with_capacity(3);
         if self.q_ei == QEiStrategy::ConstantLiarMinimum {
@@ -721,7 +721,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     fn infill_eval(
         &self,
         x: &[f64],
-        obj_model: &dyn MoePredict,
+        obj_model: &dyn Expert,
         f_min: f64,
         scale: f64,
         scale_wb2: f64,
