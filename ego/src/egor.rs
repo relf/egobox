@@ -504,14 +504,14 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         let params = self.moe_params.unwrap_or(default_params);
 
         let obj_model = params
-            .fit_for_predict(x_data, &y_data.slice(s![.., 0..1]).to_owned())
+            .fit(x_data, &y_data.slice(s![.., 0..1]).to_owned())
             .expect("GP training failure");
 
         let mut cstr_models: Vec<Box<dyn Expert>> = Vec::with_capacity(self.n_cstr);
         for k in 0..self.n_cstr {
             cstr_models.push(
                 params
-                    .fit_for_predict(x_data, &y_data.slice(s![.., k + 1..k + 2]).to_owned())
+                    .fit(x_data, &y_data.slice(s![.., k + 1..k + 2]).to_owned())
                     .expect("GP training failure"),
             )
         }

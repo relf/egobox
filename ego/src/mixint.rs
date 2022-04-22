@@ -250,7 +250,7 @@ impl MixintMoeParams {
 }
 
 impl MoeFit for MixintMoeParams {
-    fn fit_for_predict(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Expert>> {
+    fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Expert>> {
         Ok(Box::new(self.fit(x, y)) as Box<dyn Expert>)
     }
 }

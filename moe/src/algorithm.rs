@@ -41,7 +41,7 @@ macro_rules! check_allowed {
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
-    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>> {
+    fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>> {
         self.fit(xt, yt).map(|moe| Box::new(moe) as Box<dyn Expert>)
     }
 }

@@ -98,8 +98,8 @@ impl<T: Surrogate> Expert for T {
 
 /// A trait for mixture of experts predictor construction (model fitting)
 pub trait MoeFit {
-    /// Train the Moe models with given training dataset (x, y)
-    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>>;
+    /// Train the mixture of models with given training dataset (x, y)
+    fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>>;
 }
 
 /// Mixture of experts parameters
