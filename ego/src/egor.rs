@@ -100,6 +100,7 @@ use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::{CorrelationSpec, Expert, Moe, MoeFit, RegressionSpec};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
+use linfa::ParamGuard;
 use log::{debug, info};
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_linalg::Scalar;
@@ -500,7 +501,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             .set_kpls_dim(self.kpls_dim)
             .set_regression_spec(self.regression_spec)
             .set_correlation_spec(self.correlation_spec)
-            as &dyn MoeFit;
+            .check_unwrap() as &dyn MoeFit;
         let params = self.moe_params.unwrap_or(default_params);
 
         let obj_model = params

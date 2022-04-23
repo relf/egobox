@@ -1,4 +1,4 @@
-use crate::errors::Result;
+use crate::errors::{MoeError, Result};
 use crate::surrogates::Surrogate;
 use bitflags::bitflags;
 #[allow(unused_imports)]
@@ -7,7 +7,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
-use linfa::Float;
+use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::Array2;
 use ndarray_rand::rand::{Rng, SeedableRng};
@@ -104,7 +104,7 @@ pub trait MoeFit {
 
 /// Mixture of experts parameters
 #[derive(Clone)]
-pub struct MoeParams<F: Float, R: Rng + Clone> {
+pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     /// Number of clusters (i.e. number of experts)
     n_clusters: usize,
     /// [Recombination] mode
@@ -122,43 +122,21 @@ pub struct MoeParams<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float> MoeParams<F, Isaac64Rng> {
-    /// Constructor of Moe parameters with `n_clusters`.
-    ///
-    /// Default values are provided as follows:
-    ///
-    /// * recombination: `Smooth`
-    /// * regression_spec: `ALL`
-    /// * correlation_spec: `ALL`
-    /// * kpls_dim: `None`
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
-        Self::new_with_rng(n_clusters, Isaac64Rng::from_entropy())
-    }
-}
-
-impl<F: Float> Default for MoeParams<F, Isaac64Rng> {
-    fn default() -> MoeParams<F, Isaac64Rng> {
-        MoeParams::new(1)
-    }
-}
-
-impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
-    /// Constructor of Moe parameters specifying randon number generator for reproducibility
-    ///
-    /// See [MoeParams::new] for default parameters.
-    pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<F, R> {
-        MoeParams {
-            n_clusters,
+impl<F: Float> Default for MoeValidParams<F, Isaac64Rng> {
+    fn default() -> MoeValidParams<F, Isaac64Rng> {
+        MoeValidParams {
+            n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
             gmm: None,
-            rng,
+            rng: Isaac64Rng::from_entropy(),
         }
     }
+}
 
+impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
     /// The number of clusters, hence the number of experts of the mixture.
     pub fn n_clusters(&self) -> usize {
         self.n_clusters
@@ -184,20 +162,66 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self.kpls_dim
     }
 
+    /// The optional number of PLS components
+    pub fn gmm(&self) -> &Option<Box<GaussianMixtureModel<F>>> {
+        &self.gmm
+    }
+
     /// The random generator
     pub fn rng(&self) -> R {
         self.rng.clone()
     }
+}
+
+#[derive(Clone)]
+pub struct MoeParams<F: Float, R: Rng + Clone>(MoeValidParams<F, R>);
+
+impl<F: Float> Default for MoeParams<F, Isaac64Rng> {
+    fn default() -> MoeParams<F, Isaac64Rng> {
+        MoeParams(MoeValidParams::default())
+    }
+}
+
+impl<F: Float> MoeParams<F, Isaac64Rng> {
+    /// Constructor of Moe parameters with `n_clusters`.
+    ///
+    /// Default values are provided as follows:
+    ///
+    /// * recombination: `Smooth`
+    /// * regression_spec: `ALL`
+    /// * correlation_spec: `ALL`
+    /// * kpls_dim: `None`
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
+        Self::new_with_rng(n_clusters, Isaac64Rng::from_entropy())
+    }
+}
+
+impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
+    /// Constructor of Moe parameters specifying randon number generator for reproducibility
+    ///
+    /// See [MoeParams::new] for default parameters.
+    pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<F, R> {
+        Self(MoeValidParams {
+            n_clusters,
+            recombination: Recombination::Smooth(Some(F::one())),
+            regression_spec: RegressionSpec::ALL,
+            correlation_spec: CorrelationSpec::ALL,
+            kpls_dim: None,
+            gmm: None,
+            rng,
+        })
+    }
 
     /// Sets the number of clusters
     pub fn set_nclusters(mut self, n_clusters: usize) -> Self {
-        self.n_clusters = n_clusters;
+        self.0.n_clusters = n_clusters;
         self
     }
 
     /// Sets the recombination mode
     pub fn set_recombination(mut self, recombination: Recombination<F>) -> Self {
-        self.recombination = recombination;
+        self.0.recombination = recombination;
         self
     }
 
@@ -206,7 +230,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// Only GP models with regression models allowed by this specification
     /// will be used in the mixture.  
     pub fn set_regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
-        self.regression_spec = regression_spec;
+        self.0.regression_spec = regression_spec;
         self
     }
 
@@ -215,7 +239,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// Only GP models with correlation models allowed by this specification
     /// will be used in the mixture.  
     pub fn set_correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
-        self.correlation_spec = correlation_spec;
+        self.0.correlation_spec = correlation_spec;
         self
     }
 
@@ -223,27 +247,54 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     ///
     /// None means no PLS dimension reduction applied.
     pub fn set_kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
-        self.kpls_dim = kpls_dim;
+        self.0.kpls_dim = kpls_dim;
         self
     }
 
     #[doc(hidden)]
     /// Sets the gaussian mixture (used to find the optimal number of clusters)
     pub(crate) fn set_gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
-        self.gmm = gmm;
+        self.0.gmm = gmm;
         self
     }
 
     /// Sets the random number generator for reproducibility
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<F, R2> {
-        MoeParams {
-            n_clusters: self.n_clusters,
-            recombination: self.recombination,
-            regression_spec: self.regression_spec,
-            correlation_spec: self.correlation_spec,
-            kpls_dim: self.kpls_dim,
-            gmm: self.gmm,
+        MoeParams(MoeValidParams {
+            n_clusters: self.0.n_clusters(),
+            recombination: self.0.recombination(),
+            regression_spec: self.0.regression_spec(),
+            correlation_spec: self.0.correlation_spec(),
+            kpls_dim: self.0.kpls_dim(),
+            gmm: self.0.gmm().clone(),
             rng,
+        })
+    }
+}
+
+impl<F: Float, R: Rng + Clone> ParamGuard for MoeParams<F, R> {
+    type Checked = MoeValidParams<F, R>;
+    type Error = MoeError;
+
+    fn check_ref(&self) -> Result<&Self::Checked> {
+        if let Some(d) = self.0.kpls_dim {
+            if d == 0 {
+                return Err(MoeError::InvalidValueError(
+                    "`kpls_dim` canot be 0!".to_string(),
+                ));
+            }
         }
+        Ok(&self.0)
+    }
+
+    fn check(self) -> Result<Self::Checked> {
+        self.check_ref()?;
+        Ok(self.0)
+    }
+}
+
+impl<F: Float, R: Rng + Clone> From<MoeValidParams<F, R>> for MoeParams<F, R> {
+    fn from(item: MoeValidParams<F, R>) -> Self {
+        MoeParams(item)
     }
 }

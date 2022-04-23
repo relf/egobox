@@ -3,7 +3,7 @@ use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
 use crate::parameters::{
-    CorrelationSpec, Expert, MoeFit, MoeParams, Recombination, RegressionSpec,
+    CorrelationSpec, Expert, MoeFit, MoeParams, MoeValidParams, Recombination, RegressionSpec,
 };
 use crate::surrogates::*;
 use log::{debug, info, trace};
@@ -11,7 +11,7 @@ use log::{debug, info, trace};
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict};
-use linfa::{Dataset, Float};
+use linfa::{Dataset, Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use paste::paste;
 use std::cmp::Ordering;
@@ -40,13 +40,13 @@ macro_rules! check_allowed {
     };
 }
 
-impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
+impl<R: Rng + SeedableRng + Clone> MoeFit for MoeValidParams<f64, R> {
     fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>> {
         self.fit(xt, yt).map(|moe| Box::new(moe) as Box<dyn Expert>)
     }
 }
 
-impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
+impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
     /// MoE constructor from parameters
     ///
     /// # Errors
@@ -116,8 +116,9 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         if self.recombination() == Recombination::Smooth(None) {
             let factor =
                 self.optimize_heaviside_factor(&experts, &gmx, &xtest.unwrap(), &ytest.unwrap());
-            self.clone()
+            MoeParams::from(self.clone())
                 .set_recombination(Recombination::Smooth(Some(factor)))
+                .check()?
                 .fit(xt, yt)
         } else {
             Ok(Moe {
@@ -538,6 +539,7 @@ mod tests {
         let moe = Moe::params(3)
             .set_recombination(Recombination::Hard)
             .with_rng(rng)
+            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
@@ -564,6 +566,7 @@ mod tests {
         let moe = Moe::params(3)
             .set_recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng.clone())
+            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
@@ -577,6 +580,7 @@ mod tests {
         let moe = Moe::params(3)
             .set_recombination(Recombination::Smooth(None))
             .with_rng(rng)
+            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         println!("Smooth moe {}", moe);
@@ -599,6 +603,7 @@ mod tests {
             .set_regression_spec(RegressionSpec::CONSTANT)
             .set_correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .with_rng(rng.clone())
+            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
@@ -618,7 +623,7 @@ mod tests {
         let xt = Array2::random_using((10, 1), Uniform::new(0., 1.), &mut rng);
         let yt = xt.mapv(|x| xsinx(&[x]));
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-        let moe = Moe::params(1).with_rng(rng);
+        let moe = Moe::params(1).with_rng(rng).check_unwrap();
         let best_expert = &moe.find_best_expert(1, &data).unwrap();
         println!("Best expert {}", best_expert);
     }
@@ -630,6 +635,7 @@ mod tests {
         let yt = function_test_1d(&xt);
         let _moe = Moe::params(3)
             .with_rng(rng)
+            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
     }
@@ -642,6 +648,7 @@ mod tests {
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
             .with_rng(rng)
+            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let xtest = array![[0.6]];

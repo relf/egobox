@@ -57,6 +57,7 @@
 //! use egobox_moe::{Moe, Expert, Recombination};
 //! use ndarray_rand::{RandomExt, rand::SeedableRng, rand_distr::Uniform};
 //! use rand_isaac::Isaac64Rng;
+//! use linfa::ParamGuard;
 //!
 //! // one-dimensional test function with 3 modes
 //! fn f3modes(x: &Array2<f64>) -> Array2<f64> {
@@ -81,6 +82,7 @@
 //! let observations = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
 //! let predictions = Moe::params(3)
 //!                     .set_recombination(Recombination::Hard)
+//!                     .check_unwrap()
 //!                     .fit(&xt, &yt)
 //!                     .expect("MoE model training")
 //!                     .predict_values(&observations)
