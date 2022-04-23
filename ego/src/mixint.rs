@@ -4,7 +4,6 @@
 #![allow(dead_code)]
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{Expert, Moe, MoeFit, MoeParams, RegressionSpec, Result};
-use linfa::ParamGuard;
 use ndarray::{s, Array, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -269,7 +268,6 @@ impl MixintMoeParams {
                 .moe_params
                 .clone()
                 .set_regression_spec(RegressionSpec::CONSTANT)
-                .check_unwrap()
                 .fit(&xcast, y)
                 .unwrap(),
             xtypes: self.xtypes.clone(),

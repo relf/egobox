@@ -1,7 +1,6 @@
 use csv::ReaderBuilder;
 use egobox_doe::{FullFactorial, SamplingMethod};
 use egobox_moe::{Expert, Moe};
-use linfa::ParamGuard;
 use ndarray::{arr2, s, Array2, Axis};
 use ndarray_csv::Array2Reader;
 use ndarray_npy::write_npy;
@@ -23,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let xtrain = data_train.slice(s![.., ..2]).to_owned();
     let ytrain = data_train.slice(s![.., 2..]).to_owned();
-    let moe = Moe::params(4).check_unwrap().fit(&xtrain, &ytrain)?;
+    let moe = Moe::params(4).fit(&xtrain, &ytrain)?;
 
     let xlimits = arr2(&[[-1., 1.], [-1., 1.]]);
     let xtest = FullFactorial::new(&xlimits).sample(100);

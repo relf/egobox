@@ -40,6 +40,22 @@ macro_rules! check_allowed {
     };
 }
 
+impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
+    fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>> {
+        let checked = self.check_ref()?;
+        checked
+            .fit(xt, yt)
+            .map(|moe| Box::new(moe) as Box<dyn Expert>)
+    }
+}
+
+impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
+    pub fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
+        let checked = self.check_ref()?;
+        checked.fit(xt, yt)
+    }
+}
+
 impl<R: Rng + SeedableRng + Clone> MoeFit for MoeValidParams<f64, R> {
     fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>> {
         self.fit(xt, yt).map(|moe| Box::new(moe) as Box<dyn Expert>)
@@ -539,7 +555,6 @@ mod tests {
         let moe = Moe::params(3)
             .set_recombination(Recombination::Hard)
             .with_rng(rng)
-            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
@@ -566,7 +581,6 @@ mod tests {
         let moe = Moe::params(3)
             .set_recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng.clone())
-            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
@@ -580,7 +594,6 @@ mod tests {
         let moe = Moe::params(3)
             .set_recombination(Recombination::Smooth(None))
             .with_rng(rng)
-            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         println!("Smooth moe {}", moe);
@@ -603,7 +616,6 @@ mod tests {
             .set_regression_spec(RegressionSpec::CONSTANT)
             .set_correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .with_rng(rng.clone())
-            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
@@ -635,7 +647,6 @@ mod tests {
         let yt = function_test_1d(&xt);
         let _moe = Moe::params(3)
             .with_rng(rng)
-            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
     }
@@ -648,7 +659,6 @@ mod tests {
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
             .with_rng(rng)
-            .check_unwrap()
             .fit(&xt, &yt)
             .expect("MOE fitted");
         let xtest = array![[0.6]];

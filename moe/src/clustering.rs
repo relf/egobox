@@ -6,7 +6,6 @@ use log::debug;
 
 use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
-use linfa::ParamGuard;
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{concatenate, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::rand::{Rng, SeedableRng};
@@ -104,7 +103,6 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
                     .set_correlation_spec(correlation_spec)
                     //.set_kpls_dim(Some(1))
                     .set_gmm(Some(gmm.clone()))
-                    .check_unwrap()
                     .fit(train.records(), train.targets())
                 {
                     let xytrain =
@@ -349,7 +347,6 @@ mod tests {
         );
         let moe = Moe::params(nb_clusters)
             .set_recombination(recombination)
-            .check_unwrap()
             .fit(&xtrain, &ytrain)
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
@@ -378,7 +375,6 @@ mod tests {
         let yvalid = l1norm(&xvalid);
         let moe = Moe::params(n_clusters)
             .set_recombination(recomb)
-            .check_unwrap()
             .fit(&xtrain, &ytrain)
             .unwrap();
         let ypreds = moe.predict_values(&xvalid).expect("moe not fitted");

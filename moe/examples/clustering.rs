@@ -1,6 +1,5 @@
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{Expert, Moe, Recombination};
-use linfa::ParamGuard;
 use ndarray::{arr2, Array, Array2, Axis, Zip};
 use std::error::Error;
 
@@ -21,10 +20,9 @@ fn f3parts(x: &Array2<f64>) -> Array2<f64> {
 fn main() -> Result<(), Box<dyn Error>> {
     let xtrain = Lhs::new(&arr2(&[[0., 1.]])).sample(50);
     let ytrain = f3parts(&xtrain);
-    let moe1 = Moe::params(1).check_unwrap().fit(&xtrain, &ytrain)?;
+    let moe1 = Moe::params(1).fit(&xtrain, &ytrain)?;
     let moe3 = Moe::params(3)
         .set_recombination(Recombination::Hard)
-        .check_unwrap()
         .fit(&xtrain, &ytrain)?;
 
     let xtest = Array::linspace(0., 1., 101).insert_axis(Axis(1));
