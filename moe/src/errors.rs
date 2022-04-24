@@ -1,7 +1,4 @@
-// use egobox_gp::GpError;
-// use ndarray_linalg::error::LinalgError;
 use thiserror::Error;
-// use std::fmt::{self, Display};
 
 /// A result type for Moe algorithm
 pub type Result<T> = std::result::Result<T, MoeError>;
@@ -37,4 +34,7 @@ pub enum MoeError {
     /// When error during loading
     #[error("InvalidValue error: {0}")]
     InvalidValueError(String),
+    /// When a linfa error occurs
+    #[error(transparent)]
+    LinfaError(#[from] linfa::error::Error),
 }

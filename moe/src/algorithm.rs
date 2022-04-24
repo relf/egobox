@@ -3,7 +3,7 @@ use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
 use crate::parameters::{
-    CorrelationSpec, Expert, MoeFit, MoeParams, MoeValidParams, Recombination, RegressionSpec,
+    CorrelationSpec, MoeFit, MoeParams, MoeValidParams, Recombination, RegressionSpec,
 };
 use crate::surrogates::*;
 use log::{debug, info, trace};
@@ -11,13 +11,13 @@ use log::{debug, info, trace};
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict};
-use linfa::{Dataset, Float, ParamGuard};
+use linfa::{Dataset, DatasetBase, Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use paste::paste;
 use std::cmp::Ordering;
 use std::ops::Sub;
 
-use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{concatenate, s, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
 use ndarray_linalg::norm::Norm;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
@@ -41,24 +41,31 @@ macro_rules! check_allowed {
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
-    fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>> {
+    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
         let checked = self.check_ref()?;
         checked
-            .fit(xt, yt)
-            .map(|moe| Box::new(moe) as Box<dyn Expert>)
+            .train(xt, yt)
+            .map(|moe| Box::new(moe) as Box<dyn Surrogate>)
     }
 }
 
-impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
-    pub fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
-        let checked = self.check_ref()?;
-        checked.fit(xt, yt)
+impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
+    for MoeValidParams<f64, R>
+{
+    type Object = Moe;
+
+    /// Fit GP parameters using maximum likelihood
+    fn fit(&self, dataset: &DatasetBase<Array2<f64>, Array2<f64>>) -> Result<Self::Object> {
+        let x = dataset.records();
+        let y = dataset.targets();
+        self.train(x, y)
     }
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeFit for MoeValidParams<f64, R> {
-    fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>> {
-        self.fit(xt, yt).map(|moe| Box::new(moe) as Box<dyn Expert>)
+    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
+        self.train(xt, yt)
+            .map(|moe| Box::new(moe) as Box<dyn Surrogate>)
     }
 }
 
@@ -70,7 +77,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
     /// * [MoeError::ClusteringError]: if there is not enough points regarding the clusters,
     /// * [MoeError::GpError]: if gaussian process fitting fails
     ///
-    pub fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
+    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
@@ -135,7 +142,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             MoeParams::from(self.clone())
                 .set_recombination(Recombination::Smooth(Some(factor)))
                 .check()?
-                .fit(xt, yt)
+                .train(xt, yt)
         } else {
             Ok(Moe {
                 recombination: self.recombination(),
@@ -360,19 +367,32 @@ impl std::fmt::Display for Moe {
     }
 }
 
-impl Expert for Moe {
-    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+#[cfg_attr(feature = "persistent", typetag::serde)]
+impl Surrogate for Moe {
+    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_values_hard(x),
             Recombination::Smooth(_) => self.predict_values_smooth(x),
         }
     }
 
-    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_variances_hard(x),
             Recombination::Smooth(_) => self.predict_variances_smooth(x),
         }
+    }
+
+    /// Save Moe model in given file.
+    #[cfg(feature = "persistent")]
+    fn save(&self, path: &str) -> Result<()> {
+        let mut file = fs::File::create(path).unwrap();
+        let bytes = match serde_json::to_string(self) {
+            Ok(b) => b,
+            Err(err) => return Err(MoeError::SaveError(err)),
+        };
+        file.write_all(bytes.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -487,16 +507,12 @@ impl Moe {
         Ok(variances)
     }
 
-    /// Save Moe model in given file.
-    #[cfg(feature = "persistent")]
-    pub fn save(&self, path: &str) -> Result<()> {
-        let mut file = fs::File::create(path).unwrap();
-        let bytes = match serde_json::to_string(self) {
-            Ok(b) => b,
-            Err(err) => return Err(MoeError::SaveError(err)),
-        };
-        file.write_all(bytes.as_bytes())?;
-        Ok(())
+    pub fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        <Moe as Surrogate>::predict_values(self, &x.view())
+    }
+
+    pub fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        <Moe as Surrogate>::predict_variances(self, &x.view())
     }
 
     #[cfg(feature = "persistent")]
@@ -555,7 +571,7 @@ mod tests {
         let moe = Moe::params(3)
             .set_recombination(Recombination::Hard)
             .with_rng(rng)
-            .fit(&xt, &yt)
+            .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&obs).expect("MOE prediction");
@@ -581,27 +597,27 @@ mod tests {
         let moe = Moe::params(3)
             .set_recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng.clone())
-            .fit(&xt, &yt)
+            .train(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&obs).expect("MOE prediction");
+        let preds = moe.predict_values(&obs.view()).expect("MOE prediction");
         println!("Smooth moe {}", moe);
         assert_abs_diff_eq!(
             0.37579, // true value = 0.37*0.37 = 0.1369
-            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.37]].view()).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
         let moe = Moe::params(3)
             .set_recombination(Recombination::Smooth(None))
             .with_rng(rng)
-            .fit(&xt, &yt)
+            .train(&xt, &yt)
             .expect("MOE fitted");
         println!("Smooth moe {}", moe);
         write_npy("obs_smooth.npy", &obs).expect("obs saved");
         write_npy("preds_smooth.npy", &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
-            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.37]].view()).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
     }
@@ -616,11 +632,11 @@ mod tests {
             .set_regression_spec(RegressionSpec::CONSTANT)
             .set_correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .with_rng(rng.clone())
-            .fit(&xt, &yt)
+            .train(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let variances = moe
-            .predict_variances(&obs)
+            .predict_variances(&obs.view())
             .expect("MOE variances prediction");
         assert_abs_diff_eq!(*variances.max().unwrap(), 0., epsilon = 1e-10);
     }
@@ -647,7 +663,7 @@ mod tests {
         let yt = function_test_1d(&xt);
         let _moe = Moe::params(3)
             .with_rng(rng)
-            .fit(&xt, &yt)
+            .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
     }
 
@@ -657,10 +673,8 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
-        let moe = Moe::params(3)
-            .with_rng(rng)
-            .fit(&xt, &yt)
-            .expect("MOE fitted");
+        let ds = Dataset::new(xt, yt);
+        let moe = Moe::params(3).with_rng(rng).fit(&ds).expect("MOE fitted");
         let xtest = array![[0.6]];
         let y_expected = moe.predict_values(&xtest).unwrap();
         moe.save("saved_moe.json").expect("MoE saving");

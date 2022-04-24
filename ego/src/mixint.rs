@@ -3,15 +3,26 @@
 
 #![allow(dead_code)]
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_moe::{Expert, Moe, MoeFit, MoeParams, RegressionSpec, Result};
-use ndarray::{s, Array, Array2, Axis, Zip};
+use egobox_moe::{Moe, MoeFit, MoeParams, RegressionSpec, Result, Surrogate};
+use linfa::{traits::Fit, Dataset};
+use ndarray::{s, Array, Array2, ArrayView2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;
 
+#[cfg(feature = "persistent")]
+use egobox_moe::MoeError;
+#[cfg(feature = "persistent")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "persistent")]
+use std::fs;
+#[cfg(feature = "persistent")]
+use std::io::Write;
+
 /// An enumeration to define the type of an input variable component
 /// with its domain definition
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 pub enum Xtype {
     /// Continuous variable in [lower bound, upper bound]
     Cont(f64, f64),
@@ -44,7 +55,7 @@ pub fn unfold_xlimits_with_continuous_limits(xtypes: &[Xtype]) -> Array2<f64> {
 /// the input x may contain the mask [..., 0, 0, 1, ...] which will be contracted in [..., 2, ...]
 /// meaning the "green" value.
 /// This function is the opposite of unfold_with_enum_mask().
-pub fn fold_with_enum_index(xtypes: &[Xtype], x: &Array2<f64>) -> Array2<f64> {
+pub fn fold_with_enum_index(xtypes: &[Xtype], x: &ArrayView2<f64>) -> Array2<f64> {
     let mut xfold = Array::zeros((x.nrows(), xtypes.len()));
     let mut unfold_index = 0;
     Zip::indexed(xfold.columns_mut()).for_each(|j, mut col| match &xtypes[j] {
@@ -79,7 +90,7 @@ fn compute_unfolded_dimension(xtypes: &[Xtype]) -> usize {
 /// For instance, if an input dimension is typed ["blue", "red", "green"] a sample/row of
 /// the input x may contain [..., 2, ...] which will be expanded in [..., 0, 0, 1, ...].
 /// This function is the opposite of fold_with_enum_index().
-fn unfold_with_enum_mask(xtypes: &[Xtype], x: &Array2<f64>) -> Array2<f64> {
+fn unfold_with_enum_mask(xtypes: &[Xtype], x: &ArrayView2<f64>) -> Array2<f64> {
     let mut xunfold = Array::zeros((x.nrows(), compute_unfolded_dimension(xtypes)));
     let mut unfold_index = 0;
     xtypes.iter().for_each(|s| match s {
@@ -214,7 +225,7 @@ impl SamplingMethod<f64> for MixintSampling {
         let mut doe = self.lhs.sample(ns);
         cast_to_discrete_values(&self.xtypes, &mut doe);
         if self.output_in_folded_space {
-            fold_with_enum_index(&self.xtypes, &doe)
+            fold_with_enum_index(&self.xtypes, &doe.view())
         } else {
             doe
         }
@@ -250,15 +261,15 @@ impl MixintMoeParams {
 }
 
 impl MoeFit for MixintMoeParams {
-    fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Expert>> {
-        Ok(Box::new(self.fit(x, y)) as Box<dyn Expert>)
+    fn train(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
+        Ok(Box::new(self.fit(x, y)) as Box<dyn Surrogate>)
     }
 }
 
 impl MixintMoeParams {
     fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> MixintMoe {
         let mut xcast = if self.work_in_folded_space {
-            unfold_with_enum_mask(&self.xtypes, x)
+            unfold_with_enum_mask(&self.xtypes, &x.view())
         } else {
             x.to_owned()
         };
@@ -268,7 +279,7 @@ impl MixintMoeParams {
                 .moe_params
                 .clone()
                 .set_regression_spec(RegressionSpec::CONSTANT)
-                .fit(&xcast, y)
+                .fit(&Dataset::new(xcast, y.to_owned()))
                 .unwrap(),
             xtypes: self.xtypes.clone(),
             work_in_folded_space: self.work_in_folded_space,
@@ -276,14 +287,22 @@ impl MixintMoeParams {
     }
 }
 
+#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 pub struct MixintMoe {
     moe: Moe,
     xtypes: Vec<Xtype>,
     work_in_folded_space: bool,
 }
 
-impl Expert for MixintMoe {
-    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+impl std::fmt::Display for MixintMoe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.moe)
+    }
+}
+
+#[cfg_attr(feature = "persistent", typetag::serde)]
+impl Surrogate for MixintMoe {
+    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -293,7 +312,7 @@ impl Expert for MixintMoe {
         self.moe.predict_values(&xcast)
     }
 
-    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -301,6 +320,18 @@ impl Expert for MixintMoe {
         };
         cast_to_discrete_values(&self.xtypes, &mut xcast);
         self.moe.predict_variances(&xcast)
+    }
+
+    /// Save Moe model in given file.
+    #[cfg(feature = "persistent")]
+    fn save(&self, path: &str) -> Result<()> {
+        let mut file = fs::File::create(path).unwrap();
+        let bytes = match serde_json::to_string(self) {
+            Ok(b) => b,
+            Err(err) => return Err(MoeError::SaveError(err)),
+        };
+        file.write_all(bytes.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -400,9 +431,11 @@ mod tests {
 
         let num = 5;
         let xtest = Array::linspace(0.0, 4.0, num).insert_axis(Axis(1));
-        let ytest = mixi_moe.predict_values(&xtest).expect("Predict val fail");
+        let ytest = mixi_moe
+            .predict_values(&xtest.view())
+            .expect("Predict val fail");
         let yvar = mixi_moe
-            .predict_variances(&xtest)
+            .predict_variances(&xtest.view())
             .expect("Predict var fail");
         println!("{:?}", ytest);
         assert_abs_diff_eq!(
@@ -453,7 +486,9 @@ mod tests {
         let mixi_lhs = mixi.create_sampling(Some(42));
 
         let xtest = mixi_lhs.sample(ntest);
-        let ytest = mixi_moe.predict_values(&xtest).expect("Predict val fail");
+        let ytest = mixi_moe
+            .predict_values(&xtest.view())
+            .expect("Predict val fail");
         let ytrue = ftest(&xtest);
         assert_abs_diff_eq!(ytrue, ytest, epsilon = 1.5);
     }

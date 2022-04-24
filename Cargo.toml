@@ -30,6 +30,7 @@ intel-mkl-system = ["linfa/intel-mkl-system"]
 
 serializable-gp = ["egobox-gp/serializable"]
 persistent-moe = ["egobox-moe/persistent"]
+persistent-ego = ["egobox-ego/persistent"]
 
 [dependencies]
 egobox-doe = { version = "0.2.1", path="./doe" }

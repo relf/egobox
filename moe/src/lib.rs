@@ -54,10 +54,10 @@
 //!
 //! ```no_run
 //! use ndarray::{Array2, Array1, Zip, Axis};
-//! use egobox_moe::{Moe, Expert, Recombination};
+//! use egobox_moe::{Moe, Recombination};
 //! use ndarray_rand::{RandomExt, rand::SeedableRng, rand_distr::Uniform};
 //! use rand_isaac::Isaac64Rng;
-//! use linfa::ParamGuard;
+//! use linfa::{traits::Fit, ParamGuard, Dataset};
 //!
 //! // one-dimensional test function with 3 modes
 //! fn f3modes(x: &Array2<f64>) -> Array2<f64> {
@@ -78,11 +78,12 @@
 //! let mut rng = Isaac64Rng::from_entropy();
 //! let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
 //! let yt = f3modes(&xt);
+//! let ds = Dataset::new(xt, yt);
 //!
 //! let observations = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
 //! let predictions = Moe::params(3)
 //!                     .set_recombination(Recombination::Hard)
-//!                     .fit(&xt, &yt)
+//!                     .fit(&ds)
 //!                     .expect("MoE model training")
 //!                     .predict_values(&observations)
 //!                     .expect("MoE predictions");

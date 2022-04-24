@@ -78,28 +78,28 @@ bitflags! {
     }
 }
 
-/// A trait for mixture of experts predictor.
-pub trait Expert {
-    /// Predict values at a given set of points `x` defined as (n, xdim) matrix
-    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
-    /// Predict variances at a given set of points `x` defined as (n, xdim) matrix
-    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
-}
+// /// A trait for mixture of experts predictor.
+// pub trait Expert: std::fmt::Display {
+//     /// Predict values at a given set of points `x` defined as (n, xdim) matrix
+//     fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
+//     /// Predict variances at a given set of points `x` defined as (n, xdim) matrix
+//     fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
+// }
 
-impl<T: Surrogate> Expert for T {
-    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
-        self.predict_values(&x.view())
-    }
+// impl<T: Surrogate> Expert for T {
+//     fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+//         self.predict_values(&x.view())
+//     }
 
-    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
-        self.predict_variances(&x.view())
-    }
-}
+//     fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+//         self.predict_variances(&x.view())
+//     }
+// }
 
 /// A trait for mixture of experts predictor construction (model fitting)
 pub trait MoeFit {
     /// Train the mixture of models with given training dataset (x, y)
-    fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Expert>>;
+    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>>;
 }
 
 /// Mixture of experts parameters

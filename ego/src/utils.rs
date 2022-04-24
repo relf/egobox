@@ -1,6 +1,8 @@
-use egobox_moe::Expert;
+use egobox_moe::Surrogate;
 use libm::erfc;
-use ndarray::{concatenate, Array1, Array2, ArrayBase, ArrayView, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{
+    concatenate, Array1, Array2, ArrayBase, ArrayView, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
+};
 use ndarray_stats::{DeviationExt, QuantileExt};
 
 // Infill strategy related function
@@ -8,8 +10,8 @@ use ndarray_stats::{DeviationExt, QuantileExt};
 
 const SQRT_2PI: f64 = 2.5066282746310007;
 
-pub fn ei(x: &[f64], obj_model: &dyn Expert, f_min: f64) -> f64 {
-    let pt = ArrayView::from_shape((1, x.len()), x).unwrap().to_owned();
+pub fn ei(x: &[f64], obj_model: &dyn Surrogate, f_min: f64) -> f64 {
+    let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     if let Ok(p) = obj_model.predict_values(&pt) {
         if let Ok(s) = obj_model.predict_variances(&pt) {
             let pred = p[[0, 0]];
@@ -26,13 +28,13 @@ pub fn ei(x: &[f64], obj_model: &dyn Expert, f_min: f64) -> f64 {
     }
 }
 
-pub fn wb2s(x: &[f64], obj_model: &dyn Expert, f_min: f64, scale: f64) -> f64 {
-    let pt = ArrayView::from_shape((1, x.len()), x).unwrap().to_owned();
+pub fn wb2s(x: &[f64], obj_model: &dyn Surrogate, f_min: f64, scale: f64) -> f64 {
+    let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     let ei = ei(x, obj_model, f_min);
     scale * ei - obj_model.predict_values(&pt).unwrap()[[0, 0]]
 }
 
-pub fn compute_wb2s_scale(x: &Array2<f64>, obj_model: &dyn Expert, f_min: f64) -> f64 {
+pub fn compute_wb2s_scale(x: &ArrayView2<f64>, obj_model: &dyn Surrogate, f_min: f64) -> f64 {
     let ratio = 100.; // TODO: make it a parameter
     let ei_x = x.map_axis(Axis(1), |xi| {
         let ei = ei(xi.as_slice().unwrap(), obj_model, f_min);
@@ -40,7 +42,7 @@ pub fn compute_wb2s_scale(x: &Array2<f64>, obj_model: &dyn Expert, f_min: f64) -
     });
     let i_max = ei_x.argmax().unwrap();
     let pred_max = obj_model
-        .predict_values(&x.row(i_max).insert_axis(Axis(0)).to_owned())
+        .predict_values(&x.row(i_max).insert_axis(Axis(0)))
         .unwrap()[[0, 0]];
     let ei_max = ei_x[i_max];
     if ei_max > 0. {
@@ -50,12 +52,12 @@ pub fn compute_wb2s_scale(x: &Array2<f64>, obj_model: &dyn Expert, f_min: f64) -
     }
 }
 
-pub fn compute_obj_scale(x: &Array2<f64>, obj_model: &dyn Expert) -> f64 {
+pub fn compute_obj_scale(x: &ArrayView2<f64>, obj_model: &dyn Surrogate) -> f64 {
     let preds = obj_model.predict_values(x).unwrap().mapv(f64::abs);
     *preds.max().unwrap_or(&1.0)
 }
 
-pub fn compute_cstr_scales(x: &Array2<f64>, cstr_models: &[Box<dyn Expert>]) -> Array1<f64> {
+pub fn compute_cstr_scales(x: &ArrayView2<f64>, cstr_models: &[Box<dyn Surrogate>]) -> Array1<f64> {
     let scales: Vec<f64> = cstr_models
         .iter()
         .map(|cstr_model| {
