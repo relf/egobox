@@ -1,10 +1,9 @@
 use super::gaussian_mixture::GaussianMixture;
-use super::{make_gp_params, make_surrogate_params};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
 use crate::parameters::{
-    CorrelationSpec, MoeFit, MoeParams, MoePredict, Recombination, RegressionSpec,
+    CorrelationSpec, MoeFit, MoeParams, MoeValidParams, Recombination, RegressionSpec,
 };
 use crate::surrogates::*;
 use log::{debug, info, trace};
@@ -12,18 +11,24 @@ use log::{debug, info, trace};
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict};
-use linfa::{Dataset, Float};
+use linfa::{Dataset, DatasetBase, Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use paste::paste;
 use std::cmp::Ordering;
 use std::ops::Sub;
 
-use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{concatenate, s, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
 use ndarray_linalg::norm::Norm;
-use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;
+
+#[cfg(feature = "persistent")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "persistent")]
+use std::fs;
+#[cfg(feature = "persistent")]
+use std::io::Write;
 
 macro_rules! check_allowed {
     ($spec:ident, $model_kind:ident, $model:ident, $list:ident) => {
@@ -36,13 +41,35 @@ macro_rules! check_allowed {
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
-    fn fit_for_predict(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn MoePredict>> {
-        self.fit(xt, yt)
-            .map(|moe| Box::new(moe) as Box<dyn MoePredict>)
+    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
+        let checked = self.check_ref()?;
+        checked
+            .train(xt, yt)
+            .map(|moe| Box::new(moe) as Box<dyn Surrogate>)
     }
 }
 
-impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
+impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
+    for MoeValidParams<f64, R>
+{
+    type Object = Moe;
+
+    /// Fit GP parameters using maximum likelihood
+    fn fit(&self, dataset: &DatasetBase<Array2<f64>, Array2<f64>>) -> Result<Self::Object> {
+        let x = dataset.records();
+        let y = dataset.targets();
+        self.train(x, y)
+    }
+}
+
+impl<R: Rng + SeedableRng + Clone> MoeFit for MoeValidParams<f64, R> {
+    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
+        self.train(xt, yt)
+            .map(|moe| Box::new(moe) as Box<dyn Surrogate>)
+    }
+}
+
+impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
     /// MoE constructor from parameters
     ///
     /// # Errors
@@ -50,7 +77,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
     /// * [MoeError::ClusteringError]: if there is not enough points regarding the clusters,
     /// * [MoeError::GpError]: if gaussian process fitting fails
     ///
-    pub fn fit(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
+    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
@@ -112,9 +139,10 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
         if self.recombination() == Recombination::Smooth(None) {
             let factor =
                 self.optimize_heaviside_factor(&experts, &gmx, &xtest.unwrap(), &ytest.unwrap());
-            self.clone()
-                .set_recombination(Recombination::Smooth(Some(factor)))
-                .fit(xt, yt)
+            MoeParams::from(self.clone())
+                .recombination(Recombination::Smooth(Some(factor)))
+                .check()?
+                .train(xt, yt)
         } else {
             Ok(Moe {
                 recombination: self.recombination(),
@@ -126,7 +154,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
 
     /// Select the surrogate which gives the smallest prediction error on the given data
     /// The error is computed using cross-validation
-    fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn GpSurrogate>> {
+    fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
         let xtrain = data.slice(s![.., ..nx]).to_owned();
         let ytrain = data.slice(s![.., nx..]).to_owned();
         let mut dataset = Dataset::from((xtrain.clone(), ytrain.clone()));
@@ -167,34 +195,32 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
                 .unwrap();
             (map_error[argmin].0.clone(), Some(map_error[argmin].1))
         };
-        let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
-            match best.0.as_str() {
-                "Constant_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Constant, SquaredExponential))
-                }
-                "Constant_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Constant, AbsoluteExponential))
-                }
-                "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
-                "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
-                "Linear_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Linear, SquaredExponential))
-                }
-                "Linear_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Linear, AbsoluteExponential))
-                }
-                "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
-                "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
-                "Quadratic_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Quadratic, SquaredExponential))
-                }
-                "Quadratic_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
-                }
-                "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
-                "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
-                _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
-            };
+        let best_expert_params: std::result::Result<Box<dyn SurrogateParams>, MoeError> = match best
+            .0
+            .as_str()
+        {
+            "Constant_SquaredExponential" => {
+                Ok(make_surrogate_params!(Constant, SquaredExponential))
+            }
+            "Constant_AbsoluteExponential" => {
+                Ok(make_surrogate_params!(Constant, AbsoluteExponential))
+            }
+            "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
+            "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
+            "Linear_SquaredExponential" => Ok(make_surrogate_params!(Linear, SquaredExponential)),
+            "Linear_AbsoluteExponential" => Ok(make_surrogate_params!(Linear, AbsoluteExponential)),
+            "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
+            "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
+            "Quadratic_SquaredExponential" => {
+                Ok(make_surrogate_params!(Quadratic, SquaredExponential))
+            }
+            "Quadratic_AbsoluteExponential" => {
+                Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
+            }
+            "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
+            "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
+            _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
+        };
         let mut expert_params = best_expert_params?;
         expert_params.kpls_dim(self.kpls_dim());
         let expert = expert_params.fit(&xtrain, &ytrain);
@@ -213,7 +239,7 @@ impl<R: Rng + SeedableRng + Clone> MoeParams<f64, R> {
     /// Used only in case of smooth recombination
     fn optimize_heaviside_factor(
         &self,
-        experts: &[Box<dyn GpSurrogate>],
+        experts: &[Box<dyn Surrogate>],
         gmx: &GaussianMixture<f64>,
         xtest: &Array2<f64>,
         ytest: &Array2<f64>,
@@ -292,7 +318,7 @@ pub(crate) fn sort_by_cluster<F: Float>(
 /// or another (ie responsabilities). Those responsabilities are used to combine
 /// output values predict by each cluster experts.
 fn predict_values_smooth(
-    experts: &[Box<dyn GpSurrogate>],
+    experts: &[Box<dyn Surrogate>],
     gmx: &GaussianMixture<f64>,
     points: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Result<Array2<f64>> {
@@ -314,11 +340,12 @@ fn predict_values_smooth(
 }
 
 /// Mixture of gaussian process experts
+#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 pub struct Moe {
     /// The mode of recombination to get the output prediction from experts prediction
     recombination: Recombination<f64>,
     /// The list of the best experts trained on each cluster
-    experts: Vec<Box<dyn GpSurrogate>>,
+    experts: Vec<Box<dyn Surrogate>>,
     /// The gaussian mixture allowing to predict cluster responsabilities for a given point
     gmx: GaussianMixture<f64>,
 }
@@ -340,19 +367,32 @@ impl std::fmt::Display for Moe {
     }
 }
 
-impl MoePredict for Moe {
-    fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+#[cfg_attr(feature = "persistent", typetag::serde)]
+impl Surrogate for Moe {
+    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_values_hard(x),
             Recombination::Smooth(_) => self.predict_values_smooth(x),
         }
     }
 
-    fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_variances_hard(x),
             Recombination::Smooth(_) => self.predict_variances_smooth(x),
         }
+    }
+
+    /// Save Moe model in given file.
+    #[cfg(feature = "persistent")]
+    fn save(&self, path: &str) -> Result<()> {
+        let mut file = fs::File::create(path).unwrap();
+        let bytes = match serde_json::to_string(self) {
+            Ok(b) => b,
+            Err(err) => return Err(MoeError::SaveError(err)),
+        };
+        file.write_all(bytes.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -380,14 +420,6 @@ impl Moe {
             Recombination::Smooth(Some(_)) => recombination,
         };
         self
-    }
-
-    /// Predict with all experts and save prediction to disk
-    pub fn save_expert_predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) {
-        self.experts.iter().enumerate().for_each(|(i, expert)| {
-            let preds = expert.predict_values(&x.view()).unwrap();
-            write_npy(format!("preds_expert_{}.npy", i), &preds).expect("expert pred saved");
-        });
     }
 
     /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
@@ -474,6 +506,22 @@ impl Moe {
             });
         Ok(variances)
     }
+
+    pub fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        <Moe as Surrogate>::predict_values(self, &x.view())
+    }
+
+    pub fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+        <Moe as Surrogate>::predict_variances(self, &x.view())
+    }
+
+    #[cfg(feature = "persistent")]
+    /// Load Moe from given json file.
+    pub fn load(path: &str) -> Result<Box<Moe>> {
+        let data = fs::read_to_string(path)?;
+        let moe: Moe = serde_json::from_str(&data).unwrap();
+        Ok(Box::new(moe))
+    }
 }
 
 /// Take one out of `quantile` in a set of data rows.
@@ -521,12 +569,11 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
-            .set_recombination(Recombination::Hard)
+            .recombination(Recombination::Hard)
             .with_rng(rng)
-            .fit(&xt, &yt)
+            .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        moe.save_expert_predict(&obs);
         let preds = moe.predict_values(&obs).expect("MOE prediction");
         write_npy("obs_hard.npy", &obs).expect("obs saved");
         write_npy("preds_hard.npy", &preds).expect("preds saved");
@@ -548,29 +595,29 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
-            .set_recombination(Recombination::Smooth(Some(0.5)))
+            .recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng.clone())
-            .fit(&xt, &yt)
+            .train(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&obs).expect("MOE prediction");
+        let preds = moe.predict_values(&obs.view()).expect("MOE prediction");
         println!("Smooth moe {}", moe);
         assert_abs_diff_eq!(
             0.37579, // true value = 0.37*0.37 = 0.1369
-            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.37]].view()).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
         let moe = Moe::params(3)
-            .set_recombination(Recombination::Smooth(None))
+            .recombination(Recombination::Smooth(None))
             .with_rng(rng)
-            .fit(&xt, &yt)
+            .train(&xt, &yt)
             .expect("MOE fitted");
         println!("Smooth moe {}", moe);
         write_npy("obs_smooth.npy", &obs).expect("obs saved");
         write_npy("preds_smooth.npy", &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
-            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.37]].view()).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
     }
@@ -581,15 +628,15 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
-            .set_recombination(Recombination::Smooth(None))
-            .set_regression_spec(RegressionSpec::CONSTANT)
-            .set_correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+            .recombination(Recombination::Smooth(None))
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .with_rng(rng.clone())
-            .fit(&xt, &yt)
+            .train(&xt, &yt)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let variances = moe
-            .predict_variances(&obs)
+            .predict_variances(&obs.view())
             .expect("MOE variances prediction");
         assert_abs_diff_eq!(*variances.max().unwrap(), 0., epsilon = 1e-10);
     }
@@ -604,7 +651,7 @@ mod tests {
         let xt = Array2::random_using((10, 1), Uniform::new(0., 1.), &mut rng);
         let yt = xt.mapv(|x| xsinx(&[x]));
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-        let moe = Moe::params(1).with_rng(rng);
+        let moe = Moe::params(1).with_rng(rng).check_unwrap();
         let best_expert = &moe.find_best_expert(1, &data).unwrap();
         println!("Best expert {}", best_expert);
     }
@@ -616,7 +663,26 @@ mod tests {
         let yt = function_test_1d(&xt);
         let _moe = Moe::params(3)
             .with_rng(rng)
-            .fit(&xt, &yt)
+            .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
+    }
+
+    #[cfg(feature = "persistent")]
+    #[test]
+    fn test_save_load_moe() {
+        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
+        let yt = function_test_1d(&xt);
+        let ds = Dataset::new(xt, yt);
+        let moe = Moe::params(3).with_rng(rng).fit(&ds).expect("MOE fitted");
+        let xtest = array![[0.6]];
+        let y_expected = moe.predict_values(&xtest).unwrap();
+        moe.save("saved_moe.json").expect("MoE saving");
+        let new_moe = Moe::load("saved_moe.json").expect("MoE loading");
+        assert_abs_diff_eq!(
+            y_expected,
+            new_moe.predict_values(&xtest).unwrap(),
+            epsilon = 1e-6
+        );
     }
 }

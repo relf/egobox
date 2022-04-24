@@ -1,3 +1,16 @@
+#[doc(hidden)]
+// Create a GP with given regression and correlation models.
+macro_rules! make_gp_params {
+    ($regr:ident, $corr:ident) => {
+        paste! {
+            GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
+                [<$regr Mean>]::default(),
+                [<$corr Corr>]::default(),
+            )
+        }
+    };
+}
+
 macro_rules! compute_error {
     ($self:ident, $regr:ident, $corr:ident, $dataset:ident) => {{
         trace!(
@@ -116,3 +129,4 @@ pub(crate) use compute_error;
 pub(crate) use compute_errors;
 pub(crate) use compute_errors_with_corr;
 pub(crate) use compute_errors_with_regr;
+pub(crate) use make_gp_params;

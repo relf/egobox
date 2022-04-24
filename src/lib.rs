@@ -475,12 +475,10 @@ impl Egor {
             .collect();
 
         let moe_params = egobox_moe::MoeParams::default()
-            .set_nclusters(self.n_clusters.unwrap_or(1))
-            .set_kpls_dim(self.kpls_dim)
-            .set_regression_spec(
-                egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
-            )
-            .set_correlation_spec(
+            .nclusters(self.n_clusters.unwrap_or(1))
+            .kpls_dim(self.kpls_dim)
+            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+            .correlation_spec(
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             );
         let moe_params = egobox_ego::MixintMoeParams::new(&xtypes, &moe_params);

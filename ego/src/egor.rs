@@ -97,7 +97,7 @@ use crate::utils::update_data;
 use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale};
 use crate::utils::{ei, wb2s};
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
-use egobox_moe::{CorrelationSpec, Moe, MoeFit, MoePredict, RegressionSpec};
+use egobox_moe::{CorrelationSpec, Moe, MoeFit, RegressionSpec, Surrogate};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
 use log::{debug, info};
@@ -497,21 +497,20 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         let n_clusters = self.n_clusters.unwrap_or(1);
 
         let default_params = &Moe::params(n_clusters)
-            .set_kpls_dim(self.kpls_dim)
-            .set_regression_spec(self.regression_spec)
-            .set_correlation_spec(self.correlation_spec)
-            as &dyn MoeFit;
+            .kpls_dim(self.kpls_dim)
+            .regression_spec(self.regression_spec)
+            .correlation_spec(self.correlation_spec) as &dyn MoeFit;
         let params = self.moe_params.unwrap_or(default_params);
 
         let obj_model = params
-            .fit_for_predict(x_data, &y_data.slice(s![.., 0..1]).to_owned())
+            .train(x_data, &y_data.slice(s![.., 0_usize..1]).to_owned())
             .expect("GP training failure");
 
-        let mut cstr_models: Vec<Box<dyn MoePredict>> = Vec::with_capacity(self.n_cstr);
+        let mut cstr_models: Vec<Box<dyn Surrogate>> = Vec::with_capacity(self.n_cstr);
         for k in 0..self.n_cstr {
             cstr_models.push(
                 params
-                    .fit_for_predict(x_data, &y_data.slice(s![.., k + 1..k + 2]).to_owned())
+                    .train(x_data, &y_data.slice(s![.., k + 1..k + 2]).to_owned())
                     .expect("GP training failure"),
             )
         }
@@ -549,8 +548,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &Lhs<f64, R>,
-        obj_model: &dyn MoePredict,
-        cstr_models: &[Box<dyn MoePredict>],
+        obj_model: &dyn Surrogate,
+        cstr_models: &[Box<dyn Surrogate>],
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
@@ -578,7 +577,9 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                         let f = |x: &Vec<f64>| -> f64 {
                             cstr_models[i]
                                 .predict_values(
-                                    &Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap(),
+                                    &Array::from_shape_vec((1, x.len()), x.to_vec())
+                                        .unwrap()
+                                        .view(),
                                 )
                                 .unwrap()[[0, 0]]
                                 / params.scale_cstr[index]
@@ -586,7 +587,11 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                         grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
                     }
                     cstr_models[index]
-                        .predict_values(&Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap())
+                        .predict_values(
+                            &Array::from_shape_vec((1, x.len()), x.to_vec())
+                                .unwrap()
+                                .view(),
+                        )
                         .unwrap()[[0, 0]]
                         / params.scale_cstr[index]
                 };
@@ -599,10 +604,10 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         let mut best_x = None;
 
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-        let scale_obj = compute_obj_scale(&scaling_points, obj_model);
-        let scale_cstr = compute_cstr_scales(&scaling_points, cstr_models);
+        let scale_obj = compute_obj_scale(&scaling_points.view(), obj_model);
+        let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
         let scale_wb2 = if self.infill == InfillStrategy::WB2S {
-            compute_wb2s_scale(&scaling_points, obj_model, *f_min)
+            compute_wb2s_scale(&scaling_points.view(), obj_model, *f_min)
         } else {
             1.
         };
@@ -689,19 +694,19 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         &self,
         xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        obj_model: &dyn MoePredict,
-        cstr_models: &[Box<dyn MoePredict>],
+        obj_model: &dyn Surrogate,
+        cstr_models: &[Box<dyn Surrogate>],
     ) -> Result<Vec<f64>> {
         let mut res: Vec<f64> = Vec::with_capacity(3);
         if self.q_ei == QEiStrategy::ConstantLiarMinimum {
-            let index_min = y_data.slice(s![.., 0]).argmin().unwrap();
+            let index_min = y_data.slice(s![.., 0_usize]).argmin().unwrap();
             res.push(y_data[[index_min, 0]]);
             for ic in 1..=self.n_cstr {
                 res.push(y_data[[index_min, ic]]);
             }
             Ok(res)
         } else {
-            let x = &xk.to_owned().insert_axis(Axis(0));
+            let x = &xk.view().insert_axis(Axis(0));
             let pred = obj_model.predict_values(x)?[[0, 0]];
             let var = obj_model.predict_variances(x)?[[0, 0]];
             let conf = match self.q_ei {
@@ -721,7 +726,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     fn infill_eval(
         &self,
         x: &[f64],
-        obj_model: &dyn MoePredict,
+        obj_model: &dyn Surrogate,
         f_min: f64,
         scale: f64,
         scale_wb2: f64,
@@ -768,7 +773,7 @@ mod tests {
             .infill_strategy(InfillStrategy::EI)
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
-            .n_eval(15)
+            .n_eval(20)
             .doe(Some(initial_doe.to_owned()))
             .expect(Some(ApproxValue {
                 value: -15.1,
@@ -778,7 +783,7 @@ mod tests {
             .minimize()
             .expect("Minimize failure");
         let expected = array![-15.1];
-        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
         let saved_doe: Array2<f64> = read_npy(DOE_INITIAL_FILE).unwrap();
         assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
     }

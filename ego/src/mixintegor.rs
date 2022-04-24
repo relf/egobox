@@ -50,7 +50,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
         res.map(|opt| -> OptimResult<f64> {
             let x_opt = opt.x_opt.to_owned().insert_axis(Axis(0));
             let x_opt = get_cast_to_discrete_values(&self.xtypes, &x_opt);
-            let x_opt = fold_with_enum_index(&self.xtypes, &x_opt);
+            let x_opt = fold_with_enum_index(&self.xtypes, &x_opt.view());
             OptimResult {
                 x_opt: x_opt.row(0).to_owned(),
                 y_opt: opt.y_opt.to_owned(),
@@ -67,7 +67,7 @@ pub struct MixintEvaluator {
 
 impl Evaluator for MixintEvaluator {
     fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
-        let fold = fold_with_enum_index(&self.xtypes, x);
+        let fold = fold_with_enum_index(&self.xtypes, &x.view());
         get_cast_to_discrete_values(&self.xtypes, &fold)
     }
 }

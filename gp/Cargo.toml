@@ -12,7 +12,7 @@ categories = ["algorithms", "mathematics", "science"]
 [features]
 default = []
 
-serializable = ["linfa/serde", "serde"]
+serializable = ["serde", "linfa/serde"]
 
 [dependencies]
 egobox-doe = { version = "0.2.1", path="../doe" }

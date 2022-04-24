@@ -1,3 +1,6 @@
+// Extract relevant part of Gaussian Mixture Model from `linfa_clustering/gmm`
+// to allow the specification of the heaviside factor used to tune the
+// smoothness of the mixture smooth recombination
 #![allow(dead_code)]
 use crate::Result;
 use linfa::{dataset::WithLapack, dataset::WithoutLapack, traits::*, Float};
@@ -5,6 +8,10 @@ use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3,
 use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
 use ndarray_stats::QuantileExt;
 
+#[cfg(feature = "persistent")]
+use serde::{Deserialize, Serialize};
+
+#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 pub struct GaussianMixture<F: Float> {
     weights: Array1<F>,
     means: Array2<F>,
@@ -54,14 +61,6 @@ impl<F: Float> GaussianMixture<F> {
         &self.means
     }
 
-    // pub fn covariances(&self) -> &Array3<F> {
-    //     &self.covariances
-    // }
-
-    // pub fn precisions(&self) -> &Array3<F> {
-    //     &self.precisions
-    // }
-
     pub fn heaviside_factor(&self) -> F {
         self.heaviside_factor
     }
@@ -76,48 +75,7 @@ impl<F: Float> GaussianMixture<F> {
         self
     }
 
-    // NOT USED at the moment
-    // fn estimate_gaussian_parameters<D: Data<Elem = F>>(
-    //     observations: &ArrayBase<D, Ix2>,
-    //     resp: &Array2<F>,
-    //     reg_covar: F,
-    // ) -> Result<(Array1<F>, Array2<F>, Array3<F>)> {
-    //     let nk = resp.sum_axis(Axis(0));
-    //     if nk.min().unwrap() < &(F::from(10.).unwrap() * F::epsilon()) {
-    //         return Err(MoeError::EmptyCluster(format!(
-    //           "Cluster #{} has no more point. Consider decreasing number of clusters or change initialization.",
-    //           nk.argmin().unwrap() + 1
-    //       )));
-    //     }
-
-    //     let nk2 = nk.to_owned().insert_axis(Axis(1));
-    //     let means = resp.t().dot(observations) / nk2;
-    //     let covariances =
-    //         Self::estimate_gaussian_covariances_full(&observations, resp, &nk, &means, reg_covar);
-    //     Ok((nk, means, covariances))
-    // }
-
-    // fn estimate_gaussian_covariances_full<D: Data<Elem = F>>(
-    //     observations: &ArrayBase<D, Ix2>,
-    //     resp: &Array2<F>,
-    //     nk: &Array1<F>,
-    //     means: &Array2<F>,
-    //     reg_covar: F,
-    // ) -> Array3<F> {
-    //     let n_clusters = means.nrows();
-    //     let n_features = means.ncols();
-    //     let mut covariances = Array::zeros((n_clusters, n_features, n_features));
-    //     for k in 0..n_clusters {
-    //         let diff = observations - &means.row(k);
-    //         let m = &diff.t() * &resp.index_axis(Axis(1), k);
-    //         let mut cov_k = m.dot(&diff) / nk[k];
-    //         cov_k.diag_mut().mapv_inplace(|x| x + reg_covar);
-    //         covariances.slice_mut(s![k, .., ..]).assign(&cov_k);
-    //     }
-    //     covariances
-    // }
-
-    pub fn compute_precisions_cholesky_full<D: Data<Elem = F>>(
+    fn compute_precisions_cholesky_full<D: Data<Elem = F>>(
         covariances: &ArrayBase<D, Ix3>,
     ) -> Result<Array3<F>> {
         let n_clusters = covariances.shape()[0];
@@ -287,8 +245,6 @@ impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictInplace<ArrayBase<D, 
 
 #[cfg(test)]
 mod tests {
-    // extern crate openblas_src;
-    // extern crate intel_mkl_src;
     use super::*;
     use approx::assert_abs_diff_eq;
     use linfa::DatasetBase;
