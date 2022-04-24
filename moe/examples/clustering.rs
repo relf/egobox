@@ -23,9 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ytrain = f3parts(&xtrain);
     let ds = Dataset::new(xtrain, ytrain);
     let moe1 = Moe::params(1).fit(&ds)?;
-    let moe3 = Moe::params(3)
-        .set_recombination(Recombination::Hard)
-        .fit(&ds)?;
+    let moe3 = Moe::params(3).recombination(Recombination::Hard).fit(&ds)?;
 
     let xtest = Array::linspace(0., 1., 101).insert_axis(Axis(1));
     let ytest = f3parts(&xtest);

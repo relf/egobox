@@ -497,10 +497,9 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         let n_clusters = self.n_clusters.unwrap_or(1);
 
         let default_params = &Moe::params(n_clusters)
-            .set_kpls_dim(self.kpls_dim)
-            .set_regression_spec(self.regression_spec)
-            .set_correlation_spec(self.correlation_spec)
-            as &dyn MoeFit;
+            .kpls_dim(self.kpls_dim)
+            .regression_spec(self.regression_spec)
+            .correlation_spec(self.correlation_spec) as &dyn MoeFit;
         let params = self.moe_params.unwrap_or(default_params);
 
         let obj_model = params
@@ -774,7 +773,7 @@ mod tests {
             .infill_strategy(InfillStrategy::EI)
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
-            .n_eval(15)
+            .n_eval(20)
             .doe(Some(initial_doe.to_owned()))
             .expect(Some(ApproxValue {
                 value: -15.1,
@@ -784,7 +783,7 @@ mod tests {
             .minimize()
             .expect("Minimize failure");
         let expected = array![-15.1];
-        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.3);
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
         let saved_doe: Array2<f64> = read_npy(DOE_INITIAL_FILE).unwrap();
         assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
     }

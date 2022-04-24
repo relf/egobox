@@ -22,7 +22,7 @@
 //! [linfa-clustering](https://docs.rs/linfa-clustering/latest/linfa_clustering/)
 //! gaussian mixture model.
 //! * This library is a port of the
-//! [SMT MOE method](https://smt.readthedocs.io/en/latest/_src_docs/applications/moe.html)
+//! [SMT MoE method](https://smt.readthedocs.io/en/latest/_src_docs/applications/moe.html)
 //! using egobox GP models as experts.
 //! * It leverages on the egobox GP PLS reduction feature to handle high dimensional problems.
 //! * MoE trained model can be save to disk and reloaded. See
@@ -34,16 +34,16 @@
 //! End-user project should select a BLAS/Lapack backend depending its environment;
 //! it can be either:
 //!
-//! * Openblas: `linfa\openblas-system` or `linfa\openblas-static`
-//! * Netlib: `linfa\netlib-system` or `linfa\netlib-static`
-//! * Intel MKL: `linfa\intel-mkl-system` or `linfa\intel-mkl-static`
+//! * Openblas: `linfa/openblas-system` or `linfa/openblas-static`
+//! * Netlib: `linfa/netlib-system` or `linfa/netlib-static`
+//! * Intel MKL: `linfa/intel-mkl-system` or `linfa/intel-mkl-static`
 //!
 //! where
 //!
 //! * `*-system` features: try to find the corresponding backend in your installation.
 //! * `*-static` features: try to download and compile the corresponing backend.
 //!
-//! More information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)
+//! More information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend).
 //!
 //! ## persistent
 //!
@@ -59,7 +59,7 @@
 //! use rand_isaac::Isaac64Rng;
 //! use linfa::{traits::Fit, ParamGuard, Dataset};
 //!
-//! // one-dimensional test function with 3 modes
+//! // One-dimensional test function with 3 modes
 //! fn f3modes(x: &Array2<f64>) -> Array2<f64> {
 //!     let mut y = Array2::zeros(x.dim());
 //!     Zip::from(&mut y).and(x).for_each(|yi, &xi| {
@@ -80,9 +80,10 @@
 //! let yt = f3modes(&xt);
 //! let ds = Dataset::new(xt, yt);
 //!
+//! // Predictions
 //! let observations = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
 //! let predictions = Moe::params(3)
-//!                     .set_recombination(Recombination::Hard)
+//!                     .recombination(Recombination::Hard)
 //!                     .fit(&ds)
 //!                     .expect("MoE model training")
 //!                     .predict_values(&observations)

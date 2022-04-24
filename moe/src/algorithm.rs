@@ -140,7 +140,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             let factor =
                 self.optimize_heaviside_factor(&experts, &gmx, &xtest.unwrap(), &ytest.unwrap());
             MoeParams::from(self.clone())
-                .set_recombination(Recombination::Smooth(Some(factor)))
+                .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
                 .train(xt, yt)
         } else {
@@ -569,7 +569,7 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
-            .set_recombination(Recombination::Hard)
+            .recombination(Recombination::Hard)
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
@@ -595,7 +595,7 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
-            .set_recombination(Recombination::Smooth(Some(0.5)))
+            .recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng.clone())
             .train(&xt, &yt)
             .expect("MOE fitted");
@@ -608,7 +608,7 @@ mod tests {
             epsilon = 1e-3
         );
         let moe = Moe::params(3)
-            .set_recombination(Recombination::Smooth(None))
+            .recombination(Recombination::Smooth(None))
             .with_rng(rng)
             .train(&xt, &yt)
             .expect("MOE fitted");
@@ -628,9 +628,9 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let moe = Moe::params(3)
-            .set_recombination(Recombination::Smooth(None))
-            .set_regression_spec(RegressionSpec::CONSTANT)
-            .set_correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+            .recombination(Recombination::Smooth(None))
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .with_rng(rng.clone())
             .train(&xt, &yt)
             .expect("MOE fitted");

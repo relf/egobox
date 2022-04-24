@@ -99,10 +99,10 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         if ok {
             for (train, valid) in dataset.fold(5).into_iter() {
                 if let Ok(mixture) = Moe::params(n_clusters)
-                    .set_regression_spec(regression_spec)
-                    .set_correlation_spec(correlation_spec)
-                    //.set_kpls_dim(Some(1))
-                    .set_gmm(Some(gmm.clone()))
+                    .regression_spec(regression_spec)
+                    .correlation_spec(correlation_spec)
+                    //.kpls_dim(Some(1))
+                    .gmm(Some(gmm.clone()))
                     .fit(&train)
                 {
                     let xytrain =
@@ -345,7 +345,7 @@ mod tests {
             rng,
         );
         let moe = Moe::params(nb_clusters)
-            .set_recombination(recombination)
+            .recombination(recombination)
             .train(&xtrain, &ytrain)
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
@@ -373,7 +373,7 @@ mod tests {
         let xvalid = valid.sample(100);
         let yvalid = l1norm(&xvalid);
         let moe = Moe::params(n_clusters)
-            .set_recombination(recomb)
+            .recombination(recomb)
             .train(&xtrain, &ytrain)
             .unwrap();
         let ypreds = moe.predict_values(&xvalid.view()).expect("moe not fitted");

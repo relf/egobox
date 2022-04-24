@@ -278,7 +278,7 @@ impl MixintMoeParams {
             moe: self
                 .moe_params
                 .clone()
-                .set_regression_spec(RegressionSpec::CONSTANT)
+                .regression_spec(RegressionSpec::CONSTANT)
                 .fit(&Dataset::new(xcast, y.to_owned()))
                 .unwrap(),
             xtypes: self.xtypes.clone(),
@@ -479,7 +479,7 @@ mod tests {
         let yt = ftest(&xt);
 
         let moe_params =
-            SurrogateParams::new(1).set_correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
+            SurrogateParams::new(1).correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
         let mixi_moe = mixi.create_surrogate(&moe_params, &xt, &yt);
 
         let ntest = 10;

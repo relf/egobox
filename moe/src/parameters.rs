@@ -21,16 +21,16 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 pub enum Recombination<F: Float> {
     /// prediction is taken from the expert with highest responsability
-    /// resulting in discontinuity
+    /// resulting in a model with discontinuities
     Hard,
-    /// prediction is a combination experts prediction wrt their responsabilities
-    /// Takes an optional heaviside factor to control steepness of the change between
+    /// Prediction is a combination experts prediction wrt their responsabilities,
+    /// an optional heaviside factor might be used control steepness of the change between
     /// experts regions.
     Smooth(Option<F>),
 }
 
 bitflags! {
-    /// Flags to specify tested regression models during experts selection (see [MoeParams::set_regression_spec]).
+    /// Flags to specify tested regression models during experts selection (see [MoeParams::regression_spec]).
     ///
     /// Flags can be combine with bit-wise `or` operator to select two or more models.
     /// ```ignore
@@ -78,31 +78,13 @@ bitflags! {
     }
 }
 
-// /// A trait for mixture of experts predictor.
-// pub trait Expert: std::fmt::Display {
-//     /// Predict values at a given set of points `x` defined as (n, xdim) matrix
-//     fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
-//     /// Predict variances at a given set of points `x` defined as (n, xdim) matrix
-//     fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>>;
-// }
-
-// impl<T: Surrogate> Expert for T {
-//     fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
-//         self.predict_values(&x.view())
-//     }
-
-//     fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
-//         self.predict_variances(&x.view())
-//     }
-// }
-
 /// A trait for mixture of experts predictor construction (model fitting)
 pub trait MoeFit {
     /// Train the mixture of models with given training dataset (x, y)
     fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>>;
 }
 
-/// Mixture of experts parameters
+/// Mixture of experts checked parameters
 #[derive(Clone)]
 pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     /// Number of clusters (i.e. number of experts)
@@ -173,6 +155,7 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
     }
 }
 
+/// Mixture of experts parameters
 #[derive(Clone)]
 pub struct MoeParams<F: Float, R: Rng + Clone>(MoeValidParams<F, R>);
 
@@ -214,13 +197,13 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     }
 
     /// Sets the number of clusters
-    pub fn set_nclusters(mut self, n_clusters: usize) -> Self {
+    pub fn nclusters(mut self, n_clusters: usize) -> Self {
         self.0.n_clusters = n_clusters;
         self
     }
 
     /// Sets the recombination mode
-    pub fn set_recombination(mut self, recombination: Recombination<F>) -> Self {
+    pub fn recombination(mut self, recombination: Recombination<F>) -> Self {
         self.0.recombination = recombination;
         self
     }
@@ -229,7 +212,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     ///
     /// Only GP models with regression models allowed by this specification
     /// will be used in the mixture.  
-    pub fn set_regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
+    pub fn regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
         self.0.regression_spec = regression_spec;
         self
     }
@@ -238,7 +221,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     ///
     /// Only GP models with correlation models allowed by this specification
     /// will be used in the mixture.  
-    pub fn set_correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
+    pub fn correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
         self.0.correlation_spec = correlation_spec;
         self
     }
@@ -246,14 +229,14 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
     ///
     /// None means no PLS dimension reduction applied.
-    pub fn set_kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
+    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.0.kpls_dim = kpls_dim;
         self
     }
 
     #[doc(hidden)]
     /// Sets the gaussian mixture (used to find the optimal number of clusters)
-    pub(crate) fn set_gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
+    pub(crate) fn gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
         self.0.gmm = gmm;
         self
     }
