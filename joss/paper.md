@@ -19,27 +19,30 @@ bibliography: paper.bib
 
 # Summary
 
-Efficient global optimization algorithms are used to tackle design optimization problems 
+Efficient global optimization (EGO) algorithms are used to tackle design optimization problems 
 that involve computationally costly models [@Jones1998]. Basically, the idea is to use gaussian 
-process regression to approximate the objective function and use probabilistic information  
+process regression to approximate the objective function and use probabilistic information 
 to select the promising next point where the optimum could be located.
+
 Starting from that, one still has to tackle numerous challenges regarding the dimensionality, 
 multi-modality and computation time. Different algorithms may be develop to overcome 
-these hurdles [@Bartoli2019; @Dubreuil2020].  
+these hurdles [@Bartoli2019; @Dubreuil2020]. A key component of such surrogate-based algorithms 
+is the existence of an implementation of gausian process regression also known as 
+kriging method [@Bouhlel2016]. 
 
-A key component of such surrogate-based algorithm is the existence of an implementation
-of gausian process regression also known as kriging method [@Bouhlel2016]. 
-The Surrogate Modeling Toolbox [@SMT2018; @SMT2019] library addresses such concerns 
-using the Python programming language focusing on various surrogate modeling methods 
-and derivatives. 
-
-Started by porting relevant parts from the SMT Python library, the `egobox` library aims 
-at providing building blocks useful to implement EGO-like algorithms and take advantage
-of the Rust programming language.
+The Surrogate Modeling Toolbox [@SMT2018; @SMT2019] library addresses such concerns using 
+the Python programming language. The `egobox` library provides such key component to the Rust 
+machine-learning community while focusing on adaptative global optimization.  
 
 # Statement of need
 
-Research scientists reach for prototyping programming language such as Python to develop
+Started by porting relevant parts from the SMT library in Rust, the `egobox` library aims 
+at providing building blocks useful to implement EGO-like algorithms. This open source library 
+will be used by research engineers needing to tackle design optimization problems using a 
+surrogate-based adaptative approach while taking advantage of the Rust programming
+language. 
+
+Indeed research scientists reach for prototyping programming language such as Python to develop
 new methods. Thanks to performant easy-to-use libraries like `numpy`, `scipy`, `scikit-learn` 
 the Python language has become popular in science computing. The ability of Python
 to glue together different codes explains Python ecosystem is now a de-facto open source 
