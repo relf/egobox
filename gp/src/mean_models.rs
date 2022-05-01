@@ -1,4 +1,6 @@
-//! A module for regression models used by GP models.
+//! A module for regression models to model the mean term of the GP model.
+//! In practice small degree (<= 2) polynomial regression models are used,
+//! as the gaussian process is then fitted using the [correlated error term](struct.CorrelationModel).
 //! The following models are implemented:
 //! * constant,
 //! * linear,
@@ -10,7 +12,7 @@ use ndarray::{concatenate, s, Array2, ArrayBase, Axis, Data, Ix2};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
-/// A trait for using a correlation model in GP regression
+/// A trait for mean models used in GP regression
 pub trait RegressionModel<F: Float>: Clone + Copy + Default {
     /// Use the regression model to get the mean behaviour of the GP model.
     fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F>;
