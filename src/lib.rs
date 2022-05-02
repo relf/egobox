@@ -474,17 +474,17 @@ impl Egor {
             })
             .collect();
 
-        let moe_params = egobox_moe::MoeParams::default()
+        let surrogate_builder = egobox_moe::MoeParams::default()
             .nclusters(self.n_clusters.unwrap_or(1))
             .kpls_dim(self.kpls_dim)
             .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
             .correlation_spec(
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             );
-        let moe_params = egobox_ego::MixintMoeParams::new(&xtypes, &moe_params);
+        let surrogate_builder = egobox_ego::MixintMoeParams::new(&xtypes, &surrogate_builder);
         let evaluator = egobox_ego::MixintEvaluator::new(&xtypes);
         let mut mixintegor =
-            egobox_ego::MixintEgor::new_with_rng(obj, &moe_params, &evaluator, rng);
+            egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &evaluator, rng);
         mixintegor
             .egor
             .n_cstr(self.n_cstr)

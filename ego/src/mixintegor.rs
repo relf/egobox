@@ -35,7 +35,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
     ) -> Self {
         let xlimits = unfold_xlimits_with_continuous_limits(mix_params.xtypes());
         let egor = Egor::new_with_rng(f, &xlimits, rng)
-            .moe_params(Some(mix_params))
+            .surrogate_builder(Some(mix_params))
             .evaluator(Some(evaluator))
             .clone();
         MixintEgor {
@@ -102,10 +102,10 @@ mod tests {
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![Xtype::Int(0, 25)];
 
-        let moe_params = MoeParams::default();
-        let moe_params = MixintMoeParams::new(&xtypes, &moe_params);
+        let surrogate_builder = MoeParams::default();
+        let surrogate_builder = MixintMoeParams::new(&xtypes, &surrogate_builder);
         let evaluator = MixintEvaluator::new(&xtypes);
-        let mut mixintegor = MixintEgor::new(mixsinx, &moe_params, &evaluator);
+        let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &evaluator);
         mixintegor
             .egor
             .doe(Some(doe))
@@ -125,10 +125,10 @@ mod tests {
         let n_eval = 10;
         let xtypes = vec![Xtype::Int(0, 25)];
 
-        let moe_params = MoeParams::default();
-        let moe_params = MixintMoeParams::new(&xtypes, &moe_params);
+        let surrogate_builder = MoeParams::default();
+        let surrogate_builder = MixintMoeParams::new(&xtypes, &surrogate_builder);
         let evaluator = MixintEvaluator::new(&xtypes);
-        let mut mixintegor = MixintEgor::new(mixsinx, &moe_params, &evaluator);
+        let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &evaluator);
         mixintegor
             .egor
             .n_eval(n_eval)
