@@ -482,9 +482,9 @@ impl Egor {
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             );
         let surrogate_builder = egobox_ego::MixintMoeParams::new(&xtypes, &surrogate_builder);
-        let evaluator = egobox_ego::MixintEvaluator::new(&xtypes);
+        let pre_proc = egobox_ego::MixintPreProcessor::new(&xtypes);
         let mut mixintegor =
-            egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &evaluator, rng);
+            egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &pre_proc, rng);
         mixintegor
             .egor
             .n_cstr(self.n_cstr)

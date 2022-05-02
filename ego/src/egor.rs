@@ -175,10 +175,10 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     /// functions, otherwise [mixture of expert](egobox_moe) is used
     /// Note: if specified takes precedence over individual settings
     pub surrogate_builder: Option<&'a dyn SurrogateBuilder>,
-    /// An optional evaluator used to run the function under optimization
-    /// allowing to adjust pre or post processing around function evaluation,
-    /// the function is run directly otherwise
-    pub evaluator: Option<&'a dyn Evaluator>,
+    /// An optional pre-processor used to preprocess continuous input given
+    /// to the function under optimization, specially with mixed integer
+    /// function optimization
+    pub pre_proc: Option<&'a dyn PreProcessor>,
     /// The function under optimization f(x) = [objective, cstr1, ..., cstrn], (n_cstr+1 size)
     pub obj: O,
     /// A random generator used to get reproductible results.
@@ -218,7 +218,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             outdir: None,
             hot_start: false,
             surrogate_builder: None,
-            evaluator: None,
+            pre_proc: None,
             obj: f,
             rng,
         }
@@ -317,8 +317,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         self
     }
 
-    pub fn evaluator(&mut self, evaluator: Option<&'a dyn Evaluator>) -> &mut Self {
-        self.evaluator = evaluator;
+    pub fn pre_proc(&mut self, pre_proc: Option<&'a dyn PreProcessor>) -> &mut Self {
+        self.pre_proc = pre_proc;
         self
     }
 
@@ -343,7 +343,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             outdir: self.outdir,
             hot_start: self.hot_start,
             surrogate_builder: self.surrogate_builder,
-            evaluator: self.evaluator,
+            pre_proc: self.pre_proc,
             obj: self.obj,
             rng,
         }
@@ -425,6 +425,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         let mut no_point_added_retries = MAX_RETRY;
         for i in 1..=n_iter {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
+            debug!("Try adding {}", x_dat);
             let rejected_count = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
             if rejected_count > 0 {
                 info!(
@@ -482,11 +483,13 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             }
         }
         let best_index = self.find_best_result_index(&y_data);
-        info!("{}", concatenate![Axis(1), x_data, y_data]);
-        Ok(OptimResult {
+        info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
+        let res = OptimResult {
             x_opt: x_data.row(best_index).to_owned(),
             y_opt: y_data.row(best_index).to_owned(),
-        })
+        };
+        info!("Optim Result: min f(x)={} at x= {}", res.y_opt, res.x_opt);
+        Ok(res)
     }
 
     fn next_points(
@@ -496,6 +499,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         y_data: &Array2<f64>,
         sampling: &Lhs<f64, R>,
     ) -> (Array2<f64>, Array2<f64>) {
+        debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
         let n_clusters = self.n_clusters.unwrap_or(1);
@@ -746,10 +750,10 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     }
 }
 
-impl<'a, O: GroupFunc, R: Rng + Clone> Evaluator for Egor<'a, O, R> {
+impl<'a, O: GroupFunc, R: Rng + Clone> PreProcessor for Egor<'a, O, R> {
     fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
-        if let Some(evaluator) = self.evaluator {
-            (self.obj)(&evaluator.eval(x).view())
+        if let Some(pre_proc) = self.pre_proc {
+            (self.obj)(&pre_proc.eval(x).view())
         } else {
             (self.obj)(&x.view())
         }

@@ -33,7 +33,47 @@
 //!
 //! The implementation relies on [Mixture of Experts](egobox_moe).
 //! While [Egor] optimizer works with continuous data (i.e floats), the class [MixintEgor]
-//! allows to make basic mixed-integer optimization by decorating `Egor` class.    
+//! allows to make basic mixed-integer optimization by decorating `Egor` class.  
+//!
+//! Example
+//!
+//! We define an objective function `mixsinx` taking integer input values from the previous
+//! function `xsinx` defined above and we optimize with MixintEgor.
+//!  
+//! ```no_run   
+//! use ndarray::{array, Array2, ArrayView2};
+//! use egobox_ego::MixintEgor;
+//!
+//! fn mixsinx(x: &ArrayView2<f64>) -> Array2<f64> {
+//!     if (x.mapv(|v| v.round()).norm_l2() - x.norm_l2()).abs() < 1e-6 {
+//!         (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
+//!     } else {
+//!         panic!("Error: mixsinx works only on integer, got {:?}", x)
+//!     }
+//! }
+//!
+//! let n_eval = 10;
+//! let doe = array![[0.], [7.], [25.]];
+//!
+//! // We define input as being integer
+//! let xtypes = vec![Xtype::Int(0, 25)];
+//!
+//! // We create mixed-integer mixture of experts
+//! let surrogate_builder = MixintMoeParams::new(&xtypes, &MoeParams::default());
+//!
+//! // We use a mixint pre-processor which cast continuous values to discrete
+//! // and evaluate function under optimization
+//! let pre_proc = MixintPreProcessor::new(&xtypes);
+//!
+//! let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &pre_proc);
+//! let res = mixintegor
+//!     .egor
+//!     .doe(Some(doe))   // we pas an initial doe
+//!     .n_eval(n_eval)
+//!     .infill_strategy(InfillStrategy::EI)
+//!     .minimize().unwrap();
+//! println!("min f(x)={} at x={}", res.y_opt, res.x_opt);
+//! ```  
 //!
 //! # Reference
 //!
