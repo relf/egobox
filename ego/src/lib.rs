@@ -42,7 +42,9 @@
 //!  
 //! ```no_run   
 //! use ndarray::{array, Array2, ArrayView2};
-//! use egobox_ego::MixintEgor;
+//! use ndarray_linalg::Norm;
+//! use egobox_moe::MoeParams;
+//! use egobox_ego::{MixintEgor,  MixintMoeParams, MixintPreProcessor, InfillStrategy, Xtype};
 //!
 //! fn mixsinx(x: &ArrayView2<f64>) -> Array2<f64> {
 //!     if (x.mapv(|v| v.round()).norm_l2() - x.norm_l2()).abs() < 1e-6 {
