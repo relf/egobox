@@ -2,8 +2,10 @@
 //! it is a port of [SMT mixed integer module](https://smt.readthedocs.io/en/latest/_src_docs/applications/mixed_integer.html)
 
 #![allow(dead_code)]
+use crate::errors::Result;
+use crate::types::SurrogateBuilder;
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_moe::{Moe, MoeFit, MoeParams, RegressionSpec, Result, Surrogate};
+use egobox_moe::{Moe, MoeParams, RegressionSpec, Surrogate};
 use linfa::{traits::Fit, Dataset};
 use ndarray::{s, Array, Array2, ArrayView2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
@@ -260,7 +262,7 @@ impl MixintMoeParams {
     }
 }
 
-impl MoeFit for MixintMoeParams {
+impl SurrogateBuilder for MixintMoeParams {
     fn train(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
         Ok(Box::new(self.fit(x, y)) as Box<dyn Surrogate>)
     }
@@ -302,7 +304,7 @@ impl std::fmt::Display for MixintMoe {
 
 #[cfg_attr(feature = "persistent", typetag::serde)]
 impl Surrogate for MixintMoe {
-    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -312,7 +314,7 @@ impl Surrogate for MixintMoe {
         self.moe.predict_values(&xcast)
     }
 
-    fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_variances(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -369,11 +371,11 @@ impl MixintContext {
 
     pub fn create_surrogate(
         &self,
-        moe_params: &SurrogateParams,
+        surrogate_builder: &SurrogateParams,
         x: &Array2<f64>,
         y: &Array2<f64>,
     ) -> MixintMoe {
-        let mut params = MixintMoeParams::new(&self.xtypes, moe_params);
+        let mut params = MixintMoeParams::new(&self.xtypes, surrogate_builder);
         let params = params.work_in_folded_space(self.work_in_folded_space);
         params.fit(x, y)
     }
@@ -424,10 +426,10 @@ mod tests {
 
         let mixi = MixintContext::new(&xtypes);
 
-        let moe_params = SurrogateParams::new(1);
+        let surrogate_builder = SurrogateParams::new(1);
         let xt = array![[0.], [2.], [3.0], [4.]];
         let yt = array![[0.], [1.5], [0.9], [1.]];
-        let mixi_moe = mixi.create_surrogate(&moe_params, &xt, &yt);
+        let mixi_moe = mixi.create_surrogate(&surrogate_builder, &xt, &yt);
 
         let num = 5;
         let xtest = Array::linspace(0.0, 4.0, num).insert_axis(Axis(1));
@@ -478,9 +480,9 @@ mod tests {
         let xt = mixi_lhs.sample(n);
         let yt = ftest(&xt);
 
-        let moe_params =
+        let surrogate_builder =
             SurrogateParams::new(1).correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
-        let mixi_moe = mixi.create_surrogate(&moe_params, &xt, &yt);
+        let mixi_moe = mixi.create_surrogate(&surrogate_builder, &xt, &yt);
 
         let ntest = 10;
         let mixi_lhs = mixi.create_sampling(Some(42));

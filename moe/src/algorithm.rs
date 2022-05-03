@@ -3,7 +3,7 @@ use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
 use crate::parameters::{
-    CorrelationSpec, MoeFit, MoeParams, MoeValidParams, Recombination, RegressionSpec,
+    CorrelationSpec, MoeParams, MoeValidParams, Recombination, RegressionSpec,
 };
 use crate::surrogates::*;
 use log::{debug, info, trace};
@@ -40,21 +40,18 @@ macro_rules! check_allowed {
     };
 }
 
-impl<R: Rng + SeedableRng + Clone> MoeFit for MoeParams<f64, R> {
-    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
-        let checked = self.check_ref()?;
-        checked
-            .train(xt, yt)
-            .map(|moe| Box::new(moe) as Box<dyn Surrogate>)
-    }
-}
-
 impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
     for MoeValidParams<f64, R>
 {
     type Object = Moe;
 
-    /// Fit GP parameters using maximum likelihood
+    /// Fit Moe parameters using maximum likelihood
+    ///
+    /// # Errors
+    ///
+    /// * [MoeError::ClusteringError]: if there is not enough points regarding the clusters,
+    /// * [MoeError::GpError]: if gaussian process fitting fails
+    ///
     fn fit(&self, dataset: &DatasetBase<Array2<f64>, Array2<f64>>) -> Result<Self::Object> {
         let x = dataset.records();
         let y = dataset.targets();
@@ -62,21 +59,7 @@ impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
     }
 }
 
-impl<R: Rng + SeedableRng + Clone> MoeFit for MoeValidParams<f64, R> {
-    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
-        self.train(xt, yt)
-            .map(|moe| Box::new(moe) as Box<dyn Surrogate>)
-    }
-}
-
 impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
-    /// MoE constructor from parameters
-    ///
-    /// # Errors
-    ///
-    /// * [MoeError::ClusteringError]: if there is not enough points regarding the clusters,
-    /// * [MoeError::GpError]: if gaussian process fitting fails
-    ///
     fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
@@ -594,30 +577,31 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
+        let ds = Dataset::new(xt, yt);
         let moe = Moe::params(3)
             .recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng.clone())
-            .train(&xt, &yt)
+            .fit(&ds)
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&obs.view()).expect("MOE prediction");
+        let preds = moe.predict_values(&obs).expect("MOE prediction");
         println!("Smooth moe {}", moe);
         assert_abs_diff_eq!(
             0.37579, // true value = 0.37*0.37 = 0.1369
-            moe.predict_values(&array![[0.37]].view()).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
         let moe = Moe::params(3)
             .recombination(Recombination::Smooth(None))
             .with_rng(rng)
-            .train(&xt, &yt)
+            .fit(&ds)
             .expect("MOE fitted");
         println!("Smooth moe {}", moe);
         write_npy("obs_smooth.npy", &obs).expect("obs saved");
         write_npy("preds_smooth.npy", &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
-            moe.predict_values(&array![[0.37]].view()).unwrap()[[0, 0]],
+            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
     }
@@ -632,11 +616,11 @@ mod tests {
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .with_rng(rng.clone())
-            .train(&xt, &yt)
+            .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let variances = moe
-            .predict_variances(&obs.view())
+            .predict_variances(&obs)
             .expect("MOE variances prediction");
         assert_abs_diff_eq!(*variances.max().unwrap(), 0., epsilon = 1e-10);
     }

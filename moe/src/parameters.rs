@@ -1,5 +1,4 @@
 use crate::errors::{MoeError, Result};
-use crate::surrogates::Surrogate;
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
@@ -9,7 +8,6 @@ use egobox_gp::correlation_models::{
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
-use ndarray::Array2;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 
@@ -76,12 +74,6 @@ bitflags! {
                     | CorrelationSpec::MATERN32.bits
                     | CorrelationSpec::MATERN52.bits;
     }
-}
-
-/// A trait for mixture of experts predictor construction (model fitting)
-pub trait MoeFit {
-    /// Train the mixture of models with given training dataset (x, y)
-    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>>;
 }
 
 /// Mixture of experts checked parameters

@@ -1,5 +1,5 @@
-//! A module for correlation models which implements PLS weighting used by GP models.
-//! The following kernels are implemented:
+//! A module for correlation models with PLS weighting to model the error term of the GP model.
+//! The following correlation models are implemented:
 //! * squared exponential,
 //! * absolute exponential,
 //! * matern 3/2,

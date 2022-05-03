@@ -299,7 +299,6 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parameters::MoeFit;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
     use ndarray::{array, Array1, Array2, Axis, Zip};
@@ -346,10 +345,10 @@ mod tests {
         );
         let moe = Moe::params(nb_clusters)
             .recombination(recombination)
-            .train(&xtrain, &ytrain)
+            .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&obs.view()).unwrap();
+        let preds = moe.predict_values(&obs).unwrap();
         write_npy("best_obs.npy", &obs).expect("saved");
         write_npy("best_preds.npy", &preds).expect("saved");
         assert_eq!(3, nb_clusters);
@@ -374,9 +373,9 @@ mod tests {
         let yvalid = l1norm(&xvalid);
         let moe = Moe::params(n_clusters)
             .recombination(recomb)
-            .train(&xtrain, &ytrain)
+            .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();
-        let ypreds = moe.predict_values(&xvalid.view()).expect("moe not fitted");
+        let ypreds = moe.predict_values(&xvalid).expect("moe not fitted");
         debug!("{:?}", concatenate![Axis(1), ypreds, yvalid]);
         assert_abs_diff_eq!(&ypreds, &yvalid, epsilon = 1e-2);
     }
