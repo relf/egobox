@@ -175,8 +175,8 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     /// functions, otherwise [mixture of expert](egobox_moe) is used
     /// Note: if specified takes precedence over individual settings
     pub surrogate_builder: Option<&'a dyn SurrogateBuilder>,
-    /// An optional pre-processor used to preprocess continuous input given
-    /// to the function under optimization, specially with mixed integer
+    /// An optional pre-processor to preprocess continuous input given
+    /// to the function under optimization, specially used with mixed integer
     /// function optimization
     pub pre_proc: Option<&'a dyn PreProcessor>,
     /// The function under optimization f(x) = [objective, cstr1, ..., cstrn], (n_cstr+1 size)
@@ -748,12 +748,10 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         };
         obj / scale
     }
-}
 
-impl<'a, O: GroupFunc, R: Rng + Clone> PreProcessor for Egor<'a, O, R> {
     fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
         if let Some(pre_proc) = self.pre_proc {
-            (self.obj)(&pre_proc.eval(x).view())
+            (self.obj)(&pre_proc.run(x).view())
         } else {
             (self.obj)(&x.view())
         }
@@ -903,10 +901,6 @@ mod tests {
             .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .doe(Some(doe))
             .n_eval(40)
-            // .expect(Some(ApproxValue {
-            //     value: -5.5080,
-            //     tolerance: 1e-3,
-            // }))
             .minimize()
             .expect("Minimize failure");
         println!("G24 optim result = {:?}", res);

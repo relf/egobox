@@ -178,20 +178,6 @@ pub fn cast_to_enum_value(xtypes: &[Xtype], i: usize, enum_i: usize) -> Option<S
     None
 }
 
-// TODO
-// pub fn cast_to_mixint(xtypes: &[Xtype], x: &Vec<Vec<Xval>>) -> Array2<f64> {
-//     let mut res = Array::zeros((xtypes.len(), x[1].len()));
-//     res.outer_iter().for_each(|mut row| {
-//         Zip::from(row)
-//             .and(xtypes)
-//             .for_each(|val, &xtype| match xtype {
-//                 Cont(_, _) => (),
-//                 Int(_, _) => *val = v,
-//             });
-//     });
-//     res
-// }
-
 pub struct MixintSampling {
     lhs: Lhs<f64, Isaac64Rng>,
     xtypes: Vec<Xtype>,
@@ -237,16 +223,16 @@ impl SamplingMethod<f64> for MixintSampling {
 pub type SurrogateParams = MoeParams<f64, Isaac64Rng>;
 
 pub struct MixintMoeParams {
-    moe_params: SurrogateParams,
+    surrogate_builder: SurrogateParams,
     xtypes: Vec<Xtype>,
     /// whether x data are in given in folded space (enum indexes) or not (enum masks)
     work_in_folded_space: bool,
 }
 
 impl MixintMoeParams {
-    pub fn new(xtypes: &[Xtype], moe_params: &SurrogateParams) -> Self {
+    pub fn new(xtypes: &[Xtype], surrogate_builder: &SurrogateParams) -> Self {
         MixintMoeParams {
-            moe_params: moe_params.clone(),
+            surrogate_builder: surrogate_builder.clone(),
             xtypes: xtypes.to_vec(),
             work_in_folded_space: false,
         }
@@ -278,9 +264,9 @@ impl MixintMoeParams {
         cast_to_discrete_values(&self.xtypes, &mut xcast);
         MixintMoe {
             moe: self
-                .moe_params
+                .surrogate_builder
                 .clone()
-                .regression_spec(RegressionSpec::CONSTANT)
+                .regression_spec(RegressionSpec::CONSTANT) // mixinteger works on ly with constant regression
                 .fit(&Dataset::new(xcast, y.to_owned()))
                 .unwrap(),
             xtypes: self.xtypes.clone(),

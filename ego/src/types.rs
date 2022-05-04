@@ -63,5 +63,5 @@ pub trait SurrogateBuilder {
 
 /// An interface for "function under optimization" evaluation
 pub trait PreProcessor {
-    fn eval(&self, x: &Array2<f64>) -> Array2<f64>;
+    fn run(&self, x: &Array2<f64>) -> Array2<f64>;
 }

@@ -65,14 +65,15 @@ impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
     }
 }
 
-/// An pre_proc for the function under optimization taking into account
+/// A PreProcessor for the function under optimization taking into account
 /// discrete input variables specification.
 pub struct MixintPreProcessor {
     xtypes: Vec<Xtype>,
 }
 
 impl PreProcessor for MixintPreProcessor {
-    fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
+    /// cast continuous input as discrete input following types spec
+    fn run(&self, x: &Array2<f64>) -> Array2<f64> {
         let fold = fold_with_enum_index(&self.xtypes, &x.view());
         get_cast_to_discrete_values(&self.xtypes, &fold)
     }
