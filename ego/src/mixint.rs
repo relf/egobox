@@ -178,10 +178,15 @@ pub fn cast_to_enum_value(xtypes: &[Xtype], i: usize, enum_i: usize) -> Option<S
     None
 }
 
+/// A decorator of LHS sampling that takes into account Xtype specifications
+/// casting continuous LHS result from floats to discrete types.
 pub struct MixintSampling {
+    /// The continuous LHS sampling method
     lhs: Lhs<f64, Isaac64Rng>,
+    /// The input specifications
     xtypes: Vec<Xtype>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
+    /// i.e for "blue" in ["red", "green", "blue"] either [2] or [0, 0, 1]
     output_in_folded_space: bool,
 }
 
@@ -220,17 +225,22 @@ impl SamplingMethod<f64> for MixintSampling {
     }
 }
 
-pub type SurrogateParams = MoeParams<f64, Isaac64Rng>;
+/// Surrogate parameters used in
+pub type MoeBuilder = MoeParams<f64, Isaac64Rng>;
 
+/// A decorator of Moe surrogate that takes into account Xtype specifications
 pub struct MixintMoeParams {
-    surrogate_builder: SurrogateParams,
+    /// The surrogate factory
+    surrogate_builder: MoeBuilder,
+    /// The input specifications
     xtypes: Vec<Xtype>,
-    /// whether x data are in given in folded space (enum indexes) or not (enum masks)
+    /// whether data are in given in folded space (enum indexes) or not (enum masks)
+    /// i.e for "blue" in ["red", "green", "blue"] either [2] or [0, 0, 1]
     work_in_folded_space: bool,
 }
 
 impl MixintMoeParams {
-    pub fn new(xtypes: &[Xtype], surrogate_builder: &SurrogateParams) -> Self {
+    pub fn new(xtypes: &[Xtype], surrogate_builder: &MoeBuilder) -> Self {
         MixintMoeParams {
             surrogate_builder: surrogate_builder.clone(),
             xtypes: xtypes.to_vec(),
@@ -281,9 +291,13 @@ impl Fit<Array2<f64>, Array2<f64>, EgoError> for MixintMoeParams {
 }
 
 #[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+/// The Moe model that takes into account Xtype specifications
 pub struct MixintMoe {
     moe: Moe,
+    /// The input specifications
     xtypes: Vec<Xtype>,
+    /// whether data are in given in folded space (enum indexes) or not (enum masks)
+    /// i.e for "blue" in ["red", "green", "blue"] either [2] or [0, 0, 1]
     work_in_folded_space: bool,
 }
 
@@ -362,7 +376,7 @@ impl MixintContext {
 
     pub fn create_surrogate(
         &self,
-        surrogate_builder: &SurrogateParams,
+        surrogate_builder: &MoeBuilder,
         dataset: &DatasetBase<Array2<f64>, Array2<f64>>,
     ) -> Result<MixintMoe> {
         let mut params = MixintMoeParams::new(&self.xtypes, surrogate_builder);
@@ -416,7 +430,7 @@ mod tests {
 
         let mixi = MixintContext::new(&xtypes);
 
-        let surrogate_builder = SurrogateParams::new(1);
+        let surrogate_builder = MoeBuilder::new(1);
         let xt = array![[0.], [2.], [3.0], [4.]];
         let yt = array![[0.], [1.5], [0.9], [1.]];
         let ds = Dataset::new(xt, yt);
@@ -474,7 +488,7 @@ mod tests {
         let yt = ftest(&xt);
 
         let surrogate_builder =
-            SurrogateParams::new(1).correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
+            MoeBuilder::new(1).correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
         let ds = Dataset::new(xt, yt);
         let mixi_moe = mixi
             .create_surrogate(&surrogate_builder, &ds)
