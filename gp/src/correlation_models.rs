@@ -1,4 +1,5 @@
 //! A module for correlation models with PLS weighting to model the error term of the GP model.
+//!
 //! The following correlation models are implemented:
 //! * squared exponential,
 //! * absolute exponential,

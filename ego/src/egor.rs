@@ -137,7 +137,7 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     /// Number of starts for multistart approach used for hyperparameters optimization
     pub n_start: usize,
     /// Number of parallel points evaluated for each "function evaluation"
-    pub n_parallel: usize,
+    pub q_parallel: usize,
     /// Number of initial doe drawn using Latin hypercube sampling
     /// Note: n_doe > 0; otherwise n_doe = max(xdim+1, 5)
     pub n_doe: usize,
@@ -151,7 +151,7 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     pub doe: Option<Array2<f64>>,
     /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
     pub xlimits: Array2<f64>,
-    /// Parallel strategy used to define several points (n_parallel) evaluations at each iteration
+    /// Parallel strategy used to define several points (q_parallel) evaluations at each iteration
     pub q_ei: QEiStrategy,
     /// Criterium to select next point to evaluate
     pub infill: InfillStrategy,
@@ -175,8 +175,8 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     /// functions, otherwise [mixture of expert](egobox_moe) is used
     /// Note: if specified takes precedence over individual settings
     pub surrogate_builder: Option<&'a dyn SurrogateBuilder>,
-    /// An optional pre-processor used to preprocess continuous input given
-    /// to the function under optimization, specially with mixed integer
+    /// An optional pre-processor to preprocess continuous input given
+    /// to the function under optimization, specially used with mixed integer
     /// function optimization
     pub pre_proc: Option<&'a dyn PreProcessor>,
     /// The function under optimization f(x) = [objective, cstr1, ..., cstrn], (n_cstr+1 size)
@@ -187,12 +187,21 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
 }
 
 impl<'a, O: GroupFunc> Egor<'a, O, Isaac64Rng> {
+    /// Constructor of the optimization of the function `f`
+    ///
+    /// The function `f` shoud return an objective but also constraint values if any.
+    /// Design space is specified by the 2D array `xlimits` which is `[nx, 2]`-shaped and
+    /// constains lower and upper bounds of `x` components.
     pub fn new(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Egor<'a, O, Isaac64Rng> {
         Self::new_with_rng(f, xlimits, Isaac64Rng::from_entropy())
     }
 }
 
 impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
+    /// Constructor of the optimization of the function `f` with specified random generator
+    /// to get reproducibility.
+    ///
+    /// See [`Egor::new()`]
     pub fn new_with_rng(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
@@ -201,7 +210,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         Egor {
             n_eval: 20,
             n_start: 20,
-            n_parallel: 1,
+            q_parallel: 1,
             n_doe: 0,
             n_cstr: 0,
             cstr_tol: 1e-6,
@@ -224,91 +233,122 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         }
     }
 
+    /// Sets allowed number of evaluation of the function under optimization
     pub fn n_eval(&mut self, n_eval: usize) -> &mut Self {
         self.n_eval = n_eval;
         self
     }
 
+    /// Sets the number of runs of infill strategy optimizations (best result taken)
     pub fn n_start(&mut self, n_start: usize) -> &mut Self {
         self.n_start = n_start;
         self
     }
 
-    pub fn n_parallel(&mut self, n_parallel: usize) -> &mut Self {
-        self.n_parallel = n_parallel;
+    /// Sets Number of parallel evaluations of the function under optimization
+    pub fn q_parallel(&mut self, q_parallel: usize) -> &mut Self {
+        self.q_parallel = q_parallel;
         self
     }
 
+    /// Number of samples of initial LHS sampling (used when DOE not provided by the user)
+    ///
+    /// When 0 a number of points is computed automatically regarding the number of input variables
+    /// of the function under optimization.
     pub fn n_doe(&mut self, n_doe: usize) -> &mut Self {
         self.n_doe = n_doe;
         self
     }
 
+    /// Sets the number of constraint functions
     pub fn n_cstr(&mut self, n_cstr: usize) -> &mut Self {
         self.n_cstr = n_cstr;
         self
     }
 
+    /// Sets the tolerance on constraints violation (cstr < tol)
     pub fn cstr_tol(&mut self, tol: f64) -> &mut Self {
         self.cstr_tol = tol;
         self
     }
 
+    /// Sets an initial DOE containing ns samples
+    ///
+    /// Either nt = nx then only x are specified and ns evals are done to get y doe values,
+    /// or nt = nx + ny then x = doe(:, :nx) and y = doe(:, nx:) are specified  
     pub fn doe(&mut self, doe: Option<Array2<f64>>) -> &mut Self {
         self.doe = doe.map(|x| x.to_owned());
         self
     }
 
+    /// Sets the parallel infill strategy
+    ///
+    /// Parallel infill criteria to get virtual next promising points in order to allow
+    /// n parallel evaluations of the function under optimization.
     pub fn qei_strategy(&mut self, q_ei: QEiStrategy) -> &mut Self {
         self.q_ei = q_ei;
         self
     }
 
+    /// Sets the nfill criteria
     pub fn infill_strategy(&mut self, infill: InfillStrategy) -> &mut Self {
         self.infill = infill;
         self
     }
 
+    /// Sets the infill optimizer
     pub fn infill_optimizer(&mut self, optimizer: InfillOptimizer) -> &mut Self {
         self.infill_optimizer = optimizer;
         self
     }
 
+    /// Sets the allowed regression models used in gaussian processes.
     pub fn regression_spec(&mut self, regression_spec: RegressionSpec) -> &mut Self {
         self.regression_spec = regression_spec;
         self
     }
 
+    /// Sets the allowed correlation models used in gaussian processes.
     pub fn correlation_spec(&mut self, correlation_spec: CorrelationSpec) -> &mut Self {
         self.correlation_spec = correlation_spec;
         self
     }
 
+    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
+    ///
+    /// This is used to address high-dimensional problems typically when nx > 9.
     pub fn kpls_dim(&mut self, kpls_dim: Option<usize>) -> &mut Self {
         self.kpls_dim = kpls_dim;
         self
     }
 
+    /// Sets the number of clusters used by the mixture of surrogate experts.
     pub fn n_clusters(&mut self, n_clusters: Option<usize>) -> &mut Self {
         self.n_clusters = n_clusters;
         self
     }
 
+    /// Sets a known minimum to be used as a stopping criterion.
     pub fn expect(&mut self, expected: Option<ApproxValue>) -> &mut Self {
         self.expected = expected;
         self
     }
 
+    /// Sets a directory to write optimization history and used as search path for hot start doe
     pub fn outdir(&mut self, outdir: Option<String>) -> &mut Self {
         self.outdir = outdir;
         self
     }
 
+    /// Whether we start by loading last DOE saved in `outdir` as initial DOE
     pub fn hot_start(&mut self, hot_start: bool) -> &mut Self {
         self.hot_start = hot_start;
         self
     }
 
+    /// Sets the surrogate builder used to model objective and constraints.
+    ///
+    /// If none Mixture of Experts [MoeParams] will be used.
     pub fn surrogate_builder(
         &mut self,
         surrogate_builder: Option<&'a dyn SurrogateBuilder>,
@@ -317,16 +357,20 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         self
     }
 
+    /// Sets a pre processor for inputs before being evaluated by the function under optimization
+    ///
+    /// Used for mixed-integer optimizatio. See [crate::MixintEgor]
     pub fn pre_proc(&mut self, pre_proc: Option<&'a dyn PreProcessor>) -> &mut Self {
         self.pre_proc = pre_proc;
         self
     }
 
+    /// Sets a random generator for reproducibility
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<'a, O, R2> {
         Egor {
             n_eval: self.n_eval,
             n_start: self.n_start,
-            n_parallel: self.n_parallel,
+            q_parallel: self.q_parallel,
             n_doe: self.n_doe,
             n_cstr: self.n_cstr,
             cstr_tol: self.cstr_tol,
@@ -445,7 +489,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                 info!("End iteration {}/{}", i, n_iter);
             } else {
                 no_point_added_retries = MAX_RETRY;
-                let count = (self.n_parallel - rejected_count) as i32;
+                let count = (self.q_parallel - rejected_count) as i32;
                 let x_to_eval = x_data.slice(s![-count.., ..]).to_owned();
                 info!(
                     "Add {} point{}:",
@@ -523,7 +567,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                     .expect("GP training failure"),
             )
         }
-        for _ in 0..self.n_parallel {
+        for _ in 0..self.q_parallel {
             match self.find_best_point(x_data, y_data, sampling, obj_model.as_ref(), &cstr_models) {
                 Ok(xk) => {
                     match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), &cstr_models) {
@@ -748,12 +792,10 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         };
         obj / scale
     }
-}
 
-impl<'a, O: GroupFunc, R: Rng + Clone> PreProcessor for Egor<'a, O, R> {
     fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
         if let Some(pre_proc) = self.pre_proc {
-            (self.obj)(&pre_proc.eval(x).view())
+            (self.obj)(&pre_proc.run(x).view())
         } else {
             (self.obj)(&x.view())
         }
@@ -903,10 +945,6 @@ mod tests {
             .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .doe(Some(doe))
             .n_eval(40)
-            // .expect(Some(ApproxValue {
-            //     value: -5.5080,
-            //     tolerance: 1e-3,
-            // }))
             .minimize()
             .expect("Minimize failure");
         println!("G24 optim result = {:?}", res);

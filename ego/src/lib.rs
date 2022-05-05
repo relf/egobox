@@ -77,11 +77,25 @@
 //! println!("min f(x)={} at x={}", res.y_opt, res.x_opt);
 //! ```  
 //!
-//! # Reference
+//! # Implementation notes
 //!
-//! Bartoli, Nathalie, et al. [Adaptive modeling strategy for constrained global
+//! * Mixture of experts and PLS dimension reduction is explained in \[[Bartoli2019](#Bartoli2019)\]
+//! * Parallel optimization is available through the selection of a qei strategy.
+//! More information in \[[Ginsbourger2010](#Ginsbourger2010)\]
+//! * Mixed integer approach is imlemented in [MixintEgor].
+//! More information in \[[Garrido2018](#Garrido2018)\]
+//!
+//! # References
+//!
+//! \[<a id="Bartoli2019">Bartoli2019</a>\]: Bartoli, Nathalie, et al. [Adaptive modeling strategy for constrained global
 //! optimization with application to aerodynamic wing design](https://www.sciencedirect.com/science/article/pii/S1270963818306011)
 //!  Aerospace Science and technology 90 (2019): 85-102.
+//!
+//! \[<a id="Ginsbourger2010">Ginsbourger2010</a>\]: Ginsbourger, D., Le Riche, R., & Carraro, L. (2010).
+//! Kriging is well-suited to parallelize optimization.
+//!  
+//! \[<a id="Garrido2018">Garrido2018</a>\]: E.C. Garrido-Merchan and D. Hernandez-Lobato. Dealing with categorical and
+//! integer-valued variables in Bayesian Optimization with Gaussian processes.
 //!
 //!
 mod egor;

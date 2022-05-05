@@ -1,6 +1,7 @@
 use nlopt::FailState;
 use thiserror::Error;
 
+/// A result type for EGO errors
 pub type Result<T> = std::result::Result<T, EgoError>;
 
 /// An error when modeling a GMM algorithm
@@ -30,6 +31,9 @@ pub enum EgoError {
     /// When IO fails
     #[error("IO error")]
     WriteNpyError(#[from] ndarray_npy::WriteNpyError),
+    /// When a linfa error occurs
+    #[error(transparent)]
+    LinfaError(#[from] linfa::error::Error),
 }
 
 impl From<FailState> for EgoError {
