@@ -1,6 +1,7 @@
 use nlopt::FailState;
 use thiserror::Error;
 
+/// A result type for EGO errors
 pub type Result<T> = std::result::Result<T, EgoError>;
 
 /// An error when modeling a GMM algorithm

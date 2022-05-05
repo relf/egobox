@@ -10,13 +10,21 @@ use rand_isaac::Isaac64Rng;
 /// continuous relaxation allowing to manage function optimization which
 /// takes discrete input variables.  
 pub struct MixintEgor<'a, O: GroupFunc, R: Rng + Clone> {
-    // Specifications of the x input variables being either coninuous (float) or discrete (integer)
+    /// Specifications of the x input variables being either coninuous (float) or discrete (integer)
     xtypes: Vec<Xtype>,
-    // The EGO algorithm
+    /// The EGO algorithm. the object is accessible to be parametirizable using Egor API (see [`Egor`])
     pub egor: Egor<'a, O, R>,
 }
 
 impl<'a, O: GroupFunc> MixintEgor<'a, O, Isaac64Rng> {
+    /// Constructor of MixintEgor optimizer.
+    ///
+    /// the function `f` under optimization accepts mixed integer variables
+    /// returning objective to minimize and constraints to be negative.
+    /// Mixture of experts parameters `mix_params` are used to model objective
+    /// and constraints.
+    /// Mixed integer preprocessor manages continous input transformation (cast to discrete values)
+    /// before calling `f`.
     pub fn new(
         f: O,
         mix_params: &'a MixintMoeParams,
@@ -27,6 +35,8 @@ impl<'a, O: GroupFunc> MixintEgor<'a, O, Isaac64Rng> {
 }
 
 impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
+    /// Constructor enabling random generator specification
+    /// See [MixintEgor::new]
     pub fn new_with_rng(
         f: O,
         mix_params: &'a MixintMoeParams,
@@ -44,12 +54,12 @@ impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
         }
     }
 
-    /// Minimize with regard to discrete input variables as specified using [Xtype]
+    /// Minimize with regard to discrete input variables at construction using [Xtype]
     pub fn minimize(&self) -> Result<OptimResult<f64>> {
         let res = self.egor.minimize();
         res.map(|opt| -> OptimResult<f64> {
             let x_opt = opt.x_opt.to_owned().insert_axis(Axis(0));
-            let x_opt = get_cast_to_discrete_values(&self.xtypes, &x_opt);
+            let x_opt = cast_to_discrete_values(&self.xtypes, &x_opt);
             let x_opt = fold_with_enum_index(&self.xtypes, &x_opt.view());
             let res = OptimResult {
                 x_opt: x_opt.row(0).to_owned(),
@@ -75,11 +85,12 @@ impl PreProcessor for MixintPreProcessor {
     /// cast continuous input as discrete input following types spec
     fn run(&self, x: &Array2<f64>) -> Array2<f64> {
         let fold = fold_with_enum_index(&self.xtypes, &x.view());
-        get_cast_to_discrete_values(&self.xtypes, &fold)
+        cast_to_discrete_values(&self.xtypes, &fold)
     }
 }
 
 impl MixintPreProcessor {
+    /// Constrcutor with given `xtypes` specification
     pub fn new(xtypes: &[Xtype]) -> Self {
         MixintPreProcessor {
             xtypes: xtypes.to_vec(),

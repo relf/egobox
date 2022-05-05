@@ -47,9 +47,9 @@
 //! End-user project should select a BLAS/Lapack backend depending its environment;
 //! it can be either:
 //!
-//! * Openblas: `linfa\openblas-system` or `linfa\openblas-static`
-//! * Netlib: `linfa\netlib-system` or `linfa\netlib-static`
-//! * Intel MKL: `linfa\intel-mkl-system` or `linfa\intel-mkl-static`
+//! * Openblas: `linfa/openblas-system` or `linfa/openblas-static`
+//! * Netlib: `linfa/netlib-system` or `linfa/netlib-static`
+//! * Intel MKL: `linfa/intel-mkl-system` or `linfa/intel-mkl-static`
 //!
 //! where
 //!

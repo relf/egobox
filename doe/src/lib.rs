@@ -5,7 +5,7 @@ method which is used by surrogate-based methods.
 This library is a port of [SMT sampling methods](https://smt.readthedocs.io/en/latest/_src_docs/sampling_methods.html).
 
 A DoE method is a way to generate a set of points (i.e. a DoE) within a design (or sample) space `xlimits`.
-The design space is defined as a 2D ndarray [nx, 2], specifying lower bound and upper bound
+The design space is defined as a 2D ndarray `(nx, 2)`, specifying lower bound and upper bound
 of each `nx` components of the samples `x`.
 
 Example:
