@@ -239,7 +239,7 @@ impl Vspec {
 ///         Infill criteria to decide best next promising point.
 ///         Can be either InfillStrategy.EI (1), InfillStrategy.WB2 (2) or InfillStrategy.WB2S (3)
 ///
-///     n_parallel (int > 0):
+///     q_parallel (int > 0):
 ///         Number of parallel evaluations of the function under optimization.
 ///
 ///     par_infill_strategy (ParInfillStrategy enum, an int in [1, 4])
@@ -274,7 +274,7 @@ impl Vspec {
 ///      
 #[pyclass]
 #[pyo3(
-    text_signature = "(fun, n_cstr=0, cstr_tol=1e-6, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, n_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
+    text_signature = "(fun, n_cstr=0, cstr_tol=1e-6, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, q_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
 )]
 struct Egor {
     pub fun: PyObject,
@@ -287,7 +287,7 @@ struct Egor {
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub infill_strategy: InfillStrategy,
-    pub n_parallel: usize,
+    pub q_parallel: usize,
     pub par_infill_strategy: ParInfillStrategy,
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
@@ -320,7 +320,7 @@ impl Egor {
         regr_spec = "RegressionSpec::ALL",
         corr_spec = "CorrelationSpec::ALL",
         infill_strategy = "InfillStrategy::WB2",
-        n_parallel = "1",
+        q_parallel = "1",
         par_infill_strategy = "ParInfillStrategy::KB",
         infill_optimizer = "InfillOptimizer::COBYLA",
         kpls_dim = "None",
@@ -343,7 +343,7 @@ impl Egor {
         regr_spec: u8,
         corr_spec: u8,
         infill_strategy: u8,
-        n_parallel: usize,
+        q_parallel: usize,
         par_infill_strategy: u8,
         infill_optimizer: u8,
         kpls_dim: Option<usize>,
@@ -365,7 +365,7 @@ impl Egor {
             regression_spec: RegressionSpec(regr_spec),
             correlation_spec: CorrelationSpec(corr_spec),
             infill_strategy: InfillStrategy(infill_strategy),
-            n_parallel,
+            q_parallel,
             par_infill_strategy: ParInfillStrategy(par_infill_strategy),
             infill_optimizer: InfillOptimizer(infill_optimizer),
             kpls_dim,
@@ -498,7 +498,7 @@ impl Egor {
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             )
             .infill_strategy(infill_strategy)
-            .n_parallel(self.n_parallel)
+            .q_parallel(self.q_parallel)
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
             .kpls_dim(self.kpls_dim)

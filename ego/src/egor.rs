@@ -137,7 +137,7 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     /// Number of starts for multistart approach used for hyperparameters optimization
     pub n_start: usize,
     /// Number of parallel points evaluated for each "function evaluation"
-    pub n_parallel: usize,
+    pub q_parallel: usize,
     /// Number of initial doe drawn using Latin hypercube sampling
     /// Note: n_doe > 0; otherwise n_doe = max(xdim+1, 5)
     pub n_doe: usize,
@@ -151,7 +151,7 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     pub doe: Option<Array2<f64>>,
     /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
     pub xlimits: Array2<f64>,
-    /// Parallel strategy used to define several points (n_parallel) evaluations at each iteration
+    /// Parallel strategy used to define several points (q_parallel) evaluations at each iteration
     pub q_ei: QEiStrategy,
     /// Criterium to select next point to evaluate
     pub infill: InfillStrategy,
@@ -210,7 +210,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         Egor {
             n_eval: 20,
             n_start: 20,
-            n_parallel: 1,
+            q_parallel: 1,
             n_doe: 0,
             n_cstr: 0,
             cstr_tol: 1e-6,
@@ -246,8 +246,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     }
 
     /// Sets Number of parallel evaluations of the function under optimization
-    pub fn n_parallel(&mut self, n_parallel: usize) -> &mut Self {
-        self.n_parallel = n_parallel;
+    pub fn q_parallel(&mut self, q_parallel: usize) -> &mut Self {
+        self.q_parallel = q_parallel;
         self
     }
 
@@ -370,7 +370,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         Egor {
             n_eval: self.n_eval,
             n_start: self.n_start,
-            n_parallel: self.n_parallel,
+            q_parallel: self.q_parallel,
             n_doe: self.n_doe,
             n_cstr: self.n_cstr,
             cstr_tol: self.cstr_tol,
@@ -489,7 +489,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                 info!("End iteration {}/{}", i, n_iter);
             } else {
                 no_point_added_retries = MAX_RETRY;
-                let count = (self.n_parallel - rejected_count) as i32;
+                let count = (self.q_parallel - rejected_count) as i32;
                 let x_to_eval = x_data.slice(s![-count.., ..]).to_owned();
                 info!(
                     "Add {} point{}:",
@@ -567,7 +567,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                     .expect("GP training failure"),
             )
         }
-        for _ in 0..self.n_parallel {
+        for _ in 0..self.q_parallel {
             match self.find_best_point(x_data, y_data, sampling, obj_model.as_ref(), &cstr_models) {
                 Ok(xk) => {
                     match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), &cstr_models) {
