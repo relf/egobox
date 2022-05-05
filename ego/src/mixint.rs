@@ -227,7 +227,7 @@ impl SamplingMethod<f64> for MixintSampling {
     }
 }
 
-/// Surrogate parameters used in
+/// Moe type for MixintEgor optimizer
 pub type MoeBuilder = MoeParams<f64, Isaac64Rng>;
 
 /// A decorator of Moe surrogate that takes into account Xtype specifications
