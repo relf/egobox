@@ -146,6 +146,6 @@ mod tests {
             .infill_strategy(InfillStrategy::WB2);
 
         let res = mixintegor.minimize().unwrap();
-        assert_abs_diff_eq!(&array![18.], &res.x_opt, epsilon = 2.);
+        assert_abs_diff_eq!(&array![18.], &res.x_opt, epsilon = 3.);
     }
 }
