@@ -30,6 +30,9 @@ pub enum EgoError {
     /// When IO fails
     #[error("IO error")]
     WriteNpyError(#[from] ndarray_npy::WriteNpyError),
+    /// When a linfa error occurs
+    #[error(transparent)]
+    LinfaError(#[from] linfa::error::Error),
 }
 
 impl From<FailState> for EgoError {

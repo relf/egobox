@@ -2,11 +2,11 @@
 //! it is a port of [SMT mixed integer module](https://smt.readthedocs.io/en/latest/_src_docs/applications/mixed_integer.html)
 
 #![allow(dead_code)]
-use crate::errors::Result;
+use crate::errors::{EgoError, Result};
 use crate::types::SurrogateBuilder;
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{Moe, MoeParams, RegressionSpec, Surrogate};
-use linfa::{traits::Fit, Dataset};
+use linfa::{traits::Fit, Dataset, DatasetBase};
 use ndarray::{s, Array, Array2, ArrayView2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -250,19 +250,24 @@ impl MixintMoeParams {
 
 impl SurrogateBuilder for MixintMoeParams {
     fn train(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
-        Ok(Box::new(self.fit(x, y)) as Box<dyn Surrogate>)
+        Ok(Box::new(self.fit(&Dataset::new(x.to_owned(), y.to_owned()))?) as Box<dyn Surrogate>)
     }
 }
 
-impl MixintMoeParams {
-    fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> MixintMoe {
+impl Fit<Array2<f64>, Array2<f64>, EgoError> for MixintMoeParams {
+    type Object = MixintMoe;
+
+    fn fit(&self, dataset: &DatasetBase<Array2<f64>, Array2<f64>>) -> Result<Self::Object> {
+        let x = dataset.records();
+        let y = dataset.targets();
+
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, &x.view())
         } else {
             x.to_owned()
         };
         cast_to_discrete_values(&self.xtypes, &mut xcast);
-        MixintMoe {
+        Ok(MixintMoe {
             moe: self
                 .surrogate_builder
                 .clone()
@@ -271,7 +276,7 @@ impl MixintMoeParams {
                 .unwrap(),
             xtypes: self.xtypes.clone(),
             work_in_folded_space: self.work_in_folded_space,
-        }
+        })
     }
 }
 
@@ -358,12 +363,11 @@ impl MixintContext {
     pub fn create_surrogate(
         &self,
         surrogate_builder: &SurrogateParams,
-        x: &Array2<f64>,
-        y: &Array2<f64>,
-    ) -> MixintMoe {
+        dataset: &DatasetBase<Array2<f64>, Array2<f64>>,
+    ) -> Result<MixintMoe> {
         let mut params = MixintMoeParams::new(&self.xtypes, surrogate_builder);
         let params = params.work_in_folded_space(self.work_in_folded_space);
-        params.fit(x, y)
+        params.fit(dataset)
     }
 }
 
@@ -415,7 +419,10 @@ mod tests {
         let surrogate_builder = SurrogateParams::new(1);
         let xt = array![[0.], [2.], [3.0], [4.]];
         let yt = array![[0.], [1.5], [0.9], [1.]];
-        let mixi_moe = mixi.create_surrogate(&surrogate_builder, &xt, &yt);
+        let ds = Dataset::new(xt, yt);
+        let mixi_moe = mixi
+            .create_surrogate(&surrogate_builder, &ds)
+            .expect("Mixint surrogate creation");
 
         let num = 5;
         let xtest = Array::linspace(0.0, 4.0, num).insert_axis(Axis(1));
@@ -468,7 +475,10 @@ mod tests {
 
         let surrogate_builder =
             SurrogateParams::new(1).correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
-        let mixi_moe = mixi.create_surrogate(&surrogate_builder, &xt, &yt);
+        let ds = Dataset::new(xt, yt);
+        let mixi_moe = mixi
+            .create_surrogate(&surrogate_builder, &ds)
+            .expect("Mixint surrogate creation");
 
         let ntest = 10;
         let mixi_lhs = mixi.create_sampling(Some(42));
