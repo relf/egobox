@@ -36,9 +36,9 @@ egobox-ego = { version = "0.3.0" }
 
 End user project using `gp`, `moe` and `ego` should select a BLAS/Lapack backend 
 depending its environment; it can be either: 
- * Openblas: `linfa\openblas-system` or `linfa\openblas-static`
- * Netlib: `linfa\netlib-system` or `linfa\netlib-static`
- * Intel MKL: `linfa\intel-mkl-system` or `linfa\intel-mkl-static`
+ * Openblas: `linfa/openblas-system` or `linfa/openblas-static`
+ * Netlib: `linfa/netlib-system` or `linfa/netlib-static`
+ * Intel MKL: `linfa/intel-mkl-system` or `linfa/intel-mkl-static`
 
 where
 
