@@ -88,6 +88,8 @@ surrogate models on each cluster,
 * `ego`: an efficient global optimization implementation with handling of inequality 
 constraints and mixed integer optimization through continuous relaxation.
 
+![Architecture of the library](egobox_architecture.png)
+
 Finally thanks to the `PyO3` project, the Rust language is well-suited to create 
 Python extensions which benefits from Rust strenghts while being integrated in the 
 Python ecosystem.
