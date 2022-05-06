@@ -22,7 +22,7 @@ cargo-extra-args = "--features linfa/intel-mkl-static"
 
 [tool.poetry]
 name = "egobox"
-version = "0.2.1"
+version = "0.3.0"
 description = "Python binding for egobox EGO optimizer written in Rust"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 

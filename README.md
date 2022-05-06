@@ -3,7 +3,7 @@
 [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
 [![pytests](https://github.com/relf/egobox/workflows/pytests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Apytests)
 [![linting](https://github.com/relf/egobox/workflows/lint/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Alint)
-
+[![status](https://joss.theoj.org/papers/0b252f280b5e5b67b9caba72d56cb156/status.svg)](https://joss.theoj.org/papers/0b252f280b5e5b67b9caba72d56cb156)
 
 Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt). 
 
@@ -22,10 +22,10 @@ Depending on the sub-packages you want to use, you have to add following declara
 
 ```
 [dependencies]
-egobox-doe = { version = "0.2.1" }
-egobox-gp  = { version = "0.2.1" }
-egobox-moe = { version = "0.2.1" }
-egobox-ego = { version = "0.2.1" }
+egobox-doe = { version = "0.3.0" }
+egobox-gp  = { version = "0.3.0" }
+egobox-moe = { version = "0.3.0" }
+egobox-ego = { version = "0.3.0" }
 ```
 
 ## Features
@@ -51,7 +51,7 @@ For instance, using `gp` with the Intel MKL BLAS/Lapack backend, you have to spe
 
 ```
 [dependencies]
-egobox-gp = { version = "0.2.1", features = ["linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.3.0", features = ["linfa/intel-mkl-static"] }
 ```
 
 Note: only end-user projects should specify a provider in `Cargo.toml` (not librairies). In case of library development, the backend is specified on the command line as for examples below.
