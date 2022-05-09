@@ -80,3 +80,11 @@ pub trait PreProcessor {
     /// Execute the pre processing on given `x` values
     fn run(&self, x: &Array2<f64>) -> Array2<f64>;
 }
+
+/// Data used by internal infill criteria to be optimized using NlOpt
+#[derive(Clone)]
+pub(crate) struct ObjData<F> {
+    pub scale_obj: F,
+    pub scale_cstr: Array1<F>,
+    pub scale_wb2: F,
+}
