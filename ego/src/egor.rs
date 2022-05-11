@@ -480,23 +480,25 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                 no_point_added_retries -= 1;
                 if no_point_added_retries == 0 {
                     info!("Max number of retries ({}) without adding point", MAX_RETRY);
-                    info!("Use LHS optimization to get one point");
+                    info!("Use LHS optimization to get at least one point");
                     lhs_optim = true;
                 }
+                info!("End iteration {}/{}", i, n_iter);
                 continue;
-                // info!("End iteration {}/{}", i, n_iter);
             }
 
-            lhs_optim = false; // reset as a point is added
             no_point_added_retries = MAX_RETRY;
             let count = (self.q_parallel - rejected_count) as i32;
             let x_to_eval = x_data.slice(s![-count.., ..]).to_owned();
             info!(
-                "Add {} point{}:",
+                "Add {} point{} {}:",
                 count,
+                if lhs_optim { " from sampling" } else { "" },
                 if rejected_count > 1 { "s" } else { "" }
             );
             info!("  {}", x_dat);
+            lhs_optim = false; // reset as a point is added
+
             let y_actual = self.eval(&x_to_eval);
             Zip::from(y_data.slice_mut(s![-count.., ..]).columns_mut())
                 .and(y_actual.columns())
