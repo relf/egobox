@@ -1,5 +1,5 @@
 use crate::types::ObjData;
-use egobox_doe::{Lhs, SamplingMethod};
+use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_linalg::Norm;
 use ndarray_stats::QuantileExt;
@@ -60,7 +60,7 @@ impl<'a> LhsOptimizer<'a> {
 
     fn find_lhs_min(&self) -> (bool, Array1<f64>, f64, Array1<f64>) {
         let n = self.n_points * self.xlimits.nrows();
-        let doe = Lhs::new(&self.xlimits).sample(n);
+        let doe = Lhs::new(&self.xlimits).kind(LhsKind::Classic).sample(n);
 
         let y: Array1<f64> = doe.map_axis(Axis(1), |x| {
             (self.obj)(&x.to_vec(), None, &mut self.obj_data.clone())
