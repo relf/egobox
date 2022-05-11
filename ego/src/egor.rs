@@ -912,7 +912,7 @@ mod tests {
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .infill_strategy(InfillStrategy::EI)
             .doe(Some(doe))
-            .n_eval(30)
+            .n_eval(35)
             .expect(Some(ApproxValue {
                 value: 0.0,
                 tolerance: 1e-2,
