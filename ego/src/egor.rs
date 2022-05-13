@@ -91,11 +91,13 @@
 //! ```
 //!
 use crate::errors::{EgoError, Result};
+use crate::lhs_optimizer::LhsOptimizer;
 use crate::sort_axis::*;
 use crate::types::*;
 use crate::utils::update_data;
 use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale};
 use crate::utils::{ei, wb2s};
+
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::{CorrelationSpec, Moe, MoeParams, RegressionSpec, Surrogate};
 use env_logger::{Builder, Env};
@@ -112,13 +114,6 @@ use rand_isaac::Isaac64Rng;
 
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egobox_doe.npy";
-
-/// Data used by internal infill criteria to be optimized using NlOpt
-struct ObjData<F> {
-    pub scale_obj: F,
-    pub scale_cstr: Array1<F>,
-    pub scale_wb2: F,
-}
 
 impl<R: Rng + SeedableRng + Clone> SurrogateBuilder for MoeParams<f64, R> {
     fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
@@ -400,7 +395,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     pub fn suggest(&self, x_data: &Array2<f64>, y_data: &Array2<f64>) -> Array2<f64> {
         let rng = self.rng.clone();
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
-        let (x_dat, _) = self.next_points(0, x_data, y_data, &sampling);
+        let (x_dat, _) = self.next_points(0, x_data, y_data, &sampling, false);
         x_dat
     }
 
@@ -465,10 +460,11 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             write_npy(filepath, &doe).expect("Write initial doe");
         }
 
-        const MAX_RETRY: i32 = 10;
+        const MAX_RETRY: i32 = 3;
         let mut no_point_added_retries = MAX_RETRY;
+        let mut lhs_optim = false;
         for i in 1..=n_iter {
-            let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling);
+            let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling, lhs_optim);
             debug!("Try adding {}", x_dat);
             let rejected_count = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
             if rejected_count > 0 {
@@ -484,45 +480,50 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                 no_point_added_retries -= 1;
                 if no_point_added_retries == 0 {
                     info!("Max number of retries ({}) without adding point", MAX_RETRY);
-                    break;
+                    info!("Use LHS optimization to get at least one point");
+                    lhs_optim = true;
                 }
                 info!("End iteration {}/{}", i, n_iter);
-            } else {
-                no_point_added_retries = MAX_RETRY;
-                let count = (self.q_parallel - rejected_count) as i32;
-                let x_to_eval = x_data.slice(s![-count.., ..]).to_owned();
-                info!(
-                    "Add {} point{}:",
-                    count,
-                    if rejected_count > 1 { "s" } else { "" }
-                );
-                info!("  {}", x_dat);
-                let y_actual = self.eval(&x_to_eval);
-                Zip::from(y_data.slice_mut(s![-count.., ..]).columns_mut())
-                    .and(y_actual.columns())
-                    .for_each(|mut y, val| y.assign(&val));
-                let doe = concatenate![Axis(1), x_data, y_data];
-                if self.outdir.is_some() {
-                    let path = self.outdir.as_ref().unwrap();
-                    std::fs::create_dir_all(path)?;
-                    let filepath = std::path::Path::new(path).join(DOE_FILE);
-                    info!("Save doe in {:?}", filepath);
-                    write_npy(filepath, &doe).expect("Write current doe");
-                }
-                let best_index = self.find_best_result_index(&y_data);
-                info!(
-                    "End iteration {}/{}: Best fun(x)={} at x={}",
-                    i,
-                    n_iter,
-                    y_data.row(best_index),
-                    x_data.row(best_index)
-                );
-                if let Some(sol) = self.expected {
-                    if (y_data[[best_index, 0]] - sol.value).abs() < sol.tolerance {
-                        info!("Expected optimum : {:?}", sol);
-                        info!("Expected optimum reached!");
-                        break;
-                    }
+                continue;
+            }
+
+            no_point_added_retries = MAX_RETRY;
+            let count = (self.q_parallel - rejected_count) as i32;
+            let x_to_eval = x_data.slice(s![-count.., ..]).to_owned();
+            info!(
+                "Add {} point{} {}:",
+                count,
+                if lhs_optim { " from sampling" } else { "" },
+                if rejected_count > 1 { "s" } else { "" }
+            );
+            info!("  {}", x_dat);
+            lhs_optim = false; // reset as a point is added
+
+            let y_actual = self.eval(&x_to_eval);
+            Zip::from(y_data.slice_mut(s![-count.., ..]).columns_mut())
+                .and(y_actual.columns())
+                .for_each(|mut y, val| y.assign(&val));
+            let doe = concatenate![Axis(1), x_data, y_data];
+            if self.outdir.is_some() {
+                let path = self.outdir.as_ref().unwrap();
+                std::fs::create_dir_all(path)?;
+                let filepath = std::path::Path::new(path).join(DOE_FILE);
+                info!("Save doe in {:?}", filepath);
+                write_npy(filepath, &doe).expect("Write current doe");
+            }
+            let best_index = self.find_best_result_index(&y_data);
+            info!(
+                "End iteration {}/{}: Best fun(x)={} at x={}",
+                i,
+                n_iter,
+                y_data.row(best_index),
+                x_data.row(best_index)
+            );
+            if let Some(sol) = self.expected {
+                if (y_data[[best_index, 0]] - sol.value).abs() < sol.tolerance {
+                    info!("Expected optimum : {:?}", sol);
+                    info!("Expected optimum reached!");
+                    break;
                 }
             }
         }
@@ -542,6 +543,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         x_data: &Array2<f64>,
         y_data: &Array2<f64>,
         sampling: &Lhs<f64, R>,
+        lhs_optim: bool,
     ) -> (Array2<f64>, Array2<f64>) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
@@ -568,7 +570,14 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             )
         }
         for _ in 0..self.q_parallel {
-            match self.find_best_point(x_data, y_data, sampling, obj_model.as_ref(), &cstr_models) {
+            match self.find_best_point(
+                x_data,
+                y_data,
+                sampling,
+                obj_model.as_ref(),
+                &cstr_models,
+                lhs_optim,
+            ) {
                 Ok(xk) => {
                     match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), &cstr_models) {
                         Ok(yk) => {
@@ -603,6 +612,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         sampling: &Lhs<f64, R>,
         obj_model: &dyn Surrogate,
         cstr_models: &[Box<dyn Surrogate>],
+        lhs_optim: bool,
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
@@ -670,54 +680,66 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             InfillOptimizer::Cobyla => Algorithm::Cobyla,
         };
         while !success && n_optim <= n_max_optim {
-            let mut optimizer = Nlopt::new(
-                algorithm,
-                x_data.ncols(),
-                obj,
-                Target::Minimize,
-                ObjData {
+            if lhs_optim {
+                let obj_data = ObjData {
                     scale_obj,
                     scale_wb2,
                     scale_cstr: scale_cstr.to_owned(),
-                },
-            );
-            let lower = self.xlimits.column(0).to_owned();
-            optimizer.set_lower_bounds(lower.as_slice().unwrap())?;
-            let upper = self.xlimits.column(1).to_owned();
-            optimizer.set_upper_bounds(upper.as_slice().unwrap())?;
-            optimizer.set_maxeval(200)?;
-            optimizer.set_ftol_rel(1e-4)?;
-            optimizer.set_ftol_abs(1e-4)?;
-            cstrs.iter().enumerate().for_each(|(i, cstr)| {
-                optimizer
-                    .add_inequality_constraint(
-                        cstr,
-                        ObjData {
-                            scale_obj,
-                            scale_wb2,
-                            scale_cstr: scale_cstr.to_owned(),
-                        },
-                        1e-6 / scale_cstr[i],
-                    )
-                    .unwrap();
-            });
+                };
+                let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
+                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data).minimize();
+                best_x = Some(x_opt);
+                success = true;
+            } else {
+                let mut optimizer = Nlopt::new(
+                    algorithm,
+                    x_data.ncols(),
+                    obj,
+                    Target::Minimize,
+                    ObjData {
+                        scale_obj,
+                        scale_wb2,
+                        scale_cstr: scale_cstr.to_owned(),
+                    },
+                );
+                let lower = self.xlimits.column(0).to_owned();
+                optimizer.set_lower_bounds(lower.as_slice().unwrap())?;
+                let upper = self.xlimits.column(1).to_owned();
+                optimizer.set_upper_bounds(upper.as_slice().unwrap())?;
+                optimizer.set_maxeval(200)?;
+                optimizer.set_ftol_rel(1e-4)?;
+                optimizer.set_ftol_abs(1e-4)?;
+                cstrs.iter().enumerate().for_each(|(i, cstr)| {
+                    optimizer
+                        .add_inequality_constraint(
+                            cstr,
+                            ObjData {
+                                scale_obj,
+                                scale_wb2,
+                                scale_cstr: scale_cstr.to_owned(),
+                            },
+                            1e-6 / scale_cstr[i],
+                        )
+                        .unwrap();
+                });
 
-            let mut best_opt = f64::INFINITY;
-            let x_start = sampling.sample(self.n_start);
+                let mut best_opt = f64::INFINITY;
+                let x_start = sampling.sample(self.n_start);
 
-            for i in 0..self.n_start {
-                let mut x_opt = x_start.row(i).to_vec();
-                match optimizer.optimize(&mut x_opt) {
-                    Ok((_, opt)) => {
-                        if opt < best_opt {
-                            best_opt = opt;
-                            let res = x_opt.to_vec();
-                            best_x = Some(Array::from(res));
-                            success = true;
+                for i in 0..self.n_start {
+                    let mut x_opt = x_start.row(i).to_vec();
+                    match optimizer.optimize(&mut x_opt) {
+                        Ok((_, opt)) => {
+                            if opt < best_opt {
+                                best_opt = opt;
+                                let res = x_opt.to_vec();
+                                best_x = Some(Array::from(res));
+                                success = true;
+                            }
                         }
-                    }
-                    Err((err, code)) => {
-                        debug!("Nlopt Err: {:?} (y_opt={})", err, code);
+                        Err((err, code)) => {
+                            debug!("Nlopt Err: {:?} (y_opt={})", err, code);
+                        }
                     }
                 }
             }
@@ -890,7 +912,7 @@ mod tests {
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .infill_strategy(InfillStrategy::EI)
             .doe(Some(doe))
-            .n_eval(30)
+            .n_eval(35)
             .expect(Some(ApproxValue {
                 value: 0.0,
                 tolerance: 1e-2,

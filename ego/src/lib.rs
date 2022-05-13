@@ -100,6 +100,7 @@
 //!
 mod egor;
 mod errors;
+mod lhs_optimizer;
 mod mixint;
 mod mixintegor;
 mod sort_axis;
