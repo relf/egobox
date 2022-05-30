@@ -475,7 +475,7 @@ impl Egor {
             .collect();
 
         let surrogate_builder = egobox_moe::MoeParams::default()
-            .nclusters(self.n_clusters.unwrap_or(1))
+            .n_clusters(self.n_clusters.unwrap_or(1))
             .kpls_dim(self.kpls_dim)
             .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
             .correlation_spec(

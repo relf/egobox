@@ -167,8 +167,8 @@ impl<F: Float> MoeParams<F, Isaac64Rng> {
     /// * correlation_spec: `ALL`
     /// * kpls_dim: `None`
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(n_clusters: usize) -> MoeParams<F, Isaac64Rng> {
-        Self::new_with_rng(n_clusters, Isaac64Rng::from_entropy())
+    pub fn new() -> MoeParams<F, Isaac64Rng> {
+        Self::new_with_rng(Isaac64Rng::from_entropy())
     }
 }
 
@@ -176,9 +176,9 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// Constructor of Moe parameters specifying randon number generator for reproducibility
     ///
     /// See [MoeParams::new] for default parameters.
-    pub fn new_with_rng(n_clusters: usize, rng: R) -> MoeParams<F, R> {
+    pub fn new_with_rng(rng: R) -> MoeParams<F, R> {
         Self(MoeValidParams {
-            n_clusters,
+            n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
@@ -189,7 +189,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     }
 
     /// Sets the number of clusters
-    pub fn nclusters(mut self, n_clusters: usize) -> Self {
+    pub fn n_clusters(mut self, n_clusters: usize) -> Self {
         self.0.n_clusters = n_clusters;
         self
     }

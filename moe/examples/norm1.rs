@@ -12,8 +12,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let xtrain = Lhs::new(&arr2(&[[-1., 1.], [-1., 1.]])).sample(200);
     let ytrain = norm1(&xtrain);
     let ds = Dataset::new(xtrain, ytrain);
-    let moe1 = Moe::params(1).fit(&ds)?;
-    let moe5 = Moe::params(6).recombination(Recombination::Hard).fit(&ds)?;
+    let moe1 = Moe::params().fit(&ds)?;
+    let moe5 = Moe::params()
+        .n_clusters(6)
+        .recombination(Recombination::Hard)
+        .fit(&ds)?;
 
     let xtest = Lhs::new(&arr2(&[[-1., 1.], [-1., 1.]])).sample(50);
     let ytest = norm1(&xtest);

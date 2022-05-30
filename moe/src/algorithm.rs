@@ -88,7 +88,6 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
 
         let gmm = GaussianMixtureModel::params(self.n_clusters())
             .n_runs(20)
-            //.reg_covariance(1e-6)
             .with_rng(self.rng())
             .fit(&dataset)
             .expect("Training data clustering");
@@ -385,8 +384,8 @@ impl Surrogate for Moe {
 
 impl Moe {
     /// Constructor of mixture of experts parameters
-    pub fn params(n_clusters: usize) -> MoeParams<f64, Isaac64Rng> {
-        MoeParams::new(n_clusters)
+    pub fn params() -> MoeParams<f64, Isaac64Rng> {
+        MoeParams::new()
     }
 
     /// Number of clusters
@@ -555,7 +554,8 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
-        let moe = Moe::params(3)
+        let moe = Moe::params()
+            .n_clusters(3)
             .recombination(Recombination::Hard)
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
@@ -582,7 +582,8 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
-        let moe = Moe::params(3)
+        let moe = Moe::params()
+            .n_clusters(3)
             .recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng.clone())
             .fit(&ds)
@@ -595,7 +596,8 @@ mod tests {
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
-        let moe = Moe::params(3)
+        let moe = Moe::params()
+            .n_clusters(3)
             .recombination(Recombination::Smooth(None))
             .with_rng(rng)
             .fit(&ds)
@@ -615,7 +617,8 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
-        let moe = Moe::params(3)
+        let moe = Moe::params()
+            .n_clusters(3)
             .recombination(Recombination::Smooth(None))
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
@@ -639,7 +642,7 @@ mod tests {
         let xt = Array2::random_using((10, 1), Uniform::new(0., 1.), &mut rng);
         let yt = xt.mapv(|x| xsinx(&[x]));
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-        let moe = Moe::params(1).with_rng(rng).check_unwrap();
+        let moe = Moe::params().with_rng(rng).check_unwrap();
         let best_expert = &moe.find_best_expert(1, &data).unwrap();
         println!("Best expert {}", best_expert);
     }
@@ -649,7 +652,8 @@ mod tests {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
-        let _moe = Moe::params(3)
+        let _moe = Moe::params()
+            .n_clusters(3)
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
@@ -662,7 +666,11 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
-        let moe = Moe::params(3).with_rng(rng).fit(&ds).expect("MOE fitted");
+        let moe = Moe::params()
+            .n_clusters(3)
+            .with_rng(rng)
+            .fit(&ds)
+            .expect("MOE fitted");
         let xtest = array![[0.6]];
         let y_expected = moe.predict_values(&xtest).unwrap();
         moe.save("saved_moe.json").expect("MoE saving");

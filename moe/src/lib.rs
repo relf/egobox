@@ -82,7 +82,8 @@
 //!
 //! // Predictions
 //! let observations = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-//! let predictions = Moe::params(3)
+//! let predictions = Moe::params()
+//!                     .n_clusters(3)
 //!                     .recombination(Recombination::Hard)
 //!                     .fit(&ds)
 //!                     .expect("MoE model training")
