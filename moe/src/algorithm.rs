@@ -633,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_moe_auto() {
-        env_logger::init();
+        // env_logger::init();
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
