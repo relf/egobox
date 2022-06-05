@@ -1,4 +1,5 @@
 use super::gaussian_mixture::GaussianMixture;
+use crate::clustering::find_best_number_of_clusters;
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
@@ -6,13 +7,12 @@ use crate::parameters::{
     CorrelationSpec, MoeParams, MoeValidParams, Recombination, RegressionSpec,
 };
 use crate::surrogates::*;
-use log::{debug, info, trace};
-
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict};
 use linfa::{Dataset, DatasetBase, Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
+use log::{debug, info, trace};
 use paste::paste;
 use std::cmp::Ordering;
 use std::ops::Sub;
@@ -71,8 +71,26 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         let training;
         let (mut xtest, mut ytest) = (None, None);
 
-        if let Recombination::Smooth(None) = self.recombination() {
-            // Extract 10% of data for validation
+        let (n_clusters, recomb) = if self.n_clusters() == 0 {
+            // automatic mode
+            let max_nb_clusters = xt.nrows() / 10 + 1;
+            find_best_number_of_clusters(
+                xt,
+                yt,
+                max_nb_clusters,
+                self.kpls_dim(),
+                self.regression_spec(),
+                self.correlation_spec(),
+                self.rng(),
+            )
+        } else {
+            (self.n_clusters(), self.recombination())
+        };
+        if self.n_clusters() == 0 {
+            debug!("Automatic settings {} {:?}", n_clusters, recomb);
+        }
+        if let Recombination::Smooth(None) = recomb {
+            // Extract 5% of data for validation
             // TODO: Use cross-validation ? Performances
             let (test, training_data) = extract_part(&data, 5);
             // write_npy("xt_hard.npy", &training.slice(s![.., ..nx])).expect("obs saved");
@@ -86,7 +104,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         }
         let dataset = Dataset::from(training);
 
-        let gmm = GaussianMixtureModel::params(self.n_clusters())
+        let gmm = GaussianMixtureModel::params(n_clusters)
             .n_runs(20)
             .with_rng(self.rng())
             .fit(&dataset)
@@ -96,7 +114,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         let weights = gmm.weights().to_owned();
         let means = gmm.means().slice(s![.., ..nx]).to_owned();
         let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
-        let factor = match self.recombination() {
+        let factor = match recomb {
             Recombination::Smooth(Some(f)) => f,
             Recombination::Smooth(None) => 1.,
             Recombination::Hard => 1.,
@@ -104,7 +122,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         let gmx = GaussianMixture::new(weights, means, covariances)?.with_heaviside_factor(factor);
 
         let dataset_clustering = gmx.predict(xt);
-        let clusters = sort_by_cluster(self.n_clusters(), &data, &dataset_clustering);
+        let clusters = sort_by_cluster(n_clusters, &data, &dataset_clustering);
 
         check_number_of_points(&clusters, xt.ncols())?;
 
@@ -122,16 +140,17 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             experts.push(expert);
         }
 
-        if self.recombination() == Recombination::Smooth(None) {
+        if recomb == Recombination::Smooth(None) {
             let factor =
                 self.optimize_heaviside_factor(&experts, &gmx, &xtest.unwrap(), &ytest.unwrap());
             MoeParams::from(self.clone())
+                .n_clusters(n_clusters)
                 .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
                 .train(xt, yt)
         } else {
             Ok(Moe {
-                recombination: self.recombination(),
+                recombination: recomb,
                 experts,
                 gmx,
             })
@@ -605,6 +624,30 @@ mod tests {
         println!("Smooth moe {}", moe);
         write_npy("obs_smooth.npy", &obs).expect("obs saved");
         write_npy("preds_smooth.npy", &preds).expect("preds saved");
+        assert_abs_diff_eq!(
+            0.37 * 0.37, // true value of the function
+            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
+            epsilon = 1e-3
+        );
+    }
+
+    #[test]
+    fn test_moe_auto() {
+        env_logger::init();
+        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
+        let yt = function_test_1d(&xt);
+        let ds = Dataset::new(xt, yt);
+        let moe = Moe::params()
+            .n_clusters(0)
+            .with_rng(rng.clone())
+            .fit(&ds)
+            .expect("MOE fitted");
+        println!(
+            "Moe auto: nb clusters={}, recomb={:?}",
+            moe.n_clusters(),
+            moe.recombination()
+        );
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],

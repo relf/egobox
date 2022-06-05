@@ -238,6 +238,11 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         (errorih[posi[0]], erroris[posi[0]])
     };
 
+    debug!("Median errors hard: {:?}", median_eh);
+    debug!("Median errors soft: {:?}", median_es);
+    debug!("Mean errors hard: {:?}", errorih);
+    debug!("Mean errors soft: {:?}", erroris);
+
     for k in posi {
         if use_median {
             if min_err > median_eh[k] {
