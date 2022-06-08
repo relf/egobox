@@ -8,8 +8,8 @@ pub type Result<T> = std::result::Result<T, MoeError>;
 pub enum MoeError {
     /// When linear algebra computation fails
     #[cfg(feature = "blas")]
-    #[error("Linear Algebra error")]
-    LinalgError(#[from] LinalgError),
+    #[error("Linalg BLAS error: {0}")]
+    LinalgBlasError(#[from] ndarray_linalg::error::LinalgError),
     #[error(transparent)]
     LinalgError(#[from] linfa_linalg::LinalgError),
     /// When clustering fails

@@ -11,8 +11,8 @@ pub enum GpError {
     LikelihoodComputationError(String),
     /// When linear algebra computation fails
     #[cfg(feature = "blas")]
-    #[error("Linear Algebra error")]
-    LinalgError(#[from] LinalgError),
+    #[error("Linalg BLAS error: {0}")]
+    LinalgBlasError(#[from] ndarray_linalg::error::LinalgError),
     #[error(transparent)]
     LinalgError(#[from] linfa_linalg::LinalgError),
     /// When clustering fails
