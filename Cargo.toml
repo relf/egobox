@@ -19,18 +19,10 @@ crate-type = ["cdylib"]
 [features]
 default = []
 
-netlib-static = ["linfa/netlib-static"]
-netlib-system = ["linfa/netlib-system"]
-
-openblas-static = ["linfa/openblas-static"]
-openblas-system = ["linfa/openblas-system"]
-
-intel-mkl-static = ["linfa/intel-mkl-static"]
-intel-mkl-system = ["linfa/intel-mkl-system"]
-
 serializable-gp = ["egobox-gp/serializable"]
 persistent-moe = ["egobox-moe/persistent"]
 persistent-ego = ["egobox-ego/persistent"]
+blas = ["ndarray/blas", "egobox-gp/blas", "egobox-moe/blas", "egobox-ego/blas"]
 
 [dependencies]
 egobox-doe = { version = "0.3.0", path="./doe" }
