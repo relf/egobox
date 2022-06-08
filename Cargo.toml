@@ -39,18 +39,13 @@ egobox-moe = { version = "0.3.0", path="./moe" }
 egobox-ego = { version = "0.3.0", path="./ego" }
 
 linfa = { path = "../linfa", default-features = false }
-linfa-pls = { path = "../linfa/algorithms/linfa-pls", default-features = false }
-linfa-linalg = { version = "0.1", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx"]}
-ndarray-linalg = { version = "0.14", optional = true }
-ndarray-stats = "0.5"
 ndarray-rand = "0.14"
-ndarray-npy = "0.8"
 numpy = "0.15.0"
 anyhow = "=1.0.48"
 
-nlopt = "0.5.3"
+# nlopt = "0.5.3"
 rand_isaac = "0.3"
 libm = "0.2"
 finitediff = { version="0.1", features = ["ndarray"] }
