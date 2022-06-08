@@ -10,7 +10,7 @@ use linfa::{traits::*, Float};
 use linfa_linalg::{cholesky::*, triangular::*};
 use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
 #[cfg(feature = "blas")]
-use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
+use ndarray_linalg::{cholesky::*, triangular::*};
 use ndarray_stats::QuantileExt;
 
 #[cfg(feature = "persistent")]
@@ -284,7 +284,7 @@ mod tests {
     #[cfg(feature = "blas")]
     #[test]
     fn test_gaussian_mixture_aic_bic() {
-        use ndarray::{array, Array, Array2};
+        use ndarray::Array;
 
         use approx::assert_abs_diff_eq;
         use linfa::DatasetBase;
