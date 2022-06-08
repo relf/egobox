@@ -105,7 +105,6 @@ use finitediff::FiniteDiff;
 use linfa::{traits::Fit, Dataset, ParamGuard};
 use log::{debug, info};
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
-use ndarray_linalg::Scalar;
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
@@ -790,7 +789,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                 QEiStrategy::KrigingBelieverUpperBound => 3.,
                 _ => -1., // never used
             };
-            res.push(pred + conf * Scalar::sqrt(var));
+            res.push(pred + conf * f64::sqrt(var));
             for cstr_model in cstr_models {
                 res.push(cstr_model.predict_values(x)?[[0, 0]]);
             }

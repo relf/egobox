@@ -1,5 +1,3 @@
-use linfa_pls::PlsError;
-use ndarray_linalg::error::LinalgError;
 use thiserror::Error;
 
 /// A result type for GP regression algorithm
@@ -12,14 +10,17 @@ pub enum GpError {
     #[error("LikelihoodComputation computation error: {0}")]
     LikelihoodComputationError(String),
     /// When linear algebra computation fails
+    #[cfg(feature = "blas")]
     #[error("Linear Algebra error")]
     LinalgError(#[from] LinalgError),
+    #[error(transparent)]
+    LinalgError(#[from] linfa_linalg::LinalgError),
     /// When clustering fails
     #[error("Empty cluster: {0}")]
     EmptyCluster(String),
     /// When PLS fails
     #[error("PLS error: {0}")]
-    PlsError(#[from] PlsError),
+    PlsError(#[from] linfa_pls::PlsError),
     /// When a value is invalid
     #[error("PLS error: {0}")]
     InvalidValue(String),

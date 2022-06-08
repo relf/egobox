@@ -19,11 +19,12 @@ egobox-doe = { version = "0.3.0", path="../doe" }
 egobox-gp = { version = "0.3.0", path="../gp" }
 egobox-moe = { version = "0.3.0", path="../moe" }
 
-linfa = { version = "0.5.1", default-features = false }
-linfa-pls = { version = "0.5.1", default-features = false }
+linfa = { path = "../../linfa", default-features = false }
+linfa-pls = { path = "../../linfa/algorithms/linfa-pls", default-features = false }
+linfa-linalg = { version = "0.1", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx", "blas"]}
-ndarray-linalg = "0.14"
+ndarray = { version = "0.15", features = ["rayon", "approx"]}
+ndarray-linalg = { version = "0.14", optional = true }
 ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"

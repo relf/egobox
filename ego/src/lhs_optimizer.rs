@@ -1,7 +1,12 @@
 use crate::types::ObjData;
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
+
+#[cfg(not(feature = "blas"))]
+use linfa_linalg::norm::*;
+#[cfg(feature = "blas")]
 use ndarray_linalg::Norm;
+
 use ndarray_stats::QuantileExt;
 use nlopt::ObjFn;
 

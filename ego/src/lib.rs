@@ -42,7 +42,10 @@
 //!  
 //! ```no_run   
 //! use ndarray::{array, Array2, ArrayView2};
+//! #[cfg(feature = "blas")]
 //! use ndarray_linalg::Norm;
+//! #[cfg(not(feature = "blas"))]
+//! use linfa_linalg::norm::*;
 //! use egobox_moe::MoeParams;
 //! use egobox_ego::{MixintEgor,  MixintMoeParams, MixintPreProcessor, InfillStrategy, Xtype};
 //!

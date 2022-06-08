@@ -3,8 +3,13 @@
 // smoothness of the mixture smooth recombination
 #![allow(dead_code)]
 use crate::Result;
-use linfa::{dataset::WithLapack, dataset::WithoutLapack, traits::*, Float};
+#[cfg(feature = "blas")]
+use linfa::{dataset::WithLapack, dataset::WithoutLapack};
+use linfa::{traits::*, Float};
+#[cfg(not(feature = "blas"))]
+use linfa_linalg::{cholesky::*, triangular::*};
 use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
+#[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, triangular::*, Lapack, Scalar};
 use ndarray_stats::QuantileExt;
 
@@ -82,10 +87,18 @@ impl<F: Float> GaussianMixture<F> {
         let n_features = covariances.shape()[1];
         let mut precisions_chol = Array::zeros((n_clusters, n_features, n_features));
         for (k, covariance) in covariances.outer_iter().enumerate() {
-            let cov_chol = covariance.with_lapack().cholesky(UPLO::Lower)?;
-            let sol = cov_chol
-                .solve_triangular(UPLO::Lower, Diag::NonUnit, &Array::eye(n_features))?
-                .without_lapack();
+            #[cfg(feature = "blas")]
+            let sol = {
+                let cov_chol = covariance.with_lapack().cholesky(UPLO::Lower)?;
+                cov_chol
+                    .solve_triangular(UPLO::Lower, Diag::NonUnit, &Array::eye(n_features))?
+                    .without_lapack()
+            };
+            #[cfg(not(feature = "blas"))]
+            let sol = {
+                let cov_chol = covariance.cholesky()?;
+                cov_chol.solve_triangular(&Array::eye(n_features), UPLO::Lower)?
+            };
             precisions_chol.slice_mut(s![k, .., ..]).assign(&sol.t());
         }
         Ok(precisions_chol)
@@ -222,7 +235,7 @@ impl<F: Float> GaussianMixture<F> {
     }
 }
 
-impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictInplace<ArrayBase<D, Ix2>, Array1<usize>>
+impl<F: Float, D: Data<Elem = F>> PredictInplace<ArrayBase<D, Ix2>, Array1<usize>>
     for GaussianMixture<F>
 {
     fn predict_inplace(&self, observations: &ArrayBase<D, Ix2>, targets: &mut Array1<usize>) {
@@ -234,7 +247,7 @@ impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictInplace<ArrayBase<D, 
 
         let (_, log_resp) = self.estimate_log_prob_resp(observations);
         *targets = log_resp
-            .mapv(Scalar::exp)
+            .mapv(F::exp)
             .map_axis(Axis(1), |row| row.argmax().unwrap());
     }
 
@@ -246,16 +259,9 @@ impl<F: Float + Lapack + Scalar, D: Data<Elem = F>> PredictInplace<ArrayBase<D, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
-    use linfa::DatasetBase;
-    use linfa_clustering::GaussianMixtureModel;
+
     use ndarray::{array, Array, Array2};
-    use ndarray_linalg::solve::*;
     use ndarray_npy::write_npy;
-    use ndarray_rand::rand::{rngs::SmallRng, SeedableRng};
-    use ndarray_rand::rand_distr::StandardNormal;
-    use ndarray_rand::RandomExt;
-    use ndarray_stats::CorrelationExt;
 
     #[test]
     fn test_gaussian_mixture() {
@@ -275,8 +281,21 @@ mod tests {
         write_npy("probas.npy", &probas).expect("failed to save");
     }
 
+    #[cfg(feature = "blas")]
     #[test]
     fn test_gaussian_mixture_aic_bic() {
+        use ndarray::{array, Array, Array2};
+
+        use approx::assert_abs_diff_eq;
+        use linfa::DatasetBase;
+        use linfa_clustering::GaussianMixtureModel;
+        use ndarray_linalg::solve::*; // Determinant computation not in linfa-linalg
+        use ndarray_npy::write_npy;
+        use ndarray_rand::rand::{rngs::SmallRng, SeedableRng};
+        use ndarray_rand::rand_distr::StandardNormal;
+        use ndarray_rand::RandomExt;
+        use ndarray_stats::CorrelationExt;
+
         // Test the aic and bic criteria
         let mut rng = SmallRng::seed_from_u64(42);
         let (n_samples, n_features, n_components) = (50, 3, 2);
