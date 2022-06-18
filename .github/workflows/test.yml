@@ -40,8 +40,38 @@ jobs:
           version: "11.0"
           directory: ${{ runner.temp }}/llvm
 
-      # Rust flags settings required on Unix (!) otherwise linking 
-      # ld error: cannot find -lirc -lintlc -lsvml -limf
+      - name: Run cargo test in release mode
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all --release
+
+
+  test-blas:
+    name: testing-blas-${{ matrix.toolchain }}-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - stable
+        os: 
+          - ubuntu-18.04
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
+          override: true
+
+      - name: Log active toolchain
+        run: rustup show
+
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
         with:
