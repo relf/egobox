@@ -19,9 +19,9 @@ blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-clustering/blas", "linf
 egobox-doe = { version = "0.3.0", path = "../doe" }
 egobox-gp = { version = "0.3.0", path = "../gp" }
 
-linfa = { path = "../../linfa", default-features = false }
-linfa-clustering = { path = "../../linfa/algorithms/linfa-clustering", default-features = false }
-linfa-pls = { path = "../../linfa/algorithms/linfa-pls", default-features = false }
+linfa = { version = "0.6.0", default-features = false }
+linfa-clustering = { version = "0.6.0", default-features = false }
+linfa-pls = { version = "0.6.0", default-features = false }
 linfa-linalg = { version = "0.1", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx"]}

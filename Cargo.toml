@@ -30,7 +30,7 @@ egobox-gp = { version = "0.3.0", path="./gp" }
 egobox-moe = { version = "0.3.0", path="./moe" }
 egobox-ego = { version = "0.3.0", path="./ego" }
 
-linfa = { path = "../linfa", default-features = false }
+linfa = { version = "0.6.0", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx"]}
 ndarray-rand = "0.14"
