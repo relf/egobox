@@ -1,7 +1,7 @@
 #![allow(dead_code)]
-use crate::algorithm::{sort_by_cluster, Moe};
+use crate::algorithm::sort_by_cluster;
 use crate::gaussian_mixture::GaussianMixture;
-use crate::parameters::{CorrelationSpec, Recombination, RegressionSpec};
+use crate::parameters::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use log::debug;
 
 use linfa::dataset::{Dataset, DatasetView};
@@ -33,6 +33,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     max_nb_clusters: usize,
+    kpls_dim: Option<usize>,
     regression_spec: RegressionSpec,
     correlation_spec: CorrelationSpec,
     rng: R,
@@ -89,7 +90,6 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         let gmm = Box::new(
             GaussianMixtureModel::params(n_clusters)
                 .n_runs(20)
-                //.reg_covariance(1e-6)
                 .with_rng(rng.clone())
                 .fit(&xydata)
                 .expect("Training data clustering"),
@@ -98,10 +98,11 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         // Cross Validation
         if ok {
             for (train, valid) in dataset.fold(5).into_iter() {
-                if let Ok(mixture) = Moe::params(n_clusters)
+                if let Ok(mixture) = MoeParams::default()
+                    .n_clusters(n_clusters)
                     .regression_spec(regression_spec)
                     .correlation_spec(correlation_spec)
-                    //.kpls_dim(Some(1))
+                    .kpls_dim(kpls_dim)
                     .gmm(Some(gmm.clone()))
                     .fit(&train)
                 {
@@ -237,6 +238,11 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
         (errorih[posi[0]], erroris[posi[0]])
     };
 
+    debug!("Median errors hard: {:?}", median_eh);
+    debug!("Median errors soft: {:?}", median_es);
+    debug!("Mean errors hard: {:?}", errorih);
+    debug!("Mean errors soft: {:?}", erroris);
+
     for k in posi {
         if use_median {
             if min_err > median_eh[k] {
@@ -299,6 +305,7 @@ pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::algorithm::Moe;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
     #[cfg(not(feature = "blas"))]
@@ -342,11 +349,13 @@ mod tests {
             &xtrain,
             &ytrain,
             5,
+            None,
             RegressionSpec::ALL,
             CorrelationSpec::ALL,
             rng,
         );
-        let moe = Moe::params(nb_clusters)
+        let moe = Moe::params()
+            .n_clusters(nb_clusters)
             .recombination(recombination)
             .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();
@@ -367,6 +376,7 @@ mod tests {
             &xtrain,
             &ytrain,
             5,
+            None,
             RegressionSpec::ALL,
             CorrelationSpec::ALL,
             rng,
@@ -374,7 +384,8 @@ mod tests {
         let valid = FullFactorial::new(&array![[-1., 1.], [-1., 1.]]);
         let xvalid = valid.sample(100);
         let yvalid = l1norm(&xvalid);
-        let moe = Moe::params(n_clusters)
+        let moe = Moe::params()
+            .n_clusters(n_clusters)
             .recombination(recomb)
             .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();

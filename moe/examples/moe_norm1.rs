@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let xtrain = data_train.slice(s![.., ..2_usize]).to_owned();
     let ytrain = data_train.slice(s![.., 2_usize..]).to_owned();
     let ds = Dataset::new(xtrain, ytrain);
-    let moe = Moe::params(4).fit(&ds)?;
+    let moe = Moe::params().n_clusters(4).fit(&ds)?;
 
     let xlimits = arr2(&[[-1., 1.], [-1., 1.]]);
     let xtest = FullFactorial::new(&xlimits).sample(100);

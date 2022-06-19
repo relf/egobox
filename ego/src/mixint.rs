@@ -445,7 +445,7 @@ mod tests {
 
         let mixi = MixintContext::new(&xtypes);
 
-        let surrogate_builder = MoeBuilder::new(1);
+        let surrogate_builder = MoeBuilder::new();
         let xt = array![[0.], [2.], [3.0], [4.]];
         let yt = array![[0.], [1.5], [0.9], [1.]];
         let ds = Dataset::new(xt, yt);
@@ -503,7 +503,7 @@ mod tests {
         let yt = ftest(&xt);
 
         let surrogate_builder =
-            MoeBuilder::new(1).correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
+            MoeBuilder::new().correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);
         let ds = Dataset::new(xt, yt);
         let mixi_moe = mixi
             .create_surrogate(&surrogate_builder, &ds)

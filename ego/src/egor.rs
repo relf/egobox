@@ -549,7 +549,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
         let n_clusters = self.n_clusters.unwrap_or(1);
 
-        let default_builder = &Moe::params(n_clusters)
+        let default_builder = &Moe::params()
+            .n_clusters(n_clusters)
             .kpls_dim(self.kpls_dim)
             .regression_spec(self.regression_spec)
             .correlation_spec(self.correlation_spec)
