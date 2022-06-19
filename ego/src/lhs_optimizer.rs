@@ -142,6 +142,6 @@ mod tests {
         };
 
         let res = LhsOptimizer::new(&xlimits, &obj, cstrs, &obj_data).minimize();
-        assert_abs_diff_eq!(res, array![0.], epsilon = 1e-2)
+        assert_abs_diff_eq!(res, array![0.], epsilon = 1e-1)
     }
 }
