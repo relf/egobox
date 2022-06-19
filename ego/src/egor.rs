@@ -702,7 +702,9 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                     scale_cstr: scale_cstr.to_owned(),
                 };
                 let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
-                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data).minimize();
+                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
+                    .with_rng(self.rng.clone())
+                    .minimize();
                 best_x = Some(x_opt);
                 success = true;
             } else {
