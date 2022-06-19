@@ -5,7 +5,7 @@
 use crate::errors::{EgoError, Result};
 use crate::types::SurrogateBuilder;
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_moe::{Moe, MoeParams, RegressionSpec, Surrogate};
+use egobox_moe::{Clustered, ClusteredSurrogate, Moe, MoeParams, RegressionSpec, Surrogate};
 use linfa::{traits::Fit, Dataset, DatasetBase};
 use ndarray::{s, Array, Array2, ArrayView2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
@@ -264,8 +264,11 @@ impl MixintMoeParams {
 }
 
 impl SurrogateBuilder for MixintMoeParams {
-    fn train(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
-        Ok(Box::new(self.fit(&Dataset::new(x.to_owned(), y.to_owned()))?) as Box<dyn Surrogate>)
+    fn train(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn ClusteredSurrogate>> {
+        Ok(
+            Box::new(self.fit(&Dataset::new(x.to_owned(), y.to_owned()))?)
+                as Box<dyn ClusteredSurrogate>,
+        )
     }
 }
 
@@ -313,6 +316,12 @@ impl std::fmt::Display for MixintMoe {
     }
 }
 
+impl Clustered for MixintMoe {
+    fn n_clusters(&self) -> usize {
+        self.moe.n_clusters()
+    }
+}
+
 #[cfg_attr(feature = "persistent", typetag::serde)]
 impl Surrogate for MixintMoe {
     fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
@@ -347,6 +356,8 @@ impl Surrogate for MixintMoe {
         Ok(())
     }
 }
+
+impl ClusteredSurrogate for MixintMoe {}
 
 /// A factory to build consistent sampling method and surrogate regarding
 /// Xtype specifications

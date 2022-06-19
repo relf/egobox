@@ -36,6 +36,12 @@ pub trait Surrogate: std::fmt::Display {
     fn save(&self, path: &str) -> Result<()>;
 }
 
+pub trait Clustered {
+    fn n_clusters(&self) -> usize;
+}
+
+pub trait ClusteredSurrogate: Surrogate + Clustered {}
+
 /// A macro to declare GP surrogate using regression model and correlation model names.
 ///
 /// Regression model is either `Constant`, `Linear` or `Quadratic`.

@@ -372,6 +372,15 @@ impl std::fmt::Display for Moe {
     }
 }
 
+impl Clustered for Moe {
+    /// Number of clusters
+    fn n_clusters(&self) -> usize {
+        self.experts.len()
+    }
+}
+
+impl ClusteredSurrogate for Moe {}
+
 #[cfg_attr(feature = "persistent", typetag::serde)]
 impl Surrogate for Moe {
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
@@ -405,11 +414,6 @@ impl Moe {
     /// Constructor of mixture of experts parameters
     pub fn params() -> MoeParams<f64, Isaac64Rng> {
         MoeParams::new()
-    }
-
-    /// Number of clusters
-    pub fn n_clusters(&self) -> usize {
-        self.experts.len()
     }
 
     /// Recombination mode

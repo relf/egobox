@@ -8,7 +8,7 @@ use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{concatenate, ArrayBase, Axis, Data, Ix2};
-use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray_rand::rand::Rng;
 use std::ops::Sub;
 
 fn mean(list: &[f64]) -> f64 {
@@ -29,7 +29,7 @@ fn median(v: &[f64]) -> f64 {
 }
 
 /// Find the best number of cluster thanks to cross validation
-pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
+pub fn find_best_number_of_clusters<R: Rng + Clone>(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     max_nb_clusters: usize,
