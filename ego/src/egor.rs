@@ -317,6 +317,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     }
 
     /// Sets the number of clusters used by the mixture of surrogate experts.
+    ///
+    /// When set to 0, the number of clusters is determined automatically
     pub fn n_clusters(&mut self, n_clusters: Option<usize>) -> &mut Self {
         self.n_clusters = n_clusters;
         self
