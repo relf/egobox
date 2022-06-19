@@ -7,8 +7,11 @@ pub type Result<T> = std::result::Result<T, MoeError>;
 #[derive(Error, Debug)]
 pub enum MoeError {
     /// When linear algebra computation fails
-    #[error("Linear Algebra error")]
-    LinalgError(#[from] ndarray_linalg::error::LinalgError),
+    #[cfg(feature = "blas")]
+    #[error("Linalg BLAS error: {0}")]
+    LinalgBlasError(#[from] ndarray_linalg::error::LinalgError),
+    #[error(transparent)]
+    LinalgError(#[from] linfa_linalg::LinalgError),
     /// When clustering fails
     #[error("Empty cluster: {0}")]
     EmptyCluster(String),

@@ -19,18 +19,10 @@ crate-type = ["cdylib"]
 [features]
 default = []
 
-netlib-static = ["linfa/netlib-static"]
-netlib-system = ["linfa/netlib-system"]
-
-openblas-static = ["linfa/openblas-static"]
-openblas-system = ["linfa/openblas-system"]
-
-intel-mkl-static = ["linfa/intel-mkl-static"]
-intel-mkl-system = ["linfa/intel-mkl-system"]
-
 serializable-gp = ["egobox-gp/serializable"]
 persistent-moe = ["egobox-moe/persistent"]
 persistent-ego = ["egobox-ego/persistent"]
+blas = ["ndarray/blas", "egobox-gp/blas", "egobox-moe/blas", "egobox-ego/blas"]
 
 [dependencies]
 egobox-doe = { version = "0.3.0", path="./doe" }
@@ -38,18 +30,14 @@ egobox-gp = { version = "0.3.0", path="./gp" }
 egobox-moe = { version = "0.3.0", path="./moe" }
 egobox-ego = { version = "0.3.0", path="./ego" }
 
-linfa = { version = "0.5.1", default-features = false }
-linfa-pls = { version = "0.5.1", default-features = false }
+linfa = { version = "0.6.0", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx", "blas"]}
-ndarray-linalg = "0.14"
-ndarray-stats = "0.5"
+ndarray = { version = "0.15", features = ["rayon", "approx"]}
 ndarray-rand = "0.14"
-ndarray-npy = "0.8"
 numpy = "0.15.0"
 anyhow = "=1.0.48"
 
-nlopt = "0.5.3"
+# nlopt = "0.5.3"
 rand_isaac = "0.3"
 libm = "0.2"
 finitediff = { version="0.1", features = ["ndarray"] }

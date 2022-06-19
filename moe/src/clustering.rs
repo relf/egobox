@@ -301,8 +301,11 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
+    #[cfg(not(feature = "blas"))]
+    use linfa_linalg::norm::*;
     use ndarray::{array, Array1, Array2, Axis, Zip};
-    use ndarray_linalg::norm::*;
+    #[cfg(feature = "blas")]
+    use ndarray_linalg::Norm;
     use ndarray_npy::write_npy;
     use ndarray_rand::rand::SeedableRng;
     use rand_isaac::Isaac64Rng;

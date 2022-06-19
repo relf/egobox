@@ -13,15 +13,17 @@ categories = ["algorithms", "mathematics", "science"]
 default = []
 
 serializable = ["serde", "linfa/serde"]
+blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
 egobox-doe = { version = "0.3.0", path="../doe" }
 
-linfa = { version = "0.5.1", default-features = false }
-linfa-pls = { version = "0.5.1", default-features = false }
+linfa = { version = "0.6.0", default-features = false }
+linfa-pls = { version = "0.6.0", default-features = false }
+linfa-linalg = { version = "0.1", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx"]}
-ndarray-linalg = "0.14"
+ndarray-linalg = { version = "0.14", optional = true }
 ndarray-stats = "0.5"
 ndarray_einsum_beta = "0.7"
 ndarray-rand = "0.14"

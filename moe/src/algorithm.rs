@@ -17,8 +17,12 @@ use paste::paste;
 use std::cmp::Ordering;
 use std::ops::Sub;
 
+#[cfg(not(feature = "blas"))]
+use linfa_linalg::norm::*;
 use ndarray::{concatenate, s, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
-use ndarray_linalg::norm::Norm;
+
+#[cfg(feature = "blas")]
+use ndarray_linalg::Norm;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;

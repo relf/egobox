@@ -105,7 +105,12 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use egobox_moe::MoeParams;
     use ndarray::{array, Array2, ArrayView2};
+
+    #[cfg(not(feature = "blas"))]
+    use linfa_linalg::norm::*;
+    #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
+
     use serial_test::serial;
 
     fn mixsinx(x: &ArrayView2<f64>) -> Array2<f64> {

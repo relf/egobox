@@ -4,11 +4,15 @@ use crate::mean_models::*;
 use crate::parameters::{GpParams, GpValidParams};
 use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use egobox_doe::{Lhs, SamplingMethod};
+#[cfg(feature = "blas")]
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float};
+#[cfg(not(feature = "blas"))]
+use linfa_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
+#[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -131,13 +135,18 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let inners = &self.inner_params;
 
         let corr_t = corr.t().to_owned();
+        #[cfg(feature = "blas")]
         let rt = inners
             .r_chol
             .to_owned()
             .with_lapack()
             .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t.with_lapack())?
             .without_lapack();
+        #[cfg(not(feature = "blas"))]
+        let rt = inners.r_chol.solve_triangular(&corr_t, UPLO::Lower)?;
+
         let lhs = inners.ft.t().dot(&rt) - self.mean.apply(x).t();
+        #[cfg(feature = "blas")]
         let u = inners
             .ft_qr_r
             .to_owned()
@@ -145,6 +154,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .with_lapack()
             .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs.with_lapack())?
             .without_lapack();
+        #[cfg(not(feature = "blas"))]
+        let u = inners.ft_qr_r.t().solve_triangular(&lhs, UPLO::Lower)?;
 
         let a = &inners.sigma2;
         let b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
@@ -219,10 +230,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             let ds = Dataset::new(x.to_owned(), y.to_owned());
             w_star = PlsRegression::params(*n_components).fit(&ds).map_or_else(
                 |e| match e {
-                    // FIXME: Commented out in order to compile with linfa 0.5.1, should be ok with next release
-                    // PlsError::PowerMethodConstantResidualError() => {
-                    //     Ok(Array2::zeros((x.ncols(), *n_components)))
-                    // }
+                    linfa_pls::PlsError::PowerMethodConstantResidualError() => {
+                        Ok(Array2::zeros((x.ncols(), *n_components)))
+                    }
                     err => Err(err),
                 },
                 |v| Ok(v.rotations().0.to_owned()),
@@ -391,16 +401,32 @@ fn reduced_likelihood<F: Float>(
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
     }
 
+    #[cfg(feature = "blas")]
     let fxl = fx.to_owned().with_lapack();
+    #[cfg(not(feature = "blas"))]
+    let fxl = fx;
 
     // R cholesky decomposition
+    #[cfg(feature = "blas")]
     let r_chol = r_mx.with_lapack().cholesky(UPLO::Lower)?;
+    #[cfg(not(feature = "blas"))]
+    let r_chol = r_mx.cholesky()?;
 
     // Solve generalized least squared problem
+    #[cfg(feature = "blas")]
     let ft = r_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &fxl)?;
+    #[cfg(not(feature = "blas"))]
+    let ft = r_chol.solve_triangular(fxl, UPLO::Lower)?;
+
+    #[cfg(feature = "blas")]
     let (ft_qr_q, ft_qr_r) = ft.qr().unwrap();
+    #[cfg(not(feature = "blas"))]
+    let (ft_qr_q, ft_qr_r) = ft.qr().unwrap().into_decomp();
 
     // Check whether we have an ill-conditionned problem
+    #[cfg(feature = "blas")]
+    let (_, sv_qr_r, _) = ft_qr_r.svd(false, false).unwrap();
+    #[cfg(not(feature = "blas"))]
     let (_, sv_qr_r, _) = ft_qr_r.svd(false, false).unwrap();
     let cond_ft = sv_qr_r[sv_qr_r.len() - 1] / sv_qr_r[0];
     if F::cast(cond_ft) < F::cast(1e-10) {
@@ -419,22 +445,37 @@ fn reduced_likelihood<F: Float>(
             ));
         }
     }
+    #[cfg(feature = "blas")]
     let yt = r_chol.solve_triangular(
         UPLO::Lower,
         Diag::NonUnit,
         &ytrain.data.to_owned().with_lapack(),
     )?;
+    #[cfg(not(feature = "blas"))]
+    let yt = r_chol.solve_triangular(&ytrain.data, UPLO::Lower)?;
+
+    #[cfg(feature = "blas")]
     let beta = ft_qr_r.solve_triangular_into(UPLO::Upper, Diag::NonUnit, ft_qr_q.t().dot(&yt))?;
+    #[cfg(not(feature = "blas"))]
+    let beta = ft_qr_r.solve_triangular_into(ft_qr_q.t().dot(&yt), UPLO::Upper)?;
 
     let rho = yt - ft.dot(&beta);
     let rho_sqr = rho.mapv(|v| v * v).sum_axis(Axis(0));
+    #[cfg(feature = "blas")]
+    let rho_sqr = rho_sqr.without_lapack();
+
+    #[cfg(feature = "blas")]
     let gamma = r_chol
         .t()
         .solve_triangular_into(UPLO::Upper, Diag::NonUnit, rho)?;
+    #[cfg(not(feature = "blas"))]
+    let gamma = r_chol.t().solve_triangular_into(rho, UPLO::Upper)?;
 
     // The determinant of R is equal to the squared product of
     // the diagonal elements of its Cholesky decomposition r_chol
     let n_obs: F = F::cast(x_distances.n_obs);
+
+    #[cfg(feature = "blas")]
     let logdet = r_chol
         .to_owned()
         .without_lapack()
@@ -443,11 +484,15 @@ fn reduced_likelihood<F: Float>(
         .sum()
         * F::cast(2.)
         / n_obs;
+    #[cfg(not(feature = "blas"))]
+    let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
+
     // Reduced likelihood
-    let sigma2: Array1<F> = rho_sqr.without_lapack() / n_obs;
+    let sigma2: Array1<F> = rho_sqr / n_obs;
     let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
     Ok((
         reduced_likelihood,
+        #[cfg(feature = "blas")]
         GpInnerParams {
             sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
             beta: beta.without_lapack(),
@@ -455,6 +500,15 @@ fn reduced_likelihood<F: Float>(
             r_chol: r_chol.without_lapack(),
             ft: ft.without_lapack(),
             ft_qr_r: ft_qr_r.without_lapack(),
+        },
+        #[cfg(not(feature = "blas"))]
+        GpInnerParams {
+            sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
+            beta,
+            gamma,
+            r_chol,
+            ft,
+            ft_qr_r,
         },
     ))
 }
@@ -465,7 +519,10 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
+    #[cfg(not(feature = "blas"))]
+    use linfa_linalg::norm::*;
     use ndarray::{arr2, array, Array, Zip};
+    #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
     use ndarray_npy::{read_npy, write_npy};
     use ndarray_rand::rand::SeedableRng;
@@ -474,28 +531,28 @@ mod tests {
     use rand_isaac::Isaac64Rng;
 
     // FIXME: Removed nn order to pass with linfa 0.5.1, should be ok with next release
-    // #[test]
-    // fn test_constant_function() {
-    //     let dim = 3;
-    //     let lim = array![[0., 1.]];
-    //     let xlimits = lim.broadcast((dim, 2)).unwrap();
-    //     let rng = Isaac64Rng::seed_from_u64(42);
-    //     let nt = 30;
-    //     let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
-    //     let yt = Array::from_vec(vec![3.1; nt]).insert_axis(Axis(1));
-    //     let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
-    //         ConstantMean::default(),
-    //         SquaredExponentialCorr::default(),
-    //     )
-    //     .initial_theta(Some(vec![0.1]))
-    //     .kpls_dim(Some(1))
-    //     .fit(&Dataset::new(xt, yt))
-    //     .expect("GP fit error");
-    //     let rng = Isaac64Rng::seed_from_u64(43);
-    //     let xtest = Lhs::new(&xlimits).with_rng(rng).sample(nt);
-    //     let ytest = gp.predict_values(&xtest).expect("prediction error");
-    //     assert_abs_diff_eq!(Array::from_elem((nt, 1), 3.1), ytest, epsilon = 1e-6);
-    // }
+    #[test]
+    fn test_constant_function() {
+        let dim = 3;
+        let lim = array![[0., 1.]];
+        let xlimits = lim.broadcast((dim, 2)).unwrap();
+        let rng = Isaac64Rng::seed_from_u64(42);
+        let nt = 30;
+        let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
+        let yt = Array::from_vec(vec![3.1; nt]).insert_axis(Axis(1));
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+            ConstantMean::default(),
+            SquaredExponentialCorr::default(),
+        )
+        .initial_theta(Some(vec![0.1]))
+        .kpls_dim(Some(1))
+        .fit(&Dataset::new(xt, yt))
+        .expect("GP fit error");
+        let rng = Isaac64Rng::seed_from_u64(43);
+        let xtest = Lhs::new(&xlimits).with_rng(rng).sample(nt);
+        let ytest = gp.predict_values(&xtest).expect("prediction error");
+        assert_abs_diff_eq!(Array::from_elem((nt, 1), 3.1), ytest, epsilon = 1e-6);
+    }
 
     macro_rules! test_gp {
         ($regr:ident, $corr:ident, $expected:expr) => {

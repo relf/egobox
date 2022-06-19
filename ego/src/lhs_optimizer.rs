@@ -1,7 +1,12 @@
 use crate::types::ObjData;
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
+
+#[cfg(not(feature = "blas"))]
+use linfa_linalg::norm::*;
+#[cfg(feature = "blas")]
 use ndarray_linalg::Norm;
+
 use ndarray_stats::QuantileExt;
 use nlopt::ObjFn;
 
@@ -137,6 +142,6 @@ mod tests {
         };
 
         let res = LhsOptimizer::new(&xlimits, &obj, cstrs, &obj_data).minimize();
-        assert_abs_diff_eq!(res, array![0.], epsilon = 1e-2)
+        assert_abs_diff_eq!(res, array![0.], epsilon = 1e-1)
     }
 }
