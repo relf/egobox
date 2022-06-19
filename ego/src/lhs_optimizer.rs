@@ -1,6 +1,8 @@
 use crate::types::ObjData;
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
+use ndarray_rand::rand::{Rng, SeedableRng};
+use rand_isaac::Isaac64Rng;
 
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
@@ -10,7 +12,7 @@ use ndarray_linalg::Norm;
 use ndarray_stats::QuantileExt;
 use nlopt::ObjFn;
 
-pub(crate) struct LhsOptimizer<'a> {
+pub(crate) struct LhsOptimizer<'a, R: Rng + Clone> {
     xlimits: Array2<f64>,
     n_start: usize,
     n_points: usize,
@@ -18,15 +20,28 @@ pub(crate) struct LhsOptimizer<'a> {
     obj: &'a dyn ObjFn<ObjData<f64>>,
     cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
     obj_data: ObjData<f64>,
+    rng: R,
 }
 
-impl<'a> LhsOptimizer<'a> {
+impl<'a> LhsOptimizer<'a, Isaac64Rng> {
     pub fn new(
         xlimits: &Array2<f64>,
         obj: &'a dyn ObjFn<ObjData<f64>>,
         cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
         obj_data: &ObjData<f64>,
-    ) -> LhsOptimizer<'a> {
+    ) -> LhsOptimizer<'a, Isaac64Rng> {
+        Self::new_with_rng(xlimits, obj, cstrs, obj_data, Isaac64Rng::from_entropy())
+    }
+}
+
+impl<'a, R: Rng + Clone> LhsOptimizer<'a, R> {
+    pub fn new_with_rng(
+        xlimits: &Array2<f64>,
+        obj: &'a dyn ObjFn<ObjData<f64>>,
+        cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
+        obj_data: &ObjData<f64>,
+        rng: R,
+    ) -> LhsOptimizer<'a, R> {
         LhsOptimizer {
             xlimits: xlimits.to_owned(),
             n_start: 20,
@@ -35,6 +50,20 @@ impl<'a> LhsOptimizer<'a> {
             obj,
             cstrs,
             obj_data: obj_data.clone(),
+            rng,
+        }
+    }
+
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> LhsOptimizer<'a, R2> {
+        LhsOptimizer {
+            xlimits: self.xlimits,
+            n_start: self.n_start,
+            n_points: self.n_points,
+            cstr_tol: self.cstr_tol,
+            obj: self.obj,
+            cstrs: self.cstrs,
+            obj_data: self.obj_data,
+            rng,
         }
     }
 
@@ -65,7 +94,10 @@ impl<'a> LhsOptimizer<'a> {
 
     fn find_lhs_min(&self) -> (bool, Array1<f64>, f64, Array1<f64>) {
         let n = self.n_points * self.xlimits.nrows();
-        let doe = Lhs::new(&self.xlimits).kind(LhsKind::Classic).sample(n);
+        let doe = Lhs::new(&self.xlimits)
+            .kind(LhsKind::Classic)
+            .with_rng(self.rng.clone())
+            .sample(n);
 
         let y: Array1<f64> = doe.map_axis(Axis(1), |x| {
             (self.obj)(&x.to_vec(), None, &mut self.obj_data.clone())
@@ -141,7 +173,9 @@ mod tests {
             scale_wb2: 1.,
         };
 
-        let res = LhsOptimizer::new(&xlimits, &obj, cstrs, &obj_data).minimize();
+        let res = LhsOptimizer::new(&xlimits, &obj, cstrs, &obj_data)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .minimize();
         assert_abs_diff_eq!(res, array![0.], epsilon = 1e-1)
     }
 }
