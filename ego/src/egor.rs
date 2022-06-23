@@ -466,8 +466,9 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             warn!("Number of evaluations {} too low, incompatible with initial doe size {} and q_parallel={} evals/iter", 
                   self.n_eval, doe.nrows(), self.q_parallel);
         }
+        let n_iter = n_iter / self.q_parallel;
 
-        for i in 1..=(n_iter / self.q_parallel) {
+        for i in 1..=n_iter {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling, lhs_optim);
             debug!("Try adding {}", x_dat);
             let rejected_count = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
