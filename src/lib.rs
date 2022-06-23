@@ -243,11 +243,11 @@ impl Vspec {
 ///         Number of parallel evaluations of the function under optimization.
 ///
 ///     par_infill_strategy (ParInfillStrategy enum, an int in [1, 4])
-///         Parallel infill criteria to get virtual next promising points in order to allow
-///         n parallel evaluations of the function under optimization.
+///         Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
+///         q parallel evaluations of the function under optimization.
 ///         Can be either ParInfillStrategy.KB (1, Kriging Believer),
-///         ParInfillStrategy.KBLB (2, KB Lower Bound), ParInfillStrategy.KBUB (2, KB Lower Bound),
-///         ParInfillStrategy.CLMIN (2, Constant Liar Minimum)
+///         ParInfillStrategy.KBLB (2, KB Lower Bound), ParInfillStrategy.KBUB (3, KB Lower Bound),
+///         ParInfillStrategy.CLMIN (4, Constant Liar Minimum)
 ///
 ///     infill_optimizer (InfillOptimizer enum, an int [1, 2])
 ///         Internal optimizer used to optimize infill criteria.

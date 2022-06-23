@@ -103,7 +103,7 @@ use egobox_moe::{CorrelationSpec, Moe, MoeParams, RegressionSpec, Surrogate};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
 use linfa::{traits::Fit, Dataset, ParamGuard};
-use log::{debug, info};
+use log::{debug, info, warn};
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::{Rng, SeedableRng};
@@ -462,6 +462,12 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         const MAX_RETRY: i32 = 3;
         let mut no_point_added_retries = MAX_RETRY;
         let mut lhs_optim = false;
+        if n_iter / self.q_parallel == 0 {
+            warn!("Number of evaluations {} too low, incompatible with initial doe size {} and q_parallel={} evals/iter", 
+                  self.n_eval, doe.nrows(), self.q_parallel);
+        }
+        let n_iter = n_iter / self.q_parallel;
+
         for i in 1..=n_iter {
             let (x_dat, y_dat) = self.next_points(i, &x_data, &y_data, &sampling, lhs_optim);
             debug!("Try adding {}", x_dat);
@@ -492,8 +498,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             info!(
                 "Add {} point{} {}:",
                 count,
-                if lhs_optim { " from sampling" } else { "" },
-                if rejected_count > 1 { "s" } else { "" }
+                if count > 1 { "s" } else { "" },
+                if lhs_optim { " from sampling" } else { "" }
             );
             info!("  {}", x_dat);
             lhs_optim = false; // reset as a point is added
@@ -557,19 +563,28 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             as &dyn SurrogateBuilder;
         let builder = self.surrogate_builder.unwrap_or(default_builder);
 
-        let obj_model = builder
-            .train(x_data, &y_data.slice(s![.., 0..1]).to_owned())
-            .expect("GP training failure");
+        for i in 0..self.q_parallel {
+            let (xt, yt) = if i == 0 {
+                (x_data.to_owned(), y_data.to_owned())
+            } else {
+                (
+                    concatenate![Axis(0), x_data.to_owned(), x_dat.to_owned()],
+                    concatenate![Axis(0), y_data.to_owned(), y_dat.to_owned()],
+                )
+            };
+            let obj_model = builder
+                .train(&xt, &yt.slice(s![.., 0..1]).to_owned())
+                .expect("GP training");
 
-        let mut cstr_models: Vec<Box<dyn Surrogate>> = Vec::with_capacity(self.n_cstr);
-        for k in 0..self.n_cstr {
-            cstr_models.push(
-                builder
-                    .train(x_data, &y_data.slice(s![.., k + 1..k + 2]).to_owned())
-                    .expect("GP training failure"),
-            )
-        }
-        for _ in 0..self.q_parallel {
+            let mut cstr_models: Vec<Box<dyn Surrogate>> = Vec::with_capacity(self.n_cstr);
+            for k in 0..self.n_cstr {
+                cstr_models.push(
+                    builder
+                        .train(&xt, &yt.slice(s![.., k + 1..k + 2]).to_owned())
+                        .expect("GP training"),
+                )
+            }
+
             match self.find_best_point(
                 x_data,
                 y_data,
@@ -967,6 +982,35 @@ mod tests {
             .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .doe(Some(doe))
             .n_eval(40)
+            .minimize()
+            .expect("Minimize failure");
+        println!("G24 optim result = {:?}", res);
+        let expected = array![2.3295, 3.1785];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
+    }
+
+    #[test]
+    fn test_egor_g24_qei() {
+        // let a = array![[1, 2], [3, 4], [5, 6]];
+        // let a2 = array![[1, 2], [3, 4], [5, 6]];
+        // let b = concatenate![Axis(0), a, a2];
+        // println!("{}", b);
+
+        let x = array![[1., 2.]];
+        println!("{:?}", f_g24(&x.view()));
+        let xlimits = array![[0., 3.], [0., 4.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .sample(10);
+        let res = Egor::new(f_g24, &xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .n_cstr(2)
+            .infill_strategy(InfillStrategy::EI)
+            .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
+            .q_parallel(2)
+            .qei_strategy(QEiStrategy::KrigingBeliever)
+            .doe(Some(doe))
+            .n_eval(16)
             .minimize()
             .expect("Minimize failure");
         println!("G24 optim result = {:?}", res);
