@@ -11,6 +11,31 @@ use ndarray::{concatenate, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::rand::Rng;
 use std::ops::Sub;
 
+pub trait Clustered {
+    fn n_clusters(&self) -> usize;
+
+    fn to_clustering(&self) -> Clustering;
+}
+
+#[derive(Clone)]
+pub struct Clustering {
+    pub(crate) recombination: Recombination<f64>,
+    pub(crate) gmx: GaussianMixture<f64>,
+}
+
+impl Clustering {
+    pub fn new(gmx: GaussianMixture<f64>, recombination: Recombination<f64>) -> Self {
+        Clustering { gmx, recombination }
+    }
+
+    pub fn recombination(&self) -> Recombination<f64> {
+        self.recombination
+    }
+    pub fn gmx(&self) -> &GaussianMixture<f64> {
+        &self.gmx
+    }
+}
+
 fn mean(list: &[f64]) -> f64 {
     let sum: f64 = Iterator::sum(list.iter());
     sum / (list.len() as f64)

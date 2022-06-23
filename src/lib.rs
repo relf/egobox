@@ -11,6 +11,7 @@
 //!
 
 use egobox_doe::SamplingMethod;
+use linfa::ParamGuard;
 use ndarray::{Array2, ArrayView2};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
@@ -377,7 +378,7 @@ impl Egor {
         }
     }
 
-    /// This function finds the minimum of a given fun function
+    /// This function finds the minimum of a given function `fun`
     ///
     /// # Parameters
     ///     n_eval:
@@ -481,7 +482,9 @@ impl Egor {
             .correlation_spec(
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             );
-        let surrogate_builder = egobox_ego::MixintMoeParams::new(&xtypes, &surrogate_builder);
+        let surrogate_builder = egobox_ego::MixintMoeParams::new(&xtypes, &surrogate_builder)
+            .check()
+            .unwrap();
         let pre_proc = egobox_ego::MixintPreProcessor::new(&xtypes);
         let mut mixintegor =
             egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &pre_proc, rng);

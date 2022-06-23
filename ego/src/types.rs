@@ -1,5 +1,5 @@
 use crate::errors::Result;
-use egobox_moe::ClusteredSurrogate;
+use egobox_moe::{ClusteredSurrogate, Clustering};
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
 
@@ -70,6 +70,14 @@ impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<
 pub trait SurrogateBuilder {
     /// Train the surrogate with given training dataset (x, y)
     fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn ClusteredSurrogate>>;
+
+    /// Train the surrogate with given training dataset (x, y) and given clustering
+    fn train_on_clusters(
+        &self,
+        xt: &Array2<f64>,
+        yt: &Array2<f64>,
+        clustering: &Clustering,
+    ) -> Result<Box<dyn ClusteredSurrogate>>;
 }
 
 /// An interface for preprocessing continuous input init_values

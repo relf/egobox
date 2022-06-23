@@ -108,5 +108,6 @@ mod surrogates;
 pub use algorithm::*;
 pub use clustering::*;
 pub use errors::*;
+pub use gaussian_mixture::*;
 pub use parameters::*;
 pub use surrogates::*;

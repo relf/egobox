@@ -58,6 +58,10 @@ impl<F: Float> GaussianMixture<F> {
         })
     }
 
+    pub fn n_clusters(&self) -> usize {
+        self.weights.len()
+    }
+
     pub fn weights(&self) -> &Array1<F> {
         &self.weights
     }

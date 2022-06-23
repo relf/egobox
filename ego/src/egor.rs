@@ -99,10 +99,10 @@ use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale};
 use crate::utils::{ei, wb2s};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
-use egobox_moe::{ClusteredSurrogate, CorrelationSpec, Moe, MoeParams, RegressionSpec};
+use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
-use linfa::{traits::Fit, Dataset, ParamGuard};
+use linfa::ParamGuard;
 use log::{debug, info};
 use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_npy::{read_npy, write_npy};
@@ -112,12 +112,23 @@ use nlopt::*;
 use rand_isaac::Isaac64Rng;
 
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
-const DOE_FILE: &str = "egobox_doe.npy";
+const DOE_FILE: &str = "egor_doe.npy";
 
 impl<R: Rng + SeedableRng + Clone> SurrogateBuilder for MoeParams<f64, R> {
     fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn ClusteredSurrogate>> {
         let checked = self.check_ref()?;
-        let moe = checked.fit(&Dataset::new(xt.to_owned(), yt.to_owned()))?;
+        let moe = checked.train(xt, yt)?;
+        Ok(moe).map(|moe| Box::new(moe) as Box<dyn ClusteredSurrogate>)
+    }
+
+    fn train_on_clusters(
+        &self,
+        xt: &Array2<f64>,
+        yt: &Array2<f64>,
+        clustering: &Clustering,
+    ) -> Result<Box<dyn ClusteredSurrogate>> {
+        let checked = self.check_ref()?;
+        let moe = checked.train_on_clusters(xt, yt, clustering)?;
         Ok(moe).map(|moe| Box::new(moe) as Box<dyn ClusteredSurrogate>)
     }
 }
@@ -394,8 +405,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     pub fn suggest(&self, x_data: &Array2<f64>, y_data: &Array2<f64>) -> Array2<f64> {
         let rng = self.rng.clone();
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
-        let mut n_clusters = vec![self.n_clusters.unwrap_or(1); 1 + self.n_cstr];
-        let (x_dat, _) = self.next_points(0, &mut n_clusters, x_data, y_data, &sampling, false);
+        let mut clusterings = vec![None; 1 + self.n_cstr];
+        let (x_dat, _) = self.next_points(1, &mut clusterings, x_data, y_data, &sampling, false);
         x_dat
     }
 
@@ -461,13 +472,13 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         }
 
         const MAX_RETRY: i32 = 3;
-        let mut n_clusters = vec![self.n_clusters.unwrap_or(1); 1 + self.n_cstr];
+        let mut clusterings = vec![None; self.n_cstr + 1];
         let mut no_point_added_retries = MAX_RETRY;
         let mut lhs_optim = false;
 
         for i in 1..=n_iter {
             let (x_dat, y_dat) =
-                self.next_points(i, &mut n_clusters, &x_data, &y_data, &sampling, lhs_optim);
+                self.next_points(i, &mut clusterings, &x_data, &y_data, &sampling, lhs_optim);
             debug!("Try adding {}", x_dat);
             let rejected_count = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
             if rejected_count > 0 {
@@ -478,7 +489,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                     if rejected_count > 1 { "s" } else { "" }
                 );
             }
-            debug!("New pts rejected = {} / {}", rejected_count, x_dat.nrows());
+            info!("New pts: {}", x_dat);
             if rejected_count == x_dat.nrows() {
                 no_point_added_retries -= 1;
                 if no_point_added_retries == 0 {
@@ -541,36 +552,47 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     }
 
     fn should_recluster(&self, n_iter: usize) -> bool {
-        if let Some(nc) = self.n_clusters {
-            n_iter % 10 == 1 && nc == 0
-        } else {
-            false
+        n_iter % 10 == 1 || {
+            if let Some(nc) = self.n_clusters {
+                nc == 0
+            } else {
+                false
+            }
         }
     }
 
-    fn make_default_builder(
-        &self,
-        clustering_i: usize,
-        n_iter: usize,
-        n_clusters: &mut [usize],
-    ) -> egobox_moe::MoeParams<f64, rand_isaac::Isaac64Rng> {
-        let n_clust = if self.should_recluster(n_iter) {
-            0
-        } else {
-            n_clusters[clustering_i]
-        };
-
+    fn make_default_builder(&self) -> egobox_moe::MoeParams<f64, rand_isaac::Isaac64Rng> {
         Moe::params()
-            .n_clusters(n_clust)
             .kpls_dim(self.kpls_dim)
             .regression_spec(self.regression_spec)
             .correlation_spec(self.correlation_spec)
     }
 
+    fn make_clustered_surrogate(
+        &self,
+        x_data: &Array2<f64>,
+        y_data: &Array2<f64>,
+        n_iter: usize,
+        clustering: &Option<Clustering>,
+    ) -> Box<dyn ClusteredSurrogate> {
+        let default_builder = &self.make_default_builder() as &dyn SurrogateBuilder;
+        let builder = self.surrogate_builder.unwrap_or(default_builder);
+        if self.should_recluster(n_iter) {
+            builder
+                .train(x_data, &y_data.slice(s![.., 0..1]).to_owned())
+                .expect("GP training failure")
+        } else {
+            let clustering = clustering.as_ref().unwrap().clone();
+            builder
+                .train_on_clusters(x_data, &y_data.slice(s![.., 0..1]).to_owned(), &clustering)
+                .expect("GP training failure")
+        }
+    }
+
     fn next_points(
         &'a self,
-        n: usize,
-        n_clusters: &mut [usize],
+        n_iter: usize,
+        clusterings: &mut [Option<Clustering>],
         x_data: &Array2<f64>,
         y_data: &Array2<f64>,
         sampling: &Lhs<f64, R>,
@@ -580,44 +602,33 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
 
-        let default_builder = &self.make_default_builder(0, n, n_clusters) as &dyn SurrogateBuilder;
-        let builder = self.surrogate_builder.unwrap_or(default_builder);
-
-        if self.should_recluster(n) {
+        if self.should_recluster(n_iter) {
             info!("Objective reclustering...")
         }
-        let obj_model = builder
-            .train(x_data, &y_data.slice(s![.., 0..1]).to_owned())
-            .expect("GP training failure");
-        if self.should_recluster(n) {
+        let obj_model = self.make_clustered_surrogate(x_data, y_data, n_iter, &clusterings[0]);
+        if self.should_recluster(n_iter) {
             info!(
                 "... Best nb of clusters for objective: {}",
                 obj_model.n_clusters()
             )
         }
-        n_clusters[0] = obj_model.n_clusters();
+        clusterings[0] = Some(obj_model.to_clustering());
 
         let mut cstr_models: Vec<Box<dyn ClusteredSurrogate>> = Vec::with_capacity(self.n_cstr);
         for k in 0..self.n_cstr {
-            let default_builder =
-                &self.make_default_builder(k + 1, n, n_clusters) as &dyn SurrogateBuilder;
-            let builder = self.surrogate_builder.unwrap_or(default_builder);
-            if self.should_recluster(n) {
+            if self.should_recluster(n_iter) {
                 info!("Constraint[{}] reclustering...", k)
             }
-            cstr_models.push(
-                builder
-                    .train(x_data, &y_data.slice(s![.., k + 1..k + 2]).to_owned())
-                    .expect("GP training failure"),
-            );
-            if self.should_recluster(n) {
+            let cstr_model = self.make_clustered_surrogate(x_data, y_data, n_iter, &clusterings[k]);
+            cstr_models.push(cstr_model);
+            if self.should_recluster(n_iter) {
                 info!(
                     "... Best nb of clusters for constraint[{}]: {}",
                     k,
                     cstr_models[k].n_clusters()
                 );
             }
-            n_clusters[k + 1] = cstr_models[k].n_clusters();
+            clusterings[k + 1] = Some(cstr_models[k].to_clustering());
         }
         for _ in 0..self.q_parallel {
             match self.find_best_point(
@@ -1021,7 +1032,7 @@ mod tests {
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
-            .sample(10);
+            .sample(5);
         let res = Egor::new(f_g24, &xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .n_cstr(2)

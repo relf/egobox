@@ -5,8 +5,10 @@
 use crate::errors::{EgoError, Result};
 use crate::types::SurrogateBuilder;
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_moe::{Clustered, ClusteredSurrogate, Moe, MoeParams, RegressionSpec, Surrogate};
-use linfa::{traits::Fit, Dataset, DatasetBase};
+use egobox_moe::{
+    Clustered, ClusteredSurrogate, Clustering, Moe, MoeParams, RegressionSpec, Surrogate,
+};
+use linfa::{traits::Fit, DatasetBase, ParamGuard};
 use ndarray::{s, Array, Array2, ArrayView2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -229,9 +231,8 @@ impl SamplingMethod<f64> for MixintSampling {
 
 /// Moe type for MixintEgor optimizer
 pub type MoeBuilder = MoeParams<f64, Isaac64Rng>;
-
 /// A decorator of Moe surrogate that takes into account Xtype specifications
-pub struct MixintMoeParams {
+pub struct MixintMoeValidParams {
     /// The surrogate factory
     surrogate_builder: MoeBuilder,
     /// The input specifications
@@ -241,20 +242,10 @@ pub struct MixintMoeParams {
     work_in_folded_space: bool,
 }
 
-impl MixintMoeParams {
-    /// Constructor given  `xtypes` specifications and given surrogate builder
-    pub fn new(xtypes: &[Xtype], surrogate_builder: &MoeBuilder) -> Self {
-        MixintMoeParams {
-            surrogate_builder: surrogate_builder.clone(),
-            xtypes: xtypes.to_vec(),
-            work_in_folded_space: false,
-        }
-    }
-
+impl MixintMoeValidParams {
     /// Sets whether we want to work in folded space
-    pub fn work_in_folded_space(&mut self, wfs: bool) -> &mut Self {
-        self.work_in_folded_space = wfs;
-        self
+    pub fn work_in_folded_space(&self) -> bool {
+        self.work_in_folded_space
     }
 
     /// Sets the specification
@@ -263,38 +254,122 @@ impl MixintMoeParams {
     }
 }
 
-impl SurrogateBuilder for MixintMoeParams {
-    fn train(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn ClusteredSurrogate>> {
-        Ok(
-            Box::new(self.fit(&Dataset::new(x.to_owned(), y.to_owned()))?)
-                as Box<dyn ClusteredSurrogate>,
-        )
+pub struct MixintMoeParams(MixintMoeValidParams);
+
+impl MixintMoeParams {
+    /// Constructor given  `xtypes` specifications and given surrogate builder
+    pub fn new(xtypes: &[Xtype], surrogate_builder: &MoeBuilder) -> Self {
+        MixintMoeParams(MixintMoeValidParams {
+            surrogate_builder: surrogate_builder.clone(),
+            xtypes: xtypes.to_vec(),
+            work_in_folded_space: false,
+        })
+    }
+
+    /// Sets whether we want to work in folded space
+    pub fn work_in_folded_space(&mut self, wfs: bool) -> &mut Self {
+        self.0.work_in_folded_space = wfs;
+        self
+    }
+
+    /// Sets the specification
+    pub fn xtypes(&self) -> &[Xtype] {
+        &self.0.xtypes
     }
 }
 
-impl Fit<Array2<f64>, Array2<f64>, EgoError> for MixintMoeParams {
+impl MixintMoeValidParams {
+    fn _train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<MixintMoe> {
+        let mut xcast = if self.work_in_folded_space {
+            unfold_with_enum_mask(&self.xtypes, &xt.view())
+        } else {
+            xt.to_owned()
+        };
+        cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
+        let mixmoe = MixintMoe {
+            moe: self
+                .surrogate_builder
+                .clone()
+                .regression_spec(RegressionSpec::CONSTANT)
+                .check()? // mixinteger works on ly with constant regression
+                .train(&xcast, &yt.to_owned())
+                .unwrap(),
+            xtypes: self.xtypes.clone(),
+            work_in_folded_space: self.work_in_folded_space,
+        };
+        Ok(mixmoe)
+    }
+
+    fn _train_on_clusters(
+        &self,
+        xt: &Array2<f64>,
+        yt: &Array2<f64>,
+        clustering: &egobox_moe::Clustering,
+    ) -> Result<MixintMoe> {
+        let mut xcast = if self.work_in_folded_space {
+            unfold_with_enum_mask(&self.xtypes, &xt.view())
+        } else {
+            xt.to_owned()
+        };
+        cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
+        let mixmoe = MixintMoe {
+            moe: self
+                .surrogate_builder
+                .clone()
+                .regression_spec(RegressionSpec::CONSTANT)
+                .check_ref()? // mixinteger works only with constant regression
+                .train_on_clusters(&xcast, &yt.to_owned(), clustering)
+                .unwrap(),
+            xtypes: self.xtypes.clone(),
+            work_in_folded_space: self.work_in_folded_space,
+        };
+        Ok(mixmoe)
+    }
+}
+
+impl SurrogateBuilder for MixintMoeValidParams {
+    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn ClusteredSurrogate>> {
+        let mixmoe = self._train(xt, yt)?;
+        Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn ClusteredSurrogate>)
+    }
+    fn train_on_clusters(
+        &self,
+        xt: &Array2<f64>,
+        yt: &Array2<f64>,
+        clustering: &Clustering,
+    ) -> Result<Box<dyn ClusteredSurrogate>> {
+        let mixmoe = self._train_on_clusters(xt, yt, clustering)?;
+        Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn ClusteredSurrogate>)
+    }
+}
+
+impl Fit<Array2<f64>, Array2<f64>, EgoError> for MixintMoeValidParams {
     type Object = MixintMoe;
 
     fn fit(&self, dataset: &DatasetBase<Array2<f64>, Array2<f64>>) -> Result<Self::Object> {
         let x = dataset.records();
         let y = dataset.targets();
+        self._train(x, y)
+    }
+}
 
-        let mut xcast = if self.work_in_folded_space {
-            unfold_with_enum_mask(&self.xtypes, &x.view())
-        } else {
-            x.to_owned()
-        };
-        cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        Ok(MixintMoe {
-            moe: self
-                .surrogate_builder
-                .clone()
-                .regression_spec(RegressionSpec::CONSTANT) // mixinteger works on ly with constant regression
-                .fit(&Dataset::new(xcast, y.to_owned()))
-                .unwrap(),
-            xtypes: self.xtypes.clone(),
-            work_in_folded_space: self.work_in_folded_space,
-        })
+impl ParamGuard for MixintMoeParams {
+    type Checked = MixintMoeValidParams;
+    type Error = EgoError;
+
+    fn check_ref(&self) -> Result<&Self::Checked> {
+        Ok(&self.0)
+    }
+
+    fn check(self) -> Result<Self::Checked> {
+        self.check_ref()?;
+        Ok(self.0)
+    }
+}
+
+impl From<MixintMoeValidParams> for MixintMoeParams {
+    fn from(item: MixintMoeValidParams) -> Self {
+        MixintMoeParams(item)
     }
 }
 
@@ -319,6 +394,11 @@ impl std::fmt::Display for MixintMoe {
 impl Clustered for MixintMoe {
     fn n_clusters(&self) -> usize {
         self.moe.n_clusters()
+    }
+
+    /// Convert to clustering
+    fn to_clustering(&self) -> Clustering {
+        Clustering::new(self.moe.gmx().clone(), self.moe.recombination())
     }
 }
 
@@ -416,6 +496,7 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use egobox_moe::CorrelationSpec;
+    use linfa::Dataset;
     use ndarray::array;
 
     #[test]
