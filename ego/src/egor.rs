@@ -619,7 +619,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             if self.should_recluster(n_iter) {
                 info!("Constraint[{}] reclustering...", k)
             }
-            let cstr_model = self.make_clustered_surrogate(x_data, y_data, n_iter, &clusterings[k]);
+            let cstr_model =
+                self.make_clustered_surrogate(x_data, y_data, n_iter, &clusterings[k + 1]);
             cstr_models.push(cstr_model);
             if self.should_recluster(n_iter) {
                 info!(
