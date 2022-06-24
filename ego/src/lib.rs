@@ -42,6 +42,7 @@
 //!  
 //! ```no_run   
 //! use ndarray::{array, Array2, ArrayView2};
+//! use linfa::ParamGuard;
 //! #[cfg(feature = "blas")]
 //! use ndarray_linalg::Norm;
 //! #[cfg(not(feature = "blas"))]
@@ -64,7 +65,9 @@
 //! let xtypes = vec![Xtype::Int(0, 25)];
 //!
 //! // We create mixed-integer mixture of experts
-//! let surrogate_builder = MixintMoeParams::new(&xtypes, &MoeParams::default());
+//! let surrogate_builder = MixintMoeParams::new(&xtypes, &MoeParams::default())
+//!                           .check()
+//!                           .expect("Mixint Moe params validation");
 //!
 //! // We use a mixint pre-processor which cast continuous values to discrete
 //! // and evaluate function under optimization
