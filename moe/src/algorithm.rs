@@ -163,7 +163,16 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
                 .n_clusters(gmx.n_clusters())
                 .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
-                .train_on_clusters(xt, yt, &Clustering::new(gmx.clone(), recomb))
+                .train(xt, yt)
+            // TODO: See if we can use training on clusters
+            // .train_on_clusters(
+            //     xt,
+            //     yt,
+            //     &Clustering::new(
+            //         gmx.clone().with_heaviside_factor(factor),
+            //         Recombination::Smooth(Some(factor)),
+            //     ),
+            // )
         } else {
             Ok(Moe {
                 recombination: recomb,
