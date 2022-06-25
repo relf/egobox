@@ -27,7 +27,7 @@ impl<'a, O: GroupFunc> MixintEgor<'a, O, Isaac64Rng> {
     /// before calling `f`.
     pub fn new(
         f: O,
-        mix_params: &'a MixintMoeParams,
+        mix_params: &'a MixintMoeValidParams,
         pre_proc: &'a MixintPreProcessor,
     ) -> MixintEgor<'a, O, Isaac64Rng> {
         Self::new_with_rng(f, mix_params, pre_proc, Isaac64Rng::from_entropy())
@@ -39,7 +39,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
     /// See [MixintEgor::new]
     pub fn new_with_rng(
         f: O,
-        mix_params: &'a MixintMoeParams,
+        mix_params: &'a MixintMoeValidParams,
         pre_proc: &'a MixintPreProcessor,
         rng: R,
     ) -> Self {
@@ -50,7 +50,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
             .clone();
         MixintEgor {
             xtypes: mix_params.xtypes().to_vec(),
-            egor,
+            egor: egor.clone(),
         }
     }
 
@@ -104,6 +104,7 @@ mod tests {
     use crate::mixint::Xtype;
     use approx::assert_abs_diff_eq;
     use egobox_moe::MoeParams;
+    use linfa::ParamGuard;
     use ndarray::{array, Array2, ArrayView2};
 
     #[cfg(not(feature = "blas"))]
@@ -128,8 +129,36 @@ mod tests {
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![Xtype::Int(0, 25)];
 
-        let surrogate_builder = MoeParams::default();
-        let surrogate_builder = MixintMoeParams::new(&xtypes, &surrogate_builder);
+        //let surrogate_builder = ;
+        let surrogate_builder = MixintMoeParams::new(&xtypes, &MoeParams::default())
+            .check()
+            .unwrap();
+        let pre_proc = MixintPreProcessor::new(&xtypes);
+        let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &pre_proc);
+        mixintegor
+            .egor
+            .doe(Some(doe))
+            .n_eval(n_eval)
+            .expect(Some(ApproxValue {
+                value: -15.1,
+                tolerance: 1e-1,
+            }))
+            .infill_strategy(InfillStrategy::EI);
+
+        let res = mixintegor.minimize().unwrap();
+        assert_abs_diff_eq!(array![18.], res.x_opt, epsilon = 2.);
+    }
+
+    #[test]
+    fn test_mixintegor_reclustering() {
+        let n_eval = 30;
+        let doe = array![[0.], [7.], [25.]];
+        let xtypes = vec![Xtype::Int(0, 25)];
+
+        //let surrogate_builder = ;
+        let surrogate_builder = MixintMoeParams::new(&xtypes, &MoeParams::default())
+            .check()
+            .unwrap();
         let pre_proc = MixintPreProcessor::new(&xtypes);
         let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &pre_proc);
         mixintegor
@@ -152,8 +181,9 @@ mod tests {
         let n_eval = 30;
         let xtypes = vec![Xtype::Int(0, 25)];
 
-        let surrogate_builder = MoeParams::default();
-        let surrogate_builder = MixintMoeParams::new(&xtypes, &surrogate_builder);
+        let surrogate_builder = MixintMoeParams::new(&xtypes, &MoeParams::default())
+            .check()
+            .unwrap();
         let pre_proc = MixintPreProcessor::new(&xtypes);
         let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &pre_proc);
         mixintegor

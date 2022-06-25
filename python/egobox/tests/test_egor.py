@@ -85,6 +85,13 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
+    def test_xsinx_with_reclustering(self):
+        egor = egx.Egor(xsinx, egx.to_specs([[0.0, 25.0]]), seed=42, n_clusters=0)
+        res = egor.minimize(n_eval=20)
+        print(f"Optimization f={res.y_opt} at {res.x_opt}")
+        self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
+        self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
+
     def test_xsinx_with_hotstart(self):
         xlimits = egx.to_specs([[0.0, 25.0]])
         doe = egx.lhs(xlimits, 10)
@@ -96,7 +103,7 @@ class TestOptimizer(unittest.TestCase):
 
         ydoe = xsinx(doe)
         doe = np.hstack((doe, ydoe))
-        egor = egx.Egor(xsinx, xlimits, doe=doe, outdir="./test_dir", hot_start=True)
+        egor = egx.Egor(xsinx, xlimits, outdir="./test_dir", hot_start=True)
         res = egor.minimize(n_eval=5)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-2)

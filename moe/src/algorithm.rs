@@ -1,5 +1,5 @@
 use super::gaussian_mixture::GaussianMixture;
-use crate::clustering::find_best_number_of_clusters;
+use crate::clustering::{find_best_number_of_clusters, Clustered, Clustering};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
@@ -64,12 +64,10 @@ impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
-    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
+    pub fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-        let training;
-        let (mut xtest, mut ytest) = (None, None);
 
         let (n_clusters, recomb) = if self.n_clusters() == 0 {
             // automatic mode
@@ -89,19 +87,16 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         if self.n_clusters() == 0 {
             debug!("Automatic settings {} {:?}", n_clusters, recomb);
         }
-        if let Recombination::Smooth(None) = recomb {
+
+        let training = if let Recombination::Smooth(None) = recomb {
             // Extract 5% of data for validation
             // TODO: Use cross-validation ? Performances
-            let (test, training_data) = extract_part(&data, 5);
-            // write_npy("xt_hard.npy", &training.slice(s![.., ..nx])).expect("obs saved");
-            // write_npy("yt_hard.npy", &training.slice(s![.., nx..])).expect("preds saved");
+            let (_, training_data) = extract_part(&data, 5);
 
-            xtest = Some(test.slice(s![.., ..nx]).to_owned());
-            ytest = Some(test.slice(s![.., nx..]).to_owned());
-            training = training_data;
+            training_data
         } else {
-            training = data.to_owned();
-        }
+            data.to_owned()
+        };
         let dataset = Dataset::from(training);
 
         let gmm = GaussianMixtureModel::params(n_clusters)
@@ -121,8 +116,24 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         };
         let gmx = GaussianMixture::new(weights, means, covariances)?.with_heaviside_factor(factor);
 
+        let clustering = Clustering::new(gmx, recomb);
+        self.train_on_clusters(xt, yt, &clustering)
+    }
+
+    pub fn train_on_clusters(
+        &self,
+        xt: &Array2<f64>,
+        yt: &Array2<f64>,
+        clustering: &Clustering,
+    ) -> Result<Moe> {
+        let gmx = clustering.gmx();
+        let recomb = clustering.recombination();
+        let _opt = env_logger::try_init().ok();
+        let nx = xt.ncols();
+        let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
+
         let dataset_clustering = gmx.predict(xt);
-        let clusters = sort_by_cluster(n_clusters, &data, &dataset_clustering);
+        let clusters = sort_by_cluster(gmx.n_clusters(), &data, &dataset_clustering);
 
         check_number_of_points(&clusters, xt.ncols())?;
 
@@ -141,18 +152,25 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         }
 
         if recomb == Recombination::Smooth(None) {
+            // Extract 5% of data for validation
+            // TODO: Use cross-validation ? Performances
+            let (test, _) = extract_part(&data, 5);
+            let xtest = Some(test.slice(s![.., ..nx]).to_owned());
+            let ytest = Some(test.slice(s![.., nx..]).to_owned());
             let factor =
-                self.optimize_heaviside_factor(&experts, &gmx, &xtest.unwrap(), &ytest.unwrap());
-            MoeParams::from(self.clone())
-                .n_clusters(n_clusters)
+                self.optimize_heaviside_factor(&experts, gmx, &xtest.unwrap(), &ytest.unwrap());
+            let moe = MoeParams::from(self.clone())
+                .n_clusters(gmx.n_clusters())
                 .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
-                .train(xt, yt)
+                .train(xt, yt)?; // needs to train the gaussian mixture on all data (xt, yt) as it was
+                                 // previously trained on data excluding test data (see train method)
+            Ok(moe)
         } else {
             Ok(Moe {
                 recombination: recomb,
                 experts,
-                gmx,
+                gmx: gmx.clone(),
             })
         }
     }
@@ -372,6 +390,21 @@ impl std::fmt::Display for Moe {
     }
 }
 
+impl Clustered for Moe {
+    /// Number of clusters
+    fn n_clusters(&self) -> usize {
+        self.gmx.n_clusters()
+    }
+
+    /// Convert to clustering
+    fn to_clustering(&self) -> Clustering {
+        Clustering {
+            recombination: self.recombination(),
+            gmx: self.gmx.clone(),
+        }
+    }
+}
+
 #[cfg_attr(feature = "persistent", typetag::serde)]
 impl Surrogate for Moe {
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
@@ -401,20 +434,24 @@ impl Surrogate for Moe {
     }
 }
 
+pub trait ClusteredSurrogate: Clustered + Surrogate {}
+
+impl ClusteredSurrogate for Moe {}
+
 impl Moe {
     /// Constructor of mixture of experts parameters
     pub fn params() -> MoeParams<f64, Isaac64Rng> {
         MoeParams::new()
     }
 
-    /// Number of clusters
-    pub fn n_clusters(&self) -> usize {
-        self.experts.len()
-    }
-
     /// Recombination mode
     pub fn recombination(&self) -> Recombination<f64> {
         self.recombination
+    }
+
+    /// Recombination mode
+    pub fn gmx(&self) -> &GaussianMixture<f64> {
+        &self.gmx
     }
 
     /// Sets recombination mode
@@ -618,7 +655,7 @@ mod tests {
         let moe = Moe::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(None))
-            .with_rng(rng)
+            .with_rng(rng.clone())
             .fit(&ds)
             .expect("MOE fitted");
         println!("Smooth moe {}", moe);

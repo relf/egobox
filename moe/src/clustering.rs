@@ -8,8 +8,33 @@ use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{concatenate, ArrayBase, Axis, Data, Ix2};
-use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray_rand::rand::Rng;
 use std::ops::Sub;
+
+pub trait Clustered {
+    fn n_clusters(&self) -> usize;
+
+    fn to_clustering(&self) -> Clustering;
+}
+
+#[derive(Clone)]
+pub struct Clustering {
+    pub(crate) recombination: Recombination<f64>,
+    pub(crate) gmx: GaussianMixture<f64>,
+}
+
+impl Clustering {
+    pub fn new(gmx: GaussianMixture<f64>, recombination: Recombination<f64>) -> Self {
+        Clustering { gmx, recombination }
+    }
+
+    pub fn recombination(&self) -> Recombination<f64> {
+        self.recombination
+    }
+    pub fn gmx(&self) -> &GaussianMixture<f64> {
+        &self.gmx
+    }
+}
 
 fn mean(list: &[f64]) -> f64 {
     let sum: f64 = Iterator::sum(list.iter());
@@ -29,7 +54,7 @@ fn median(v: &[f64]) -> f64 {
 }
 
 /// Find the best number of cluster thanks to cross validation
-pub fn find_best_number_of_clusters<R: Rng + SeedableRng + Clone>(
+pub fn find_best_number_of_clusters<R: Rng + Clone>(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     max_nb_clusters: usize,

@@ -17,6 +17,7 @@ use ndarray_stats::QuantileExt;
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub struct GaussianMixture<F: Float> {
     weights: Array1<F>,
     means: Array2<F>,
@@ -56,6 +57,10 @@ impl<F: Float> GaussianMixture<F> {
             precisions_chol,
             heaviside_factor: F::one(),
         })
+    }
+
+    pub fn n_clusters(&self) -> usize {
+        self.weights.len()
     }
 
     pub fn weights(&self) -> &Array1<F> {
