@@ -159,18 +159,13 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             let ytest = Some(test.slice(s![.., nx..]).to_owned());
             let factor =
                 self.optimize_heaviside_factor(&experts, gmx, &xtest.unwrap(), &ytest.unwrap());
-            MoeParams::from(self.clone())
+            let moe = MoeParams::from(self.clone())
                 .n_clusters(gmx.n_clusters())
                 .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
-                .train_on_clusters(
-                    xt,
-                    yt,
-                    &Clustering::new(
-                        gmx.clone().with_heaviside_factor(factor),
-                        Recombination::Smooth(Some(factor)),
-                    ),
-                )
+                .train(xt, yt)?; // needs to train the gaussian mixture on all data (xt, yt) as it was
+                                 // previously trained on data excluding test data (see train method)
+            Ok(moe)
         } else {
             Ok(Moe {
                 recombination: recomb,
@@ -660,7 +655,7 @@ mod tests {
         let moe = Moe::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(None))
-            .with_rng(rng)
+            .with_rng(rng.clone())
             .fit(&ds)
             .expect("MOE fitted");
         println!("Smooth moe {}", moe);

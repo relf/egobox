@@ -17,6 +17,7 @@ use ndarray_stats::QuantileExt;
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub struct GaussianMixture<F: Float> {
     weights: Array1<F>,
     means: Array2<F>,
