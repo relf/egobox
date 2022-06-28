@@ -169,6 +169,8 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     /// Optional dimension reduction (see [egobox_moe])
     pub kpls_dim: Option<usize>,
     /// Number of clusters used by mixture of experts (see [egobox_moe])
+    /// When set to 0 the clusters are computes automatically and refreshed
+    /// every 10-points (tentative) additions
     pub n_clusters: Option<usize>,
     /// Specification of an expected solution which is used to stop the algorithm once reached
     pub expected: Option<ApproxValue>,
