@@ -396,6 +396,10 @@ impl Clustered for MixintMoe {
         self.moe.n_clusters()
     }
 
+    fn recombination(&self) -> egobox_moe::Recombination<f64> {
+        self.moe.recombination()
+    }
+
     /// Convert to clustering
     fn to_clustering(&self) -> Clustering {
         Clustering::new(self.moe.gmx().clone(), self.moe.recombination())

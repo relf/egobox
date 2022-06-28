@@ -476,6 +476,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         }
 
         const MAX_RETRY: i32 = 3;
+        info!("NUMBER CLUSTER {:?}", self.n_clusters);
         let mut clusterings = vec![None; self.n_cstr + 1];
         let mut no_point_added_retries = MAX_RETRY;
         let mut lhs_optim = false;
@@ -561,12 +562,10 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     }
 
     fn should_cluster(&self, n_iter: usize) -> bool {
-        n_iter == 1 || {
-            if let Some(nc) = self.n_clusters {
-                nc == 0 && n_iter % 10 == 1
-            } else {
-                false
-            }
+        if let Some(nc) = self.n_clusters {
+            nc == 0 && n_iter % 10 == 1
+        } else {
+            false
         }
     }
 
@@ -592,11 +591,23 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         yt: &Array2<f64>,
         n_iter: usize,
         clustering: &Option<Clustering>,
+        model_name: &str,
     ) -> Box<dyn ClusteredSurrogate> {
         let default_builder = &self.make_default_builder() as &dyn SurrogateBuilder;
         let builder = self.surrogate_builder.unwrap_or(default_builder);
-        if self.should_cluster(n_iter) {
-            builder.train(xt, yt).expect("GP training failure")
+        let reclustering = self.should_cluster(n_iter);
+        if n_iter == 1 || reclustering {
+            if reclustering {
+                info!("{} reclustering...", model_name);
+            }
+            let model = builder.train(xt, yt).expect("GP training failure");
+            info!(
+                "... Best nb of clusters / mixture for {}: {} / {}",
+                model_name,
+                model.n_clusters(),
+                model.recombination()
+            );
+            model
         } else {
             let clustering = clustering.as_ref().unwrap().clone();
             builder
@@ -632,28 +643,20 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                 &yt.slice(s![.., 0..1]).to_owned(),
                 n_iter,
                 &clusterings[0],
+                "Objective",
             );
             clusterings[0] = Some(obj_model.to_clustering());
 
             let mut cstr_models: Vec<Box<dyn ClusteredSurrogate>> = Vec::with_capacity(self.n_cstr);
             for k in 1..=self.n_cstr {
-                if self.should_cluster(n_iter) {
-                    info!("Constraint[{}] reclustering...", k)
-                }
                 let cstr_model = self.make_clustered_surrogate(
                     &xt,
                     &yt.slice(s![.., k..k + 1]).to_owned(),
                     n_iter,
                     &clusterings[k],
+                    &format!("Constraint[{}] reclustering...", k),
                 );
                 cstr_models.push(cstr_model);
-                if self.should_cluster(n_iter) {
-                    info!(
-                        "... Best nb of clusters for constraint[{}]: {}",
-                        k,
-                        cstr_models[k - 1].n_clusters()
-                    );
-                }
                 clusterings[k] = Some(cstr_models[k - 1].to_clustering());
             }
 

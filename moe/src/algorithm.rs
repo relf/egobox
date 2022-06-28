@@ -396,6 +396,11 @@ impl Clustered for Moe {
         self.gmx.n_clusters()
     }
 
+    /// Clustering Recombination
+    fn recombination(&self) -> Recombination<f64> {
+        self.recombination()
+    }
+
     /// Convert to clustering
     fn to_clustering(&self) -> Clustering {
         Clustering {

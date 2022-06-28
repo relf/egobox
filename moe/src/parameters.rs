@@ -10,6 +10,7 @@ use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
+use std::fmt::Display;
 
 #[cfg(feature = "persistent")]
 use serde::{Deserialize, Serialize};
@@ -25,6 +26,17 @@ pub enum Recombination<F: Float> {
     /// an optional heaviside factor might be used control steepness of the change between
     /// experts regions.
     Smooth(Option<F>),
+}
+
+impl<F: Float> Display for Recombination<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let recomb = match self {
+            Recombination::Hard => "Hard".to_string(),
+            Recombination::Smooth(Some(f)) => format!("Smooth({})", f),
+            Recombination::Smooth(None) => "Smooth".to_string(),
+        };
+        write!(f, "Mixture[{}]", &recomb)
+    }
 }
 
 bitflags! {
