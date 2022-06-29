@@ -674,6 +674,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn next_points(
         &'a self,
         init: bool,
