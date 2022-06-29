@@ -9,7 +9,7 @@ use rand_isaac::Isaac64Rng;
 /// The MixintEgor structure wraps the [Egor] structure to implement
 /// continuous relaxation allowing to manage function optimization which
 /// takes discrete input variables.  
-pub struct MixintEgor<'a, O: GroupFunc, R: Rng + Clone> {
+pub struct MixintEgor<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> {
     /// Specifications of the x input variables being either coninuous (float) or discrete (integer)
     xtypes: Vec<Xtype>,
     /// The EGO algorithm. the object is accessible to be parametirizable using Egor API (see [`Egor`])
@@ -34,7 +34,7 @@ impl<'a, O: GroupFunc> MixintEgor<'a, O, Isaac64Rng> {
     }
 }
 
-impl<'a, O: GroupFunc, R: Rng + Clone> MixintEgor<'a, O, R> {
+impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> MixintEgor<'a, O, R> {
     /// Constructor enabling random generator specification
     /// See [MixintEgor::new]
     pub fn new_with_rng(
