@@ -557,13 +557,13 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                 if no_point_added_retries == 0 {
                     info!("Max number of retries ({}) without adding point", MAX_RETRY);
                     info!("Use LHS optimization to hopefully ensure a point addition");
-                    continue;
                 }
                 if no_point_added_retries < 0 {
                     // no luck with LHS optimization
                     warn!("Fail to add another point to improve the surrogate models. Terminate!");
                     break;
                 }
+                continue;
             }
 
             let add_count = (self.q_parallel - rejected_count) as i32;
