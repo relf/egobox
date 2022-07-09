@@ -514,13 +514,13 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         while it_count <= n_iter {
             let recluster = self.have_to_recluster(added, prev_added);
             let init = it_count == 1;
-            info!(
+            debug!(
                 "LHSOPTIM = {} {}",
                 no_point_added_retries,
                 no_point_added_retries == 0
             );
             let lhs_optim_seed = if no_point_added_retries == 0 {
-                Some(it_count as u64)
+                Some(added as u64)
             } else {
                 None
             };
@@ -556,9 +556,14 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                 no_point_added_retries -= 1;
                 if no_point_added_retries == 0 {
                     info!("Max number of retries ({}) without adding point", MAX_RETRY);
-                    info!("Use LHS optimization to ensure point addition");
+                    info!("Use LHS optimization to hopefully ensure a point addition");
+                    continue;
                 }
-                continue;
+                if no_point_added_retries < 0 {
+                    // no luck with LHS optimization
+                    warn!("Fail to add another point to improve the surrogate models. Terminate!");
+                    break;
+                }
             }
 
             let add_count = (self.q_parallel - rejected_count) as i32;
@@ -1034,6 +1039,30 @@ mod tests {
         let res = Egor::new(xsinx, &array![[0.0, 25.0]])
             .n_clusters(Some(0))
             .n_eval(20)
+            .minimize()
+            .expect("Minimize failure");
+        let expected = array![18.9];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+    }
+
+    #[test]
+    #[serial]
+    fn test_xsinx_with_hotstart() {
+        let xlimits = array![[0.0, 25.0]];
+        let doe = Lhs::new(&xlimits).sample(10);
+        let res = Egor::new_with_rng(xsinx, &xlimits, Isaac64Rng::seed_from_u64(42))
+            .n_eval(15)
+            .doe(Some(doe))
+            .outdir(Some("./test_dir".to_string()))
+            .minimize()
+            .expect("Minimize failure");
+        let expected = array![18.9];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+
+        let res = Egor::new_with_rng(xsinx, &array![[0.0, 25.0]], Isaac64Rng::seed_from_u64(41))
+            .n_eval(5)
+            .outdir(Some("./test_dir".to_string()))
+            .hot_start(true)
             .minimize()
             .expect("Minimize failure");
         let expected = array![18.9];
