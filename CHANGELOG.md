@@ -4,6 +4,16 @@ Unreleased
 Changes
 -------
 
+Version 0.4.0 - 2022-07-09
+==========================
+
+* Generate Python `egobox` module for Linux (#20)
+* Improve `Egor` robustness by adding LHS optimization (#21)
+* Improve `moe` with automatic number of clusters determination (#22) 
+* Use `linfa 0.6.0` making BLAS dependency optional (#23)
+* Improve `Egor` by implementing automatic reclustering every 10-points addition (#25)
+* Fix `Egor` parallel infill strategy (qEI): bad objectives and constraints gp models updste (#26)
+
 Version 0.3.0 - 2022-05-05
 ==========================
 
