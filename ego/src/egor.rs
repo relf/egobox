@@ -1182,7 +1182,7 @@ mod tests {
             .q_parallel(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
             .doe(Some(doe))
-            .n_eval(19)
+            .n_eval(30)
             .minimize()
             .expect("Minimize failure");
         println!("G24 optim result = {:?}", res);
