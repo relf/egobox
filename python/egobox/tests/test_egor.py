@@ -1,3 +1,4 @@
+import os
 import unittest
 import numpy as np
 import egobox as egx
@@ -93,6 +94,10 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
     def test_xsinx_with_hotstart(self):
+        if os.path.exists("./test_dir/egor_initial_doe.npy"):
+            os.remove("./test_dir/egor_initial_doe.npy")
+        if os.path.exists("./test_dir/egor_doe.npy"):
+            os.remove("./test_dir/egor_doe.npy")
         xlimits = egx.to_specs([[0.0, 25.0]])
         doe = egx.lhs(xlimits, 10)
         egor = egx.Egor(xsinx, xlimits, doe=doe, seed=42, outdir="./test_dir")
@@ -101,13 +106,16 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
-        ydoe = xsinx(doe)
-        doe = np.hstack((doe, ydoe))
         egor = egx.Egor(xsinx, xlimits, outdir="./test_dir", hot_start=True)
         res = egor.minimize(n_eval=5)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-2)
+
+        self.assertTrue(os.path.exists("./test_dir/egor_initial_doe.npy"))
+        os.remove("./test_dir/egor_initial_doe.npy")
+        self.assertTrue(os.path.exists("./test_dir/egor_doe.npy"))
+        os.remove("./test_dir/egor_doe.npy")
 
     def test_g24(self):
         egor = egx.Egor(

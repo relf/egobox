@@ -13,6 +13,7 @@ use std::ops::Sub;
 
 pub trait Clustered {
     fn n_clusters(&self) -> usize;
+    fn recombination(&self) -> Recombination<f64>;
 
     fn to_clustering(&self) -> Clustering;
 }

@@ -85,6 +85,8 @@ fn norm_pdf(x: f64) -> f64 {
 
 // DOE handling functions
 ///////////////////////////////////////////////////////////////////////////////
+
+/// Check if new point is not too close to previous ones `x_data`
 pub fn is_update_ok(
     x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     x_new: &ArrayBase<impl Data<Elem = f64>, Ix1>,
@@ -97,24 +99,27 @@ pub fn is_update_ok(
     true
 }
 
+/// Append `x_new` (resp. `y_new`) to `x_data` (resp. y_data) if `x_new` not too close to `x_data` points
+/// Returns the index of appended points in `x_new`
 pub fn update_data(
     x_data: &mut Array2<f64>,
     y_data: &mut Array2<f64>,
     x_new: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     y_new: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-) -> usize {
-    let mut out_count = 0;
-    Zip::from(x_new.rows()).and(y_new.rows()).for_each(|x, y| {
-        let xdat = x.insert_axis(Axis(0));
-        let ydat = y.insert_axis(Axis(0));
-        if is_update_ok(x_data, &x) {
-            *x_data = concatenate![Axis(0), x_data.view(), xdat];
-            *y_data = concatenate![Axis(0), y_data.view(), ydat];
-        } else {
-            out_count += 1;
-        }
-    });
-    out_count
+) -> Vec<usize> {
+    let mut appended = vec![];
+    Zip::indexed(x_new.rows())
+        .and(y_new.rows())
+        .for_each(|idx, x, y| {
+            let xdat = x.insert_axis(Axis(0));
+            let ydat = y.insert_axis(Axis(0));
+            if is_update_ok(x_data, &x) {
+                *x_data = concatenate![Axis(0), x_data.view(), xdat];
+                *y_data = concatenate![Axis(0), y_data.view(), ydat];
+                appended.push(idx);
+            }
+        });
+    appended
 }
 
 #[cfg(test)]
@@ -140,7 +145,7 @@ mod tests {
                 &array![[3., 4.], [1e-7, 1.]],
                 &array![[6.], [7.]],
             ),
-            1
+            &[0]
         );
         assert_eq!(&array![[0., 1.], [2., 3.], [3., 4.]], xdata);
         assert_eq!(&array![[3.], [4.], [6.]], ydata);

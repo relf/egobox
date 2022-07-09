@@ -258,8 +258,11 @@ impl Vspec {
 ///         Number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
-///     n_clusters (int > 0)
+///     n_clusters (int >= 0)
 ///         Number of clusters used by the mixture of surrogate experts.
+///         When set to 0, the number of cluster is determined automatically and refreshed every
+///         10-points addition (should say 'tentative addition' because addition may fail for some points
+///         but it is counted anyway).
 ///   
 ///     expected (ExpectedOptimum)
 ///         Known optimum used as stopping criterion.

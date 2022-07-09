@@ -135,7 +135,7 @@ impl<R: Rng + SeedableRng + Clone> SurrogateBuilder for MoeParams<f64, R> {
 
 /// EGO optimization parameterization
 #[derive(Clone)]
-pub struct Egor<'a, O: GroupFunc, R: Rng> {
+pub struct Egor<'a, O: GroupFunc, R: SeedableRng> {
     /// Number of function evaluations allocated to find the optimum
     /// Note: if the initial doe has to be evaluated, doe size should be substract.  
     pub n_eval: usize,
@@ -169,6 +169,8 @@ pub struct Egor<'a, O: GroupFunc, R: Rng> {
     /// Optional dimension reduction (see [egobox_moe])
     pub kpls_dim: Option<usize>,
     /// Number of clusters used by mixture of experts (see [egobox_moe])
+    /// When set to 0 the clusters are computes automatically and refreshed
+    /// every 10-points (tentative) additions
     pub n_clusters: Option<usize>,
     /// Specification of an expected solution which is used to stop the algorithm once reached
     pub expected: Option<ApproxValue>,
@@ -202,7 +204,7 @@ impl<'a, O: GroupFunc> Egor<'a, O, Isaac64Rng> {
     }
 }
 
-impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
+impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
     /// Constructor of the optimization of the function `f` with specified random generator
     /// to get reproducibility.
     ///
@@ -328,6 +330,8 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     }
 
     /// Sets the number of clusters used by the mixture of surrogate experts.
+    ///
+    /// When set to 0, the number of clusters is determined automatically
     pub fn n_clusters(&mut self, n_clusters: Option<usize>) -> &mut Self {
         self.n_clusters = n_clusters;
         self
@@ -371,7 +375,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
     }
 
     /// Sets a random generator for reproducibility
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Egor<'a, O, R2> {
+    pub fn with_rng<R2: Rng + SeedableRng + Clone>(self, rng: R2) -> Egor<'a, O, R2> {
         Egor {
             n_eval: self.n_eval,
             n_start: self.n_start,
@@ -406,7 +410,15 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         let rng = self.rng.clone();
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
         let mut clusterings = vec![None; 1 + self.n_cstr];
-        let (x_dat, _) = self.next_points(1, &mut clusterings, x_data, y_data, &sampling, false);
+        let (x_dat, _) = self.next_points(
+            true,
+            false, // done anyway
+            &mut clusterings,
+            x_data,
+            y_data,
+            &sampling,
+            None,
+        );
         x_dat
     }
 
@@ -434,7 +446,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
 
         let doe = hstart_doe.as_ref().or(self.doe.as_ref());
 
-        let (mut y_data, mut x_data, n_iter) = if let Some(doe) = doe {
+        let (mut y_data, mut x_data, n_eval) = if let Some(doe) = doe {
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
@@ -449,7 +461,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                 (
                     doe.slice(s![.., self.xlimits.nrows()..]).to_owned(),
                     doe.slice(s![.., ..self.xlimits.nrows()]).to_owned(),
-                    self.n_eval.saturating_sub(doe.nrows()),
+                    self.n_eval,
                 )
             }
         } else {
@@ -474,18 +486,64 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         const MAX_RETRY: i32 = 3;
         let mut clusterings = vec![None; self.n_cstr + 1];
         let mut no_point_added_retries = MAX_RETRY;
-        let mut lhs_optim = false;
-        if n_iter / self.q_parallel == 0 {
-            warn!("Number of evaluations {} too low, incompatible with initial doe size {} and q_parallel={} evals/iter", 
-                  self.n_eval, doe.nrows(), self.q_parallel);
+        if n_eval / self.q_parallel == 0 {
+            warn!(
+                "Number of evaluations {} too low (initial doe size={} and q_parallel={})",
+                self.n_eval,
+                doe.nrows(),
+                self.q_parallel
+            );
         }
-        let n_iter = n_iter / self.q_parallel;
+        let n_eval = if n_eval % self.q_parallel != 0 {
+            let new_n_eval = (n_eval / self.q_parallel) * self.q_parallel;
+            warn!(
+                "Number of evaluations out of initial doe {} readjusted to {} to get a multiple of q_parallel={}",
+                n_eval,
+                new_n_eval,
+                self.q_parallel
+            );
+            new_n_eval
+        } else {
+            n_eval
+        };
+        let n_iter = n_eval / self.q_parallel;
+        let mut prev_added = 0;
+        let mut added = doe.nrows();
 
-        for i in 1..=n_iter {
-            let (x_dat, y_dat) =
-                self.next_points(i, &mut clusterings, &x_data, &y_data, &sampling, lhs_optim);
+        let mut it_count = 1;
+        while it_count <= n_iter {
+            let recluster = self.have_to_recluster(added, prev_added);
+            let init = it_count == 1;
+            debug!(
+                "LHSOPTIM = {} {}",
+                no_point_added_retries,
+                no_point_added_retries == 0
+            );
+            let lhs_optim_seed = if no_point_added_retries == 0 {
+                Some(added as u64)
+            } else {
+                None
+            };
+            let (x_dat, y_dat) = self.next_points(
+                init,
+                recluster,
+                &mut clusterings,
+                &x_data,
+                &y_data,
+                &sampling,
+                lhs_optim_seed,
+            );
+
             debug!("Try adding {}", x_dat);
-            let rejected_count = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
+            let added_indices = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
+            let rejected_count = x_dat.nrows() - added_indices.len();
+            for i in 0..x_dat.nrows() {
+                debug!(
+                    "  {} {}",
+                    if added_indices.contains(&i) { "A" } else { "R" },
+                    x_dat.row(i)
+                );
+            }
             if rejected_count > 0 {
                 info!(
                     "Reject {}/{} point{} too close to previous ones",
@@ -494,32 +552,39 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                     if rejected_count > 1 { "s" } else { "" }
                 );
             }
-            info!("New pts: {}", x_dat);
             if rejected_count == x_dat.nrows() {
                 no_point_added_retries -= 1;
                 if no_point_added_retries == 0 {
                     info!("Max number of retries ({}) without adding point", MAX_RETRY);
-                    info!("Use LHS optimization to get at least one point");
-                    lhs_optim = true;
+                    info!("Use LHS optimization to hopefully ensure a point addition");
                 }
-                info!("End iteration {}/{}", i, n_iter);
+                if no_point_added_retries < 0 {
+                    // no luck with LHS optimization
+                    warn!("Fail to add another point to improve the surrogate models. Terminate!");
+                    break;
+                }
                 continue;
             }
 
-            no_point_added_retries = MAX_RETRY;
-            let count = (self.q_parallel - rejected_count) as i32;
-            let x_to_eval = x_data.slice(s![-count.., ..]).to_owned();
-            info!(
-                "Add {} point{} {}:",
-                count,
-                if count > 1 { "s" } else { "" },
-                if lhs_optim { " from sampling" } else { "" }
+            let add_count = (self.q_parallel - rejected_count) as i32;
+            let x_to_eval = x_data.slice(s![-add_count.., ..]).to_owned();
+            debug!(
+                "Eval {} point{} {}",
+                add_count,
+                if add_count > 1 { "s" } else { "" },
+                if no_point_added_retries == 0 {
+                    " from sampling"
+                } else {
+                    ""
+                }
             );
-            info!("  {}", x_dat);
-            lhs_optim = false; // reset as a point is added
+            prev_added = added;
+            added += add_count as usize;
+            info!("+{} point(s), total : {} points", add_count, added);
+            no_point_added_retries = MAX_RETRY; // reset as a point is added
 
             let y_actual = self.eval(&x_to_eval);
-            Zip::from(y_data.slice_mut(s![-count.., ..]).columns_mut())
+            Zip::from(y_data.slice_mut(s![-add_count.., ..]).columns_mut())
                 .and(y_actual.columns())
                 .for_each(|mut y, val| y.assign(&val));
             let doe = concatenate![Axis(1), x_data, y_data];
@@ -533,7 +598,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             let best_index = self.find_best_result_index(&y_data);
             info!(
                 "End iteration {}/{}: Best fun(x)={} at x={}",
-                i,
+                it_count,
                 n_iter,
                 y_data.row(best_index),
                 x_data.row(best_index)
@@ -545,6 +610,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
                     break;
                 }
             }
+            it_count += 1;
         }
         let best_index = self.find_best_result_index(&y_data);
         info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
@@ -556,13 +622,11 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         Ok(res)
     }
 
-    fn should_cluster(&self, n_iter: usize) -> bool {
-        n_iter == 1 || {
-            if let Some(nc) = self.n_clusters {
-                nc == 0 && n_iter % 10 == 1
-            } else {
-                false
-            }
+    fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
+        if let Some(nc) = self.n_clusters {
+            nc == 0 && (added != 0 && added % 10 == 0 && added - prev_added > 0)
+        } else {
+            false
         }
     }
 
@@ -586,13 +650,27 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         &self,
         xt: &Array2<f64>,
         yt: &Array2<f64>,
-        n_iter: usize,
+        init: bool,
+        recluster: bool,
         clustering: &Option<Clustering>,
+        model_name: &str,
     ) -> Box<dyn ClusteredSurrogate> {
         let default_builder = &self.make_default_builder() as &dyn SurrogateBuilder;
         let builder = self.surrogate_builder.unwrap_or(default_builder);
-        if self.should_cluster(n_iter) {
-            builder.train(xt, yt).expect("GP training failure")
+        if init || recluster {
+            if recluster {
+                info!("{} reclustering...", model_name);
+            } else {
+                info!("{} initial clustering...", model_name);
+            }
+            let model = builder.train(xt, yt).expect("GP training failure");
+            info!(
+                "... Best nb of clusters / mixture for {}: {} / {}",
+                model_name,
+                model.n_clusters(),
+                model.recombination()
+            );
+            model
         } else {
             let clustering = clustering.as_ref().unwrap().clone();
             builder
@@ -601,14 +679,16 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn next_points(
         &'a self,
-        n_iter: usize,
+        init: bool,
+        recluster: bool,
         clusterings: &mut [Option<Clustering>],
         x_data: &Array2<f64>,
         y_data: &Array2<f64>,
         sampling: &Lhs<f64, R>,
-        lhs_optim: bool,
+        lhs_optim: Option<u64>,
     ) -> (Array2<f64>, Array2<f64>) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
@@ -626,30 +706,24 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             let obj_model = self.make_clustered_surrogate(
                 &xt,
                 &yt.slice(s![.., 0..1]).to_owned(),
-                n_iter,
+                init && i == 0,
+                recluster,
                 &clusterings[0],
+                "Objective",
             );
             clusterings[0] = Some(obj_model.to_clustering());
 
             let mut cstr_models: Vec<Box<dyn ClusteredSurrogate>> = Vec::with_capacity(self.n_cstr);
             for k in 1..=self.n_cstr {
-                if self.should_cluster(n_iter) {
-                    info!("Constraint[{}] reclustering...", k)
-                }
                 let cstr_model = self.make_clustered_surrogate(
                     &xt,
                     &yt.slice(s![.., k..k + 1]).to_owned(),
-                    n_iter,
+                    init && i == 0,
+                    recluster,
                     &clusterings[k],
+                    &format!("Constraint[{}] reclustering...", k),
                 );
                 cstr_models.push(cstr_model);
-                if self.should_cluster(n_iter) {
-                    info!(
-                        "... Best nb of clusters for constraint[{}]: {}",
-                        k,
-                        cstr_models[k - 1].n_clusters()
-                    );
-                }
                 clusterings[k] = Some(cstr_models[k - 1].to_clustering());
             }
 
@@ -695,7 +769,7 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
         sampling: &Lhs<f64, R>,
         obj_model: &dyn ClusteredSurrogate,
         cstr_models: &[Box<dyn ClusteredSurrogate>],
-        lhs_optim: bool,
+        lhs_optim_seed: Option<u64>,
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
@@ -763,14 +837,18 @@ impl<'a, O: GroupFunc, R: Rng + Clone> Egor<'a, O, R> {
             InfillOptimizer::Cobyla => Algorithm::Cobyla,
         };
         while !success && n_optim <= n_max_optim {
-            if lhs_optim {
+            if let Some(seed) = lhs_optim_seed {
+                info!("LHS optimization");
                 let obj_data = ObjData {
                     scale_obj,
                     scale_wb2,
                     scale_cstr: scale_cstr.to_owned(),
                 };
                 let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
-                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data).minimize();
+                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
+                    .with_rng(<R as ndarray_rand::rand::SeedableRng>::seed_from_u64(seed))
+                    .minimize();
+                info!("LHS optimization best_x {}", x_opt);
                 best_x = Some(x_opt);
                 success = true;
             } else {
@@ -969,6 +1047,30 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_xsinx_with_hotstart() {
+        let xlimits = array![[0.0, 25.0]];
+        let doe = Lhs::new(&xlimits).sample(10);
+        let res = Egor::new_with_rng(xsinx, &xlimits, Isaac64Rng::seed_from_u64(42))
+            .n_eval(15)
+            .doe(Some(doe))
+            .outdir(Some("./test_dir".to_string()))
+            .minimize()
+            .expect("Minimize failure");
+        let expected = array![18.9];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+
+        let res = Egor::new_with_rng(xsinx, &array![[0.0, 25.0]], Isaac64Rng::seed_from_u64(41))
+            .n_eval(5)
+            .outdir(Some("./test_dir".to_string()))
+            .hot_start(true)
+            .minimize()
+            .expect("Minimize failure");
+        let expected = array![18.9];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+    }
+
+    #[test]
+    #[serial]
     fn test_xsinx_suggestions() {
         let mut ego = Egor::new(xsinx, &array![[0.0, 25.0]]);
         let ego = ego.infill_strategy(InfillStrategy::EI);
@@ -1005,9 +1107,8 @@ mod tests {
             .sample(10);
         let res = Egor::new(rosenb, &xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
-            .infill_strategy(InfillStrategy::EI)
             .doe(Some(doe))
-            .n_eval(35)
+            .n_eval(100)
             .expect(Some(ApproxValue {
                 value: 0.0,
                 tolerance: 1e-2,
@@ -1081,7 +1182,7 @@ mod tests {
             .q_parallel(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
             .doe(Some(doe))
-            .n_eval(20)
+            .n_eval(30)
             .minimize()
             .expect("Minimize failure");
         println!("G24 optim result = {:?}", res);

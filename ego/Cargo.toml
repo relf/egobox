@@ -1,6 +1,6 @@
 [package]
 name = "egobox-ego"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A library for efficient global optimization"
@@ -16,9 +16,9 @@ persistent = ["serde", "typetag", "egobox-moe/persistent", "serde_json"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.3.0", path="../doe" }
-egobox-gp = { version = "0.3.0", path="../gp" }
-egobox-moe = { version = "0.3.0", path="../moe" }
+egobox-doe = { version = "0.4.0", path="../doe" }
+egobox-gp = { version = "0.4.0", path="../gp" }
+egobox-moe = { version = "0.4.0", path="../moe" }
 
 linfa = { version = "0.6.0", default-features = false }
 linfa-pls = { version = "0.6.0", default-features = false }
