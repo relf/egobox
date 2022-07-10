@@ -7,7 +7,13 @@
 
 Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt). 
 
-`egobox` consists of the following sub-packages.
+`egobox` is twofold: 
+1. for developers: [a set of Rust libraries](#the-rust-libraries) required to implement and EGO-like algorithm or to be used independently,
+2. for end-users: [a Python module](#the-python-optimizer-egor), the Python binding of the implemented EGO-like optimizer, named `Egor`. 
+
+## The Rust libraries
+
+`egobox` Rust libraries consists of the following sub-packages.
 
 | Name         | Version                                                                                         | Documentation                                                               | Description                                                                     |
 | :----------- | :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
@@ -16,7 +22,7 @@ Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](ht
 | [moe](./gp)  | [![crates.io](https://img.shields.io/crates/v/egobox-moe)](https://crates.io/crates/egobox-moe) | [![docs](https://docs.rs/egobox-moe/badge.svg)](https://docs.rs/egobox-moe) | mixture of experts using GP models                                              |
 | [ego](./ego) | [![crates.io](https://img.shields.io/crates/v/egobox-ego)](https://crates.io/crates/egobox-ego) | [![docs](https://docs.rs/egobox-ego/badge.svg)](https://docs.rs/egobox-ego) | efficient global optimization with basic constraints and mixed integer handling |
 
-## Usage
+### Usage
 
 Depending on the sub-packages you want to use, you have to add following declarations to your `Cargo.toml`
 
@@ -28,16 +34,16 @@ egobox-moe = { version = "0.4.0" }
 egobox-ego = { version = "0.4.0" }
 ```
 
-## Features
-### `serializable-gp` 
+### Features
+#### `serializable-gp` 
 
 The `serializable-gp` feature enables the serialization of GP models using the [serde crate](https://serde.rs/). 
 
-### `persistent-moe` 
+#### `persistent-moe` 
 
 The `persistent-moe` feature enables `save()` and `load()` methods for MoE model to/from a json file using the [serde crate](https://serde.rs/). 
 
-### linfa BLAS/Lapack backend feature
+#### linfa BLAS/Lapack backend feature
 
 By default, we use a pure-Rust implementation for linear algebra routines. However, you can also choose an external BLAS/LAPACK backend library instead, by enabling the blas feature and a feature corresponding to your BLAS backend.
 
@@ -65,7 +71,7 @@ egobox-gp = { version = "0.4.0", features = ["blas", "linfa/intel-mkl-static"] }
 
 Note: only end-user projects should specify a provider in `Cargo.toml` (not librairies). In case of library development, the backend is specified on the command line as for examples below.
 
-## Examples
+### Examples
 
 Examples (in `examples/` sub-packages folder) are run as follows:
 
@@ -90,6 +96,7 @@ Using the Intel MKL BLAS/Lapack backend, you can also run for instance:
 ``` bash
 $ cd gp && cargo run --example kriging --release --features linfa/intel-mkl-static
 ```
+## The Python optimizer Egor
 
 Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka `Egor`) is binded in Python. You can install the Python package using:
 
@@ -107,7 +114,7 @@ This library relies also on the [linfa project](https://github.com/rust-ml/linfa
 
 While I did not benchmark exactly my Rust code against SMT Python one, from my debugging sessions, I noticed I did not get such a great speed up. Actually, algorithms like `doe` and `gp` relies extensively on linear algebra and Python famous libraries `numpy`/`scipy` which are strongly optimized by calling C or Fortran compiled code.
 
-My guess at this point is that interest could come from some Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top surrogate-based optimization EGO algorithm (`ego`) which gives its name to the library[^2][^3]. Aside from performance, such library can also take advantage from the others [Rust selling points](https://www.rust-lang.org/), namely reliability and productivity. 
+My guess at this point is that interest could come from some Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top surrogate-based optimization EGO algorithm (`ego`) which gives its name to the library[^2][^3]. Aside from performance, such library can also take advantage from the others [Rust selling points](https://www.rust-lang.org/). 
 
 ## Cite
 
