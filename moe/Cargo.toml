@@ -47,3 +47,8 @@ ndarray-npy = "0.8"
 ndarray-csv = "0.5"
 csv = "1.1"
 env_logger = "0.9"
+plotters = "0.2"
+
+[[bench]]
+name = "bench_find_nb_clusters"
+harness = false
