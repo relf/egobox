@@ -79,10 +79,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     let mut errorih: Vec<f64> = Vec::new();
     let mut erroris: Vec<f64> = Vec::new();
     let mut posi: Vec<usize> = Vec::new();
-    let mut b_ic: Vec<Vec<f64>> = Vec::new();
-    let mut a_ic: Vec<Vec<f64>> = Vec::new();
-    let mut error_h: Vec<Vec<f64>> = Vec::new();
-    let mut error_s: Vec<Vec<f64>> = Vec::new();
+
     let mut median_eh: Vec<f64> = Vec::new();
     let mut median_es: Vec<f64> = Vec::new();
 
@@ -106,8 +103,6 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 
         let mut h_errors: Vec<f64> = Vec::new();
         let mut s_errors: Vec<f64> = Vec::new();
-        let mut bic_c: Vec<f64> = Vec::new();
-        let mut aic_c: Vec<f64> = Vec::new();
         let mut ok = true; // Say if this number of cluster is possible
 
         let n_clusters = i + 1;
@@ -137,32 +132,13 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                             .unwrap();
                     let data_clustering = gmm.predict(&xytrain);
                     let clusters = sort_by_cluster(n_clusters, &xytrain, &data_clustering);
-                    let gmx = GaussianMixture::new(
-                        gmm.weights().to_owned(),
-                        gmm.means().to_owned(),
-                        gmm.covariances().to_owned(),
-                    )
-                    .unwrap();
-
-                    let records = valid.records();
-                    let targets = valid.targets();
-                    let valid_set =
-                        concatenate(Axis(1), &[records.view(), targets.view()]).unwrap();
-                    bic_c.push(gmx.bic(&valid_set));
-                    aic_c.push(gmx.aic(&valid_set));
                     for cluster in clusters.iter().take(i + 1) {
                         // If there is at least 3 points
-                        ok = cluster.len() > 3
+                        ok = ok && cluster.len() > 3
                     }
                     let actual = valid.targets();
                     let mixture = mixture.set_recombination(Recombination::Hard);
                     let h_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
-                        // write_npy(format!("valid_x_{}_{}.npy", n_clusters, k), valid.records())
-                        //     .expect("valid x saved");
-                        // write_npy(format!("valid_y_{}_{}.npy", n_clusters, k), actual)
-                        //     .expect("valid y saved");
-                        // write_npy(format!("pred_{}_{}.npy", n_clusters, k), &pred)
-                        //     .expect("pred saved");
                         pred.sub(actual).mapv(|x| x * x).sum().sqrt()
                             / actual.mapv(|x| x * x).sum().sqrt()
                     } else {
@@ -186,12 +162,6 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                 }
             }
         }
-
-        // Stock for box plot
-        b_ic.push(bic_c);
-        a_ic.push(aic_c);
-        error_s.push(s_errors.to_owned());
-        error_h.push(h_errors.to_owned());
 
         // Stock median
         median_es.push(median(&s_errors));
