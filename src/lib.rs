@@ -99,42 +99,30 @@ impl CorrelationSpec {
 }
 
 #[pyclass]
-struct InfillStrategy(u8);
-
-#[pymethods]
-impl InfillStrategy {
-    #[classattr]
-    const EI: u8 = 1;
-    #[classattr]
-    const WB2: u8 = 2;
-    #[classattr]
-    const WB2S: u8 = 3;
+#[derive(Debug, Clone, Copy)]
+#[allow(clippy::upper_case_acronyms)]
+enum InfillStrategy {
+    EI = 1,
+    WB2 = 2,
+    WB2S = 3,
 }
 
 #[pyclass]
-struct ParInfillStrategy(u8);
-
-#[pymethods]
-impl ParInfillStrategy {
-    #[classattr]
-    const KB: u8 = 1;
-    #[classattr]
-    const KBLB: u8 = 2;
-    #[classattr]
-    const KBUB: u8 = 3;
-    #[classattr]
-    const CLMIN: u8 = 4;
+#[derive(Debug, Clone, Copy)]
+#[allow(clippy::upper_case_acronyms)]
+enum ParInfillStrategy {
+    KB = 1,
+    KBLB = 2,
+    KBUB = 3,
+    CLMIN = 4,
 }
 
 #[pyclass]
-struct InfillOptimizer(u8);
-
-#[pymethods]
-impl InfillOptimizer {
-    #[classattr]
-    const COBYLA: u8 = 1;
-    #[classattr]
-    const SLSQP: u8 = 2;
+#[derive(Debug, Clone, Copy)]
+#[allow(clippy::upper_case_acronyms)]
+enum InfillOptimizer {
+    COBYLA = 1,
+    SLSQP = 2,
 }
 
 #[pyclass]
@@ -236,23 +224,23 @@ impl Vspec {
 ///         CorrelationSpec.MATERN32 (4), CorrelationSpec.MATERN52 (8) or
 ///         any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
 ///
-///     infill_strategy (InfillStrategy enum, an int in [1, 3])
+///     infill_strategy (InfillStrategy enum)
 ///         Infill criteria to decide best next promising point.
-///         Can be either InfillStrategy.EI (1), InfillStrategy.WB2 (2) or InfillStrategy.WB2S (3)
+///         Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S.
 ///
 ///     q_parallel (int > 0):
 ///         Number of parallel evaluations of the function under optimization.
 ///
-///     par_infill_strategy (ParInfillStrategy enum, an int in [1, 4])
+///     par_infill_strategy (ParInfillStrategy enum)
 ///         Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
 ///         q parallel evaluations of the function under optimization.
-///         Can be either ParInfillStrategy.KB (1, Kriging Believer),
-///         ParInfillStrategy.KBLB (2, KB Lower Bound), ParInfillStrategy.KBUB (3, KB Lower Bound),
-///         ParInfillStrategy.CLMIN (4, Constant Liar Minimum)
+///         Can be either ParInfillStrategy.KB (Kriging Believer),
+///         ParInfillStrategy.KBLB (KB Lower Bound), ParInfillStrategy.KBUB (KB Upper Bound),
+///         ParInfillStrategy.CLMIN (Constant Liar Minimum)
 ///
-///     infill_optimizer (InfillOptimizer enum, an int [1, 2])
+///     infill_optimizer (InfillOptimizer enum)
 ///         Internal optimizer used to optimize infill criteria.
-///         Can be either InfillOptimizer.COBYLA (1) or InfillOptimizer.SLSQP (2)
+///         Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP
 ///
 ///     kpls_dim (0 < int < nx)
 ///         Number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
@@ -346,10 +334,10 @@ impl Egor {
         doe: Option<PyReadonlyArray2<f64>>,
         regr_spec: u8,
         corr_spec: u8,
-        infill_strategy: u8,
+        infill_strategy: InfillStrategy,
         q_parallel: usize,
-        par_infill_strategy: u8,
-        infill_optimizer: u8,
+        par_infill_strategy: ParInfillStrategy,
+        infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
         n_clusters: Option<usize>,
         expected: Option<ExpectedOptimum>,
@@ -368,10 +356,10 @@ impl Egor {
             doe,
             regression_spec: RegressionSpec(regr_spec),
             correlation_spec: CorrelationSpec(corr_spec),
-            infill_strategy: InfillStrategy(infill_strategy),
+            infill_strategy,
             q_parallel,
-            par_infill_strategy: ParInfillStrategy(par_infill_strategy),
-            infill_optimizer: InfillOptimizer(infill_optimizer),
+            par_infill_strategy,
+            infill_optimizer,
             kpls_dim,
             n_clusters,
             expected,
@@ -405,43 +393,22 @@ impl Egor {
             pyarray.to_owned_array()
         };
 
-        let infill_strategy = match self.infill_strategy.0 {
+        let infill_strategy = match self.infill_strategy {
             InfillStrategy::EI => egobox_ego::InfillStrategy::EI,
             InfillStrategy::WB2 => egobox_ego::InfillStrategy::WB2,
             InfillStrategy::WB2S => egobox_ego::InfillStrategy::WB2S,
-            _ => panic!(
-                "InfillStrategy should be either EI ({}), WB2 ({}) or WB2S ({}), got {}",
-                InfillStrategy::EI,
-                InfillStrategy::WB2,
-                InfillStrategy::WB2S,
-                self.infill_strategy.0
-            ),
         };
 
-        let qei_strategy = match self.par_infill_strategy.0 {
+        let qei_strategy = match self.par_infill_strategy {
             ParInfillStrategy::KB => egobox_ego::QEiStrategy::KrigingBeliever,
             ParInfillStrategy::KBLB => egobox_ego::QEiStrategy::KrigingBelieverLowerBound,
             ParInfillStrategy::KBUB => egobox_ego::QEiStrategy::KrigingBelieverUpperBound,
             ParInfillStrategy::CLMIN => egobox_ego::QEiStrategy::ConstantLiarMinimum,
-            _ => panic!(
-                "ParInfillStrategy should be either KB ({}), KBLB ({}), KBUB ({}) or CLMIN ({}), got {}",
-                ParInfillStrategy::KB,
-                ParInfillStrategy::KBLB,
-                ParInfillStrategy::KBUB,
-                ParInfillStrategy::CLMIN,
-                self.par_infill_strategy.0
-            ),
         };
 
-        let infill_optimizer = match self.infill_optimizer.0 {
+        let infill_optimizer = match self.infill_optimizer {
             InfillOptimizer::COBYLA => egobox_ego::InfillOptimizer::Cobyla,
             InfillOptimizer::SLSQP => egobox_ego::InfillOptimizer::Slsqp,
-            _ => panic!(
-                "InfillOptimizer should be either COBYLA ({}) or SLSQP ({}), got {}",
-                InfillOptimizer::COBYLA,
-                InfillOptimizer::SLSQP,
-                self.infill_optimizer.0
-            ),
         };
 
         let rng = if let Some(seed) = self.seed {
