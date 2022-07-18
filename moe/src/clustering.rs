@@ -69,22 +69,15 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     } else {
         max_nb_clusters
     };
-    //let max_nb_clusters = 3;
-    //let val = concatenate(Axis(1), &[x.view(), y.view()]).unwrap();
     let nx = x.ncols();
-
     let dataset: DatasetView<f64, f64> = DatasetView::new(x.view(), y.view());
 
     // Stock
-    let mut errorih: Vec<f64> = Vec::new();
-    let mut erroris: Vec<f64> = Vec::new();
-    let mut posi: Vec<usize> = Vec::new();
-    let mut b_ic: Vec<Vec<f64>> = Vec::new();
-    let mut a_ic: Vec<Vec<f64>> = Vec::new();
-    let mut error_h: Vec<Vec<f64>> = Vec::new();
-    let mut error_s: Vec<Vec<f64>> = Vec::new();
-    let mut median_eh: Vec<f64> = Vec::new();
-    let mut median_es: Vec<f64> = Vec::new();
+    let mut mean_err_h: Vec<f64> = Vec::new();
+    let mut mean_err_s: Vec<f64> = Vec::new();
+    let mut median_err_h: Vec<f64> = Vec::new();
+    let mut median_err_s: Vec<f64> = Vec::new();
+    let mut nb_clusters_ok: Vec<usize> = Vec::new();
 
     // Init Output Loop
     let mut auxkh;
@@ -106,8 +99,6 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 
         let mut h_errors: Vec<f64> = Vec::new();
         let mut s_errors: Vec<f64> = Vec::new();
-        let mut bic_c: Vec<f64> = Vec::new();
-        let mut aic_c: Vec<f64> = Vec::new();
         let mut ok = true; // Say if this number of cluster is possible
 
         let n_clusters = i + 1;
@@ -137,32 +128,13 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                             .unwrap();
                     let data_clustering = gmm.predict(&xytrain);
                     let clusters = sort_by_cluster(n_clusters, &xytrain, &data_clustering);
-                    let gmx = GaussianMixture::new(
-                        gmm.weights().to_owned(),
-                        gmm.means().to_owned(),
-                        gmm.covariances().to_owned(),
-                    )
-                    .unwrap();
-
-                    let records = valid.records();
-                    let targets = valid.targets();
-                    let valid_set =
-                        concatenate(Axis(1), &[records.view(), targets.view()]).unwrap();
-                    bic_c.push(gmx.bic(&valid_set));
-                    aic_c.push(gmx.aic(&valid_set));
                     for cluster in clusters.iter().take(i + 1) {
                         // If there is at least 3 points
-                        ok = cluster.len() > 3
+                        ok = ok && cluster.len() > 3
                     }
                     let actual = valid.targets();
                     let mixture = mixture.set_recombination(Recombination::Hard);
                     let h_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
-                        // write_npy(format!("valid_x_{}_{}.npy", n_clusters, k), valid.records())
-                        //     .expect("valid x saved");
-                        // write_npy(format!("valid_y_{}_{}.npy", n_clusters, k), actual)
-                        //     .expect("valid y saved");
-                        // write_npy(format!("pred_{}_{}.npy", n_clusters, k), &pred)
-                        //     .expect("pred saved");
                         pred.sub(actual).mapv(|x| x * x).sum().sqrt()
                             / actual.mapv(|x| x * x).sum().sqrt()
                     } else {
@@ -187,24 +159,13 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
             }
         }
 
-        // Stock for box plot
-        b_ic.push(bic_c);
-        a_ic.push(aic_c);
-        error_s.push(s_errors.to_owned());
-        error_h.push(h_errors.to_owned());
-
-        // Stock median
-        median_es.push(median(&s_errors));
-        median_eh.push(median(&h_errors));
-
-        // Stock possible numbers of cluster
-        if ok {
-            posi.push(i);
-        }
+        // Stock median errors
+        median_err_s.push(median(&s_errors));
+        median_err_h.push(median(&h_errors));
 
         // Stock mean errors
-        erroris.push(mean(&s_errors));
-        errorih.push(mean(&h_errors));
+        mean_err_s.push(mean(&s_errors));
+        mean_err_h.push(mean(&h_errors));
 
         debug!(
             "Number of cluster: {} \
@@ -215,12 +176,17 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
             | Median (smooth): {}",
             i + 1,
             ok,
-            mean(&h_errors),
-            mean(&s_errors),
-            median(&h_errors),
-            median(&s_errors),
+            mean_err_h[mean_err_h.len() - 1],
+            mean_err_s[mean_err_s.len() - 1],
+            median_err_h[median_err_h.len() - 1],
+            median_err_s[median_err_s.len() - 1],
         );
         debug!("#######");
+
+        // Stock possible numbers of cluster
+        if ok {
+            nb_clusters_ok.push(i);
+        }
 
         if i > 3 {
             // Stop the search if the clustering can not be performed three times
@@ -231,24 +197,24 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
         if use_median {
             // Stop the search if the median increases three times
             if i > 3 {
-                auxkh = median_eh[i - 2];
-                auxkph = median_eh[i - 1];
-                auxkpph = median_eh[i];
-                auxks = median_es[i - 2];
-                auxkps = median_es[i - 1];
-                auxkpps = median_es[i];
+                auxkh = median_err_h[i - 2];
+                auxkph = median_err_h[i - 1];
+                auxkpph = median_err_h[i];
+                auxks = median_err_s[i - 2];
+                auxkps = median_err_s[i - 1];
+                auxkpps = median_err_s[i];
 
                 exit_ =
                     auxkph >= auxkh && auxkps >= auxks && auxkpph >= auxkph && auxkpps >= auxkps;
             }
         } else if i > 3 {
             // Stop the search if the means of errors increase three times
-            auxkh = errorih[i - 2];
-            auxkph = errorih[i - 1];
-            auxkpph = errorih[i];
-            auxks = erroris[i - 2];
-            auxkps = erroris[i - 1];
-            auxkpps = erroris[i];
+            auxkh = mean_err_h[i - 2];
+            auxkph = mean_err_h[i - 1];
+            auxkpph = mean_err_h[i];
+            auxks = mean_err_s[i - 2];
+            auxkps = mean_err_s[i - 1];
+            auxkpps = mean_err_s[i];
 
             exit_ = auxkph >= auxkh && auxkps >= auxks && auxkpph >= auxkph && auxkpps >= auxkps;
         }
@@ -259,33 +225,36 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     let mut cluster_mse = 1;
     let mut cluster_mses = 1;
     let (mut min_err, mut min_errs) = if use_median {
-        (median_eh[posi[0]], median_es[posi[0]])
+        (
+            median_err_h[nb_clusters_ok[0]],
+            median_err_s[nb_clusters_ok[0]],
+        )
     } else {
-        (errorih[posi[0]], erroris[posi[0]])
+        (mean_err_h[nb_clusters_ok[0]], mean_err_s[nb_clusters_ok[0]])
     };
 
-    debug!("Median errors hard: {:?}", median_eh);
-    debug!("Median errors soft: {:?}", median_es);
-    debug!("Mean errors hard: {:?}", errorih);
-    debug!("Mean errors soft: {:?}", erroris);
+    debug!("Median errors hard: {:?}", median_err_h);
+    debug!("Median errors soft: {:?}", median_err_s);
+    debug!("Mean errors hard: {:?}", mean_err_h);
+    debug!("Mean errors soft: {:?}", mean_err_s);
 
-    for k in posi {
+    for k in nb_clusters_ok {
         if use_median {
-            if min_err > median_eh[k] {
-                min_err = median_eh[k];
+            if min_err > median_err_h[k] {
+                min_err = median_err_h[k];
                 cluster_mse = k + 1;
             }
-            if min_errs > median_es[k] {
-                min_errs = median_es[k];
+            if min_errs > median_err_s[k] {
+                min_errs = median_err_s[k];
                 cluster_mses = k + 1;
             }
         } else {
-            if min_err > errorih[k] {
-                min_err = errorih[k];
+            if min_err > mean_err_h[k] {
+                min_err = mean_err_h[k];
                 cluster_mse = k + 1;
             }
-            if min_errs > erroris[k] {
-                min_errs = erroris[k];
+            if min_errs > mean_err_s[k] {
+                min_errs = mean_err_s[k];
                 cluster_mses = k + 1;
             }
         }
@@ -295,14 +264,14 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     let cluster;
     let hardi;
     if use_median {
-        if median_eh[cluster_mse - 1] < median_es[cluster_mses - 1] {
+        if median_err_h[cluster_mse - 1] < median_err_s[cluster_mses - 1] {
             cluster = cluster_mse;
             hardi = true;
         } else {
             cluster = cluster_mses;
             hardi = false;
         }
-    } else if errorih[cluster_mse - 1] < erroris[cluster_mses - 1] {
+    } else if mean_err_h[cluster_mse - 1] < mean_err_s[cluster_mses - 1] {
         cluster = cluster_mse;
         hardi = true;
     } else {
