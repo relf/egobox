@@ -16,7 +16,7 @@ use log::info;
 use ndarray::{Array2, ArrayView2};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use rand_isaac::Isaac64Rng;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -485,17 +485,23 @@ impl Egor {
             .hot_start(self.hot_start)
             .interruptor(interruptor.clone());
 
-        ctrlc::set_handler(move || {
+        match ctrlc::set_handler(move || {
             info!("***** Keyboard interruption! ******************************");
             interruptor.store(true, Ordering::SeqCst)
-        })
-        .expect("Keyboard interruption");
-        let res = mixintegor.minimize().expect("Minimization failed");
+        }) {
+            Ok(_) | Err(ctrlc::Error::MultipleHandlers) => {
+                let res = mixintegor.minimize().expect("Minimization failed");
 
-        Ok(OptimResult {
-            x_opt: res.x_opt.to_vec(),
-            y_opt: res.y_opt.to_vec(),
-        })
+                Ok(OptimResult {
+                    x_opt: res.x_opt.to_vec(),
+                    y_opt: res.y_opt.to_vec(),
+                })
+            }
+            Err(err) => Err(PyRuntimeError::new_err(format!(
+                "Error in keyboard interruption setup: {:?}",
+                err
+            ))),
+        }
     }
 }
 
