@@ -45,6 +45,7 @@ env_logger = "0.9"
 log = "0.4"
 pyo3 = { version = "0.16.5", features = ["extension-module"] }
 pyo3-log = "0.6.0"
+ctrlc = { version = "3.2.2", features = ["termination"] }
 
 [dev-dependencies]
 criterion = "0.3"

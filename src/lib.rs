@@ -12,12 +12,15 @@
 
 use egobox_doe::SamplingMethod;
 use linfa::ParamGuard;
+use log::info;
 use ndarray::{Array2, ArrayView2};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rand_isaac::Isaac64Rng;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 /// Utility function converting `xlimits` float data list specifying bounds of x components
 /// to x specified as a list of Vtype.Float types [egobox.Vtype]
@@ -382,7 +385,7 @@ impl Egor {
     ///
     #[args(n_eval = "20")]
     #[pyo3(text_signature = "(n_eval=20)")]
-    fn minimize(&self, py: Python, n_eval: usize) -> OptimResult {
+    fn minimize(&self, py: Python, n_eval: usize) -> PyResult<OptimResult> {
         let fun = self.fun.to_object(py);
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
             let gil = Python::acquire_gil();
@@ -456,6 +459,7 @@ impl Egor {
             .check()
             .unwrap();
         let pre_proc = egobox_ego::MixintPreProcessor::new(&xtypes);
+        let interruptor = Arc::new(AtomicBool::new(false));
         let mut mixintegor =
             egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &pre_proc, rng);
         mixintegor
@@ -478,14 +482,20 @@ impl Egor {
             .n_clusters(self.n_clusters)
             .expect(expected)
             .outdir(self.outdir.as_ref().cloned())
-            .hot_start(self.hot_start);
+            .hot_start(self.hot_start)
+            .interruptor(interruptor.clone());
 
+        ctrlc::set_handler(move || {
+            info!("***** Keyboard interruption! ******************************");
+            interruptor.store(true, Ordering::SeqCst)
+        })
+        .expect("Keyboard interruption");
         let res = mixintegor.minimize().expect("Minimization failed");
 
-        OptimResult {
+        Ok(OptimResult {
             x_opt: res.x_opt.to_vec(),
             y_opt: res.y_opt.to_vec(),
-        }
+        })
     }
 }
 
