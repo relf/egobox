@@ -247,12 +247,9 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         let mut expert_params = best_expert_params?;
         expert_params.kpls_dim(self.kpls_dim());
         let expert = expert_params.fit(&xtrain, &ytrain);
-        info!(
-            "Best expert {} accuracy={}",
-            best.0,
-            best.1
-                .map_or_else(|| String::from("<Not Computed>"), |v| format!("{}", v))
-        );
+        if let Some(v) = best.1 {
+            info!("Best expert {} accuracy={}", best.0, v);
+        }
         expert.map_err(MoeError::from)
     }
 
