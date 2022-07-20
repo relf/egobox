@@ -8,7 +8,7 @@
 Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt). 
 
 `egobox` is twofold: 
-1. for developers: [a set of Rust libraries](#the-rust-libraries) required to implement and EGO-like algorithm or to be used independently,
+1. for developers: [a set of Rust libraries](#the-rust-libraries) useful to implement bayesian optimization (EGO-like) algorithms,
 2. for end-users: [a Python module](#the-python-optimizer-egor), the Python binding of the implemented EGO-like optimizer, named `Egor`. 
 
 ## The Rust libraries
