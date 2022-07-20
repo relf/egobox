@@ -124,16 +124,17 @@ impl<'a, R: Rng + Clone> LhsOptimizer<'a, R> {
                 .iter()
                 .enumerate()
                 .filter_map(|(i, &b)| {
-                    if b {
+                    if b && !y[i].is_nan() {
                         Some((doe.row(i).to_owned(), y[i], cstrs_values.row(i)))
                     } else {
                         None
                     }
                 })
                 .collect();
-            let index_min = Array1::from_vec(vals.iter().map(|(_, y, _)| y).collect())
+            let values = Array1::from_vec(vals.iter().map(|(_, y, _)| *y).collect());
+            let index_min = values
                 .argmin()
-                .unwrap();
+                .unwrap_or_else(|err| panic!("Cannot find min in {}: {:?}", values, err));
             (
                 true,
                 vals[index_min].0.to_owned(),

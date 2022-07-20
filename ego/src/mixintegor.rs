@@ -9,6 +9,7 @@ use rand_isaac::Isaac64Rng;
 /// The MixintEgor structure wraps the [Egor] structure to implement
 /// continuous relaxation allowing to manage function optimization which
 /// takes discrete input variables.  
+#[derive(Clone)]
 pub struct MixintEgor<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> {
     /// Specifications of the x input variables being either coninuous (float) or discrete (integer)
     xtypes: Vec<Xtype>,
@@ -50,7 +51,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> MixintEgor<'a, O, R> {
             .clone();
         MixintEgor {
             xtypes: mix_params.xtypes().to_vec(),
-            egor: egor.clone(),
+            egor,
         }
     }
 
@@ -72,6 +73,10 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> MixintEgor<'a, O, R> {
             );
             res
         })
+    }
+
+    pub fn interrupt(&self) {
+        self.egor.interrupt()
     }
 }
 

@@ -110,6 +110,8 @@ use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_isaac::Isaac64Rng;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
@@ -191,6 +193,8 @@ pub struct Egor<'a, O: GroupFunc, R: SeedableRng> {
     /// A random generator used to get reproductible results.
     /// For instance: Isaac64Rng::from_u64_seed(42) for reproducibility
     pub rng: R,
+    /// Shared atomic boolean to allow iteration loop interruption
+    interruptor: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl<'a, O: GroupFunc> Egor<'a, O, Isaac64Rng> {
@@ -237,6 +241,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             pre_proc: None,
             obj: f,
             rng,
+            interruptor: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -374,6 +379,14 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         self
     }
 
+    /// Sets a shared boolean to allow interruption handling
+    ///
+    /// Allows to interrupt iteration loop when `interrupt` method is called
+    pub fn interruptor(&mut self, interruptor: Arc<AtomicBool>) -> &mut Self {
+        self.interruptor = interruptor;
+        self
+    }
+
     /// Sets a random generator for reproducibility
     pub fn with_rng<R2: Rng + SeedableRng + Clone>(self, rng: R2) -> Egor<'a, O, R2> {
         Egor {
@@ -399,6 +412,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             pre_proc: self.pre_proc,
             obj: self.obj,
             rng,
+            interruptor: self.interruptor,
         }
     }
 
@@ -511,7 +525,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         let mut added = doe.nrows();
 
         let mut it_count = 1;
-        while it_count <= n_iter {
+        while !self.interruptor.load(Ordering::SeqCst) && it_count <= n_iter {
             let recluster = self.have_to_recluster(added, prev_added);
             let init = it_count == 1;
             debug!(
@@ -580,7 +594,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             );
             prev_added = added;
             added += add_count as usize;
-            info!("+{} point(s), total : {} points", add_count, added);
+            info!("+{} point(s), total: {} points", add_count, added);
             no_point_added_retries = MAX_RETRY; // reset as a point is added
 
             let y_actual = self.eval(&x_to_eval);
@@ -620,6 +634,10 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         };
         info!("Optim Result: min f(x)={} at x= {}", res.y_opt, res.x_opt);
         Ok(res)
+    }
+
+    pub fn interrupt(&self) {
+        self.interruptor.store(true, Ordering::SeqCst);
     }
 
     fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
