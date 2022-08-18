@@ -4,7 +4,7 @@ use crate::mean_models::{ConstantMean, RegressionModel};
 use linfa::{Float, ParamGuard};
 
 /// A set of validated GP parameters.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Option<Vec<F>>,

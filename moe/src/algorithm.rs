@@ -276,12 +276,11 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             });
 
             let min_error_index = errors.argmin().unwrap();
-            let scale_factor = if *errors.max().unwrap() < 1e-6 {
+            if *errors.max().unwrap() < 1e-6 {
                 1.
             } else {
                 scale_factors[min_error_index]
-            };
-            scale_factor
+            }
         }
     }
 }

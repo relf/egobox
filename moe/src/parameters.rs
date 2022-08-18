@@ -16,7 +16,7 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 /// Enumeration of recombination modes handled by the mixture
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 pub enum Recombination<F: Float> {
     /// prediction is taken from the expert with highest responsability

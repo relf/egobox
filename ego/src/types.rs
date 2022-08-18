@@ -13,7 +13,7 @@ pub struct OptimResult<F: Float> {
 }
 
 /// Infill criterion used to select next promising point
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InfillStrategy {
     /// Expected Improvement
     EI,
@@ -24,7 +24,7 @@ pub enum InfillStrategy {
 }
 
 /// Optimizer used to optimize the infill criteria
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InfillOptimizer {
     /// SLSQP optimizer (gradient from finite differences)
     Slsqp,
@@ -35,7 +35,7 @@ pub enum InfillOptimizer {
 /// Strategy to choose several points at each iteration
 /// to benefit from parallel evaluation of the objective function
 /// (The Multi-points Expected Improvement (q-EI) Criterion)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum QEiStrategy {
     /// Take the mean of the kriging predictor for q points
     KrigingBeliever,
