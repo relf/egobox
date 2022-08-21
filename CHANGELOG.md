@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+Version 0.5.0
+=============
+
+* Add ``GpMix` in Python `egobox` module wrapping `egobox-moe` (#31)
+* Add Egor `minimize` interruption capability (Ctrl+C) from Python (#30)
+* Minor performance improvement in moe clustering (#29)
+
 Changes
 -------
 
