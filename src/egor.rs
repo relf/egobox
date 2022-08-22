@@ -10,6 +10,7 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/TutorialEgor.ipynb) for usage.
 //!
 
+use crate::types::*;
 use egobox_doe::SamplingMethod;
 use linfa::ParamGuard;
 use log::info;
@@ -72,120 +73,6 @@ pub(crate) fn lhs(
     let lhs = egobox_ego::MixintContext::new(&xtypes).create_sampling(seed);
     let doe = lhs.sample(n_samples);
     doe.into_pyarray(py)
-}
-
-#[pyclass]
-pub(crate) struct RegressionSpec(u8);
-
-#[pymethods]
-impl RegressionSpec {
-    #[classattr]
-    const ALL: u8 = egobox_moe::RegressionSpec::ALL.bits();
-    #[classattr]
-    const CONSTANT: u8 = egobox_moe::RegressionSpec::CONSTANT.bits();
-    #[classattr]
-    const LINEAR: u8 = egobox_moe::RegressionSpec::LINEAR.bits();
-    #[classattr]
-    const QUADRATIC: u8 = egobox_moe::RegressionSpec::QUADRATIC.bits();
-}
-
-#[pyclass]
-pub(crate) struct CorrelationSpec(u8);
-
-#[pymethods]
-impl CorrelationSpec {
-    #[classattr]
-    const ALL: u8 = egobox_moe::CorrelationSpec::ALL.bits();
-    #[classattr]
-    const SQUARED_EXPONENTIAL: u8 = egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL.bits();
-    #[classattr]
-    const ABSOLUTE_EXPONENTIAL: u8 = egobox_moe::CorrelationSpec::ABSOLUTEEXPONENTIAL.bits();
-    #[classattr]
-    const MATERN32: u8 = egobox_moe::CorrelationSpec::MATERN32.bits();
-    #[classattr]
-    const MATERN52: u8 = egobox_moe::CorrelationSpec::MATERN52.bits();
-}
-
-#[pyclass]
-#[derive(Debug, Clone, Copy)]
-#[allow(clippy::upper_case_acronyms)]
-pub(crate) enum InfillStrategy {
-    EI = 1,
-    WB2 = 2,
-    WB2S = 3,
-}
-
-#[pyclass]
-#[derive(Debug, Clone, Copy)]
-#[allow(clippy::upper_case_acronyms)]
-pub(crate) enum ParInfillStrategy {
-    KB = 1,
-    KBLB = 2,
-    KBUB = 3,
-    CLMIN = 4,
-}
-
-#[pyclass]
-#[derive(Debug, Clone, Copy)]
-#[allow(clippy::upper_case_acronyms)]
-pub(crate) enum InfillOptimizer {
-    COBYLA = 1,
-    SLSQP = 2,
-}
-
-#[pyclass]
-#[derive(Clone, Copy)]
-#[pyo3(text_signature = "(val, tol=1e-6)")]
-pub(crate) struct ExpectedOptimum {
-    #[pyo3(get)]
-    val: f64,
-    #[pyo3(get)]
-    tol: f64,
-}
-
-#[pymethods]
-impl ExpectedOptimum {
-    #[new]
-    #[args(value, tolerance = "1e-6")]
-    fn new(val: f64, tol: f64) -> Self {
-        ExpectedOptimum { val, tol }
-    }
-}
-
-#[pyclass]
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Vtype(u8);
-
-#[pymethods]
-impl Vtype {
-    #[classattr]
-    const FLOAT: u8 = 1;
-    #[classattr]
-    const INT: u8 = 2;
-    #[new]
-    fn new(vtype: u8) -> Self {
-        Vtype(vtype)
-    }
-    fn id(&self) -> u8 {
-        self.0
-    }
-}
-
-#[pyclass]
-#[derive(FromPyObject, Debug)]
-pub(crate) struct Vspec {
-    #[pyo3(get)]
-    vtype: Vtype,
-    #[pyo3(get)]
-    vlimits: Vec<f64>,
-}
-
-#[pymethods]
-impl Vspec {
-    #[new]
-    fn new(vtype: Vtype, vlimits: Vec<f64>) -> Self {
-        Vspec { vtype, vlimits }
-    }
 }
 
 /// Optimizer constructor

@@ -1,8 +1,13 @@
 #![doc = include_str!("../README.md")]
 
 mod egor;
+mod gpmix;
+pub(crate) mod types;
 
 use egor::*;
+use gpmix::*;
+use types::*;
+
 use pyo3::prelude::*;
 
 #[doc(hidden)]
