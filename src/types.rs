@@ -2,6 +2,18 @@ use pyo3::prelude::*;
 
 #[pyclass]
 #[derive(Clone)]
+pub enum Recombination {
+    /// prediction is taken from the expert with highest responsability
+    /// resulting in a model with discontinuities
+    Hard = 0,
+    /// Prediction is a combination experts prediction wrt their responsabilities,
+    /// an optional heaviside factor might be used control steepness of the change between
+    /// experts regions.
+    Smooth = 1,
+}
+
+#[pyclass]
+#[derive(Clone)]
 pub(crate) struct RegressionSpec(pub(crate) u8);
 
 #[pymethods]
