@@ -8,6 +8,7 @@ use crate::parameters::{
 };
 use crate::surrogates::*;
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
+use env_logger::{Builder, Env};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict, PredictInplace};
 use linfa::{Dataset, DatasetBase, Float, ParamGuard};
