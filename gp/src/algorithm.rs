@@ -387,6 +387,7 @@ where
     }
 }
 
+#[cfg(not(feature = "blas"))]
 fn reduced_likelihood<F: Float>(
     fx: &ArrayBase<impl Data<Elem = F>, Ix2>,
     rxx: ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -400,33 +401,17 @@ fn reduced_likelihood<F: Float>(
         r_mx[[ij[0], ij[1]]] = rxx[[i, 0]];
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
     }
-
-    #[cfg(feature = "blas")]
-    let fxl = fx.to_owned().with_lapack();
-    #[cfg(not(feature = "blas"))]
     let fxl = fx;
 
     // R cholesky decomposition
-    #[cfg(feature = "blas")]
-    let r_chol = r_mx.with_lapack().cholesky(UPLO::Lower)?;
-    #[cfg(not(feature = "blas"))]
     let r_chol = r_mx.cholesky()?;
 
     // Solve generalized least squared problem
-    #[cfg(feature = "blas")]
-    let ft = r_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &fxl)?;
-    #[cfg(not(feature = "blas"))]
     let ft = r_chol.solve_triangular(fxl, UPLO::Lower)?;
 
-    #[cfg(feature = "blas")]
-    let (ft_qr_q, ft_qr_r) = ft.qr().unwrap();
-    #[cfg(not(feature = "blas"))]
     let (ft_qr_q, ft_qr_r) = ft.qr().unwrap().into_decomp();
 
     // Check whether we have an ill-conditionned problem
-    #[cfg(feature = "blas")]
-    let (_, sv_qr_r, _) = ft_qr_r.svd(false, false).unwrap();
-    #[cfg(not(feature = "blas"))]
     let (_, sv_qr_r, _) = ft_qr_r.svd(false, false).unwrap();
     let cond_ft = sv_qr_r[sv_qr_r.len() - 1] / sv_qr_r[0];
     if F::cast(cond_ft) < F::cast(1e-10) {
@@ -445,37 +430,101 @@ fn reduced_likelihood<F: Float>(
             ));
         }
     }
-    #[cfg(feature = "blas")]
-    let yt = r_chol.solve_triangular(
-        UPLO::Lower,
-        Diag::NonUnit,
-        &ytrain.data.to_owned().with_lapack(),
-    )?;
-    #[cfg(not(feature = "blas"))]
     let yt = r_chol.solve_triangular(&ytrain.data, UPLO::Lower)?;
 
-    #[cfg(feature = "blas")]
-    let beta = ft_qr_r.solve_triangular_into(UPLO::Upper, Diag::NonUnit, ft_qr_q.t().dot(&yt))?;
-    #[cfg(not(feature = "blas"))]
     let beta = ft_qr_r.solve_triangular_into(ft_qr_q.t().dot(&yt), UPLO::Upper)?;
 
     let rho = yt - ft.dot(&beta);
     let rho_sqr = rho.mapv(|v| v * v).sum_axis(Axis(0));
-    #[cfg(feature = "blas")]
-    let rho_sqr = rho_sqr.without_lapack();
 
-    #[cfg(feature = "blas")]
-    let gamma = r_chol
-        .t()
-        .solve_triangular_into(UPLO::Upper, Diag::NonUnit, rho)?;
-    #[cfg(not(feature = "blas"))]
     let gamma = r_chol.t().solve_triangular_into(rho, UPLO::Upper)?;
 
     // The determinant of R is equal to the squared product of
     // the diagonal elements of its Cholesky decomposition r_chol
     let n_obs: F = F::cast(x_distances.n_obs);
 
-    #[cfg(feature = "blas")]
+    let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
+
+    // Reduced likelihood
+    let sigma2: Array1<F> = rho_sqr / n_obs;
+    let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
+    Ok((
+        reduced_likelihood,
+        GpInnerParams {
+            sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
+            beta,
+            gamma,
+            r_chol,
+            ft,
+            ft_qr_r,
+        },
+    ))
+}
+
+#[cfg(feature = "blas")]
+fn reduced_likelihood<F: Float>(
+    fx: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    rxx: ArrayBase<impl Data<Elem = F>, Ix2>,
+    x_distances: &DistanceMatrix<F>,
+    ytrain: &NormalizedMatrix<F>,
+    nugget: F,
+) -> Result<(F, GpInnerParams<F>)> {
+    // Set up R
+    let mut r_mx: Array2<F> = Array2::<F>::eye(x_distances.n_obs).mapv(|v| (v + v * nugget));
+    for (i, ij) in x_distances.d_indices.outer_iter().enumerate() {
+        r_mx[[ij[0], ij[1]]] = rxx[[i, 0]];
+        r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
+    }
+
+    let fxl = fx.to_owned().with_lapack();
+
+    // R cholesky decomposition
+    let r_chol = r_mx.with_lapack().cholesky(UPLO::Lower)?;
+
+    // Solve generalized least squared problem
+    let ft = r_chol.solve_triangular(UPLO::Lower, Diag::NonUnit, &fxl)?;
+    let (ft_qr_q, ft_qr_r) = ft.qr().unwrap();
+
+    // Check whether we have an ill-conditionned problem
+    let (_, sv_qr_r, _) = ft_qr_r.svd(false, false).unwrap();
+    let cond_ft = sv_qr_r[sv_qr_r.len() - 1] / sv_qr_r[0];
+    if F::cast(cond_ft) < F::cast(1e-10) {
+        let (_, sv_f, _) = &fxl.svd(false, false).unwrap();
+        let cond_fx = sv_f[0] / sv_f[sv_f.len() - 1];
+        if F::cast(cond_fx) > F::cast(1e15) {
+            return Err(GpError::LikelihoodComputationError(
+                "F is too ill conditioned. Poor combination \
+                of regression model and observations."
+                    .to_string(),
+            ));
+        } else {
+            // ft is too ill conditioned, get out (try different theta)
+            return Err(GpError::LikelihoodComputationError(
+                "ft is too ill conditioned, try another theta again".to_string(),
+            ));
+        }
+    }
+
+    let yt = r_chol.solve_triangular(
+        UPLO::Lower,
+        Diag::NonUnit,
+        &ytrain.data.to_owned().with_lapack(),
+    )?;
+
+    let beta = ft_qr_r.solve_triangular_into(UPLO::Upper, Diag::NonUnit, ft_qr_q.t().dot(&yt))?;
+
+    let rho = yt - ft.dot(&beta);
+    let rho_sqr = rho.mapv(|v| v * v).sum_axis(Axis(0));
+    let rho_sqr = rho_sqr.without_lapack();
+
+    let gamma = r_chol
+        .t()
+        .solve_triangular_into(UPLO::Upper, Diag::NonUnit, rho)?;
+
+    // The determinant of R is equal to the squared product of
+    // the diagonal elements of its Cholesky decomposition r_chol
+    let n_obs: F = F::cast(x_distances.n_obs);
+
     let logdet = r_chol
         .to_owned()
         .without_lapack()
@@ -484,15 +533,12 @@ fn reduced_likelihood<F: Float>(
         .sum()
         * F::cast(2.)
         / n_obs;
-    #[cfg(not(feature = "blas"))]
-    let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
 
     // Reduced likelihood
     let sigma2: Array1<F> = rho_sqr / n_obs;
     let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
     Ok((
         reduced_likelihood,
-        #[cfg(feature = "blas")]
         GpInnerParams {
             sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
             beta: beta.without_lapack(),
@@ -500,15 +546,6 @@ fn reduced_likelihood<F: Float>(
             r_chol: r_chol.without_lapack(),
             ft: ft.without_lapack(),
             ft_qr_r: ft_qr_r.without_lapack(),
-        },
-        #[cfg(not(feature = "blas"))]
-        GpInnerParams {
-            sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
-            beta,
-            gamma,
-            r_chol,
-            ft,
-            ft_qr_r,
         },
     ))
 }
