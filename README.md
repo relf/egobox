@@ -94,7 +94,7 @@ $ cd ego && cargo run --example ackley --release
 Using the Intel MKL BLAS/Lapack backend, you can also run for instance:
 
 ``` bash
-$ cd gp && cargo run --example kriging --release --features linfa/intel-mkl-static
+$ cd gp && cargo run --example kriging --release --features blas,linfa/intel-mkl-static
 ```
 ## The Python optimizer Egor
 

@@ -84,6 +84,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all --release --features linfa/intel-mkl-static
+          args: --all --release --features blas,linfa/intel-mkl-static
 
 
