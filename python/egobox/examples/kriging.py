@@ -6,13 +6,10 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-xt = np.array([[0.0, 1.0, 2.0, 3.0, 4.0]]).T
-yt = np.array([[0.0, 1.0, 1.5, 0.9, 1.0]]).T
+xt = np.array([[0.0, 1.0, 1.5, 2.0, 3.0, 4.0]]).T
+yt = np.array([[0.0, 1.0, 1.7, 1.5, 0.9, 1.0]]).T
 
-sm = egx.GpMix(
-    regr_spec=egx.RegressionSpec.CONSTANT,
-    corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
-)
+sm = egx.GpMix()
 sm.set_training_values(xt, yt)
 sm.train()
 
