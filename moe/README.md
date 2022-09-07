@@ -23,7 +23,7 @@ It is a Rust port of mixture of expert of the [SMT](https://smt.readthedocs.io) 
 There is some usage examples in the examples/ directory. To run, use:
 
 ```
-$ cargo run --release --example clustering --features linfa/intel-mkl-static
+$ cargo run --release --example clustering
 ```
 
 ## License

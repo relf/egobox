@@ -43,33 +43,30 @@ The `serializable-gp` feature enables the serialization of GP models using the [
 
 The `persistent-moe` feature enables `save()` and `load()` methods for MoE model to/from a json file using the [serde crate](https://serde.rs/). 
 
-#### linfa BLAS/Lapack backend feature
+### Implementation Notes
 
-By default, we use a pure-Rust implementation for linear algebra routines. However, you can also choose an external BLAS/LAPACK backend library instead, by enabling the blas feature and a feature corresponding to your BLAS backend.
+`egobox` relies on `[linfa](https://github.com/rust-ml/linfa)` project for methods like clustering and dimension reduction, but also adopts as far as possible
+the same [coding structures](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md).
 
-It relies on `linfa` [BLAS/Lapack backend features](https://github.com/rust-ml/linfa#blaslapack-backend).
+Regarding linear algebra routines used in `gp`, `moe` ad `ego`, as for `linfa`, you can:
 
-End user project using `gp`, `moe` and `ego` can select a BLAS/Lapack backend 
-depending its environment; it can be either: 
- * Openblas: `linfa/openblas-system` or `linfa/openblas-static`
- * Netlib: `linfa/netlib-system` or `linfa/netlib-static`
- * Intel MKL: `linfa/intel-mkl-system` or `linfa/intel-mkl-static`
+* either use the pure-Rust implementation [linfa-linalg](https://github.com/rust-ml/linfa-linalg), which is the default 
 
-where
+* or you can choose an external BLAS/LAPACK backend available through the [ndarray-linalg](https://github.com/rust-ndarray/ndarray-linalg) project
 
- * `*-system` features: try to find the corresponding backend in your installation.
- * `*-static` features: try to download and compile the corresponing backend.
+In this latter case you have to use the `linfa` [BLAS/LAPACK backend features](https://github.com/rust-ml/linfa#blaslapack-backend)
 
 More information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)
 
-For instance, using `gp` with the Intel MKL BLAS/Lapack backend, you have to specify the linfa backend feature :
+For instance, for using `gp` with the Intel MKL BLAS/Lapack backend, you have to specify in your `Cargo.toml` the following features:
 
 ```
 [dependencies]
 egobox-gp = { version = "0.4.0", features = ["blas", "linfa/intel-mkl-static"] }
 ```
 
-Note: only end-user projects should specify a provider in `Cargo.toml` (not librairies). In case of library development, the backend is specified on the command line as for examples below.
+Note: only end-user applications should specify a BLAS/LAPACK provider in `Cargo.toml` (not librairies). 
+In case of a library development, the backend is specified on the command line when building binaries like tests or examples (eg `--features linfa/intel-mkl-static`).
 
 ### Examples
 
