@@ -361,10 +361,15 @@ impl SurrogateBuilder for MixintMoeValidParams {
     }
 }
 
-impl Fit<Array2<f64>, Array2<f64>, EgoError> for MixintMoeValidParams {
+impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, EgoError>
+    for MixintMoeValidParams
+{
     type Object = MixintMoe;
 
-    fn fit(&self, dataset: &DatasetBase<Array2<f64>, Array2<f64>>) -> Result<Self::Object> {
+    fn fit(
+        &self,
+        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
+    ) -> Result<Self::Object> {
         let x = dataset.records();
         let y = dataset.targets();
         self._train(x, y)
