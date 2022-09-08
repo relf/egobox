@@ -44,8 +44,8 @@ macro_rules! check_allowed {
     };
 }
 
-impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
-    for MoeValidParams<f64, R>
+impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for MoeValidParams<f64, R>
 {
     type Object = Moe;
 
@@ -56,7 +56,10 @@ impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
     /// * [MoeError::ClusteringError]: if there is not enough points regarding the clusters,
     /// * [MoeError::GpError]: if gaussian process fitting fails
     ///
-    fn fit(&self, dataset: &DatasetBase<Array2<f64>, Array2<f64>>) -> Result<Self::Object> {
+    fn fit(
+        &self,
+        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
+    ) -> Result<Self::Object> {
         let x = dataset.records();
         let y = dataset.targets();
         self.train(x, y)
