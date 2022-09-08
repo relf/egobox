@@ -63,7 +63,7 @@ $ cd moe && cargo run --example clustering --release
 $ cd ego && cargo run --example ackley --release
 ```
 
-### Linear algebra backend selection (optional)
+### BLAS/LAPACK backend (optional)
 
 `egobox` relies on [linfa](https://github.com/rust-ml/linfa) project for methods like clustering and dimension reduction, but also try to adopt as far as possible the same [coding structures](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md).
 

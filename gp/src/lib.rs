@@ -42,22 +42,6 @@
 //!
 //! # Features
 //!
-//! ## linfa features
-//!
-//! End-user project should select a BLAS/Lapack backend depending its environment;
-//! it can be either:
-//!
-//! * Openblas: `linfa/openblas-system` or `linfa/openblas-static`
-//! * Netlib: `linfa/netlib-system` or `linfa/netlib-static`
-//! * Intel MKL: `linfa/intel-mkl-system` or `linfa/intel-mkl-static`
-//!
-//! where
-//!
-//! * `*-system` features: try to find the corresponding backend in your installation.
-//! * `*-static` features: try to download and compile the corresponding backend.
-//!
-//! More information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)
-//!
 //! ## serializable
 //!
 //! The `serializable` feature enables the serialization of GP models using the [serde crate](https://serde.rs/).
