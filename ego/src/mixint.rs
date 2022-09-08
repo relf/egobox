@@ -9,7 +9,7 @@ use egobox_moe::{
     Clustered, ClusteredSurrogate, Clustering, Moe, MoeParams, RegressionSpec, Surrogate,
 };
 use linfa::{traits::Fit, DatasetBase, ParamGuard};
-use ndarray::{s, Array, Array2, ArrayView2, Axis, Zip};
+use ndarray::{s, Array, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use rand_isaac::Isaac64Rng;
@@ -61,7 +61,10 @@ pub fn unfold_xlimits_with_continuous_limits(xtypes: &[Xtype]) -> Array2<f64> {
 /// the input x may contain the mask [..., 0, 0, 1, ...] which will be contracted in [..., 2, ...]
 /// meaning the "green" value.
 /// This function is the opposite of unfold_with_enum_mask().
-pub fn fold_with_enum_index(xtypes: &[Xtype], x: &ArrayView2<f64>) -> Array2<f64> {
+pub fn fold_with_enum_index(
+    xtypes: &[Xtype],
+    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) -> Array2<f64> {
     let mut xfold = Array::zeros((x.nrows(), xtypes.len()));
     let mut unfold_index = 0;
     Zip::indexed(xfold.columns_mut()).for_each(|j, mut col| match &xtypes[j] {
@@ -97,7 +100,10 @@ fn compute_unfolded_dimension(xtypes: &[Xtype]) -> usize {
 /// For instance, if an input dimension is typed ["blue", "red", "green"] a sample/row of
 /// the input x may contain [..., 2, ...] which will be expanded in [..., 0, 0, 1, ...].
 /// This function is the opposite of fold_with_enum_index().
-fn unfold_with_enum_mask(xtypes: &[Xtype], x: &ArrayView2<f64>) -> Array2<f64> {
+fn unfold_with_enum_mask(
+    xtypes: &[Xtype],
+    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) -> Array2<f64> {
     let mut xunfold = Array::zeros((x.nrows(), compute_unfolded_dimension(xtypes)));
     let mut unfold_index = 0;
     xtypes.iter().for_each(|s| match s {
@@ -135,7 +141,7 @@ fn take_closest(v: &[i32], val: f64) -> i32 {
 /// Project continuously relaxed values to their closer assessable values.
 ///
 /// See cast_to_discrete_values
-fn cast_to_discrete_values_mut(xtypes: &[Xtype], x: &mut Array2<f64>) {
+fn cast_to_discrete_values_mut(xtypes: &[Xtype], x: &mut ArrayBase<impl DataMut<Elem = f64>, Ix2>) {
     let mut xcol = 0;
     xtypes.iter().for_each(|s| match s {
         Xtype::Cont(_, _) => xcol += 1,
@@ -174,7 +180,10 @@ fn cast_to_discrete_values_mut(xtypes: &[Xtype], x: &mut Array2<f64>) {
 /// For instance, if an input dimension is typed ["blue", "red", "green"] in xlimits a sample/row of
 /// the input x may contain the values (or mask) [..., 0, 0, 1, ...] to specify "green" for
 /// this original dimension.
-pub fn cast_to_discrete_values(xtypes: &[Xtype], x: &Array2<f64>) -> Array2<f64> {
+pub fn cast_to_discrete_values(
+    xtypes: &[Xtype],
+    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) -> Array2<f64> {
     let mut xcast = x.to_owned();
     cast_to_discrete_values_mut(xtypes, &mut xcast);
     xcast
@@ -279,7 +288,11 @@ impl MixintMoeParams {
 }
 
 impl MixintMoeValidParams {
-    fn _train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<MixintMoe> {
+    fn _train(
+        &self,
+        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<MixintMoe> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, &xt.view())
         } else {
@@ -302,8 +315,8 @@ impl MixintMoeValidParams {
 
     fn _train_on_clusters(
         &self,
-        xt: &Array2<f64>,
-        yt: &Array2<f64>,
+        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         clustering: &egobox_moe::Clustering,
     ) -> Result<MixintMoe> {
         let mut xcast = if self.work_in_folded_space {
@@ -328,14 +341,19 @@ impl MixintMoeValidParams {
 }
 
 impl SurrogateBuilder for MixintMoeValidParams {
-    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn ClusteredSurrogate>> {
+    fn train(
+        &self,
+        xt: &ArrayView2<f64>,
+        yt: &ArrayView2<f64>,
+    ) -> Result<Box<dyn ClusteredSurrogate>> {
         let mixmoe = self._train(xt, yt)?;
         Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn ClusteredSurrogate>)
     }
+
     fn train_on_clusters(
         &self,
-        xt: &Array2<f64>,
-        yt: &Array2<f64>,
+        xt: &ArrayView2<f64>,
+        yt: &ArrayView2<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn ClusteredSurrogate>> {
         let mixmoe = self._train_on_clusters(xt, yt, clustering)?;

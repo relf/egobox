@@ -21,7 +21,7 @@ pub trait SurrogateParams {
     /// Set the nugget parameter to improve numerical stability
     fn nugget(&mut self, nugget: f64);
     /// Train the surrogate
-    fn fit(&self, x: &Array2<f64>, y: &Array2<f64>) -> Result<Box<dyn Surrogate>>;
+    fn train(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn Surrogate>>;
 }
 
 /// A trait for a surrogate used as expert in the mixture.
@@ -70,10 +70,10 @@ macro_rules! declare_surrogate {
                     self.0 = self.0.clone().nugget(nugget);
                 }
 
-                fn fit(
+                fn train(
                     &self,
-                    x: &Array2<f64>,
-                    y: &Array2<f64>,
+                    x: &ArrayView2<f64>,
+                    y: &ArrayView2<f64>,
                 ) -> Result<Box<dyn Surrogate>> {
                     Ok(Box::new([<Gp $regr $corr Surrogate>](
                         self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,

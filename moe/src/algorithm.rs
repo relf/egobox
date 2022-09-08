@@ -64,7 +64,11 @@ impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
-    pub fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
+    pub fn train(
+        &self,
+        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
@@ -117,13 +121,13 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         let gmx = GaussianMixture::new(weights, means, covariances)?.with_heaviside_factor(factor);
 
         let clustering = Clustering::new(gmx, recomb);
-        self.train_on_clusters(xt, yt, &clustering)
+        self.train_on_clusters(&xt.view(), &yt.view(), &clustering)
     }
 
     pub fn train_on_clusters(
         &self,
-        xt: &Array2<f64>,
-        yt: &Array2<f64>,
+        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         clustering: &Clustering,
     ) -> Result<Moe> {
         let gmx = clustering.gmx();
@@ -177,7 +181,11 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
 
     /// Select the surrogate which gives the smallest prediction error on the given data
     /// The error is computed using cross-validation
-    fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
+    fn find_best_expert(
+        &self,
+        nx: usize,
+        data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Box<dyn Surrogate>> {
         let xtrain = data.slice(s![.., ..nx]).to_owned();
         let ytrain = data.slice(s![.., nx..]).to_owned();
         let mut dataset = Dataset::from((xtrain.clone(), ytrain.clone()));
@@ -246,7 +254,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         };
         let mut expert_params = best_expert_params?;
         expert_params.kpls_dim(self.kpls_dim());
-        let expert = expert_params.fit(&xtrain, &ytrain);
+        let expert = expert_params.train(&xtrain.view(), &ytrain.view());
         if let Some(v) = best.1 {
             info!("Best expert {} accuracy={}", best.0, v);
         }
@@ -261,8 +269,8 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         &self,
         experts: &[Box<dyn Surrogate>],
         gmx: &GaussianMixture<f64>,
-        xtest: &Array2<f64>,
-        ytest: &Array2<f64>,
+        xtest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        ytest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> f64 {
         if self.recombination() == Recombination::Hard || self.n_clusters() == 1 {
             1.
@@ -285,7 +293,10 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
     }
 }
 
-fn check_number_of_points<F>(clusters: &[Array2<F>], dim: usize) -> Result<()> {
+fn check_number_of_points<F>(
+    clusters: &[ArrayBase<impl Data<Elem = F>, Ix2>],
+    dim: usize,
+) -> Result<()> {
     if clusters.len() > 1 {
         let min_number_point = factorial(dim + 2) / (factorial(dim) * factorial(2));
         for cluster in clusters {
@@ -550,11 +561,14 @@ impl Moe {
         Ok(variances)
     }
 
-    pub fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
         <Moe as Surrogate>::predict_values(self, &x.view())
     }
 
-    pub fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_variances(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
         <Moe as Surrogate>::predict_variances(self, &x.view())
     }
 
@@ -567,8 +581,8 @@ impl Moe {
     }
 }
 
-/// Take one out of `quantile` in a set of data rows.
-/// Returns the selectionned part and the remaining data.
+/// Take one out of `quantile` in a set of data rows
+/// Returns the selected part and the remaining data.
 fn extract_part<F: Float>(
     data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     quantile: usize,
