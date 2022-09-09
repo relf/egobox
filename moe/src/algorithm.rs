@@ -606,34 +606,26 @@ fn extract_part<F: Float>(
     (data_test, data_train)
 }
 
-struct MoeSmoothPredictor<'a>(&'a Moe);
-impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
-    for MoeSmoothPredictor<'a>
-{
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Moe {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
         assert_eq!(
             x.nrows(),
             y.nrows(),
             "The number of data points must match the number of output targets."
         );
-        assert_ne!(
-            self.0.experts.len(),
-            0,
-            "Mixture should have at least a trained expert"
-        );
 
-        let values = self.0.predict_variances_smooth(x).expect("MoE Prediction");
+        let values = self.predict(x);
         *y = values;
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.0.output_dim()))
+        Array2::zeros((x.nrows(), self.output_dim()))
     }
 }
 
-struct MoeSmoothVariancePredictor<'a>(&'a Moe);
+struct MoeVariancePredictor<'a>(&'a Moe);
 impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
-    for MoeSmoothVariancePredictor<'a>
+    for MoeVariancePredictor<'a>
 {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
         assert_eq!(
@@ -641,63 +633,8 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
             y.nrows(),
             "The number of data points must match the number of output targets."
         );
-        assert_ne!(
-            self.0.experts.len(),
-            0,
-            "Mixture should have at least a trained expert"
-        );
 
-        let values = self.0.predict_values_smooth(x).expect("MoE Prediction");
-        *y = values;
-    }
-
-    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.0.output_dim()))
-    }
-}
-
-struct MoeHardPredictor<'a>(&'a Moe);
-impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
-    for MoeHardPredictor<'a>
-{
-    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
-        assert_eq!(
-            x.nrows(),
-            y.nrows(),
-            "The number of data points must match the number of output targets."
-        );
-        assert_ne!(
-            self.0.experts.len(),
-            0,
-            "Mixture should have at least a trained expert"
-        );
-
-        let values = self.0.predict_variances_hard(x).expect("MoE Prediction");
-        *y = values;
-    }
-
-    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.0.output_dim()))
-    }
-}
-
-struct MoeHardVariancePredictor<'a>(&'a Moe);
-impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
-    for MoeHardVariancePredictor<'a>
-{
-    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
-        assert_eq!(
-            x.nrows(),
-            y.nrows(),
-            "The number of data points must match the number of output targets."
-        );
-        assert_ne!(
-            self.0.experts.len(),
-            0,
-            "Mixture should have at least a trained expert"
-        );
-
-        let values = self.0.predict_variances_hard(x).expect("MoE Prediction");
+        let values = self.0.predict_variances(x).expect("MoE Prediction");
         *y = values;
     }
 
