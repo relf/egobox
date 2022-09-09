@@ -9,7 +9,7 @@ use crate::parameters::{
 use crate::surrogates::*;
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
 use linfa::dataset::Records;
-use linfa::traits::{Fit, Predict};
+use linfa::traits::{Fit, Predict, PredictInplace};
 use linfa::{Dataset, DatasetBase, Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use log::{debug, info, trace};
@@ -178,6 +178,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
                 recombination: recomb,
                 experts,
                 gmx: gmx.clone(),
+                output_dim: yt.ncols(),
             })
         }
     }
@@ -381,6 +382,8 @@ pub struct Moe {
     experts: Vec<Box<dyn Surrogate>>,
     /// The gaussian mixture allowing to predict cluster responsabilities for a given point
     gmx: GaussianMixture<f64>,
+    /// The dimension of the predicted output
+    output_dim: usize,
 }
 
 impl std::fmt::Display for Moe {
@@ -467,6 +470,11 @@ impl Moe {
     /// Recombination mode
     pub fn gmx(&self) -> &GaussianMixture<f64> {
         &self.gmx
+    }
+
+    /// Retrieve output dimensions from
+    pub fn output_dim(&self) -> usize {
+        self.output_dim
     }
 
     /// Sets recombination mode
@@ -596,6 +604,106 @@ fn extract_part<F: Float>(
     let indices2: Vec<usize> = (0..nsamples).filter(|i| i % quantile != 0).collect();
     let data_train = data.select(Axis(0), &indices2);
     (data_test, data_train)
+}
+
+struct MoeSmoothPredictor<'a>(&'a Moe);
+impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
+    for MoeSmoothPredictor<'a>
+{
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+        assert_ne!(
+            self.0.experts.len(),
+            0,
+            "Mixture should have at least a trained expert"
+        );
+
+        let values = self.0.predict_variances_smooth(x).expect("MoE Prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+        Array2::zeros((x.nrows(), self.0.output_dim()))
+    }
+}
+
+struct MoeSmoothVariancePredictor<'a>(&'a Moe);
+impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
+    for MoeSmoothVariancePredictor<'a>
+{
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+        assert_ne!(
+            self.0.experts.len(),
+            0,
+            "Mixture should have at least a trained expert"
+        );
+
+        let values = self.0.predict_values_smooth(x).expect("MoE Prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+        Array2::zeros((x.nrows(), self.0.output_dim()))
+    }
+}
+
+struct MoeHardPredictor<'a>(&'a Moe);
+impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
+    for MoeHardPredictor<'a>
+{
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+        assert_ne!(
+            self.0.experts.len(),
+            0,
+            "Mixture should have at least a trained expert"
+        );
+
+        let values = self.0.predict_variances_hard(x).expect("MoE Prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+        Array2::zeros((x.nrows(), self.0.output_dim()))
+    }
+}
+
+struct MoeHardVariancePredictor<'a>(&'a Moe);
+impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
+    for MoeHardVariancePredictor<'a>
+{
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+        assert_ne!(
+            self.0.experts.len(),
+            0,
+            "Mixture should have at least a trained expert"
+        );
+
+        let values = self.0.predict_variances_hard(x).expect("MoE Prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+        Array2::zeros((x.nrows(), self.0.output_dim()))
+    }
 }
 
 #[cfg(test)]

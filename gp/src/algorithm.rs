@@ -197,6 +197,16 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             None
         }
     }
+
+    /// Retrieve input dimension before kpls dimension reduction if any
+    pub fn input_dim(&self) -> usize {
+        self.ytrain.ncols()
+    }
+
+    /// Retrieve output dimension
+    pub fn output_dim(&self) -> usize {
+        self.ytrain.ncols()
+    }
 }
 
 impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
@@ -219,7 +229,7 @@ where
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.ytrain.ncols()))
+        Array2::zeros((x.nrows(), self.output_dim()))
     }
 }
 
@@ -249,7 +259,7 @@ where
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.0.ytrain.ncols()))
+        Array2::zeros((x.nrows(), self.0.output_dim()))
     }
 }
 
