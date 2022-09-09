@@ -614,7 +614,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Moe
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.predict(x);
+        let values = self.predict_values(x).expect("MoE prediction");
         *y = values;
     }
 
@@ -634,7 +634,10 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.0.predict_variances(x).expect("MoE Prediction");
+        let values = self
+            .0
+            .predict_variances(x)
+            .expect("MoE variances prediction");
         *y = values;
     }
 

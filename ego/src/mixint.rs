@@ -8,6 +8,7 @@ use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{
     Clustered, ClusteredSurrogate, Clustering, Moe, MoeParams, RegressionSpec, Surrogate,
 };
+use linfa::traits::PredictInplace;
 use linfa::{traits::Fit, DatasetBase, ParamGuard};
 use ndarray::{s, Array, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
@@ -465,6 +466,46 @@ impl Surrogate for MixintMoe {
 }
 
 impl ClusteredSurrogate for MixintMoe {}
+
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for MixintMoe {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+
+        let values = self.moe.predict_values(x).expect("MixintMoE prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+        Array2::zeros((x.nrows(), self.moe.output_dim()))
+    }
+}
+
+struct MoeVariancePredictor<'a>(&'a Moe);
+impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
+    for MoeVariancePredictor<'a>
+{
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+
+        let values = self
+            .0
+            .predict_variances(x)
+            .expect("MixintMoE variances prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+        Array2::zeros((x.nrows(), self.0.output_dim()))
+    }
+}
 
 /// A factory to build consistent sampling method and surrogate regarding
 /// Xtype specifications
