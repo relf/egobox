@@ -43,34 +43,6 @@ The `serializable-gp` feature enables the serialization of GP models using the [
 
 The `persistent-moe` feature enables `save()` and `load()` methods for MoE model to/from a json file using the [serde crate](https://serde.rs/). 
 
-#### linfa BLAS/Lapack backend feature
-
-By default, we use a pure-Rust implementation for linear algebra routines. However, you can also choose an external BLAS/LAPACK backend library instead, by enabling the blas feature and a feature corresponding to your BLAS backend.
-
-It relies on `linfa` [BLAS/Lapack backend features](https://github.com/rust-ml/linfa#blaslapack-backend).
-
-End user project using `gp`, `moe` and `ego` can select a BLAS/Lapack backend 
-depending its environment; it can be either: 
- * Openblas: `linfa/openblas-system` or `linfa/openblas-static`
- * Netlib: `linfa/netlib-system` or `linfa/netlib-static`
- * Intel MKL: `linfa/intel-mkl-system` or `linfa/intel-mkl-static`
-
-where
-
- * `*-system` features: try to find the corresponding backend in your installation.
- * `*-static` features: try to download and compile the corresponing backend.
-
-More information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)
-
-For instance, using `gp` with the Intel MKL BLAS/Lapack backend, you have to specify the linfa backend feature :
-
-```
-[dependencies]
-egobox-gp = { version = "0.4.0", features = ["blas", "linfa/intel-mkl-static"] }
-```
-
-Note: only end-user projects should specify a provider in `Cargo.toml` (not librairies). In case of library development, the backend is specified on the command line as for examples below.
-
 ### Examples
 
 Examples (in `examples/` sub-packages folder) are run as follows:
@@ -91,11 +63,24 @@ $ cd moe && cargo run --example clustering --release
 $ cd ego && cargo run --example ackley --release
 ```
 
-Using the Intel MKL BLAS/Lapack backend, you can also run for instance:
+### BLAS/LAPACK backend (optional)
 
+`egobox` relies on [linfa](https://github.com/rust-ml/linfa) project for methods like clustering and dimension reduction, but also try to adopt as far as possible the same [coding structures](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md).
+
+As for `linfa`, the linear algebra routines used in `gp`, `moe` ad `ego` are provided by the pure-Rust [linfa-linalg](https://github.com/rust-ml/linfa-linalg) crate, the default linear algebra provider.
+
+Otherwise, you can choose an external BLAS/LAPACK backend available through the [ndarray-linalg](https://github.com/rust-ndarray/ndarray-linalg) crate. In this case, you have to specify the `blas` feature and a `linfa` [BLAS/LAPACK backend feature](https://github.com/rust-ml/linfa#blaslapack-backend) (more information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)).
+
+Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you could specify in your `Cargo.toml` the following features:
+```
+[dependencies]
+egobox-gp = { version = "0.4.0", features = ["blas", "linfa/intel-mkl-static"] }
+```
+or you could run the `gp` example as follows:
 ``` bash
 $ cd gp && cargo run --example kriging --release --features blas,linfa/intel-mkl-static
 ```
+
 ## The Python optimizer Egor
 
 Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka `Egor`) is binded in Python. You can install the Python package using:

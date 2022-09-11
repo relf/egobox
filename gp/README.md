@@ -23,7 +23,7 @@ It is a Rust port of some kriging algorithms of the [SMT](https://smt.readthedoc
 There is an usage example in the examples/ directory. To run, use:
 
 ```
-$ cargo run --release --example kriging --features linfa/intel-mkl-static
+$ cargo run --release --example kriging
 ```
 
 ## License
