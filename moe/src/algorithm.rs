@@ -9,7 +9,7 @@ use crate::parameters::{
 use crate::surrogates::*;
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
 use linfa::dataset::Records;
-use linfa::traits::{Fit, Predict};
+use linfa::traits::{Fit, Predict, PredictInplace};
 use linfa::{Dataset, DatasetBase, Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use log::{debug, info, trace};
@@ -44,8 +44,8 @@ macro_rules! check_allowed {
     };
 }
 
-impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
-    for MoeValidParams<f64, R>
+impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for MoeValidParams<f64, R>
 {
     type Object = Moe;
 
@@ -56,7 +56,10 @@ impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
     /// * [MoeError::ClusteringError]: if there is not enough points regarding the clusters,
     /// * [MoeError::GpError]: if gaussian process fitting fails
     ///
-    fn fit(&self, dataset: &DatasetBase<Array2<f64>, Array2<f64>>) -> Result<Self::Object> {
+    fn fit(
+        &self,
+        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
+    ) -> Result<Self::Object> {
         let x = dataset.records();
         let y = dataset.targets();
         self.train(x, y)
@@ -64,7 +67,11 @@ impl<R: Rng + SeedableRng + Clone> Fit<Array2<f64>, Array2<f64>, MoeError>
 }
 
 impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
-    pub fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Moe> {
+    pub fn train(
+        &self,
+        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Moe> {
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
@@ -117,13 +124,13 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         let gmx = GaussianMixture::new(weights, means, covariances)?.with_heaviside_factor(factor);
 
         let clustering = Clustering::new(gmx, recomb);
-        self.train_on_clusters(xt, yt, &clustering)
+        self.train_on_clusters(&xt.view(), &yt.view(), &clustering)
     }
 
     pub fn train_on_clusters(
         &self,
-        xt: &Array2<f64>,
-        yt: &Array2<f64>,
+        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         clustering: &Clustering,
     ) -> Result<Moe> {
         let gmx = clustering.gmx();
@@ -171,13 +178,18 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
                 recombination: recomb,
                 experts,
                 gmx: gmx.clone(),
+                output_dim: yt.ncols(),
             })
         }
     }
 
     /// Select the surrogate which gives the smallest prediction error on the given data
     /// The error is computed using cross-validation
-    fn find_best_expert(&self, nx: usize, data: &Array2<f64>) -> Result<Box<dyn Surrogate>> {
+    fn find_best_expert(
+        &self,
+        nx: usize,
+        data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Box<dyn Surrogate>> {
         let xtrain = data.slice(s![.., ..nx]).to_owned();
         let ytrain = data.slice(s![.., nx..]).to_owned();
         let mut dataset = Dataset::from((xtrain.clone(), ytrain.clone()));
@@ -246,7 +258,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         };
         let mut expert_params = best_expert_params?;
         expert_params.kpls_dim(self.kpls_dim());
-        let expert = expert_params.fit(&xtrain, &ytrain);
+        let expert = expert_params.train(&xtrain.view(), &ytrain.view());
         if let Some(v) = best.1 {
             info!("Best expert {} accuracy={}", best.0, v);
         }
@@ -261,8 +273,8 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         &self,
         experts: &[Box<dyn Surrogate>],
         gmx: &GaussianMixture<f64>,
-        xtest: &Array2<f64>,
-        ytest: &Array2<f64>,
+        xtest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        ytest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> f64 {
         if self.recombination() == Recombination::Hard || self.n_clusters() == 1 {
             1.
@@ -285,7 +297,10 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
     }
 }
 
-fn check_number_of_points<F>(clusters: &[Array2<F>], dim: usize) -> Result<()> {
+fn check_number_of_points<F>(
+    clusters: &[ArrayBase<impl Data<Elem = F>, Ix2>],
+    dim: usize,
+) -> Result<()> {
     if clusters.len() > 1 {
         let min_number_point = factorial(dim + 2) / (factorial(dim) * factorial(2));
         for cluster in clusters {
@@ -367,6 +382,8 @@ pub struct Moe {
     experts: Vec<Box<dyn Surrogate>>,
     /// The gaussian mixture allowing to predict cluster responsabilities for a given point
     gmx: GaussianMixture<f64>,
+    /// The dimension of the predicted output
+    output_dim: usize,
 }
 
 impl std::fmt::Display for Moe {
@@ -453,6 +470,11 @@ impl Moe {
     /// Recombination mode
     pub fn gmx(&self) -> &GaussianMixture<f64> {
         &self.gmx
+    }
+
+    /// Retrieve output dimensions from
+    pub fn output_dim(&self) -> usize {
+        self.output_dim
     }
 
     /// Sets recombination mode
@@ -550,11 +572,14 @@ impl Moe {
         Ok(variances)
     }
 
-    pub fn predict_values(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
         <Moe as Surrogate>::predict_values(self, &x.view())
     }
 
-    pub fn predict_variances(&self, x: &Array2<f64>) -> Result<Array2<f64>> {
+    pub fn predict_variances(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
         <Moe as Surrogate>::predict_variances(self, &x.view())
     }
 
@@ -567,8 +592,8 @@ impl Moe {
     }
 }
 
-/// Take one out of `quantile` in a set of data rows.
-/// Returns the selectionned part and the remaining data.
+/// Take one out of `quantile` in a set of data rows
+/// Returns the selected part and the remaining data.
 fn extract_part<F: Float>(
     data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     quantile: usize,
@@ -579,6 +604,46 @@ fn extract_part<F: Float>(
     let indices2: Vec<usize> = (0..nsamples).filter(|i| i % quantile != 0).collect();
     let data_train = data.select(Axis(0), &indices2);
     (data_test, data_train)
+}
+
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Moe {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+
+        let values = self.predict_values(x).expect("MoE prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+        Array2::zeros((x.nrows(), self.output_dim()))
+    }
+}
+
+struct MoeVariancePredictor<'a>(&'a Moe);
+impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
+    for MoeVariancePredictor<'a>
+{
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+
+        let values = self
+            .0
+            .predict_variances(x)
+            .expect("MoE variances prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
+        Array2::zeros((x.nrows(), self.0.output_dim()))
+    }
 }
 
 #[cfg(test)]

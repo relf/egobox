@@ -69,13 +69,17 @@ impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<
 /// objective function or constraint functions
 pub trait SurrogateBuilder {
     /// Train the surrogate with given training dataset (x, y)
-    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn ClusteredSurrogate>>;
+    fn train(
+        &self,
+        xt: &ArrayView2<f64>,
+        yt: &ArrayView2<f64>,
+    ) -> Result<Box<dyn ClusteredSurrogate>>;
 
     /// Train the surrogate with given training dataset (x, y) and given clustering
     fn train_on_clusters(
         &self,
-        xt: &Array2<f64>,
-        yt: &Array2<f64>,
+        xt: &ArrayView2<f64>,
+        yt: &ArrayView2<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn ClusteredSurrogate>>;
 }

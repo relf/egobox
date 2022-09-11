@@ -104,7 +104,9 @@ use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
 use linfa::ParamGuard;
 use log::{debug, info, warn};
-use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{
+    concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
+};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
@@ -117,7 +119,11 @@ const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
 
 impl<R: Rng + SeedableRng + Clone> SurrogateBuilder for MoeParams<f64, R> {
-    fn train(&self, xt: &Array2<f64>, yt: &Array2<f64>) -> Result<Box<dyn ClusteredSurrogate>> {
+    fn train(
+        &self,
+        xt: &ArrayView2<f64>,
+        yt: &ArrayView2<f64>,
+    ) -> Result<Box<dyn ClusteredSurrogate>> {
         let checked = self.check_ref()?;
         let moe = checked.train(xt, yt)?;
         Ok(moe).map(|moe| Box::new(moe) as Box<dyn ClusteredSurrogate>)
@@ -125,8 +131,8 @@ impl<R: Rng + SeedableRng + Clone> SurrogateBuilder for MoeParams<f64, R> {
 
     fn train_on_clusters(
         &self,
-        xt: &Array2<f64>,
-        yt: &Array2<f64>,
+        xt: &ArrayView2<f64>,
+        yt: &ArrayView2<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn ClusteredSurrogate>> {
         let checked = self.check_ref()?;
@@ -420,7 +426,11 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
     /// where optimum may occurs regarding the infill criterium.
     /// This function inverse the control of the optimization and can used
     /// ask-and-tell interface to the EGO optmizer.
-    pub fn suggest(&self, x_data: &Array2<f64>, y_data: &Array2<f64>) -> Array2<f64> {
+    pub fn suggest(
+        &self,
+        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Array2<f64> {
         let rng = self.rng.clone();
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
         let mut clusterings = vec![None; 1 + self.n_cstr];
@@ -666,8 +676,8 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
 
     fn make_clustered_surrogate(
         &self,
-        xt: &Array2<f64>,
-        yt: &Array2<f64>,
+        xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         init: bool,
         recluster: bool,
         clustering: &Option<Clustering>,
@@ -681,7 +691,9 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             } else {
                 info!("{} initial clustering...", model_name);
             }
-            let model = builder.train(xt, yt).expect("GP training failure");
+            let model = builder
+                .train(&xt.view(), &yt.view())
+                .expect("GP training failure");
             info!(
                 "... Best nb of clusters / mixture for {}: {} / {}",
                 model_name,
@@ -692,7 +704,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         } else {
             let clustering = clustering.as_ref().unwrap().clone();
             builder
-                .train_on_clusters(xt, yt, &clustering)
+                .train_on_clusters(&xt.view(), &yt.view(), &clustering)
                 .expect("GP training failure")
         }
     }
@@ -703,8 +715,8 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         init: bool,
         recluster: bool,
         clusterings: &mut [Option<Clustering>],
-        x_data: &Array2<f64>,
-        y_data: &Array2<f64>,
+        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &Lhs<f64, R>,
         lhs_optim: Option<u64>,
     ) -> (Array2<f64>, Array2<f64>) {

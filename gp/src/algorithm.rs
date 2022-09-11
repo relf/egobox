@@ -6,7 +6,7 @@ use crate::utils::{DistanceMatrix, NormalizedMatrix};
 use egobox_doe::{Lhs, SamplingMethod};
 #[cfg(feature = "blas")]
 use linfa::dataset::{WithLapack, WithoutLapack};
-use linfa::prelude::{Dataset, DatasetBase, Fit, Float};
+use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
@@ -196,6 +196,70 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         } else {
             None
         }
+    }
+
+    /// Retrieve input dimension before kpls dimension reduction if any
+    pub fn input_dim(&self) -> usize {
+        self.ytrain.ncols()
+    }
+
+    /// Retrieve output dimension
+    pub fn output_dim(&self) -> usize {
+        self.ytrain.ncols()
+    }
+}
+
+impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
+    for GaussianProcess<F, Mean, Corr>
+where
+    F: Float,
+    D: Data<Elem = F>,
+    Mean: RegressionModel<F>,
+    Corr: CorrelationModel<F>,
+{
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<F>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+
+        let values = self.predict_values(x).expect("GP Prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
+        Array2::zeros((x.nrows(), self.output_dim()))
+    }
+}
+
+struct GpVariancePredictor<'a, F, Mean, Corr>(&'a GaussianProcess<F, Mean, Corr>)
+where
+    F: Float,
+    Mean: RegressionModel<F>,
+    Corr: CorrelationModel<F>;
+
+impl<'a, F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
+    for GpVariancePredictor<'a, F, Mean, Corr>
+where
+    F: Float,
+    D: Data<Elem = F>,
+    Mean: RegressionModel<F>,
+    Corr: CorrelationModel<F>,
+{
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<F>) {
+        assert_eq!(
+            x.nrows(),
+            y.nrows(),
+            "The number of data points must match the number of output targets."
+        );
+
+        let values = self.0.predict_variances(x).expect("GP Prediction");
+        *y = values;
+    }
+
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
+        Array2::zeros((x.nrows(), self.0.output_dim()))
     }
 }
 
@@ -556,6 +620,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
+    use linfa::prelude::Predict;
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
     use ndarray::{arr2, array, Array, Zip};
@@ -567,7 +632,6 @@ mod tests {
     use paste::paste;
     use rand_isaac::Isaac64Rng;
 
-    // FIXME: Removed nn order to pass with linfa 0.5.1, should be ok with next release
     #[test]
     fn test_constant_function() {
         let dim = 3;
@@ -768,14 +832,17 @@ mod tests {
             Matern52Corr::default(),
         )
         .kpls_dim(Some(1))
-        .fit(&Dataset::new(xt, yt))
+        .fit(&Dataset::new(xt.to_owned(), yt))
         .expect("GP training");
 
         let xv = Lhs::new(&xlimits).sample(500);
         let yv = rosenb(&xv);
 
-        let ytest = gp.predict_values(&xv).unwrap();
+        let ytest = gp.predict(&xv);
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
         assert_abs_diff_eq!(err, 0., epsilon = 2e-1);
+
+        let var = GpVariancePredictor(&gp).predict(&xt);
+        assert_abs_diff_eq!(var, Array2::zeros((nt, 1)), epsilon = 2e-1);
     }
 }
