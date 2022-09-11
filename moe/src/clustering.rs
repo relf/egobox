@@ -356,8 +356,11 @@ mod tests {
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&obs).unwrap();
-        write_npy("best_obs.npy", &obs).expect("saved");
-        write_npy("best_preds.npy", &preds).expect("saved");
+
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+        write_npy(format!("{}/best_obs.npy", test_dir), &obs).expect("obs save");
+        write_npy(format!("{}/best_preds.npy", test_dir), &preds).expect("preds save");
         assert_eq!(3, nb_clusters);
     }
 

@@ -282,8 +282,11 @@ mod tests {
             .for_each(|mut o, &v| o.assign(&array![v, v]));
         let _preds = gmix.predict(&obs);
         let probas = gmix.predict_probas(&obs);
-        write_npy("probes.npy", &obs).expect("failed to save");
-        write_npy("probas.npy", &probas).expect("failed to save");
+
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+        write_npy(format!("{}/probes.npy", test_dir), &obs).expect("failed to save");
+        write_npy(format!("{}/probas.npy", test_dir), &probas).expect("failed to save");
     }
 
     #[cfg(feature = "blas")]
@@ -305,7 +308,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(42);
         let (n_samples, n_features, n_components) = (50, 3, 2);
         let x = Array::random_using((n_samples, n_features), StandardNormal, &mut rng);
-        write_npy("test_bic_aic.npy", &x).expect("failed to save");
+        // write_npy("test_bic_aic.npy", &x).expect("failed to save");
 
         let dataset = DatasetBase::from(x.to_owned());
         let g = GaussianMixtureModel::params(n_components)

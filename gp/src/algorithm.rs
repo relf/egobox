@@ -688,14 +688,20 @@ mod tests {
 
                     let gpr_vars = gp.predict_variances(&xplot).unwrap();
 
+                    let test_dir = "target/tests";
+                    std::fs::create_dir_all(test_dir).ok();
+
                     let xplot_file = stringify!([<gp_x_ $regr:snake _ $corr:snake >]);
-                    write_npy(format!("{}.npy", xplot_file), &xplot).expect("x saved");
+                    let file_path = format!("{}/{}.npy", test_dir, xplot_file);
+                    write_npy(file_path, &xplot).expect("x saved");
 
                     let gp_vals_file = stringify!([<gp_vals_ $regr:snake _ $corr:snake >]);
-                    write_npy(format!("{}.npy", gp_vals_file), &gpr_vals).expect("gp vals saved");
+                    let file_path = format!("{}/{}.npy", test_dir, gp_vals_file);
+                    write_npy(file_path, &gpr_vals).expect("gp vals saved");
 
                     let gp_vars_file = stringify!([<gp_vars_ $regr:snake _ $corr:snake >]);
-                    write_npy(format!("{}.npy", gp_vars_file), &gpr_vars).expect("gp vars saved");
+                    let file_path = format!("{}/{}.npy", test_dir, gp_vars_file);
+                    write_npy(file_path, &gpr_vars).expect("gp vars saved");
                 }
             }
         };
@@ -721,6 +727,9 @@ mod tests {
         let dims = vec![5, 10, 20]; //, 60];
         let nts = vec![100, 300, 400]; //, 800];
 
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+
         (0..2).for_each(|i| {
             let dim = dims[i];
             let nt = nts[i];
@@ -732,8 +741,8 @@ mod tests {
                     + 1.0
             };
             let prefix = "gp";
-            let xfilename = format!("{}_xt_{}x{}.npy", prefix, nt, dim);
-            let yfilename = format!("{}_yt_{}x{}.npy", prefix, nt, 1);
+            let xfilename = format!("{}/{}_xt_{}x{}.npy", test_dir, prefix, nt, dim);
+            let yfilename = format!("{}/{}_yt_{}x{}.npy", test_dir, prefix, nt, 1);
 
             let xt = match read_npy(&xfilename) {
                 Ok(xt) => xt,
