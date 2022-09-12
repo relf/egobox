@@ -13,7 +13,7 @@ fn norm1(x: &Array2<f64>) -> Array2<f64> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let file = File::open("D:/rlafage/workspace/egobox/moe/examples/norm1_D2_200.csv")?;
+    let file = File::open("examples/norm1_D2_200.csv")?;
     let mut reader = ReaderBuilder::new()
         .has_headers(false)
         .delimiter(b',')
@@ -31,9 +31,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ytest = moe.predict_values(&xtest)?;
     let ytrue = norm1(&xtest);
 
-    write_npy("moe_x_norm1.npy", &xtest).expect("x not saved!");
-    write_npy("moe_ypred_norm1.npy", &ytest).expect("ypred not saved!");
-    write_npy("moe_ytrue_norm1.npy", &ytrue).expect("ytrue not saved!");
+    // Save data as numpy arrays to plot with Python
+    let example_dir = "target/examples";
+    std::fs::create_dir_all(example_dir).ok();
+
+    write_npy(format!("{}/moe_x_norm1.npy", example_dir), &xtest).expect("x not saved!");
+    write_npy(format!("{}/moe_ypred_norm1.npy", example_dir), &ytest).expect("ypred not saved!");
+    write_npy(format!("{}/moe_ytrue_norm1.npy", example_dir), &ytrue).expect("ytrue not saved!");
 
     Ok(())
 }

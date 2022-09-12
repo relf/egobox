@@ -183,8 +183,8 @@ mod tests {
         let gp = make_surrogate_params!(Constant, SquaredExponential)
             .fit(&xt, &yt)
             .expect("GP fit error");
-        gp.save("save_gp.json").expect("GP not saved");
-        let gp = load("save_gp.json").expect("GP not loaded");
+        gp.save("target/tests/save_gp.json").expect("GP not saved");
+        let gp = load("target/tests/save_gp.json").expect("GP not loaded");
         let xv = Lhs::new(&xlimits).sample(20);
         let yv = xsinx(&xv);
         let ytest = gp.predict_values(&xv.view()).unwrap();

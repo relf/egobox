@@ -684,8 +684,10 @@ mod tests {
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&obs).expect("MOE prediction");
-        write_npy("obs_hard.npy", &obs).expect("obs saved");
-        write_npy("preds_hard.npy", &preds).expect("preds saved");
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+        write_npy(format!("{}/obs_hard.npy", test_dir), &obs).expect("obs saved");
+        write_npy(format!("{}/preds_hard.npy", test_dir), &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.39 * 0.39,
             moe.predict_values(&array![[0.39]]).unwrap()[[0, 0]],
@@ -725,8 +727,11 @@ mod tests {
             .fit(&ds)
             .expect("MOE fitted");
         println!("Smooth moe {}", moe);
-        write_npy("obs_smooth.npy", &obs).expect("obs saved");
-        write_npy("preds_smooth.npy", &preds).expect("preds saved");
+
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+        write_npy(format!("{}/obs_smooth.npy", test_dir), &obs).expect("obs saved");
+        write_npy(format!("{}/preds_smooth.npy", test_dir), &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
@@ -808,6 +813,9 @@ mod tests {
     #[cfg(feature = "persistent")]
     #[test]
     fn test_save_load_moe() {
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = function_test_1d(&xt);
@@ -819,8 +827,9 @@ mod tests {
             .expect("MOE fitted");
         let xtest = array![[0.6]];
         let y_expected = moe.predict_values(&xtest).unwrap();
-        moe.save("saved_moe.json").expect("MoE saving");
-        let new_moe = Moe::load("saved_moe.json").expect("MoE loading");
+        let filename = format!("{}/saved_moe.json", test_dir);
+        moe.save(filename).expect("MoE saving");
+        let new_moe = Moe::load(filename).expect("MoE loading");
         assert_abs_diff_eq!(
             y_expected,
             new_moe.predict_values(&xtest).unwrap(),

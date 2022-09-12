@@ -1043,12 +1043,13 @@ mod tests {
                 value: -15.1,
                 tolerance: 1e-1,
             }))
-            .outdir(Some(".".to_string()))
+            .outdir(Some("target/tests".to_string()))
             .minimize()
             .expect("Minimize failure");
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
-        let saved_doe: Array2<f64> = read_npy(DOE_INITIAL_FILE).unwrap();
+        let saved_doe: Array2<f64> =
+            read_npy(format!("target/tests/{}", DOE_INITIAL_FILE)).unwrap();
         assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
     }
 
@@ -1083,7 +1084,7 @@ mod tests {
         let res = Egor::new_with_rng(xsinx, &xlimits, Isaac64Rng::seed_from_u64(42))
             .n_eval(15)
             .doe(Some(doe))
-            .outdir(Some("./test_dir".to_string()))
+            .outdir(Some("target/tests".to_string()))
             .minimize()
             .expect("Minimize failure");
         let expected = array![18.9];
@@ -1091,7 +1092,7 @@ mod tests {
 
         let res = Egor::new_with_rng(xsinx, &array![[0.0, 25.0]], Isaac64Rng::seed_from_u64(41))
             .n_eval(5)
-            .outdir(Some("./test_dir".to_string()))
+            .outdir(Some("target/tests".to_string()))
             .hot_start(true)
             .minimize()
             .expect("Minimize failure");
