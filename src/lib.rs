@@ -33,6 +33,7 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
 
     // Surrogate Model
     m.add_class::<GpMix>()?;
+    m.add_class::<Gpx>()?;
 
     // Optimizer
     m.add_class::<Egor>()?;

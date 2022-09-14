@@ -1,5 +1,5 @@
 use crate::types::*;
-use egobox_moe::{Moe, MoeError};
+use egobox_moe::{Moe, Surrogate};
 use linfa::{traits::Fit, Dataset};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
@@ -16,7 +16,6 @@ pub(crate) struct GpMix {
     pub _outdir: Option<String>,
     pub seed: Option<u64>,
     pub training_data: Option<Dataset<f64, f64>>,
-    pub moe: Option<Moe>,
 }
 
 #[pymethods]
@@ -50,7 +49,6 @@ impl GpMix {
             _outdir,
             seed,
             training_data: None,
-            moe: None,
         }
     }
 
@@ -61,7 +59,7 @@ impl GpMix {
         ));
     }
 
-    fn train(&mut self) {
+    fn train(&mut self) -> Gpx {
         let recomb = match self.recombination {
             Recombination::Hard => egobox_moe::Recombination::Hard,
             Recombination::Smooth => egobox_moe::Recombination::Smooth(None),
@@ -71,27 +69,38 @@ impl GpMix {
         } else {
             Isaac64Rng::from_entropy()
         };
-        self.moe = Some(
-            Moe::params()
-                .n_clusters(self.n_clusters)
-                .recombination(recomb)
-                .regression_spec(
-                    egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
-                )
-                .correlation_spec(
-                    egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-                )
-                .kpls_dim(self.kpls_dim)
-                .with_rng(rng)
-                .fit(self.training_data.as_ref().unwrap())
-                .expect("MoE model training"),
-        )
+        let moe = Moe::params()
+            .n_clusters(self.n_clusters)
+            .recombination(recomb)
+            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+            .correlation_spec(
+                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+            )
+            .kpls_dim(self.kpls_dim)
+            .with_rng(rng)
+            .fit(self.training_data.as_ref().unwrap())
+            .expect("MoE model training");
+        Gpx(Box::new(moe))
+    }
+}
+
+#[pyclass]
+#[pyo3(text_signature = "()")]
+pub(crate) struct Gpx(Box<Moe>);
+
+#[pymethods]
+impl Gpx {
+    #[new]
+    fn load(filename: String) -> Gpx {
+        Gpx(Moe::load(&filename).unwrap())
+    }
+
+    fn save(&self, filename: String) {
+        self.0.save(&filename).ok();
     }
 
     fn predict_values<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> &'py PyArray2<f64> {
-        self.moe
-            .as_ref()
-            .unwrap()
+        self.0
             .predict_values(&x.as_array().to_owned())
             .unwrap()
             .into_pyarray(py)
@@ -102,25 +111,9 @@ impl GpMix {
         py: Python<'py>,
         x: PyReadonlyArray2<f64>,
     ) -> &'py PyArray2<f64> {
-        self.moe
-            .as_ref()
-            .unwrap()
+        self.0
             .predict_variances(&x.as_array().to_owned())
             .unwrap()
             .into_pyarray(py)
-    }
-
-    fn save(filename: &str) {
-        self.moe.save(&filename)
-    }
-}
-
-pub(crate) struct Gpx {
-    pub moe: Option<Box<Moe>>,
-}
-
-impl Gpx {
-    fn load(filename: &str) -> Gpx {
-        let moe = Moe::load(filename);
     }
 }
