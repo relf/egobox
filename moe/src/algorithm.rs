@@ -827,8 +827,8 @@ mod tests {
         let xtest = array![[0.6]];
         let y_expected = moe.predict_values(&xtest).unwrap();
         let filename = format!("{}/saved_moe.json", test_dir);
-        moe.save(filename).expect("MoE saving");
-        let new_moe = Moe::load(filename).expect("MoE loading");
+        moe.save(&filename).expect("MoE saving");
+        let new_moe = Moe::load(&filename).expect("MoE loading");
         assert_abs_diff_eq!(
             y_expected,
             new_moe.predict_values(&xtest).unwrap(),

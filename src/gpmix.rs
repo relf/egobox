@@ -1,5 +1,5 @@
 use crate::types::*;
-use egobox_moe::Moe;
+use egobox_moe::{Moe, MoeError};
 use linfa::{traits::Fit, Dataset};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
@@ -108,5 +108,19 @@ impl GpMix {
             .predict_variances(&x.as_array().to_owned())
             .unwrap()
             .into_pyarray(py)
+    }
+
+    fn save(filename: &str) {
+        self.moe.save(&filename)
+    }
+}
+
+pub(crate) struct Gpx {
+    pub moe: Option<Box<Moe>>,
+}
+
+impl Gpx {
+    fn load(filename: &str) -> Gpx {
+        let moe = Moe::load(filename);
     }
 }
