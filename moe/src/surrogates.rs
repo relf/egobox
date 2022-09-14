@@ -184,7 +184,7 @@ mod tests {
         let xt = Lhs::new(&xlimits).sample(10);
         let yt = xsinx(&xt);
         let gp = make_surrogate_params!(Constant, SquaredExponential)
-            .fit(&xt, &yt)
+            .train(&xt.view(), &yt.view())
             .expect("GP fit error");
         gp.save("target/tests/save_gp.json").expect("GP not saved");
         let gp = load("target/tests/save_gp.json").expect("GP not loaded");
