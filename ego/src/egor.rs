@@ -813,7 +813,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                 let f = |x: &Vec<f64>| -> f64 {
                     self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
                 };
-                grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
+                grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
             }
             self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
         };
@@ -855,9 +855,13 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
 
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
         let scale_obj = compute_obj_scale(&scaling_points.view(), obj_model);
+        info!("Acquisition function scaling is updated to {}", scale_obj);
         let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
+        info!("Feasibility criterion scaling is updated to {}", scale_cstr);
         let scale_wb2 = if self.infill == InfillStrategy::WB2S {
-            compute_wb2s_scale(&scaling_points.view(), obj_model, *f_min)
+            let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, *f_min);
+            info!("WB2S scaling factor is updated to {}", scale);
+            scale
         } else {
             1.
         };
