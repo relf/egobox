@@ -747,12 +747,12 @@ mod tests {
         };
     }
 
-    test_gp!(Constant, SquaredExponential, 1.66);
+    test_gp!(Constant, SquaredExponential, 1.67);
     test_gp!(Constant, AbsoluteExponential, 22.35);
     test_gp!(Constant, Matern32, 21.68);
     test_gp!(Constant, Matern52, 21.68);
 
-    test_gp!(Linear, SquaredExponential, 1.55);
+    test_gp!(Linear, SquaredExponential, 1.56);
     test_gp!(Linear, AbsoluteExponential, 21.68);
     test_gp!(Linear, Matern32, 21.68);
     test_gp!(Linear, Matern52, 21.68);

@@ -623,13 +623,13 @@ mod tests {
             .expect("Predict var fail");
         println!("{:?}", ytest);
         assert_abs_diff_eq!(
-            array![[0.], [0.8296067096163109], [1.5], [0.9], [1.]],
+            array![[0.], [0.8297580023632912], [1.5], [0.9], [1.]],
             ytest,
-            epsilon = 1e-6
+            epsilon = 1e-3
         );
         println!("{:?}", yvar);
         assert_abs_diff_eq!(
-            array![[0.], [0.35290670137172425], [0.], [0.], [0.]],
+            array![[0.], [0.35300898770096056], [0.], [0.], [0.]],
             yvar,
             epsilon = 1e-6
         );
