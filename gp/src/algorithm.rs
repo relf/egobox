@@ -2,7 +2,7 @@ use crate::correlation_models::*;
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::parameters::{GpParams, GpValidParams};
-use crate::utils::{DistanceMatrix, NormalizedMatrix};
+use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedMatrix};
 use egobox_doe::{Lhs, SamplingMethod};
 #[cfg(feature = "blas")]
 use linfa::dataset::{WithLapack, WithoutLapack};
@@ -128,6 +128,10 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         Ok(&y_ * &self.ytrain.std + &self.ytrain.mean)
     }
 
+    pub fn predict_derivatives(&self, _x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        todo!();
+    }
+
     /// Predict variance values at the n given points.
     /// Returns variance values as (n, 1) matrix.
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
@@ -171,21 +175,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     fn _compute_correlation(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let n_obs = x.nrows();
-        let n_features = x.ncols();
-
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let nt = self.xtrain.data.nrows();
         // Get pairwise componentwise L1-distances to the input training set
-        let mut dx: Array2<F> = Array2::zeros((nt * n_obs, n_features));
-        for (i, xrow) in xnorm.rows().into_iter().enumerate() {
-            let dxrows = &self.xtrain.data - &xrow.into_shape((1, n_features)).unwrap();
-            let a = i * nt;
-            let b = (i + 1) * nt;
-            dx.slice_mut(s![a..b, ..]).assign(&dxrows);
-        }
+        let dx = pairwise_differences(&xnorm, &self.xtrain.data);
         // Compute the correlation function
         let r = self.corr.apply(&self.theta, &dx, &self.w_star);
+        let n_obs = x.nrows();
+        let nt = self.xtrain.data.nrows();
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 
@@ -638,7 +634,7 @@ mod tests {
         let lim = array![[0., 1.]];
         let xlimits = lim.broadcast((dim, 2)).unwrap();
         let rng = Isaac64Rng::seed_from_u64(42);
-        let nt = 30;
+        let nt = 5;
         let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let yt = Array::from_vec(vec![3.1; nt]).insert_axis(Axis(1));
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(

@@ -1,5 +1,5 @@
 use linfa::Float;
-use ndarray::{s, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2};
+use ndarray::{s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
@@ -107,14 +107,20 @@ impl<F: Float> DistanceMatrix<F> {
     }
 }
 
-fn differences<F: Float>(
+/// Computes differences between each element of x and each element oy y
+/// resulting in a 2d array of shape (nrows(x) * nrows(y), ncols(x));
+/// *Panics* if x and y have not the same column numbers
+pub fn pairwise_differences<F: Float>(
     x: &ArrayBase<impl Data<Elem = F>, Ix2>,
     y: &ArrayBase<impl Data<Elem = F>, Ix2>,
-) -> Array3<F> {
-    let x = x.to_owned().insert_axis(Axis(1));
-    let y = y.to_owned().insert_axis(Axis(0));
-    let d = x - y;
-    d
+) -> Array2<F> {
+    assert!(x.ncols() == y.ncols());
+    let x3 = x.to_owned().insert_axis(Axis(1));
+    let y3 = y.to_owned().insert_axis(Axis(0));
+    let d = x3 - y3;
+    let n = d.len();
+    let res = Array::from_iter(d.iter().cloned());
+    res.into_shape((n / x.ncols(), x.ncols())).unwrap()
 }
 
 #[cfg(test)]
@@ -124,7 +130,7 @@ mod tests {
     use ndarray::array;
 
     #[test]
-    fn test_differences() {
+    fn test_pairwise_differences() {
         let x = array![[-0.9486833], [-0.82219219]];
         let y = array![
             [-1.26491106],
@@ -135,22 +141,18 @@ mod tests {
         ];
         assert_abs_diff_eq!(
             &array![
-                [
-                    [0.31622777],
-                    [-0.31622777],
-                    [-0.9486833],
-                    [-1.58113883],
-                    [-2.21359436]
-                ],
-                [
-                    [0.44271887],
-                    [-0.18973666],
-                    [-0.82219219],
-                    [-1.45464772],
-                    [-2.08710326]
-                ]
+                [0.31622777],
+                [-0.31622777],
+                [-0.9486833],
+                [-1.58113883],
+                [-2.21359436],
+                [0.44271887],
+                [-0.18973666],
+                [-0.82219219],
+                [-1.45464772],
+                [-2.08710326]
             ],
-            &differences(&x, &y),
+            &pairwise_differences(&x, &y),
             epsilon = 1e-6
         )
     }
