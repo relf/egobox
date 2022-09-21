@@ -128,8 +128,52 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         Ok(&y_ * &self.ytrain.std + &self.ytrain.mean)
     }
 
-    pub fn predict_derivatives(&self, _x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        todo!();
+    /// Predict derivatives only for GP(constant, squared_exponential)
+    pub fn predict_derivatives(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        kx: usize,
+    ) -> Array2<F> {
+        let corr = self._compute_correlation(x);
+        println!("R={:?}", corr);
+
+        let x = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let df = Array2::<F>::zeros((1, x.nrows()));
+        let beta = &self.inner_params.beta;
+        println!("beta={:?}", beta);
+        let gamma = &self.inner_params.gamma;
+        println!("gamma={:?}", gamma);
+        let df_dx = &df.t().dot(beta);
+
+        let nr = x.nrows();
+        let nc = self.xtrain.data.nrows();
+        println!("x={:?}", x);
+        println!("self.xtrain.data={:?}", self.xtrain.data);
+        let d_dx = &x
+            .column(kx)
+            .to_owned()
+            .into_shape((nr, 1))
+            .unwrap()
+            .broadcast((nr, nc))
+            .unwrap()
+            .to_owned()
+            - self
+                .xtrain
+                .data
+                .column(kx)
+                .into_shape((1, nc))
+                .unwrap()
+                .broadcast((nr, nc))
+                .unwrap()
+                .to_owned();
+        println!("d_dx={:?}", d_dx);
+
+        // Get pairwise componentwise L1-distances to the input training set
+        let theta = &self.theta.to_owned().insert_axis(Axis(0));
+        println!("theta={:?}", theta);
+
+        let dcorr = theta.mapv(|v| F::cast(2) * v) * (d_dx * corr);
+        (df_dx - dcorr.dot(gamma)) * &self.ytrain.std / &self.xtrain.std
     }
 
     /// Predict variance values at the n given points.
@@ -427,7 +471,7 @@ where
         .map(|v| unsafe { *(v as *const F as *const f64) })
         .into_raw_vec();
     optimizer.set_initial_step1(0.5).unwrap();
-    optimizer.set_maxeval(10 * theta0.len() as u32).unwrap();
+    optimizer.set_maxeval(15 * theta0.len() as u32).unwrap();
     optimizer.set_ftol_rel(1e-4).unwrap();
 
     match optimizer.optimize(&mut theta_vec) {
@@ -849,5 +893,22 @@ mod tests {
 
         let var = GpVariancePredictor(&gp).predict(&xt);
         assert_abs_diff_eq!(var, Array2::zeros((nt, 1)), epsilon = 2e-1);
+    }
+
+    #[test]
+    fn test_derivatives() {
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+            ConstantMean::default(),
+            SquaredExponentialCorr::default(),
+        )
+        .initial_theta(Some(vec![0.1]))
+        .fit(&Dataset::new(xt, yt))
+        .expect("GP fit error");
+
+        let x = array![[0.5], [0.7]];
+        let dx = gp.predict_derivatives(&x, 0);
+        println!("{}", dx)
     }
 }
