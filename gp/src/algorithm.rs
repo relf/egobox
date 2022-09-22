@@ -128,54 +128,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         Ok(&y_ * &self.ytrain.std + &self.ytrain.mean)
     }
 
-    /// Predict derivatives only for GP(constant, squared_exponential)
-    pub fn predict_derivatives(
-        &self,
-        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-        kx: usize,
-    ) -> Array2<F> {
-        let corr = self._compute_correlation(x);
-        println!("R={:?}", corr);
-
-        let x = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let df = Array2::<F>::zeros((1, x.nrows()));
-        let beta = &self.inner_params.beta;
-        println!("beta={:?}", beta);
-        let gamma = &self.inner_params.gamma;
-        println!("gamma={:?}", gamma);
-        let df_dx = &df.t().dot(beta);
-
-        let nr = x.nrows();
-        let nc = self.xtrain.data.nrows();
-        println!("x={:?}", x);
-        println!("self.xtrain.data={:?}", self.xtrain.data);
-        let d_dx = &x
-            .column(kx)
-            .to_owned()
-            .into_shape((nr, 1))
-            .unwrap()
-            .broadcast((nr, nc))
-            .unwrap()
-            .to_owned()
-            - self
-                .xtrain
-                .data
-                .column(kx)
-                .into_shape((1, nc))
-                .unwrap()
-                .broadcast((nr, nc))
-                .unwrap()
-                .to_owned();
-        println!("d_dx={:?}", d_dx);
-
-        // Get pairwise componentwise L1-distances to the input training set
-        let theta = &self.theta.to_owned().insert_axis(Axis(0));
-        println!("theta={:?}", theta);
-
-        let dcorr = theta.mapv(|v| F::cast(2) * v) * (d_dx * corr);
-        (df_dx - dcorr.dot(gamma)) * &self.ytrain.std / &self.xtrain.std
-    }
-
     /// Predict variance values at the n given points.
     /// Returns variance values as (n, 1) matrix.
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
@@ -246,6 +198,56 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Retrieve output dimension
     pub fn output_dim(&self) -> usize {
         self.ytrain.ncols()
+    }
+}
+
+impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
+    /// Predict derivatives only for GP(constant, squared_exponential)
+    pub fn predict_derivatives(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        kx: usize,
+    ) -> Array2<F> {
+        let corr = self._compute_correlation(x);
+        println!("R={:?}", corr);
+
+        let x = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let df = Array2::<F>::zeros((1, x.nrows()));
+        let beta = &self.inner_params.beta;
+        println!("beta={:?}", beta);
+        let gamma = &self.inner_params.gamma;
+        println!("gamma={:?}", gamma);
+        let df_dx = &df.t().dot(beta);
+
+        let nr = x.nrows();
+        let nc = self.xtrain.data.nrows();
+        println!("x={:?}", x);
+        println!("self.xtrain.data={:?}", self.xtrain.data);
+        let d_dx = &x
+            .column(kx)
+            .to_owned()
+            .into_shape((nr, 1))
+            .unwrap()
+            .broadcast((nr, nc))
+            .unwrap()
+            .to_owned()
+            - self
+                .xtrain
+                .data
+                .column(kx)
+                .into_shape((1, nc))
+                .unwrap()
+                .broadcast((nr, nc))
+                .unwrap()
+                .to_owned();
+        println!("d_dx={:?}", d_dx);
+
+        // Get pairwise componentwise L1-distances to the input training set
+        let theta = &self.theta.to_owned().insert_axis(Axis(0));
+        println!("theta={:?}", theta);
+
+        let dcorr = theta.mapv(|v| F::cast(2) * v) * (d_dx * corr);
+        (df_dx - dcorr.dot(gamma)) * &self.ytrain.std / &self.xtrain.std
     }
 }
 
