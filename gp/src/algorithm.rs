@@ -209,20 +209,14 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
         kx: usize,
     ) -> Array2<F> {
         let corr = self._compute_correlation(x);
-        println!("R={:?}", corr);
-
         let x = (x - &self.xtrain.mean) / &self.xtrain.std;
         let df = Array2::<F>::zeros((1, x.nrows()));
         let beta = &self.inner_params.beta;
-        println!("beta={:?}", beta);
         let gamma = &self.inner_params.gamma;
-        println!("gamma={:?}", gamma);
         let df_dx = &df.t().dot(beta);
 
         let nr = x.nrows();
         let nc = self.xtrain.data.nrows();
-        println!("x={:?}", x);
-        println!("self.xtrain.data={:?}", self.xtrain.data);
         let d_dx = &x
             .column(kx)
             .to_owned()
@@ -240,11 +234,9 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
                 .broadcast((nr, nc))
                 .unwrap()
                 .to_owned();
-        println!("d_dx={:?}", d_dx);
 
         // Get pairwise componentwise L1-distances to the input training set
         let theta = &self.theta.to_owned().insert_axis(Axis(0));
-        println!("theta={:?}", theta);
 
         let dcorr = theta.mapv(|v| F::cast(2) * v) * (d_dx * corr);
         (df_dx - dcorr.dot(gamma)) * &self.ytrain.std / &self.xtrain.std
