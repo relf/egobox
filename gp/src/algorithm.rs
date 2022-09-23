@@ -202,7 +202,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 }
 
 impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
-    /// Predict derivatives only for GP(constant, squared_exponential)
+    /// Predict derivatives of the output prediction
+    /// wrt the kx th components at point a set of points x \[n_samples, n_components\].
     pub fn predict_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -240,6 +241,93 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
 
         let dcorr = theta.mapv(|v| F::cast(2) * v) * (d_dx * corr);
         (df_dx - dcorr.dot(gamma)) * &self.ytrain.std / &self.xtrain.std
+    }
+
+    /// Predict derivatives of the output prediction variance
+    /// wrt the kx th components at point one input.
+    pub fn predict_variance_derivatives(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        // Initialization
+        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let theta = &self.theta;
+        println!("x={:?}", xnorm);
+        // Get pairwise componentwise L1-distances to the input training set
+        // dx = differences(x, Y=self.X_norma.copy())
+        let dx = pairwise_differences(&xnorm, &self.xtrain.data);
+        println!("dx={:?}", dx);
+        // d = self._componentwise_distance(dx)
+        // dd = self._componentwise_distance(
+        //     dx, theta=self.optimal_theta, return_derivative=True
+        // )
+        let dd = einsum("j,ij->ij", &[&theta.t(), &dx])
+            .unwrap()
+            .mapv(|v| F::cast(2) * v);
+        println!("dd={:?}", dd);
+        let sigma2 = &self.inner_params.sigma2;
+        let cholesky_k = &self.inner_params.r_chol;
+
+        // derivative_dic = {"dx": dx, "dd": dd}
+        // r, dr = self._correlation_types[self.options["corr"]](
+        //     theta, d, derivative_params=derivative_dic
+        // )
+        let r = self.corr.apply(&self.theta, &dx, &self.w_star);
+        let dr = -einsum("i,ij->ij", &[&r.t().row(0), &dd])
+            .unwrap()
+            .into_shape((dd.shape()[0], dd.shape()[1]))
+            .unwrap();
+        println!("r={:?}", r);
+        println!("dr={:?}", dr);
+
+        let rho1 = cholesky_k.solve_triangular(&r, UPLO::Lower).unwrap();
+        let invKr = cholesky_k.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
+
+        let p1 = dr.t().dot(&invKr).t().to_owned();
+
+        let p2 = invKr.t().dot(&dr);
+
+        let f_x = self.mean.apply(x).t().to_owned(); //(x).T
+        let F = self.mean.apply(&self.xtrain.data);
+
+        let rho2 = cholesky_k.solve_triangular(&F, UPLO::Lower).unwrap();
+        let invKF = cholesky_k.t().solve_triangular(&rho2, UPLO::Upper).unwrap();
+
+        let A = f_x.t().to_owned() - r.t().dot(&invKF);
+
+        let B = F.t().dot(&invKF);
+
+        let rho3 = B.cholesky().unwrap();
+        let invBAt = rho3.solve_triangular(&A.t(), UPLO::Lower).unwrap();
+        let D = rho3.t().solve_triangular(&invBAt, UPLO::Upper).unwrap();
+
+        // mean = constant
+        let df = Array2::zeros((1, x.ncols()));
+        // if self.options["poly"] == "constant":
+        //     df = np.zeros((1, self.nx))
+        // elif self.options["poly"] == "linear":
+        //     df = np.zeros((self.nx + 1, self.nx))
+        //     df[1:, :] = np.eye(self.nx)
+        // else:
+        //     raise ValueError(
+        //         "The derivative is only available for ordinary kriging or "
+        //         + "universal kriging using a linear trend"
+        //     )
+
+        let dA = df.t().to_owned() - dr.t().dot(&invKF);
+        let p3 = dA.dot(&D).t().to_owned();
+        let p4 = D.t().dot(&dA.t());
+        let prime_t = (-p1 - p2 + p3 + p4).t().to_owned();
+
+        // derived_variance = []
+        let x_std = &self.xtrain.std;
+        let mut dvar = Array2::<F>::zeros((x_std.len(), sigma2.len()));
+        // for i in range(len(x_std)):
+        //     derived_variance.append(sigma2 * prime.T[i] / x_std[i])
+        Zip::from(dvar.rows_mut())
+            .and(prime_t.rows())
+            .for_each(|mut dv, p| dv.assign(&(sigma2.to_owned() * &p / x_std)));
+        dvar.t().to_owned()
     }
 }
 
@@ -897,12 +985,27 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
-        .initial_theta(Some(vec![0.1]))
         .fit(&Dataset::new(xt, yt))
-        .expect("GP fit error");
+        .expect("GP fitting");
 
         let x = array![[0.5], [0.7]];
-        let dx = gp.predict_derivatives(&x, 0);
-        println!("{}", dx)
+        let dypred = gp.predict_derivatives(&x, 0);
+        println!("{}", dypred)
+    }
+
+    #[test]
+    fn test_variance_derivatives() {
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+            ConstantMean::default(),
+            SquaredExponentialCorr::default(),
+        )
+        .fit(&Dataset::new(xt, yt))
+        .expect("GP fitting");
+
+        let x = array![[0.5]];
+        let dvar = gp.predict_variance_derivatives(&x);
+        println!("dvar={}", dvar)
     }
 }
