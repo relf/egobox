@@ -281,25 +281,25 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
         println!("dr={:?}", dr);
 
         let rho1 = cholesky_k.solve_triangular(&r, UPLO::Lower).unwrap();
-        let invKr = cholesky_k.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
+        let inv_kr = cholesky_k.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
 
-        let p1 = dr.t().dot(&invKr).t().to_owned();
+        let p1 = dr.t().dot(&inv_kr).t().to_owned();
 
-        let p2 = invKr.t().dot(&dr);
+        let p2 = inv_kr.t().dot(&dr);
 
         let f_x = self.mean.apply(x).t().to_owned(); //(x).T
-        let F = self.mean.apply(&self.xtrain.data);
+        let f_mean = self.mean.apply(&self.xtrain.data);
 
-        let rho2 = cholesky_k.solve_triangular(&F, UPLO::Lower).unwrap();
-        let invKF = cholesky_k.t().solve_triangular(&rho2, UPLO::Upper).unwrap();
+        let rho2 = cholesky_k.solve_triangular(&f_mean, UPLO::Lower).unwrap();
+        let inv_kf = cholesky_k.t().solve_triangular(&rho2, UPLO::Upper).unwrap();
 
-        let A = f_x.t().to_owned() - r.t().dot(&invKF);
+        let a_mat = f_x.t().to_owned() - r.t().dot(&inv_kf);
 
-        let B = F.t().dot(&invKF);
+        let b_mat = f_mean.t().dot(&inv_kf);
 
-        let rho3 = B.cholesky().unwrap();
-        let invBAt = rho3.solve_triangular(&A.t(), UPLO::Lower).unwrap();
-        let D = rho3.t().solve_triangular(&invBAt, UPLO::Upper).unwrap();
+        let rho3 = b_mat.cholesky().unwrap();
+        let inv_bat = rho3.solve_triangular(&a_mat.t(), UPLO::Lower).unwrap();
+        let d_mat = rho3.t().solve_triangular(&inv_bat, UPLO::Upper).unwrap();
 
         // mean = constant
         let df = Array2::zeros((1, x.ncols()));
@@ -314,9 +314,9 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
         //         + "universal kriging using a linear trend"
         //     )
 
-        let dA = df.t().to_owned() - dr.t().dot(&invKF);
-        let p3 = dA.dot(&D).t().to_owned();
-        let p4 = D.t().dot(&dA.t());
+        let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
+        let p3 = d_a.dot(&d_mat).t().to_owned();
+        let p4 = d_mat.t().dot(&d_a.t());
         let prime_t = (-p1 - p2 + p3 + p4).t().to_owned();
 
         // derived_variance = []
@@ -326,7 +326,7 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
         //     derived_variance.append(sigma2 * prime.T[i] / x_std[i])
         Zip::from(dvar.rows_mut())
             .and(prime_t.rows())
-            .for_each(|mut dv, p| dv.assign(&(sigma2.to_owned() * &p / x_std)));
+            .for_each(|mut dv, p| dv.assign(&(sigma2.to_owned() * p / x_std)));
         dvar.t().to_owned()
     }
 }
