@@ -10,7 +10,7 @@ use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
-use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
@@ -199,9 +199,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     pub fn output_dim(&self) -> usize {
         self.ytrain.ncols()
     }
-}
+    // }
 
-impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
+    // impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
     /// Predict derivatives of the output prediction
     /// wrt the kx th components at point a set of points x \[n_samples, n_components\].
     pub fn predict_derivatives(
@@ -243,6 +243,14 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
         (df_dx - dcorr.dot(gamma)) * &self.ytrain.std / &self.xtrain.std
     }
 
+    /// Predict jacobian at one point x
+    pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let mut jac = Array2::zeros((1, self.xtrain.data.ncols()));
+        Zip::indexed(jac.rows_mut())
+            .for_each(|i, mut r| r.assign(&self.predict_derivatives(x, i).row(0)));
+        jac.t().to_owned()
+    }
+
     /// Predict derivatives of the output prediction variance
     /// wrt the kx th components at point one input.
     pub fn predict_variance_derivatives(
@@ -252,11 +260,11 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
         // Initialization
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         let theta = &self.theta;
-        println!("x={:?}", xnorm);
+        // println!("x={:?}", xnorm);
         // Get pairwise componentwise L1-distances to the input training set
         // dx = differences(x, Y=self.X_norma.copy())
         let dx = pairwise_differences(&xnorm, &self.xtrain.data);
-        println!("dx={:?}", dx);
+        // println!("dx={:?}", dx);
         // d = self._componentwise_distance(dx)
         // dd = self._componentwise_distance(
         //     dx, theta=self.optimal_theta, return_derivative=True
@@ -264,7 +272,7 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
         let dd = einsum("j,ij->ij", &[&theta.t(), &dx])
             .unwrap()
             .mapv(|v| F::cast(2) * v);
-        println!("dd={:?}", dd);
+        // println!("dd={:?}", dd);
         let sigma2 = &self.inner_params.sigma2;
         let cholesky_k = &self.inner_params.r_chol;
 
@@ -277,8 +285,8 @@ impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
             .unwrap()
             .into_shape((dd.shape()[0], dd.shape()[1]))
             .unwrap();
-        println!("r={:?}", r);
-        println!("dr={:?}", dr);
+        // println!("r={:?}", r);
+        // println!("dr={:?}", dr);
 
         let rho1 = cholesky_k.solve_triangular(&r, UPLO::Lower).unwrap();
         let inv_kr = cholesky_k.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
