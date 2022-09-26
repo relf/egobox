@@ -445,6 +445,13 @@ impl Surrogate for Moe {
         }
     }
 
+    fn predict_variance_jacobian(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+        match self.recombination {
+            Recombination::Hard => self.predict_variance_jacobian_hard(x),
+            Recombination::Smooth(_) => self.predict_variance_jacobian_smooth(x),
+        }
+    }
+
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> Result<()> {
@@ -542,12 +549,36 @@ impl Moe {
             .and(probas.rows())
             .for_each(|y, x, p| {
                 let obs = x.insert_axis(Axis(0));
+                let subpreds: Vec<Array1<f64>> = self
+                    .experts
+                    .iter()
+                    .map(|gp| gp.predict_jacobian(&obs).unwrap().row(0).to_owned())
+                    .collect();
+                //*y = (subpreds * p).sum();
+                todo!()
+            });
+        Ok(preds.insert_axis(Axis(1)))
+    }
+
+    pub fn predict_variance_jacobian_smooth(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
+        let probas = self.gmx.predict_probas(x);
+        let mut preds = Array1::<f64>::zeros(x.nrows());
+
+        Zip::from(&mut preds)
+            .and(x.rows())
+            .and(probas.rows())
+            .for_each(|y, x, p| {
+                let obs = x.insert_axis(Axis(0));
                 let subpreds: Array1<f64> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_jacobian(&obs).unwrap()[[0, 0]])
+                    .map(|gp| gp.predict_variance_jacobian(&obs).unwrap()[[0, 0]])
                     .collect();
-                *y = (subpreds * p).sum();
+                //*y = (subpreds * p).sum();
+                todo!()
             });
         Ok(preds.insert_axis(Axis(1)))
     }
@@ -609,13 +640,33 @@ impl Moe {
         Zip::from(jac.rows_mut())
             .and(x.rows())
             .and(&clustering)
-            .for_each(|mut jaci, xi, &c| {
+            .for_each(|mut jac_i, xi, &c| {
                 let x = xi.to_owned().insert_axis(Axis(0));
                 let x_jac: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> =
                     self.experts[c].predict_jacobian(&x.view()).unwrap();
-                jaci.assign(&x_jac.row(0))
+                jac_i.assign(&x_jac.row(0))
             });
         Ok(jac)
+    }
+
+    pub fn predict_variance_jacobian_hard(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
+        let mut varjac = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let clustering = self.gmx.predict(x);
+        Zip::from(varjac.rows_mut())
+            .and(x.rows())
+            .and(&clustering)
+            .for_each(|mut varjac_i, xi, &c| {
+                let x = xi.to_owned().insert_axis(Axis(0));
+                let x_varjac: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> = self
+                    .experts[c]
+                    .predict_variance_jacobian(&x.view())
+                    .unwrap();
+                varjac_i.assign(&x_varjac.row(0))
+            });
+        Ok(varjac)
     }
 
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
@@ -634,6 +685,13 @@ impl Moe {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         <Moe as Surrogate>::predict_jacobian(self, &x.view())
+    }
+
+    pub fn predict_variance_jacobian(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<Array2<f64>> {
+        <Moe as Surrogate>::predict_variance_jacobian(self, &x.view())
     }
 
     #[cfg(feature = "persistent")]

@@ -253,10 +253,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives of the output prediction variance
     /// wrt the kx th components at point one input.
-    pub fn predict_variance_derivatives(
-        &self,
-        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> Array2<F> {
+    pub fn predict_variance_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         // Initialization
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         let theta = &self.theta;
@@ -1013,7 +1010,7 @@ mod tests {
         .expect("GP fitting");
 
         let x = array![[0.5]];
-        let dvar = gp.predict_variance_derivatives(&x);
+        let dvar = gp.predict_variance_jacobian(&x);
         println!("dvar={}", dvar)
     }
 }
