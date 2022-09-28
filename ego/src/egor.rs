@@ -94,9 +94,9 @@ use crate::errors::{EgoError, Result};
 use crate::lhs_optimizer::LhsOptimizer;
 use crate::sort_axis::*;
 use crate::types::*;
-use crate::utils::update_data;
-use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale};
+use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale, grad_wbs2};
 use crate::utils::{ei, wb2s};
+use crate::utils::{grad_ei, update_data};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec};
@@ -813,6 +813,11 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                 let f = |x: &Vec<f64>| -> f64 {
                     self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
                 };
+                // let grd = self
+                //     .grad_infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                //     .to_vec();
+                // info!("finite diff {:?}", x.to_vec().forward_diff(&f));
+                // info!("gradient {:?}", grd);
                 grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
             }
             self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
@@ -1010,6 +1015,23 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         obj / scale
     }
 
+    pub fn grad_infill_eval(
+        &self,
+        x: &[f64],
+        obj_model: &dyn ClusteredSurrogate,
+        f_min: f64,
+        scale: f64,
+        scale_wb2: f64,
+    ) -> Vec<f64> {
+        let x_f = x.to_vec();
+        let grad = match self.infill {
+            InfillStrategy::EI => -grad_ei(&x_f, obj_model, f_min),
+            InfillStrategy::WB2 => -grad_wbs2(&x_f, obj_model, f_min, 1.),
+            InfillStrategy::WB2S => -grad_wbs2(&x_f, obj_model, f_min, scale_wb2),
+        };
+        (grad / scale).to_vec()
+    }
+
     fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
         if let Some(pre_proc) = self.pre_proc {
             (self.obj)(&pre_proc.run(x).view())
@@ -1055,6 +1077,25 @@ mod tests {
         let saved_doe: Array2<f64> =
             read_npy(format!("target/tests/{}", DOE_INITIAL_FILE)).unwrap();
         assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_deriv() {
+        let initial_doe = array![[0.], [7.], [25.]];
+        let res = Egor::new(xsinx, &array![[0.0, 25.0]])
+            .infill_strategy(InfillStrategy::EI)
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+            .n_eval(20)
+            .doe(Some(initial_doe.to_owned()))
+            .expect(Some(ApproxValue {
+                value: -15.1,
+                tolerance: 1e-1,
+            }))
+            .minimize()
+            .expect("Minimization");
+        let expected = array![-15.1];
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
     }
 
     #[test]
@@ -1144,6 +1185,33 @@ mod tests {
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .doe(Some(doe))
             .n_eval(100)
+            .expect(Some(ApproxValue {
+                value: 0.0,
+                tolerance: 1e-2,
+            }))
+            .minimize()
+            .expect("Minimize failure");
+        println!("Rosenbrock optim result = {:?}", res);
+        println!("Elapsed = {:?}", now.elapsed());
+        let expected = array![1., 1.];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+    }
+
+    #[test]
+    #[serial]
+    fn test_deriv_rosenbrock_2d() {
+        let now = Instant::now();
+        let xlimits = array![[-2., 2.], [-2., 2.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .sample(10);
+        let res = Egor::new(rosenb, &xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .doe(Some(doe))
+            .n_eval(100)
+            .infill_strategy(InfillStrategy::EI)
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .expect(Some(ApproxValue {
                 value: 0.0,
                 tolerance: 1e-2,
