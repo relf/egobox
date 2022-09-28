@@ -541,46 +541,14 @@ impl Moe {
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        let probas = self.gmx.predict_probas(x);
-        let mut preds = Array1::<f64>::zeros(x.nrows());
-
-        Zip::from(&mut preds)
-            .and(x.rows())
-            .and(probas.rows())
-            .for_each(|y, x, p| {
-                let obs = x.insert_axis(Axis(0));
-                let subpreds: Vec<Array1<f64>> = self
-                    .experts
-                    .iter()
-                    .map(|gp| gp.predict_jacobian(&obs).unwrap().row(0).to_owned())
-                    .collect();
-                //*y = (subpreds * p).sum();
-                todo!()
-            });
-        Ok(preds.insert_axis(Axis(1)))
+        self.predict_jacobian_hard(x)
     }
 
     pub fn predict_variance_jacobian_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        let probas = self.gmx.predict_probas(x);
-        let mut preds = Array1::<f64>::zeros(x.nrows());
-
-        Zip::from(&mut preds)
-            .and(x.rows())
-            .and(probas.rows())
-            .for_each(|y, x, p| {
-                let obs = x.insert_axis(Axis(0));
-                let subpreds: Array1<f64> = self
-                    .experts
-                    .iter()
-                    .map(|gp| gp.predict_variance_jacobian(&obs).unwrap()[[0, 0]])
-                    .collect();
-                //*y = (subpreds * p).sum();
-                todo!()
-            });
-        Ok(preds.insert_axis(Axis(1)))
+        self.predict_variance_jacobian_hard(x)
     }
 
     /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
@@ -644,7 +612,7 @@ impl Moe {
                 let x = xi.to_owned().insert_axis(Axis(0));
                 let x_jac: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> =
                     self.experts[c].predict_jacobian(&x.view()).unwrap();
-                jac_i.assign(&x_jac.row(0))
+                jac_i.assign(&x_jac.column(0))
             });
         Ok(jac)
     }
