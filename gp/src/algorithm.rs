@@ -10,7 +10,7 @@ use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
-use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
@@ -208,47 +208,67 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
         kx: usize,
-    ) -> Array2<F> {
+    ) -> Array1<F> {
         let corr = self._compute_correlation(x);
+        // println!("r = {}", corr);
         let x = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let df = Array2::<F>::zeros((1, x.nrows()));
+
+        let df = Array2::<F>::zeros((1, x.ncols()));
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
         let df_dx = &df.t().dot(beta);
+        // println!("x = {}", x);
+        // println!("df_dx = {}", df_dx);
+        // println!(
+        //     "shapes df={:?}, beta={:?}, df_dx={:?}",
+        //     df.shape(),
+        //     beta.shape(),
+        //     df_dx.shape()
+        // );
 
         let nr = x.nrows();
         let nc = self.xtrain.data.nrows();
-        let d_dx = &x
+        let d_dx_1 = &x
             .column(kx)
             .to_owned()
             .into_shape((nr, 1))
             .unwrap()
             .broadcast((nr, nc))
             .unwrap()
+            .to_owned();
+
+        let d_dx_2 = self
+            .xtrain
+            .data
+            .column(kx)
             .to_owned()
-            - self
-                .xtrain
-                .data
-                .column(kx)
-                .into_shape((1, nc))
-                .unwrap()
-                .broadcast((nr, nc))
-                .unwrap()
-                .to_owned();
+            .as_standard_layout()
+            .into_shape((1, nc))
+            .unwrap()
+            .to_owned();
 
+        let d_dx = d_dx_1 - d_dx_2;
+        // println!("d_dx = {}", d_dx);
+        // println!("theta = {}", self.theta);
         // Get pairwise componentwise L1-distances to the input training set
-        let theta = &self.theta.to_owned().insert_axis(Axis(0));
-
-        let dcorr = theta.mapv(|v| F::cast(2) * v) * (d_dx * corr);
-        (df_dx - dcorr.dot(gamma)) * &self.ytrain.std / &self.xtrain.std
+        let theta = &self.theta.to_owned();
+        let d_dx_corr = d_dx * corr;
+        let res = (df_dx.row(kx).to_owned()
+            - F::cast(2.) * theta[kx] * d_dx_corr.dot(gamma)[[0, 0]])
+            * self.ytrain.std[0]
+            / self.xtrain.std[kx];
+        res
     }
 
     /// Predict jacobian at one point x
     pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let mut jac = Array2::zeros((1, self.xtrain.data.ncols()));
-        Zip::indexed(jac.rows_mut())
-            .for_each(|i, mut r| r.assign(&self.predict_derivatives(x, i).row(0)));
-        jac.t().to_owned()
+        let mut jac = Array2::zeros((self.xtrain.data.ncols(), 1));
+        Zip::indexed(jac.rows_mut()).for_each(|i, mut r| {
+            let pred = self.predict_derivatives(x, i);
+            // println!("df/dx{}={}", i, pred);
+            r.assign(&pred);
+        });
+        jac
     }
 
     /// Predict derivatives of the output prediction variance
@@ -326,12 +346,22 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         // derived_variance = []
         let x_std = &self.xtrain.std;
-        let mut dvar = Array2::<F>::zeros((x_std.len(), sigma2.len()));
+        let mut dvar = Array2::<F>::zeros((x_std.len(), x_std.len()));
         // for i in range(len(x_std)):
         //     derived_variance.append(sigma2 * prime.T[i] / x_std[i])
         Zip::from(dvar.rows_mut())
             .and(prime_t.rows())
-            .for_each(|mut dv, p| dv.assign(&(sigma2.to_owned() * p / x_std)));
+            .for_each(|mut dv, p| {
+                let dv_val = (sigma2.to_owned() * p) / x_std;
+                // println!("sigma {}", sigma2);
+                // println!("p {}", p);
+                // println!("x_std {}", x_std);
+                // println!("dv {}", dv);
+                // println!("dvval {}", dv_val);
+                dv.assign(&dv_val);
+                // println!("dv {}", dv);
+            });
+
         dvar.t().to_owned()
     }
 }
@@ -754,6 +784,7 @@ mod tests {
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
     use ndarray_npy::{read_npy, write_npy};
+    use ndarray_rand::rand;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_stats::DeviationExt;
     use paste::paste;
@@ -982,10 +1013,19 @@ mod tests {
         assert_abs_diff_eq!(var, Array2::zeros((nt, 1)), epsilon = 2e-1);
     }
 
+    fn sphere(x: &Array2<f64>) -> Array2<f64> {
+        let s = (x * x).sum_axis(Axis(1));
+        s.insert_axis(Axis(1))
+    }
+
+    fn dsphere(x: &Array2<f64>) -> Array2<f64> {
+        x.mapv(|v| 2. * v).t().to_owned()
+    }
+
     #[test]
     fn test_derivatives() {
-        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
-        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(100);
+        let yt = sphere(&xt);
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
@@ -993,9 +1033,18 @@ mod tests {
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
 
-        let x = array![[0.5], [0.7]];
-        let dypred = gp.predict_derivatives(&x, 0);
-        println!("{}", dypred)
+        let x1: f64 = rand::random::<f64>() * 20. - 10.;
+        let x2: f64 = rand::random::<f64>() * 20. - 10.;
+        let xtest = array![[x1, x2]];
+
+        let jac = gp.predict_jacobian(&xtest);
+        let df = dsphere(&xtest);
+
+        let jac_rel_err1 = (jac[[0, 0]] - df[[0, 0]]).abs() / jac[[0, 0]];
+        let jac_rel_err2 = (jac[[1, 0]] - df[[1, 0]]).abs() / jac[[1, 0]];
+        println!("Test sphere predicted derivatives at {}", xtest);
+        assert_abs_diff_eq!(jac_rel_err1, 0.0, epsilon = 1e-3);
+        assert_abs_diff_eq!(jac_rel_err2, 0.0, epsilon = 1e-3);
     }
 
     #[test]
