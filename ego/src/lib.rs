@@ -1,5 +1,5 @@
 //! This library implements Efficient Global Optimization method,
-//! it is a port of [SMT EGO algorithm](https://smt.readthedocs.io/en/latest/_src_docs/applications/ego.html)
+//! it is a port of [SMT EGO algorithm](https://smt.readthedocs.io/en/stable/_src_docs/applications/ego.html)
 //!
 //! The optimizer is able to deal with inequality constraints.
 //! Objective and contraints are expected to computed grouped at the same time
@@ -12,7 +12,7 @@
 //! * parameterize mixture of experts,
 //! * save intermediate results and allow hot restart,
 //!
-//! # Example
+//! # Examples
 //!
 //! ```no_run
 //! use ndarray::{array, Array2, ArrayView2};
@@ -35,10 +35,8 @@
 //! While [Egor] optimizer works with continuous data (i.e floats), the class [MixintEgor]
 //! allows to make basic mixed-integer optimization by decorating `Egor` class.  
 //!
-//! Example
-//!
-//! We define an objective function `mixsinx` taking integer input values from the previous
-//! function `xsinx` defined above and we optimize with MixintEgor.
+//! As a second example, we define an objective function `mixsinx` taking integer
+//! input values from the previous function `xsinx` defined above and we optimize with `MixintEgor`.
 //!  
 //! ```no_run   
 //! use ndarray::{array, Array2, ArrayView2};
@@ -76,7 +74,7 @@
 //! let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &pre_proc);
 //! let res = mixintegor
 //!     .egor
-//!     .doe(Some(doe))   // we pas an initial doe
+//!     .doe(Some(doe))   // we pass an initial doe
 //!     .n_eval(n_eval)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .minimize().unwrap();
