@@ -89,7 +89,7 @@ Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for 
 $ pip install egobox
 ```
 
-See the [tutorial notebook](doc/TutorialEgor.ipynb) for usage of the optimizer.
+See the [tutorial notebook](https://github.com/relf/egobox/tree/master/doc/TutorialEgor.ipynb) for usage of the optimizer.
 
 ## Why egobox?
 
