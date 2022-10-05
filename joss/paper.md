@@ -27,7 +27,7 @@ to select the promising next point where the optimum could be located.
 Starting from that, one still has to tackle numerous challenges regarding the dimensionality, 
 multi-modality and computation time. Different algorithms may be develop to overcome 
 these hurdles [@Bartoli2019; @Dubreuil2020]. A key component of such surrogate-based algorithms 
-is the existence of an implementation of gausian process regression also known as 
+is the existence of an implementation of gaussian process regression also known as
 kriging method [@Bouhlel2016]. 
 
 The Surrogate Modeling Toolbox [@SMT2018; @SMT2019] library addresses such concerns using 
