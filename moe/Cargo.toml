@@ -1,6 +1,6 @@
 [package]
 name = "egobox-moe"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A library for mixture of expert gaussian processes"
@@ -16,8 +16,8 @@ persistent = ["serde", "typetag", "egobox-gp/serializable", "serde_json"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-clustering/blas", "linfa-pls/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.4.0", path = "../doe" }
-egobox-gp = { version = "0.4.0", path = "../gp" }
+egobox-doe = { version = "0.5.0", path = "../doe" }
+egobox-gp = { version = "0.5.0", path = "../gp" }
 
 linfa = { version = "0.6.0", default-features = false }
 linfa-clustering = { version = "0.6.0", default-features = false }
