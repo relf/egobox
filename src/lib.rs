@@ -1,29 +1,4 @@
-//! `egobox`, Rust toolbox for efficient global optimization
-//!
-//! # For Rust developers
-//!
-//! `egobox` is a set of ML libraries.
-//!
-//! | Name          | Version                                                                                         | Documentation                                                               | Description                                                                     |
-//! | :------------ | :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
-//! | `doe`         | [![crates.io](https://img.shields.io/crates/v/egobox-doe)](https://crates.io/crates/egobox-doe) | [![docs](https://docs.rs/egobox-doe/badge.svg)](https://docs.rs/egobox-doe) | sampling methods; contains LHS, FullFactorial, Random methods                   |
-//! | `gp`          | [![crates.io](https://img.shields.io/crates/v/egobox-gp)](https://crates.io/crates/egobox-gp)   | [![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)   | gaussian process regression; contains Kriging and PLS dimension reduction       |
-//! | `moe`         | [![crates.io](https://img.shields.io/crates/v/egobox-moe)](https://crates.io/crates/egobox-moe) | [![docs](https://docs.rs/egobox-moe/badge.svg)](https://docs.rs/egobox-moe) | mixture of experts using GP models                                              |
-//! | `ego`         | [![crates.io](https://img.shields.io/crates/v/egobox-ego)](https://crates.io/crates/egobox-ego) | [![docs](https://docs.rs/egobox-ego/badge.svg)](https://docs.rs/egobox-ego) | efficient global optimization with basic constraints and mixed integer handling |
-//!
-//! # For Python users
-//!
-//! Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions,
-//! the EGO algorithm written in Rust (aka `egor`) is binded in Python (the present Rust `egobox` module).
-//!
-//! You can install the Python package using:
-//!
-//! ```bash
-//! pip install egobox
-//! ```
-//!
-//! See the [tutorial notebook](https://github.com/relf/egobox/doc/TutorialEgor.ipynb) for usage.
-//!
+#![doc = include_str!("../README.md")]
 
 use egobox_doe::SamplingMethod;
 use linfa::ParamGuard;

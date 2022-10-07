@@ -15,12 +15,12 @@ Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](ht
 
 `egobox` Rust libraries consists of the following sub-packages.
 
-| Name         | Version                                                                                         | Documentation                                                               | Description                                                                     |
-| :----------- | :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
-| [doe](./doe) | [![crates.io](https://img.shields.io/crates/v/egobox-doe)](https://crates.io/crates/egobox-doe) | [![docs](https://docs.rs/egobox-doe/badge.svg)](https://docs.rs/egobox-doe) | sampling methods; contains LHS, FullFactorial, Random methods                   |
-| [gp](./gp)   | [![crates.io](https://img.shields.io/crates/v/egobox-gp)](https://crates.io/crates/egobox-gp)   | [![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)   | gaussian process regression; contains Kriging and PLS dimension reduction       |
-| [moe](./gp)  | [![crates.io](https://img.shields.io/crates/v/egobox-moe)](https://crates.io/crates/egobox-moe) | [![docs](https://docs.rs/egobox-moe/badge.svg)](https://docs.rs/egobox-moe) | mixture of experts using GP models                                              |
-| [ego](./ego) | [![crates.io](https://img.shields.io/crates/v/egobox-ego)](https://crates.io/crates/egobox-ego) | [![docs](https://docs.rs/egobox-ego/badge.svg)](https://docs.rs/egobox-ego) | efficient global optimization with basic constraints and mixed integer handling |
+| Name                                                  | Version                                                                                         | Documentation                                                               | Description                                                                     |
+| :---------------------------------------------------- | :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
+| [doe](https://github.com/relf/egobox/tree/master/doe) | [![crates.io](https://img.shields.io/crates/v/egobox-doe)](https://crates.io/crates/egobox-doe) | [![docs](https://docs.rs/egobox-doe/badge.svg)](https://docs.rs/egobox-doe) | sampling methods; contains LHS, FullFactorial, Random methods                   |
+| [gp](https://github.com/relf/egobox/tree/master/gp)   | [![crates.io](https://img.shields.io/crates/v/egobox-gp)](https://crates.io/crates/egobox-gp)   | [![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)   | gaussian process regression; contains Kriging and PLS dimension reduction       |
+| [moe](https://github.com/relf/egobox/tree/master/moe) | [![crates.io](https://img.shields.io/crates/v/egobox-moe)](https://crates.io/crates/egobox-moe) | [![docs](https://docs.rs/egobox-moe/badge.svg)](https://docs.rs/egobox-moe) | mixture of experts using GP models                                              |
+| [ego](https://github.com/relf/egobox/tree/master/ego) | [![crates.io](https://img.shields.io/crates/v/egobox-ego)](https://crates.io/crates/egobox-ego) | [![docs](https://docs.rs/egobox-ego/badge.svg)](https://docs.rs/egobox-ego) | efficient global optimization with basic constraints and mixed integer handling |
 
 ### Usage
 
@@ -89,7 +89,7 @@ Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for 
 $ pip install egobox
 ```
 
-See the [tutorial notebook](doc/TutorialEgor.ipynb) for usage of the optimizer.
+See the [tutorial notebook](https://github.com/relf/egobox/tree/master/doc/TutorialEgor.ipynb) for usage of the optimizer.
 
 ## Why egobox?
 
