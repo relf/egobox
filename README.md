@@ -28,10 +28,10 @@ Depending on the sub-packages you want to use, you have to add following declara
 
 ```
 [dependencies]
-egobox-doe = { version = "0.4.0" }
-egobox-gp  = { version = "0.4.0" }
-egobox-moe = { version = "0.4.0" }
-egobox-ego = { version = "0.4.0" }
+egobox-doe = { version = "0.5.0" }
+egobox-gp  = { version = "0.5.0" }
+egobox-moe = { version = "0.5.0" }
+egobox-ego = { version = "0.5.0" }
 ```
 
 ### Features
@@ -74,7 +74,7 @@ Otherwise, you can choose an external BLAS/LAPACK backend available through the 
 Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you could specify in your `Cargo.toml` the following features:
 ```
 [dependencies]
-egobox-gp = { version = "0.4.0", features = ["blas", "linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.5.0", features = ["blas", "linfa/intel-mkl-static"] }
 ```
 or you could run the `gp` example as follows:
 ``` bash
