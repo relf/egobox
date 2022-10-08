@@ -20,14 +20,14 @@ bibliography: paper.bib
 # Summary
 
 Efficient global optimization (EGO) algorithms are used to tackle design optimization problems 
-that involve computationally costly models [@Jones1998]. Basically, the idea is to use gaussian 
+that involve computationally costly models [@Jones1998]. Basically, the idea is to use Gaussian 
 process regression to approximate the objective function and use probabilistic information 
 to select the promising next point where the optimum could be located.
 
 Starting from that, one still has to tackle numerous challenges regarding the dimensionality, 
-multi-modality and computation time. Different algorithms may be develop to overcome 
+multi-modality and computation time. Different algorithms have been developed to overcome 
 these hurdles [@Bartoli2019; @Dubreuil2020]. A key component of such surrogate-based algorithms 
-is the existence of an implementation of gaussian process regression also known as
+is the existence of an implementation of Gaussian process regression also known as
 kriging method [@Bouhlel2016]. 
 
 The Surrogate Modeling Toolbox [@SMT2018; @SMT2019] library addresses such concerns using 
@@ -60,9 +60,9 @@ environments where a Python runtime does not fit.
 # Library features
 
 With the above need in mind, the Rust programming language appears to be of interest
-with its selling points being performance, reliability and productivity.
-The language is meant to challenge C as a system language but also rely on strong typing,
-and high level features such as functional programming, algebric data types, module 
+with its selling points being performance, reliability, and productivity.
+The language is meant to challenge C as a system language but also supporting strong typing,
+and high level features such as functional programming, algebric data types, and module 
 management. It has a strict approach regarding memory-safety management and 
 benefits from a state of the art tooling for software development. 
 
@@ -78,7 +78,7 @@ algorithms. The library is organized in four sub-packages as follows:
 * `doe`: sampling methods implementing Latin Hypercube sampling, popular sampling
 method used to create design of experiments,
 
-* `gp`: gaussian process regression also known as kriging algorithm used
+* `gp`: Gaussian process regression also known as kriging algorithm used
 as surrogate models for computationally costly black-box functions,
 
 * `moe`: mixture of experts which aims at increasing the accuracy of a surrogate 
@@ -91,7 +91,7 @@ constraints and mixed integer optimization through continuous relaxation.
 ![Architecture of the library](egobox_architecture.png)
 
 Finally thanks to the `PyO3` project, the Rust language is well-suited to create 
-Python extensions which benefits from Rust strenghts while being integrated in the 
+Python extensions which benefits from Rust strengths while being integrated in the 
 Python ecosystem.
 
 In order to increase the dissemination among the scientific community and demonstrate 
@@ -100,7 +100,7 @@ as the binding of the implemented EGO-like Rust optimizer, namely `Egor`.
 
 # Acknowledgements
 
-I would like to thank my colleagues Nathalie Bartoli, Thierry Lefebvre and Sylvain Dubreuil 
+I would like to thank my colleagues Nathalie Bartoli, Thierry Lefebvre, and Sylvain Dubreuil 
 as their work on surrogate-based adaptative optimization has fueled this software development.
 
 # References
