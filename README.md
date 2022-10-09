@@ -101,18 +101,31 @@ While I did not benchmark exactly my Rust code against SMT Python one, from my d
 
 My guess at this point is that interest could come from some Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top surrogate-based optimization EGO algorithm (`ego`) which gives its name to the library[^2][^3]. Aside from performance, such library can also take advantage from the others [Rust selling points](https://www.rust-lang.org/). 
 
-## Cite
+## Citation
 
-If you happen to find this Rust library useful for your research, you can cite this project as follows: 
+[![status](https://joss.theoj.org/papers/0b252f280b5e5b67b9caba72d56cb156/status.svg)](https://joss.theoj.org/papers/0b252f280b5e5b67b9caba72d56cb156)
+
+If you find this project useful for your research, you may cite it as follows: 
 
 ```
-@Misc{egobox,
-  author = {Rémi Lafage},
-  title = {Egobox: efficient global optimization toolbox in Rust},
-  year = {2020--},
-  url = "https://github.com/relf/egobox"
-}
+@article{
+  Lafage2022, 
+  author = {Rémi Lafage}, 
+  title = {egobox, a Rust toolbox for efficient global optimization}, 
+  journal = {Journal of Open Source Software} 
+  year = {2022}, 
+  doi = {10.21105/joss.04737}, 
+  url = {https://doi.org/10.21105/joss.04737}, 
+  publisher = {The Open Journal}, 
+  volume = {7}, 
+  number = {78}, 
+  pages = {4737}, 
+} 
 ```
+
+Additionally, you may consider adding a star to the repository. This positive feedback improves the visibility of the project.
+
+## References
 
 [^1]: M. A. Bouhlel and J. T. Hwang and N. Bartoli and R. Lafage and J. Morlier and J. R. R. A. Martins. A Python surrogate modeling framework with derivatives. Advances in Engineering Software, 2019.
 
