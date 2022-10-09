@@ -41,8 +41,8 @@ class TestGpMix(unittest.TestCase):
 
         if os.path.exists(filename):
             os.remove(filename)
-        gpx.save("gpdump.json")
-        gpx2 = egx.Gpx("gpdump.json")
+        gpx.save(filename)
+        gpx2 = egx.Gpx(filename)
         os.remove(filename)
 
         # should interpolate
