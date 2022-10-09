@@ -3,7 +3,7 @@
 [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
 [![pytests](https://github.com/relf/egobox/workflows/pytests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Apytests)
 [![linting](https://github.com/relf/egobox/workflows/lint/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Alint)
-[![status](https://joss.theoj.org/papers/0b252f280b5e5b67b9caba72d56cb156/status.svg)](https://joss.theoj.org/papers/0b252f280b5e5b67b9caba72d56cb156)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.04737/status.svg)](https://doi.org/10.21105/joss.04737)
 
 Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt). 
 
@@ -91,19 +91,9 @@ $ pip install egobox
 
 See the [tutorial notebook](https://github.com/relf/egobox/tree/master/doc/TutorialEgor.ipynb) for usage of the optimizer.
 
-## Why egobox?
-
-I started this library as a way to learn Rust and see if it can be used to implement algorithms like those in the SMT toolbox[^1]. As the first components (doe, gp) emerged, it appears I could translate Python code almost line by line in Rust (well... after a great deal of borrow-checker fight!) and thanks to [Rust ndarray library ecosystem](https://github.com/rust-ndarray). 
-
-This library relies also on the [linfa project](https://github.com/rust-ml/linfa) which aims at being the "scikit-learn-like ML library for Rust". Along the way I could contribute to `linfa` by porting gaussian mixture model (`linfa-clustering/gmm`) and partial least square family methods (`linfa-pls`) confirming the fact that Python algorithms translation in Rust could be pretty straightforward.
-
-While I did not benchmark exactly my Rust code against SMT Python one, from my debugging sessions, I noticed I did not get such a great speed up. Actually, algorithms like `doe` and `gp` relies extensively on linear algebra and Python famous libraries `numpy`/`scipy` which are strongly optimized by calling C or Fortran compiled code.
-
-My guess at this point is that interest could come from some Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top surrogate-based optimization EGO algorithm (`ego`) which gives its name to the library[^2][^3]. Aside from performance, such library can also take advantage from the others [Rust selling points](https://www.rust-lang.org/). 
-
 ## Citation
 
-[![status](https://joss.theoj.org/papers/0b252f280b5e5b67b9caba72d56cb156/status.svg)](https://joss.theoj.org/papers/0b252f280b5e5b67b9caba72d56cb156)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.04737/status.svg)](https://doi.org/10.21105/joss.04737)
 
 If you find this project useful for your research, you may cite it as follows: 
 
@@ -125,7 +115,16 @@ If you find this project useful for your research, you may cite it as follows:
 
 Additionally, you may consider adding a star to the repository. This positive feedback improves the visibility of the project.
 
-## References
+## History
+
+I started this library as a way to learn Rust and see if it can be used to implement algorithms like those in the SMT toolbox[^1]. As the first components (doe, gp) emerged, it appears I could translate Python code almost line by line in Rust (well... after a great deal of borrow-checker fight!) and thanks to [Rust ndarray library ecosystem](https://github.com/rust-ndarray). 
+
+This library relies also on the [linfa project](https://github.com/rust-ml/linfa) which aims at being the "scikit-learn-like ML library for Rust". Along the way I could contribute to `linfa` by porting gaussian mixture model (`linfa-clustering/gmm`) and partial least square family methods (`linfa-pls`) confirming the fact that Python algorithms translation in Rust could be pretty straightforward.
+
+While I did not benchmark exactly my Rust code against SMT Python one, from my debugging sessions, I noticed I did not get such a great speed up. Actually, algorithms like `doe` and `gp` relies extensively on linear algebra and Python famous libraries `numpy`/`scipy` which are strongly optimized by calling C or Fortran compiled code.
+
+My guess at this point was that interest could come from some Rust algorithms built upon these initial building blocks hence I started to implement mixture of experts algorithm (`moe`) and on top surrogate-based optimization EGO algorithm (`ego`) which gives its name to the library[^2][^3]. Aside from performance, such library can also take advantage from the others [Rust selling points](https://www.rust-lang.org/). 
+
 
 [^1]: M. A. Bouhlel and J. T. Hwang and N. Bartoli and R. Lafage and J. Morlier and J. R. R. A. Martins. A Python surrogate modeling framework with derivatives. Advances in Engineering Software, 2019.
 
