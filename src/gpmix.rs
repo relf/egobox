@@ -23,8 +23,8 @@ impl GpMix {
     #[new]
     #[args(
         n_clusters = "1",
-        regr_spec = "RegressionSpec::ALL",
-        corr_spec = "CorrelationSpec::ALL",
+        regr_spec = "RegressionSpec::CONSTANT",
+        corr_spec = "CorrelationSpec::SQUARED_EXPONENTIAL",
         recombination = "Recombination::Smooth",
         kpls_dim = "None",
         outdir = "None",
