@@ -26,7 +26,7 @@ pub trait SurrogateParams {
 
 /// A trait for a surrogate used as expert in the mixture.
 #[cfg_attr(feature = "persistent", typetag::serde(tag = "type"))]
-pub trait Surrogate: std::fmt::Display {
+pub trait Surrogate: std::fmt::Display + Send {
     /// Predict output values at n points given as (n, xdim) matrix.
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
@@ -167,7 +167,10 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{Lhs, SamplingMethod};
+    #[cfg(not(feature = "blas"))]
+    use linfa_linalg::norm::*;
     use ndarray::array;
+    #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
     use ndarray_stats::DeviationExt;
 
@@ -181,7 +184,7 @@ mod tests {
         let xt = Lhs::new(&xlimits).sample(10);
         let yt = xsinx(&xt);
         let gp = make_surrogate_params!(Constant, SquaredExponential)
-            .fit(&xt, &yt)
+            .train(&xt.view(), &yt.view())
             .expect("GP fit error");
         gp.save("target/tests/save_gp.json").expect("GP not saved");
         let gp = load("target/tests/save_gp.json").expect("GP not loaded");

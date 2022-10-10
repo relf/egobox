@@ -9,7 +9,7 @@ Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](ht
 
 `egobox` is twofold: 
 1. for developers: [a set of Rust libraries](#the-rust-libraries) useful to implement bayesian optimization (EGO-like) algorithms,
-2. for end-users: [a Python module](#the-python-optimizer-egor), the Python binding of the implemented EGO-like optimizer, named `Egor`. 
+2. for end-users: [a Python module](#the-python-optimizer-egor), the Python binding of the implemented EGO-like optimizer, named `Egor` and surrogate model `Gpx`, mixture of Gaussian processes. 
 
 ## The Rust libraries
 
@@ -81,15 +81,17 @@ or you could run the `gp` example as follows:
 $ cd gp && cargo run --example kriging --release --features blas,linfa/intel-mkl-static
 ```
 
-## The Python optimizer Egor
+## The `egobox` Python binding
 
-Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions, the EGO algorithm written in Rust (aka `Egor`) is binded in Python. You can install the Python package using:
+Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions. 
+You can install the Python package using:
 
 ```bash
 $ pip install egobox
 ```
 
-See the [tutorial notebook](https://github.com/relf/egobox/tree/master/doc/TutorialEgor.ipynb) for usage of the optimizer.
+See the [tutorial notebooks](https://github.com/relf/egobox/tree/master/doc) for usage of the optimizer 
+and mixture of Gaussian processes surrogate model.
 
 ## Citation
 

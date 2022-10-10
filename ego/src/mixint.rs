@@ -397,8 +397,8 @@ impl From<MixintMoeValidParams> for MixintMoeParams {
     }
 }
 
-#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 /// The Moe model that takes into account Xtype specifications
+#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 pub struct MixintMoe {
     /// the decorated Moe
     moe: Moe,
@@ -454,7 +454,7 @@ impl Surrogate for MixintMoe {
 
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
-    fn save(&self, path: &str) -> Result<()> {
+    fn save(&self, path: &str) -> egobox_moe::Result<()> {
         let mut file = fs::File::create(path).unwrap();
         let bytes = match serde_json::to_string(self) {
             Ok(b) => b,

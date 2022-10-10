@@ -95,11 +95,10 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             debug!("Automatic settings {} {:?}", n_clusters, recomb);
         }
 
-        let training = if let Recombination::Smooth(None) = recomb {
+        let training = if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
             // Extract 5% of data for validation
             // TODO: Use cross-validation ? Performances
             let (_, training_data) = extract_part(&data, 5);
-
             training_data
         } else {
             data.to_owned()
@@ -135,7 +134,6 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
     ) -> Result<Moe> {
         let gmx = clustering.gmx();
         let recomb = clustering.recombination();
-        let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
 
@@ -158,7 +156,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             experts.push(expert);
         }
 
-        if recomb == Recombination::Smooth(None) {
+        if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
             // Extract 5% of data for validation
             // TODO: Use cross-validation ? Performances
             let (test, _) = extract_part(&data, 5);
@@ -166,6 +164,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             let ytest = Some(test.slice(s![.., nx..]).to_owned());
             let factor =
                 self.optimize_heaviside_factor(&experts, gmx, &xtest.unwrap(), &ytest.unwrap());
+            info!("Retrain mixture with optimized heaviside factor={}", factor);
             let moe = MoeParams::from(self.clone())
                 .n_clusters(gmx.n_clusters())
                 .recombination(Recombination::Smooth(Some(factor)))
@@ -828,8 +827,8 @@ mod tests {
         let xtest = array![[0.6]];
         let y_expected = moe.predict_values(&xtest).unwrap();
         let filename = format!("{}/saved_moe.json", test_dir);
-        moe.save(filename).expect("MoE saving");
-        let new_moe = Moe::load(filename).expect("MoE loading");
+        moe.save(&filename).expect("MoE saving");
+        let new_moe = Moe::load(&filename).expect("MoE loading");
         assert_abs_diff_eq!(
             y_expected,
             new_moe.predict_values(&xtest).unwrap(),
