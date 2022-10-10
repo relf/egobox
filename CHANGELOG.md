@@ -1,7 +1,7 @@
 Version 0.6.0 - unreleased
 ==========================
 
-* Add `GpMix`/`Gpx` in Python `egobox` module wrapping `egobox-moe::Moe` (#31)
+* Add `GpMix`/`Gpx` in Python `egobox` module, the Python binding of `egobox-moe::Moe` (#31)
 
 Version 0.5.0 - 2022-10-07
 ==========================
