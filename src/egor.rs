@@ -138,7 +138,7 @@ pub(crate) fn lhs(
 ///         Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP
 ///
 ///     kpls_dim (0 < int < nx)
-///         Number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
+///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
 ///     n_clusters (int >= 0)

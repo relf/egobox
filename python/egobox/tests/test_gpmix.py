@@ -12,11 +12,11 @@ class TestGpMix(unittest.TestCase):
         xt = np.array([[0.0, 1.0, 2.0, 3.0, 4.0]]).T
         yt = np.array([[0.0, 1.0, 1.5, 0.9, 1.0]]).T
 
-        self.gpmix = egx.GpMix()
+        self.gpmix = egx.GpMix()  # or egx.Gpx.gp_mix()
         self.gpmix.set_training_values(xt, yt)
         self.gpx = self.gpmix.train()
 
-    def test_gpmix_kriging(self):
+    def test_gpx_kriging(self):
         gpx = self.gpx
 
         # should interpolate
@@ -31,7 +31,7 @@ class TestGpMix(unittest.TestCase):
             0.0, float(gpx.predict_variances(np.array([[1.1]]))), delta=1e-3
         )
 
-    def test_gpmix_save_load(self):
+    def test_gpx_save_load(self):
         filename = "gpdump.json"
 
         gpx = self.gpx
@@ -39,7 +39,7 @@ class TestGpMix(unittest.TestCase):
         if os.path.exists(filename):
             os.remove(filename)
         gpx.save(filename)
-        gpx2 = egx.Gpx(filename)
+        gpx2 = egx.Gpx.load(filename)
         os.remove(filename)
 
         # should interpolate
