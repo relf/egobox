@@ -12,7 +12,7 @@ class TestGpMix(unittest.TestCase):
         xt = np.array([[0.0, 1.0, 2.0, 3.0, 4.0]]).T
         yt = np.array([[0.0, 1.0, 1.5, 0.9, 1.0]]).T
 
-        self.gpmix = egx.GpMix()  # or egx.Gpx.gp_mix()
+        self.gpmix = egx.GpMix()  # or egx.Gpx.builder()
         self.gpmix.set_training_values(xt, yt)
         self.gpx = self.gpmix.train()
 
