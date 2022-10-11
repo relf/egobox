@@ -810,15 +810,15 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                 ..
             } = params;
             if let Some(grad) = gradient {
-                let f = |x: &Vec<f64>| -> f64 {
-                    self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
-                };
-                // let grd = self
-                //     .grad_infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
-                //     .to_vec();
-                // info!("finite diff {:?}", x.to_vec().forward_diff(&f));
-                // info!("gradient {:?}", grd);
-                grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+                // let f = |x: &Vec<f64>| -> f64 {
+                //     self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                // };
+                // grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+
+                let grd = self
+                    .grad_infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                    .to_vec();
+                grad[..].copy_from_slice(&grd);
             }
             self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
         };
@@ -829,17 +829,29 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             let cstr =
                 move |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
                     if let Some(grad) = gradient {
-                        let f = |x: &Vec<f64>| -> f64 {
-                            cstr_models[i]
-                                .predict_values(
-                                    &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                        .unwrap()
-                                        .view(),
-                                )
-                                .unwrap()[[0, 0]]
-                                / params.scale_cstr[index]
-                        };
-                        grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
+                        // let f = |x: &Vec<f64>| -> f64 {
+                        //     cstr_models[i]
+                        //         .predict_values(
+                        //             &Array::from_shape_vec((1, x.len()), x.to_vec())
+                        //                 .unwrap()
+                        //                 .view(),
+                        //         )
+                        //         .unwrap()[[0, 0]]
+                        //         / params.scale_cstr[index]
+                        // };
+                        // grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+
+                        let grd = cstr_models[i]
+                            .predict_jacobian(
+                                &Array::from_shape_vec((1, x.len()), x.to_vec())
+                                    .unwrap()
+                                    .view(),
+                            )
+                            .unwrap()
+                            .row(0)
+                            .mapv(|v| v / params.scale_cstr[index])
+                            .to_vec();
+                        grad[..].copy_from_slice(&grd);
                     }
                     cstr_models[index]
                         .predict_values(
