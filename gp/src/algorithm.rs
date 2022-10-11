@@ -201,9 +201,19 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
     // }
 
+    #[cfg(feature = "blas")]
+    pub fn predict_derivatives(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        kx: usize,
+    ) -> Array1<F> {
+        Array1::zeros((1,))
+    }
+
     // impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
     /// Predict derivatives of the output prediction
     /// wrt the kx th components at point a set of points x \[n_samples, n_components\].
+    #[cfg(not(feature = "blas"))]
     pub fn predict_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -260,7 +270,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         res
     }
 
+    #[cfg(feature = "blas")]
+    pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        return Array2::<F>::zeros((1, 1));
+    }
+
     /// Predict jacobian at one point x
+    #[cfg(not(feature = "blas"))]
     pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut jac = Array2::zeros((self.xtrain.data.ncols(), 1));
         Zip::indexed(jac.rows_mut()).for_each(|i, mut r| {
@@ -271,8 +287,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         jac
     }
 
+    #[cfg(feature = "blas")]
+    pub fn predict_variance_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        return Array2::<F>::zeros((1, 1));
+    }
+
     /// Predict derivatives of the output prediction variance
     /// wrt the kx th components at point one input.
+    #[cfg(not(feature = "blas"))]
     pub fn predict_variance_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         // Initialization
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
@@ -1022,6 +1044,7 @@ mod tests {
         x.mapv(|v| 2. * v).t().to_owned()
     }
 
+    #[cfg(not(feature = "blas"))]
     #[test]
     fn test_derivatives() {
         let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(100);
@@ -1047,6 +1070,7 @@ mod tests {
         assert_abs_diff_eq!(jac_rel_err2, 0.0, epsilon = 1e-3);
     }
 
+    #[cfg(not(feature = "blas"))]
     #[test]
     fn test_variance_derivatives() {
         let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
