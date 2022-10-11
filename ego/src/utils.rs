@@ -205,8 +205,8 @@ mod tests {
         s.insert_axis(Axis(1))
     }
     #[test]
-    fn test_grad_ei() {
-        let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(100);
+    fn test_grad_wbs2() {
+        let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(10);
         let yt = sphere(&xt);
         let gp = Moe::params()
             .regression_spec(RegressionSpec::CONSTANT)
@@ -216,26 +216,79 @@ mod tests {
             .expect("GP fitting");
         let bgp = Box::new(gp) as Box<dyn ClusteredSurrogate>;
 
-        let h = 1e-5;
-        let x1 = 2.;
-        let x2 = 3.;
+        let h = 1e-4;
+        let x1 = 0.1;
+        let x2 = 0.3;
         let xtest = vec![x1, x2];
         let xtest11 = vec![x1 + h, x2];
         let xtest12 = vec![x1 - h, x2];
         let xtest21 = vec![x1, x2 + h];
         let xtest22 = vec![x1, x2 - h];
-        let fdiff1 = (grad_ei(&xtest11, bgp.as_ref(), 0.1) - grad_ei(&xtest12, bgp.as_ref(), 0.1))
+        let fdiff1 = (wb2s(&xtest11, bgp.as_ref(), 0.1, 0.5)
+            - wb2s(&xtest12, bgp.as_ref(), 0.1, 0.5))
             / (2. * h);
-        let fdiff2 = (grad_ei(&xtest21, bgp.as_ref(), 0.1) - grad_ei(&xtest22, bgp.as_ref(), 0.1))
+        let fdiff2 = (wb2s(&xtest21, bgp.as_ref(), 0.1, 0.5)
+            - wb2s(&xtest22, bgp.as_ref(), 0.1, 0.5))
             / (2. * h);
         println!("fdiff({:?}) = [{}, {}]", xtest, fdiff1, fdiff2);
-
-        let basetest = Array::from_vec(xtest.clone());
-        let arrtest = basetest.broadcast((2, xtest.len())).unwrap();
         println!(
-            "GP predict derivatives({:?}) = {:?}",
+            "grad_wbs2({:?}) = {:?}",
             xtest,
-            bgp.predict_jacobian(&arrtest.view()).unwrap()
-        )
+            grad_wbs2(&xtest21, bgp.as_ref(), 0.1, 0.5)
+        );
+
+        let h = 1e-4;
+        let x1 = 0.5;
+        let x2 = 0.7;
+        let xtest = array![[x1, x2]];
+        let basetest = xtest.to_owned();
+        let xtest11 = array![[x1 + h, x2]];
+        let xtest12 = array![[x1 - h, x2]];
+        let xtest21 = array![[x1, x2 + h]];
+        let xtest22 = array![[x1, x2 - h]];
+        let fdiff1 = (bgp.predict_values(&xtest11.view()).unwrap()
+            - bgp.predict_values(&xtest12.view()).unwrap())
+            / (2. * h);
+        let fdiff2 = (bgp.predict_values(&xtest21.view()).unwrap()
+            - bgp.predict_values(&xtest22.view()).unwrap())
+            / (2. * h);
+        println!(
+            "gp fdiff({}) = [[{}, {}]]",
+            xtest,
+            fdiff1[[0, 0]],
+            fdiff2[[0, 0]]
+        );
+        println!(
+            "GP predict derivatives({}) = {}",
+            xtest,
+            bgp.predict_jacobian(&basetest.view()).unwrap()
+        );
+
+        let h = 1e-4;
+        let x1 = 5.0;
+        let x2 = 1.0;
+        let xtest = array![[x1, x2]];
+        let basetest = xtest.to_owned();
+        let xtest11 = array![[x1 + h, x2]];
+        let xtest12 = array![[x1 - h, x2]];
+        let xtest21 = array![[x1, x2 + h]];
+        let xtest22 = array![[x1, x2 - h]];
+        let fdiff1 = (bgp.predict_variances(&xtest11.view()).unwrap()
+            - bgp.predict_variances(&xtest12.view()).unwrap())
+            / (2. * h);
+        let fdiff2 = (bgp.predict_variances(&xtest21.view()).unwrap()
+            - bgp.predict_variances(&xtest22.view()).unwrap())
+            / (2. * h);
+        println!(
+            "gp var fdiff({}) = [[{}, {}]]",
+            xtest,
+            fdiff1[[0, 0]],
+            fdiff2[[0, 0]]
+        );
+        println!(
+            "GP predict variances derivatives({}) = {}",
+            xtest,
+            bgp.predict_variance_jacobian(&basetest.view()).unwrap()
+        );
     }
 }
