@@ -792,6 +792,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         (x_dat, y_dat)
     }
 
+    #[cfg(not(feature = "blas"))]
     /// True whether surrogate gradient computation implemented
     fn is_grad_impl_available(&self) -> bool {
         if let Some(n) = self.n_clusters {
@@ -799,6 +800,12 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                 && self.regression_spec == RegressionSpec::CONSTANT
                 && self.correlation_spec == CorrelationSpec::SQUAREDEXPONENTIAL;
         }
+        false
+    }
+
+    #[cfg(feature = "blas")]
+    /// True whether surrogate gradient computation implemented
+    fn is_grad_impl_available(&self) -> bool {
         false
     }
 
@@ -1175,7 +1182,10 @@ mod tests {
     #[serial]
     fn test_xsinx_suggestions() {
         let mut ego = Egor::new(xsinx, &array![[0.0, 25.0]]);
-        let ego = ego.infill_strategy(InfillStrategy::EI);
+        let ego = ego
+            .regression_spec(RegressionSpec::ALL)
+            .correlation_spec(CorrelationSpec::ALL)
+            .infill_strategy(InfillStrategy::EI);
 
         let mut doe = array![[0.], [7.], [20.], [25.]];
         let mut y_doe = xsinx(&doe.view());
@@ -1308,6 +1318,8 @@ mod tests {
             .sample(10);
         let res = Egor::new(f_g24, &xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
+            .regression_spec(RegressionSpec::ALL)
+            .correlation_spec(CorrelationSpec::ALL)
             .n_cstr(2)
             .q_parallel(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
