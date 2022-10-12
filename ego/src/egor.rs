@@ -792,6 +792,16 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         (x_dat, y_dat)
     }
 
+    /// True whether surrogate gradient computation implemented
+    fn is_grad_impl_available(&self) -> bool {
+        if let Some(n) = self.n_clusters {
+            return n == 1
+                && self.regression_spec == RegressionSpec::CONSTANT
+                && self.correlation_spec == CorrelationSpec::SQUAREDEXPONENTIAL;
+        }
+        false
+    }
+
     fn find_best_point(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -810,15 +820,17 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                 ..
             } = params;
             if let Some(grad) = gradient {
-                // let f = |x: &Vec<f64>| -> f64 {
-                //     self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
-                // };
-                // grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-
-                let grd = self
-                    .grad_infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
-                    .to_vec();
-                grad[..].copy_from_slice(&grd);
+                if self.is_grad_impl_available() {
+                    let grd = self
+                        .grad_infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                        .to_vec();
+                    grad[..].copy_from_slice(&grd);
+                } else {
+                    let f = |x: &Vec<f64>| -> f64 {
+                        self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                    };
+                    grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+                }
             }
             self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
         };
@@ -829,29 +841,31 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             let cstr =
                 move |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
                     if let Some(grad) = gradient {
-                        // let f = |x: &Vec<f64>| -> f64 {
-                        //     cstr_models[i]
-                        //         .predict_values(
-                        //             &Array::from_shape_vec((1, x.len()), x.to_vec())
-                        //                 .unwrap()
-                        //                 .view(),
-                        //         )
-                        //         .unwrap()[[0, 0]]
-                        //         / params.scale_cstr[index]
-                        // };
-                        // grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-
-                        let grd = cstr_models[i]
-                            .predict_jacobian(
-                                &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                    .unwrap()
-                                    .view(),
-                            )
-                            .unwrap()
-                            .row(0)
-                            .mapv(|v| v / params.scale_cstr[index])
-                            .to_vec();
-                        grad[..].copy_from_slice(&grd);
+                        if self.is_grad_impl_available() {
+                            let grd = cstr_models[i]
+                                .predict_jacobian(
+                                    &Array::from_shape_vec((1, x.len()), x.to_vec())
+                                        .unwrap()
+                                        .view(),
+                                )
+                                .unwrap()
+                                .row(0)
+                                .mapv(|v| v / params.scale_cstr[index])
+                                .to_vec();
+                            grad[..].copy_from_slice(&grd);
+                        } else {
+                            let f = |x: &Vec<f64>| -> f64 {
+                                cstr_models[i]
+                                    .predict_values(
+                                        &Array::from_shape_vec((1, x.len()), x.to_vec())
+                                            .unwrap()
+                                            .view(),
+                                    )
+                                    .unwrap()[[0, 0]]
+                                    / params.scale_cstr[index]
+                            };
+                            grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+                        }
                     }
                     cstr_models[index]
                         .predict_values(
