@@ -253,7 +253,7 @@ impl<F: Float, D: Data<Elem = F>> PredictInplace<ArrayBase<D, Ix2>, Array1<usize
         let (_, log_resp) = self.estimate_log_prob_resp(observations);
         *targets = log_resp
             .mapv(F::exp)
-            .map_axis(Axis(1), |row| row.argmax().unwrap());
+            .map_axis(Axis(1), |row| row.argmax().unwrap_or(0));
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<usize> {

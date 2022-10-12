@@ -2,7 +2,7 @@ use crate::correlation_models::*;
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::parameters::{GpParams, GpValidParams};
-use crate::utils::{DistanceMatrix, NormalizedMatrix};
+use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedMatrix};
 use egobox_doe::{Lhs, SamplingMethod};
 #[cfg(feature = "blas")]
 use linfa::dataset::{WithLapack, WithoutLapack};
@@ -171,21 +171,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     fn _compute_correlation(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let n_obs = x.nrows();
-        let n_features = x.ncols();
-
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let nt = self.xtrain.data.nrows();
         // Get pairwise componentwise L1-distances to the input training set
-        let mut dx: Array2<F> = Array2::zeros((nt * n_obs, n_features));
-        for (i, xrow) in xnorm.rows().into_iter().enumerate() {
-            let dxrows = &self.xtrain.data - &xrow.into_shape((1, n_features)).unwrap();
-            let a = i * nt;
-            let b = (i + 1) * nt;
-            dx.slice_mut(s![a..b, ..]).assign(&dxrows);
-        }
+        let dx = pairwise_differences(&xnorm, &self.xtrain.data);
         // Compute the correlation function
         let r = self.corr.apply(&self.theta, &dx, &self.w_star);
+        let n_obs = x.nrows();
+        let nt = self.xtrain.data.nrows();
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 
@@ -206,6 +198,193 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Retrieve output dimension
     pub fn output_dim(&self) -> usize {
         self.ytrain.ncols()
+    }
+    // }
+
+    #[cfg(feature = "blas")]
+    pub fn predict_derivatives(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        kx: usize,
+    ) -> Array1<F> {
+        Array1::zeros((1,))
+    }
+
+    // impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
+    /// Predict derivatives of the output prediction
+    /// wrt the kx th components at point a set of points x \[n_samples, n_components\].
+    #[cfg(not(feature = "blas"))]
+    pub fn predict_derivatives(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        kx: usize,
+    ) -> Array1<F> {
+        let corr = self._compute_correlation(x);
+        // println!("r = {}", corr);
+        let x = (x - &self.xtrain.mean) / &self.xtrain.std;
+
+        let df = Array2::<F>::zeros((1, x.ncols()));
+        let beta = &self.inner_params.beta;
+        let gamma = &self.inner_params.gamma;
+        let df_dx = &df.t().dot(beta);
+        // println!("x = {}", x);
+        // println!("df_dx = {}", df_dx);
+        // println!(
+        //     "shapes df={:?}, beta={:?}, df_dx={:?}",
+        //     df.shape(),
+        //     beta.shape(),
+        //     df_dx.shape()
+        // );
+
+        let nr = x.nrows();
+        let nc = self.xtrain.data.nrows();
+        let d_dx_1 = &x
+            .column(kx)
+            .to_owned()
+            .into_shape((nr, 1))
+            .unwrap()
+            .broadcast((nr, nc))
+            .unwrap()
+            .to_owned();
+
+        let d_dx_2 = self
+            .xtrain
+            .data
+            .column(kx)
+            .to_owned()
+            .as_standard_layout()
+            .into_shape((1, nc))
+            .unwrap()
+            .to_owned();
+
+        let d_dx = d_dx_1 - d_dx_2;
+        // println!("d_dx = {}", d_dx);
+        // println!("theta = {}", self.theta);
+        // Get pairwise componentwise L1-distances to the input training set
+        let theta = &self.theta.to_owned();
+        let d_dx_corr = d_dx * corr;
+        let res = (df_dx.row(kx).to_owned()
+            - F::cast(2.) * theta[kx] * d_dx_corr.dot(gamma)[[0, 0]])
+            * self.ytrain.std[0]
+            / self.xtrain.std[kx];
+        res
+    }
+
+    #[cfg(feature = "blas")]
+    pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        return Array2::<F>::zeros((1, 1));
+    }
+
+    /// Predict jacobian at one point x
+    #[cfg(not(feature = "blas"))]
+    pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let mut jac = Array2::zeros((self.xtrain.data.ncols(), 1));
+        Zip::indexed(jac.rows_mut()).for_each(|i, mut r| {
+            let pred = self.predict_derivatives(x, i);
+            // println!("df/dx{}={}", i, pred);
+            r.assign(&pred);
+        });
+        jac
+    }
+
+    #[cfg(feature = "blas")]
+    pub fn predict_variance_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        return Array2::<F>::zeros((1, 1));
+    }
+
+    /// Predict derivatives of the output prediction variance
+    /// wrt the kx th components at point one input.
+    #[cfg(not(feature = "blas"))]
+    pub fn predict_variance_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        // Initialization
+        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let theta = &self.theta;
+        // println!("x={:?}", xnorm);
+        // Get pairwise componentwise L1-distances to the input training set
+        // dx = differences(x, Y=self.X_norma.copy())
+        let dx = pairwise_differences(&xnorm, &self.xtrain.data);
+        // println!("dx={:?}", dx);
+        // d = self._componentwise_distance(dx)
+        // dd = self._componentwise_distance(
+        //     dx, theta=self.optimal_theta, return_derivative=True
+        // )
+        let dd = einsum("j,ij->ij", &[&theta.t(), &dx])
+            .unwrap()
+            .mapv(|v| F::cast(2) * v);
+        // println!("dd={:?}", dd);
+        let sigma2 = &self.inner_params.sigma2;
+        let cholesky_k = &self.inner_params.r_chol;
+
+        // derivative_dic = {"dx": dx, "dd": dd}
+        // r, dr = self._correlation_types[self.options["corr"]](
+        //     theta, d, derivative_params=derivative_dic
+        // )
+        let r = self.corr.apply(&self.theta, &dx, &self.w_star);
+        let dr = -einsum("i,ij->ij", &[&r.t().row(0), &dd])
+            .unwrap()
+            .into_shape((dd.shape()[0], dd.shape()[1]))
+            .unwrap();
+        // println!("r={:?}", r);
+        // println!("dr={:?}", dr);
+
+        let rho1 = cholesky_k.solve_triangular(&r, UPLO::Lower).unwrap();
+        let inv_kr = cholesky_k.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
+
+        let p1 = dr.t().dot(&inv_kr).t().to_owned();
+
+        let p2 = inv_kr.t().dot(&dr);
+
+        let f_x = self.mean.apply(x).t().to_owned(); //(x).T
+        let f_mean = self.mean.apply(&self.xtrain.data);
+
+        let rho2 = cholesky_k.solve_triangular(&f_mean, UPLO::Lower).unwrap();
+        let inv_kf = cholesky_k.t().solve_triangular(&rho2, UPLO::Upper).unwrap();
+
+        let a_mat = f_x.t().to_owned() - r.t().dot(&inv_kf);
+
+        let b_mat = f_mean.t().dot(&inv_kf);
+
+        let rho3 = b_mat.cholesky().unwrap();
+        let inv_bat = rho3.solve_triangular(&a_mat.t(), UPLO::Lower).unwrap();
+        let d_mat = rho3.t().solve_triangular(&inv_bat, UPLO::Upper).unwrap();
+
+        // mean = constant
+        let df = Array2::zeros((1, x.ncols()));
+        // if self.options["poly"] == "constant":
+        //     df = np.zeros((1, self.nx))
+        // elif self.options["poly"] == "linear":
+        //     df = np.zeros((self.nx + 1, self.nx))
+        //     df[1:, :] = np.eye(self.nx)
+        // else:
+        //     raise ValueError(
+        //         "The derivative is only available for ordinary kriging or "
+        //         + "universal kriging using a linear trend"
+        //     )
+
+        let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
+        let p3 = d_a.dot(&d_mat).t().to_owned();
+        let p4 = d_mat.t().dot(&d_a.t());
+        let prime_t = (-p1 - p2 + p3 + p4).t().to_owned();
+
+        // derived_variance = []
+        let x_std = &self.xtrain.std;
+        let mut dvar = Array2::<F>::zeros((x_std.len(), x_std.len()));
+        // for i in range(len(x_std)):
+        //     derived_variance.append(sigma2 * prime.T[i] / x_std[i])
+        Zip::from(dvar.rows_mut())
+            .and(prime_t.rows())
+            .for_each(|mut dv, p| {
+                let dv_val = (sigma2.to_owned() * p) / x_std;
+                // println!("sigma {}", sigma2);
+                // println!("p {}", p);
+                // println!("x_std {}", x_std);
+                // println!("dv {}", dv);
+                // println!("dvval {}", dv_val);
+                dv.assign(&dv_val);
+                // println!("dv {}", dv);
+            });
+
+        dvar.t().to_owned()
     }
 }
 
@@ -431,7 +610,7 @@ where
         .map(|v| unsafe { *(v as *const F as *const f64) })
         .into_raw_vec();
     optimizer.set_initial_step1(0.5).unwrap();
-    optimizer.set_maxeval(10 * theta0.len() as u32).unwrap();
+    optimizer.set_maxeval(15 * theta0.len() as u32).unwrap();
     optimizer.set_ftol_rel(1e-4).unwrap();
 
     match optimizer.optimize(&mut theta_vec) {
@@ -627,6 +806,7 @@ mod tests {
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
     use ndarray_npy::{read_npy, write_npy};
+    use ndarray_rand::rand;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_stats::DeviationExt;
     use paste::paste;
@@ -638,7 +818,7 @@ mod tests {
         let lim = array![[0., 1.]];
         let xlimits = lim.broadcast((dim, 2)).unwrap();
         let rng = Isaac64Rng::seed_from_u64(42);
-        let nt = 30;
+        let nt = 5;
         let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let yt = Array::from_vec(vec![3.1; nt]).insert_axis(Axis(1));
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
@@ -707,12 +887,12 @@ mod tests {
         };
     }
 
-    test_gp!(Constant, SquaredExponential, 1.66);
+    test_gp!(Constant, SquaredExponential, 1.67);
     test_gp!(Constant, AbsoluteExponential, 22.35);
     test_gp!(Constant, Matern32, 21.68);
     test_gp!(Constant, Matern52, 21.68);
 
-    test_gp!(Linear, SquaredExponential, 1.55);
+    test_gp!(Linear, SquaredExponential, 1.56);
     test_gp!(Linear, AbsoluteExponential, 21.68);
     test_gp!(Linear, Matern32, 21.68);
     test_gp!(Linear, Matern52, 21.68);
@@ -853,5 +1033,57 @@ mod tests {
 
         let var = GpVariancePredictor(&gp).predict(&xt);
         assert_abs_diff_eq!(var, Array2::zeros((nt, 1)), epsilon = 2e-1);
+    }
+
+    fn sphere(x: &Array2<f64>) -> Array2<f64> {
+        let s = (x * x).sum_axis(Axis(1));
+        s.insert_axis(Axis(1))
+    }
+
+    fn dsphere(x: &Array2<f64>) -> Array2<f64> {
+        x.mapv(|v| 2. * v).t().to_owned()
+    }
+
+    #[cfg(not(feature = "blas"))]
+    #[test]
+    fn test_derivatives() {
+        let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(100);
+        let yt = sphere(&xt);
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+            ConstantMean::default(),
+            SquaredExponentialCorr::default(),
+        )
+        .fit(&Dataset::new(xt, yt))
+        .expect("GP fitting");
+
+        let x1: f64 = rand::random::<f64>() * 20. - 10.;
+        let x2: f64 = rand::random::<f64>() * 20. - 10.;
+        let xtest = array![[x1, x2]];
+
+        let jac = gp.predict_jacobian(&xtest);
+        let df = dsphere(&xtest);
+
+        let jac_rel_err1 = (jac[[0, 0]] - df[[0, 0]]).abs() / jac[[0, 0]];
+        let jac_rel_err2 = (jac[[1, 0]] - df[[1, 0]]).abs() / jac[[1, 0]];
+        println!("Test sphere predicted derivatives at {}", xtest);
+        assert_abs_diff_eq!(jac_rel_err1, 0.0, epsilon = 1e-3);
+        assert_abs_diff_eq!(jac_rel_err2, 0.0, epsilon = 1e-3);
+    }
+
+    #[cfg(not(feature = "blas"))]
+    #[test]
+    fn test_variance_derivatives() {
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+            ConstantMean::default(),
+            SquaredExponentialCorr::default(),
+        )
+        .fit(&Dataset::new(xt, yt))
+        .expect("GP fitting");
+
+        let x = array![[0.5]];
+        let dvar = gp.predict_variance_jacobian(&x);
+        println!("dvar={}", dvar)
     }
 }

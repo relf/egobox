@@ -94,9 +94,9 @@ use crate::errors::{EgoError, Result};
 use crate::lhs_optimizer::LhsOptimizer;
 use crate::sort_axis::*;
 use crate::types::*;
-use crate::utils::update_data;
-use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale};
+use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale, grad_wbs2};
 use crate::utils::{ei, wb2s};
+use crate::utils::{grad_ei, update_data};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec};
@@ -236,8 +236,8 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             q_ei: QEiStrategy::KrigingBeliever,
             infill: InfillStrategy::WB2,
             infill_optimizer: InfillOptimizer::Slsqp,
-            regression_spec: RegressionSpec::ALL,
-            correlation_spec: CorrelationSpec::ALL,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
             n_clusters: Some(1),
             expected: None,
@@ -792,6 +792,23 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         (x_dat, y_dat)
     }
 
+    #[cfg(not(feature = "blas"))]
+    /// True whether surrogate gradient computation implemented
+    fn is_grad_impl_available(&self) -> bool {
+        if let Some(n) = self.n_clusters {
+            return n == 1
+                && self.regression_spec == RegressionSpec::CONSTANT
+                && self.correlation_spec == CorrelationSpec::SQUAREDEXPONENTIAL;
+        }
+        false
+    }
+
+    #[cfg(feature = "blas")]
+    /// True whether surrogate gradient computation implemented
+    fn is_grad_impl_available(&self) -> bool {
+        false
+    }
+
     fn find_best_point(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -810,10 +827,17 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                 ..
             } = params;
             if let Some(grad) = gradient {
-                let f = |x: &Vec<f64>| -> f64 {
-                    self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
-                };
-                grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+                if self.is_grad_impl_available() {
+                    let grd = self
+                        .grad_infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                        .to_vec();
+                    grad[..].copy_from_slice(&grd);
+                } else {
+                    let f = |x: &Vec<f64>| -> f64 {
+                        self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                    };
+                    grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+                }
             }
             self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
         };
@@ -824,17 +848,31 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             let cstr =
                 move |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
                     if let Some(grad) = gradient {
-                        let f = |x: &Vec<f64>| -> f64 {
-                            cstr_models[i]
-                                .predict_values(
+                        if self.is_grad_impl_available() {
+                            let grd = cstr_models[i]
+                                .predict_jacobian(
                                     &Array::from_shape_vec((1, x.len()), x.to_vec())
                                         .unwrap()
                                         .view(),
                                 )
-                                .unwrap()[[0, 0]]
-                                / params.scale_cstr[index]
-                        };
-                        grad[..].copy_from_slice(&x.to_vec().forward_diff(&f));
+                                .unwrap()
+                                .row(0)
+                                .mapv(|v| v / params.scale_cstr[index])
+                                .to_vec();
+                            grad[..].copy_from_slice(&grd);
+                        } else {
+                            let f = |x: &Vec<f64>| -> f64 {
+                                cstr_models[i]
+                                    .predict_values(
+                                        &Array::from_shape_vec((1, x.len()), x.to_vec())
+                                            .unwrap()
+                                            .view(),
+                                    )
+                                    .unwrap()[[0, 0]]
+                                    / params.scale_cstr[index]
+                            };
+                            grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+                        }
                     }
                     cstr_models[index]
                         .predict_values(
@@ -1010,6 +1048,23 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         obj / scale
     }
 
+    pub fn grad_infill_eval(
+        &self,
+        x: &[f64],
+        obj_model: &dyn ClusteredSurrogate,
+        f_min: f64,
+        scale: f64,
+        scale_wb2: f64,
+    ) -> Vec<f64> {
+        let x_f = x.to_vec();
+        let grad = match self.infill {
+            InfillStrategy::EI => -grad_ei(&x_f, obj_model, f_min),
+            InfillStrategy::WB2 => -grad_wbs2(&x_f, obj_model, f_min, 1.),
+            InfillStrategy::WB2S => -grad_wbs2(&x_f, obj_model, f_min, scale_wb2),
+        };
+        (grad / scale).to_vec()
+    }
+
     fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
         if let Some(pre_proc) = self.pre_proc {
             (self.obj)(&pre_proc.run(x).view())
@@ -1058,10 +1113,29 @@ mod tests {
     }
 
     #[test]
+    fn test_deriv() {
+        let initial_doe = array![[0.], [7.], [25.]];
+        let res = Egor::new(xsinx, &array![[0.0, 25.0]])
+            .infill_strategy(InfillStrategy::EI)
+            .n_eval(20)
+            .doe(Some(initial_doe.to_owned()))
+            .expect(Some(ApproxValue {
+                value: -15.1,
+                tolerance: 1e-1,
+            }))
+            .minimize()
+            .expect("Minimization");
+        let expected = array![-15.1];
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
+    }
+
+    #[test]
     #[serial]
     fn test_xsinx_wb2() {
         let res = Egor::new(xsinx, &array![[0.0, 25.0]])
             .n_eval(20)
+            .regression_spec(RegressionSpec::ALL)
+            .correlation_spec(CorrelationSpec::ALL)
             .minimize()
             .expect("Minimize failure");
         let expected = array![18.9];
@@ -1108,7 +1182,10 @@ mod tests {
     #[serial]
     fn test_xsinx_suggestions() {
         let mut ego = Egor::new(xsinx, &array![[0.0, 25.0]]);
-        let ego = ego.infill_strategy(InfillStrategy::EI);
+        let ego = ego
+            .regression_spec(RegressionSpec::ALL)
+            .correlation_spec(CorrelationSpec::ALL)
+            .infill_strategy(InfillStrategy::EI);
 
         let mut doe = array![[0.], [7.], [20.], [25.]];
         let mut y_doe = xsinx(&doe.view());
@@ -1144,6 +1221,34 @@ mod tests {
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .doe(Some(doe))
             .n_eval(100)
+            .regression_spec(RegressionSpec::ALL)
+            .correlation_spec(CorrelationSpec::ALL)
+            .expect(Some(ApproxValue {
+                value: 0.0,
+                tolerance: 1e-2,
+            }))
+            .minimize()
+            .expect("Minimize failure");
+        println!("Rosenbrock optim result = {:?}", res);
+        println!("Elapsed = {:?}", now.elapsed());
+        let expected = array![1., 1.];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+    }
+
+    #[test]
+    #[serial]
+    fn test_deriv_rosenbrock_2d() {
+        // true deriv of criteria is implemented for kriging surrogate (default surrogate used by optimizer)
+        let now = Instant::now();
+        let xlimits = array![[-2., 2.], [-2., 2.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .sample(10);
+        let res = Egor::new(rosenb, &xlimits)
+            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .doe(Some(doe))
+            .n_eval(100)
+            .infill_strategy(InfillStrategy::EI)
             .expect(Some(ApproxValue {
                 value: 0.0,
                 tolerance: 1e-2,
@@ -1213,6 +1318,8 @@ mod tests {
             .sample(10);
         let res = Egor::new(f_g24, &xlimits)
             .with_rng(Isaac64Rng::seed_from_u64(42))
+            .regression_spec(RegressionSpec::ALL)
+            .correlation_spec(CorrelationSpec::ALL)
             .n_cstr(2)
             .q_parallel(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
