@@ -1,5 +1,5 @@
 use super::gaussian_mixture::GaussianMixture;
-use crate::clustering::{find_best_number_of_clusters, Clustered, Clustering};
+use crate::clustering::{find_best_number_of_clusters, sort_by_cluster, Clustered, Clustering};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
@@ -317,33 +317,6 @@ fn check_number_of_points<F>(
 
 fn factorial(n: usize) -> usize {
     (1..=n).product()
-}
-
-/// Return a vector of clustered data set given the `data_clustering` indices which contraints
-/// for each `data` rows the cluster number.     
-pub(crate) fn sort_by_cluster<F: Float>(
-    n_clusters: usize,
-    data: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    dataset_clustering: &Array1<usize>,
-) -> Vec<Array2<F>> {
-    let mut res: Vec<Array2<F>> = Vec::new();
-    let ndim = data.ncols();
-    for n in 0..n_clusters {
-        let cluster_data_indices: Array1<usize> = dataset_clustering
-            .iter()
-            .enumerate()
-            .filter_map(|(k, i)| if *i == n { Some(k) } else { None })
-            .collect();
-        let nsamples = cluster_data_indices.len();
-        let mut subset = Array2::zeros((nsamples, ndim));
-        Zip::from(subset.rows_mut())
-            .and(&cluster_data_indices)
-            .for_each(|mut r, &k| {
-                r.assign(&data.row(k));
-            });
-        res.push(subset);
-    }
-    res
 }
 
 /// Predict outputs at given points with `experts` and gaussian mixture `gmx`.
