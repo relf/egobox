@@ -236,8 +236,8 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             q_ei: QEiStrategy::KrigingBeliever,
             infill: InfillStrategy::WB2,
             infill_optimizer: InfillOptimizer::Slsqp,
-            regression_spec: RegressionSpec::ALL,
-            correlation_spec: CorrelationSpec::ALL,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
             n_clusters: Some(1),
             expected: None,
@@ -1110,8 +1110,6 @@ mod tests {
         let initial_doe = array![[0.], [7.], [25.]];
         let res = Egor::new(xsinx, &array![[0.0, 25.0]])
             .infill_strategy(InfillStrategy::EI)
-            .regression_spec(RegressionSpec::CONSTANT)
-            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .n_eval(20)
             .doe(Some(initial_doe.to_owned()))
             .expect(Some(ApproxValue {
@@ -1129,6 +1127,8 @@ mod tests {
     fn test_xsinx_wb2() {
         let res = Egor::new(xsinx, &array![[0.0, 25.0]])
             .n_eval(20)
+            .regression_spec(RegressionSpec::ALL)
+            .correlation_spec(CorrelationSpec::ALL)
             .minimize()
             .expect("Minimize failure");
         let expected = array![18.9];
@@ -1211,6 +1211,8 @@ mod tests {
             .with_rng(Isaac64Rng::seed_from_u64(42))
             .doe(Some(doe))
             .n_eval(100)
+            .regression_spec(RegressionSpec::ALL)
+            .correlation_spec(CorrelationSpec::ALL)
             .expect(Some(ApproxValue {
                 value: 0.0,
                 tolerance: 1e-2,
@@ -1226,6 +1228,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_deriv_rosenbrock_2d() {
+        // true deriv of criteria is implemented for kriging surrogate (default surrogate used by optimizer)
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
         let doe = Lhs::new(&xlimits)
@@ -1236,8 +1239,6 @@ mod tests {
             .doe(Some(doe))
             .n_eval(100)
             .infill_strategy(InfillStrategy::EI)
-            .regression_spec(RegressionSpec::CONSTANT)
-            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .expect(Some(ApproxValue {
                 value: 0.0,
                 tolerance: 1e-2,

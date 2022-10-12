@@ -174,7 +174,7 @@ mod tests {
     use egobox_doe::SamplingMethod;
     use egobox_moe::*;
     use linfa::prelude::*;
-    use ndarray::{array, Array};
+    use ndarray::array;
 
     #[test]
     fn test_is_update_ok() {
