@@ -1,3 +1,6 @@
+Changes
+-------
+
 Version 0.6.0 - unreleased
 ==========================
 
@@ -12,9 +15,6 @@ Version 0.5.0 - 2022-10-07
 * Add Egor `minimize` interruption capability (Ctrl+C) from Python (#30)
 * Minor performance improvement in moe clustering (#29)
 * Improvements following JOSS submission review (#34, #36, #38, #39, #40, #42)
-
-Changes
--------
 
 Version 0.4.0 - 2022-07-09
 ==========================
