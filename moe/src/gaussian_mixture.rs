@@ -298,11 +298,11 @@ mod tests {
         use linfa::DatasetBase;
         use linfa_clustering::GaussianMixtureModel;
         use ndarray_linalg::solve::*; // Determinant computation not in linfa-linalg
-        use ndarray_npy::write_npy;
         use ndarray_rand::rand::{rngs::SmallRng, SeedableRng};
         use ndarray_rand::rand_distr::StandardNormal;
         use ndarray_rand::RandomExt;
         use ndarray_stats::CorrelationExt;
+        // use ndarray_npy::write_npy;
 
         // Test the aic and bic criteria
         let mut rng = SmallRng::seed_from_u64(42);

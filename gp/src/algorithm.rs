@@ -201,19 +201,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
     // }
 
-    #[cfg(feature = "blas")]
-    pub fn predict_derivatives(
-        &self,
-        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-        kx: usize,
-    ) -> Array1<F> {
-        Array1::zeros((1,))
-    }
-
     // impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
     /// Predict derivatives of the output prediction
     /// wrt the kx th components at point a set of points x \[n_samples, n_components\].
-    #[cfg(not(feature = "blas"))]
     pub fn predict_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -270,13 +260,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         res
     }
 
-    #[cfg(feature = "blas")]
-    pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        return Array2::<F>::zeros((1, 1));
-    }
-
     /// Predict jacobian at one point x
-    #[cfg(not(feature = "blas"))]
     pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut jac = Array2::zeros((self.xtrain.data.ncols(), 1));
         Zip::indexed(jac.rows_mut()).for_each(|i, mut r| {
@@ -289,7 +273,114 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     #[cfg(feature = "blas")]
     pub fn predict_variance_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        return Array2::<F>::zeros((1, 1));
+        // Initialization
+        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let theta = &self.theta;
+        // println!("x={:?}", xnorm);
+        // Get pairwise componentwise L1-distances to the input training set
+        // dx = differences(x, Y=self.X_norma.copy())
+        let dx = pairwise_differences(&xnorm, &self.xtrain.data);
+        // println!("dx={:?}", dx);
+        // d = self._componentwise_distance(dx)
+        // dd = self._componentwise_distance(
+        //     dx, theta=self.optimal_theta, return_derivative=True
+        // )
+        let dd = einsum("j,ij->ij", &[&theta.t(), &dx])
+            .unwrap()
+            .mapv(|v| F::cast(2) * v)
+            .with_lapack();
+        // println!("dd={:?}", dd);
+        let sigma2 = &self.inner_params.sigma2;
+        let cholesky_k = &self.inner_params.r_chol.to_owned().with_lapack();
+
+        // derivative_dic = {"dx": dx, "dd": dd}
+        // r, dr = self._correlation_types[self.options["corr"]](
+        //     theta, d, derivative_params=derivative_dic
+        // )
+        let r = self
+            .corr
+            .apply(&self.theta, &dx, &self.w_star)
+            .with_lapack();
+        let dr = -einsum("i,ij->ij", &[&r.t().row(0), &dd])
+            .unwrap()
+            .into_shape((dd.shape()[0], dd.shape()[1]))
+            .unwrap();
+        // println!("r={:?}", r);
+        // println!("dr={:?}", dr);
+
+        let rho1 = cholesky_k
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &r)
+            .unwrap();
+        let inv_kr = cholesky_k
+            .t()
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &rho1)
+            .unwrap();
+
+        let p1 = dr.t().dot(&inv_kr).t().to_owned();
+
+        let p2 = inv_kr.t().dot(&dr);
+
+        let f_x = self.mean.apply(x).t().to_owned(); //(x).T
+        let f_mean = self.mean.apply(&self.xtrain.data).with_lapack();
+
+        let rho2 = cholesky_k
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &f_mean)
+            .unwrap();
+        let inv_kf = cholesky_k
+            .t()
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &rho2)
+            .unwrap();
+
+        let a_mat = f_x.t().to_owned().with_lapack() - r.t().dot(&inv_kf);
+
+        let b_mat = f_mean.t().dot(&inv_kf);
+
+        let rho3 = b_mat.cholesky(UPLO::Lower).unwrap();
+        let inv_bat = rho3
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &a_mat.t().to_owned())
+            .unwrap();
+        let d_mat = rho3
+            .t()
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &inv_bat)
+            .unwrap();
+
+        // mean = constant
+        let df = Array2::zeros((1, x.ncols()));
+        // if self.options["poly"] == "constant":
+        //     df = np.zeros((1, self.nx))
+        // elif self.options["poly"] == "linear":
+        //     df = np.zeros((self.nx + 1, self.nx))
+        //     df[1:, :] = np.eye(self.nx)
+        // else:
+        //     raise ValueError(
+        //         "The derivative is only available for ordinary kriging or "
+        //         + "universal kriging using a linear trend"
+        //     )
+
+        let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
+        let p3 = d_a.dot(&d_mat).t().to_owned();
+        let p4 = d_mat.t().dot(&d_a.t());
+        let prime_t = (-p1 - p2 + p3 + p4).t().to_owned().without_lapack();
+
+        // derived_variance = []
+        let x_std = &self.xtrain.std;
+        let mut dvar = Array2::<F>::zeros((x_std.len(), x_std.len()));
+        // for i in range(len(x_std)):
+        //     derived_variance.append(sigma2 * prime.T[i] / x_std[i])
+        Zip::from(dvar.rows_mut())
+            .and(prime_t.rows())
+            .for_each(|mut dv, p| {
+                let dv_val = (sigma2.to_owned() * p) / x_std;
+                // println!("sigma {}", sigma2);
+                // println!("p {}", p);
+                // println!("x_std {}", x_std);
+                // println!("dv {}", dv);
+                // println!("dvval {}", dv_val);
+                dv.assign(&dv_val);
+                // println!("dv {}", dv);
+            });
+
+        dvar.t().to_owned()
     }
 
     /// Predict derivatives of the output prediction variance
@@ -1044,7 +1135,6 @@ mod tests {
         x.mapv(|v| 2. * v).t().to_owned()
     }
 
-    #[cfg(not(feature = "blas"))]
     #[test]
     fn test_derivatives() {
         let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(100);
@@ -1070,7 +1160,6 @@ mod tests {
         assert_abs_diff_eq!(jac_rel_err2, 0.0, epsilon = 1e-3);
     }
 
-    #[cfg(not(feature = "blas"))]
     #[test]
     fn test_variance_derivatives() {
         let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
