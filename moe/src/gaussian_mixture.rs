@@ -71,14 +71,39 @@ impl<F: Float> GaussianMixture<F> {
         &self.means
     }
 
+    pub fn covariances(&self) -> &Array3<F> {
+        &self.covariances
+    }
+
     pub fn heaviside_factor(&self) -> F {
         self.heaviside_factor
     }
 
-    pub fn predict_probas<D: Data<Elem = F>>(&self, observations: &ArrayBase<D, Ix2>) -> Array2<F> {
-        let (_, log_resp) = self.estimate_log_prob_resp(observations);
+    pub fn predict_probas<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
+        let (_, log_resp) = self.estimate_log_prob_resp(x);
         log_resp.mapv(|v| v.exp())
     }
+
+    fn proba_cluster_single<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array1<F> {
+        let mut proba = Array1::<F>::zeros(self.n_clusters());
+        Zip::from(&mut proba)
+            .and(self.covariances().outer_iter())
+            .and(self.weights())
+            .for_each(|mut prob, cov, &w| *prob = pdf(self.means, cov, x) * w);
+        proba
+    }
+
+    fn proba_cluster<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
+        let mut probas = Array2::zeros((x.nrows(), self.n_clusters()));
+        Zip::from(probas.rows_mut())
+            .and(x.rows())
+            .for_each(|mut proba, xi| {
+                proba.assign(&self.proba_cluster_single(x));
+            });
+        probas
+    }
+
+    fn pdf() {}
 
     pub fn with_heaviside_factor(mut self, heaviside_factor: F) -> Self {
         self.heaviside_factor = heaviside_factor;
@@ -162,7 +187,7 @@ impl<F: Float> GaussianMixture<F> {
         let n_clusters = means.nrows();
         let factor = ndarray_rand::rand_distr::num_traits::Float::powf(
             self.heaviside_factor(),
-            F::from(-0.5).unwrap(),
+            F::cast(-0.5),
         );
         let precs = &self.precisions_chol * factor;
         // GmmCovarType = full
@@ -178,8 +203,7 @@ impl<F: Float> GaussianMixture<F> {
                     .assign(&diff.mapv(|v| v * v).sum_axis(Axis(1)))
             });
         log_prob.mapv(|v| {
-            F::from(-0.5).unwrap()
-                * (v + F::from(n_features as f64 * f64::ln(2. * std::f64::consts::PI)).unwrap())
+            F::cast(-0.5) * (v + F::cast(n_features as f64 * f64::ln(2. * std::f64::consts::PI)))
         }) + log_det
     }
 

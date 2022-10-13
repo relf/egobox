@@ -7,7 +7,7 @@ use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
 use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
-use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_rand::rand::Rng;
 use std::ops::Sub;
 
@@ -80,6 +80,20 @@ pub(crate) fn sort_by_cluster<F: Float>(
     }
     res
 }
+
+// pub(crate) fn proba_cluster_derivative_for_one_sample<F: Float>(
+//     weights: &Array1<F>,
+//     gmx: &GaussianMixture<F>,
+//     x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+// ) {
+//     let deriv_proba = Array1::zeros(weights.len());
+//     let v = 0.;
+//     let vprime = 0.;
+
+//     for k in 0..weights.len() {
+//         v += weights[k] * gmx.co
+//     }
+// }
 
 /// Find the best number of cluster thanks to cross validation
 pub fn find_best_number_of_clusters<R: Rng + Clone>(

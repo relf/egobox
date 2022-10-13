@@ -86,6 +86,7 @@ mod clustering;
 mod errors;
 mod expertise_macros;
 mod gaussian_mixture;
+mod multivariate_normal;
 mod parameters;
 mod surrogates;
 
@@ -93,5 +94,6 @@ pub use algorithm::*;
 pub use clustering::*;
 pub use errors::*;
 pub use gaussian_mixture::*;
+pub use multivariate_normal::*;
 pub use parameters::*;
 pub use surrogates::*;

@@ -121,11 +121,22 @@ pub fn compute_cstr_scales(
     Array1::from_shape_vec(cstr_models.len(), scales).unwrap()
 }
 
-fn norm_cdf(x: f64) -> f64 {
+/// Cumulative distribution function of Normal at x
+pub fn cdf(mean: f64, std_dev: f64, x: f64) -> f64 {
+    0.5 * erfc((mean - x) / (std_dev * std::f64::consts::SQRT_2))
+}
+/// Cumulative distribution function of Standard Normal at x
+pub fn norm_cdf(x: f64) -> f64 {
     0.5 * erfc(-x / std::f64::consts::SQRT_2)
 }
 
-fn norm_pdf(x: f64) -> f64 {
+/// Probability density function of Normal at x
+pub fn pdf(mean: f64, std_dev: f64, x: f64) -> f64 {
+    let d = (x - mean) / std_dev;
+    (-0.5 * d * d).exp() / (SQRT_2PI * std_dev)
+}
+/// Probability density function of Standard Normal at x
+pub fn norm_pdf(x: f64) -> f64 {
     (-0.5 * x * x).exp() / SQRT_2PI
 }
 
