@@ -335,14 +335,17 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let b_mat = f_mean.t().dot(&inv_kf);
 
-        let rho3 = b_mat.cholesky(UPLO::Lower).unwrap();
-        let inv_bat = rho3
-            .solve_triangular(UPLO::Lower, Diag::NonUnit, &a_mat.t().to_owned())
-            .unwrap();
-        let d_mat = rho3
-            .t()
-            .solve_triangular(UPLO::Upper, Diag::NonUnit, &inv_bat)
-            .unwrap();
+        let d_mat = match b_mat.cholesky(UPLO::Lower) {
+            Ok(rho3) => {
+                let inv_bat = rho3
+                    .solve_triangular(UPLO::Lower, Diag::NonUnit, &a_mat.t().to_owned())
+                    .unwrap();
+                rho3.t()
+                    .solve_triangular(UPLO::Upper, Diag::NonUnit, &inv_bat)
+                    .unwrap()
+            }
+            Err(_) => Array2::zeros((b_mat.nrows(), b_mat.ncols())),
+        };
 
         // mean = constant
         let df = Array2::zeros((1, x.ncols()));
