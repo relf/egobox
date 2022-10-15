@@ -84,27 +84,6 @@ impl<F: Float> GaussianMixture<F> {
         log_resp.mapv(|v| v.exp())
     }
 
-    fn proba_cluster_single<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array1<F> {
-        let mut proba = Array1::<F>::zeros(self.n_clusters());
-        Zip::from(&mut proba)
-            .and(self.covariances().outer_iter())
-            .and(self.weights())
-            .for_each(|mut prob, cov, &w| *prob = pdf(self.means, cov, x) * w);
-        proba
-    }
-
-    fn proba_cluster<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        let mut probas = Array2::zeros((x.nrows(), self.n_clusters()));
-        Zip::from(probas.rows_mut())
-            .and(x.rows())
-            .for_each(|mut proba, xi| {
-                proba.assign(&self.proba_cluster_single(x));
-            });
-        probas
-    }
-
-    fn pdf() {}
-
     pub fn with_heaviside_factor(mut self, heaviside_factor: F) -> Self {
         self.heaviside_factor = heaviside_factor;
         self
@@ -176,7 +155,7 @@ impl<F: Float> GaussianMixture<F> {
     }
 
     // Compute the log LikelihoodComputation in case of the gaussian probabilities
-    // log(P(X|Mean, Precision)) = -0.5*(d*ln(2*PI)-ln(det(Precision))-(X-Mean)^t.Precision.(X-Mean)
+    // log(P(X|Mean, Precision)) = -0.5*(d*ln(2*PI)-ln(det(Precision)+(X-Mean)^t.Precision.(X-Mean))
     fn estimate_log_gaussian_prob<D: Data<Elem = F>>(
         &self,
         observations: &ArrayBase<D, Ix2>,
@@ -190,8 +169,10 @@ impl<F: Float> GaussianMixture<F> {
             F::cast(-0.5),
         );
         let precs = &self.precisions_chol * factor;
-        // GmmCovarType = full
-        // det(precision_chol) is half of det(precision)
+        // The determinant of the precision matrix from the Cholesky decomposition
+        // corresponds to the negative half of the determinant of the full precision
+        // matrix.
+        // In short: det(precision_chol) = - det(precision) / 2
         let log_det = Self::compute_log_det_cholesky_full(&precs, n_features);
         let mut log_prob: Array2<F> = Array::zeros((n_samples, n_clusters));
         Zip::indexed(means.rows())
@@ -300,17 +281,17 @@ mod tests {
         let gmix = GaussianMixture::new(weights, means, covs)
             .expect("Gaussian mixture creation failed")
             .with_heaviside_factor(0.99);
-        let mut obs = Array2::from_elem((101, 2), 0.);
+        let mut obs = Array2::from_elem((11, 2), 0.);
         Zip::from(obs.rows_mut())
-            .and(&Array::linspace(0., 4., 101))
+            .and(&Array::linspace(0., 4., 11))
             .for_each(|mut o, &v| o.assign(&array![v, v]));
         let _preds = gmix.predict(&obs);
-        let probas = gmix.predict_probas(&obs);
+        let _probas = gmix.predict_probas(&obs);
 
-        let test_dir = "target/tests";
-        std::fs::create_dir_all(test_dir).ok();
-        write_npy(format!("{}/probes.npy", test_dir), &obs).expect("failed to save");
-        write_npy(format!("{}/probas.npy", test_dir), &probas).expect("failed to save");
+        // let test_dir = "target/tests";
+        // std::fs::create_dir_all(test_dir).ok();
+        // write_npy(format!("{}/probes.npy", test_dir), &obs).expect("failed to save");
+        // write_npy(format!("{}/probas.npy", test_dir), &probas).expect("failed to save");
     }
 
     #[cfg(feature = "blas")]
