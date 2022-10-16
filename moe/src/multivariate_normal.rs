@@ -8,7 +8,7 @@ use linfa::{dataset::WithLapack, dataset::WithoutLapack};
 use linfa::{traits::*, Float};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, triangular::*};
-use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
+use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix1, Ix2, Ix3, Zip};
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, triangular::*};
 use ndarray_stats::QuantileExt;
@@ -87,6 +87,46 @@ impl<F: Float> MultivariateNormal<F> {
     pub fn predict_probas<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
         let (_, log_resp) = self.compute_log_prob_resp(x);
         log_resp.mapv(|v| v.exp())
+    }
+
+    pub fn predict_probas_derivatives<D: Data<Elem = F>>(
+        &self,
+        x: &ArrayBase<D, Ix1>,
+    ) -> Array2<F> {
+        let v = self.weights.to_owned().dot(&self.pdfs(x));
+        let precs = &self.precisions / self.heaviside_factor;
+        let mut deriv = Array2::zeros((self.means.nrows(), self.means.ncols()));
+        Zip::from(deriv.rows_mut())
+            .and(self.means.rows())
+            .and(precs.outer_iter())
+            .for_each(|mut der, mu, prec| {
+                der.assign(&(&x.to_owned() - &mu).dot(&prec));
+            });
+        let vprime = -self.weights.to_owned() * self.pdfs(x) * &deriv;
+        let vprime = vprime.sum_axis(Axis(0));
+
+        let u = self.weights.to_owned() * self.pdfs(x);
+        let uprime = -(deriv.to_owned() * &u);
+        let v2 = v * v;
+        let prob_deriv = (uprime.map(|up| *up * v) - u * vprime).mapv(|w| w / v2);
+        prob_deriv
+    }
+
+    pub fn predict_probas_jacobian<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array3<F> {
+        let mut prob = Array3::zeros((x.nrows(), self.means.nrows(), x.ncols()));
+        Zip::from(prob.outer_iter_mut())
+            .and(x.rows())
+            .for_each(|mut p, xi| p.assign(&self.predict_probas_derivatives(&xi)));
+        prob
+    }
+
+    pub fn pdf<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix1>) -> F {
+        let xx = x.to_owned().insert_axis(Axis(0));
+        self.compute_log_gaussian_prob(&xx)[[0, 0]].exp()
+    }
+    pub fn pdfs<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix1>) -> Array1<F> {
+        let xx = x.to_owned().insert_axis(Axis(0));
+        self.compute_log_gaussian_prob(&xx).row(0).mapv(|v| v.exp())
     }
 
     fn compute_precisions_cholesky<D: Data<Elem = F>>(
@@ -179,7 +219,7 @@ impl<F: Float> MultivariateNormal<F> {
         matrix_chol: &ArrayBase<D, Ix3>,
         n_features: usize,
     ) -> Array1<F> {
-        let n_clusters = n_features;
+        let n_clusters = matrix_chol.shape()[0];
         let log_diags = &matrix_chol
             .to_owned()
             .into_shape((n_clusters, n_features * n_features))
@@ -216,8 +256,8 @@ impl<F: Float, D: Data<Elem = F>> PredictInplace<ArrayBase<D, Ix2>, Array1<usize
 mod tests {
     use super::*;
 
+    use approx::assert_abs_diff_eq;
     use ndarray::{array, Array, Array2};
-    use ndarray_npy::write_npy;
 
     #[test]
     fn test_mvn() {
@@ -235,5 +275,34 @@ mod tests {
         println!("preds =  {:?}", _preds);
         let probas = gmix.predict_probas(&obs);
         println!("probas =  {:?}", probas);
+    }
+
+    fn test_case(means: Array2<f64>, covariances: Array3<f64>, expected: f64, x: Array1<f64>) {
+        let part = 1. / means.nrows() as f64;
+        let weights = Array::from_elem((means.len(),), part);
+        let mvn = MultivariateNormal::new(weights, means, covariances).unwrap();
+        assert_abs_diff_eq!(expected, mvn.pdf(&x));
+    }
+
+    #[test]
+    fn test_pdf() {
+        test_case(
+            array![[0., 0.]],
+            array![[[1., 0.], [0., 1.]]],
+            0.05854983152431917,
+            array![1., 1.],
+        );
+        test_case(
+            array![[0., 0.]],
+            array![[[1., 0.], [0., 1.]]],
+            0.013064233284684921,
+            array![1., 2.],
+        );
+        test_case(
+            array![[0.5, -0.2]],
+            array![[[2.0, 0.3], [0.3, 0.5]]],
+            0.00014842259203296995,
+            array![-1., 2.],
+        )
     }
 }
