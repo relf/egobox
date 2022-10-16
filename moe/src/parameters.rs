@@ -1,4 +1,5 @@
 use crate::errors::{MoeError, Result};
+use crate::multivariate_normal::MultivariateNormal;
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
@@ -8,6 +9,7 @@ use egobox_gp::correlation_models::{
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
+use ndarray::{Array1, Array2, Array3};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_isaac::Isaac64Rng;
 use std::fmt::Display;
@@ -102,8 +104,10 @@ pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
-    /// Gaussian Mixture model used to
+    /// Gaussian Mixture model used to cluster
     gmm: Option<Box<GaussianMixtureModel<F>>>,
+    /// MultivariateNormal preset
+    gmx: Option<Box<MultivariateNormal<F>>>,
     /// Random number generator
     rng: R,
 }
@@ -117,6 +121,7 @@ impl<F: Float> Default for MoeValidParams<F, Isaac64Rng> {
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
             gmm: None,
+            gmx: None,
             rng: Isaac64Rng::from_entropy(),
         }
     }
@@ -148,9 +153,15 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
         self.kpls_dim
     }
 
-    /// The optional number of PLS components
+    /// An optional gaussian mixture to be fitted to generate multivariate normal
+    /// in turns used to cluster
     pub fn gmm(&self) -> &Option<Box<GaussianMixtureModel<F>>> {
         &self.gmm
+    }
+
+    /// An optional multivariate normal used to cluster (take precedence over gmm)
+    pub fn gmx(&self) -> &Option<Box<MultivariateNormal<F>>> {
+        &self.gmx
     }
 
     /// The random generator
@@ -196,6 +207,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
             gmm: None,
+            gmx: None,
             rng,
         })
     }
@@ -245,6 +257,20 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self
     }
 
+    #[doc(hidden)]
+    /// Sets the gaussian mixture (used to find the optimal number of clusters)
+    pub(crate) fn gmx(
+        mut self,
+        weights: Array1<F>,
+        means: Array2<F>,
+        covariances: Array3<F>,
+    ) -> Self {
+        self.0.gmx = Some(Box::new(
+            MultivariateNormal::new(weights, means, covariances).unwrap(),
+        ));
+        self
+    }
+
     /// Sets the random number generator for reproducibility
     pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<F, R2> {
         MoeParams(MoeValidParams {
@@ -254,6 +280,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
             correlation_spec: self.0.correlation_spec(),
             kpls_dim: self.0.kpls_dim(),
             gmm: self.0.gmm().clone(),
+            gmx: self.0.gmx().clone(),
             rng,
         })
     }

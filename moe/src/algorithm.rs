@@ -1,4 +1,5 @@
-use super::gaussian_mixture::GaussianMixture;
+//use super::gaussian_mixture::GaussianMixture;
+use super::multivariate_normal::MultivariateNormal;
 use crate::clustering::{find_best_number_of_clusters, sort_by_cluster, Clustered, Clustering};
 use crate::errors::MoeError;
 use crate::errors::Result;
@@ -19,7 +20,9 @@ use std::ops::Sub;
 
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
-use ndarray::{concatenate, s, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
+use ndarray::{
+    array, concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip,
+};
 
 #[cfg(feature = "blas")]
 use ndarray_linalg::Norm;
@@ -105,22 +108,26 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         };
         let dataset = Dataset::from(training);
 
-        let gmm = GaussianMixtureModel::params(n_clusters)
-            .n_runs(20)
-            .with_rng(self.rng())
-            .fit(&dataset)
-            .expect("Training data clustering");
+        let gmx = if self.gmx().is_some() {
+            *self.gmx().as_ref().unwrap().clone()
+        } else {
+            let gmm = GaussianMixtureModel::params(n_clusters)
+                .n_runs(20)
+                .with_rng(self.rng())
+                .fit(&dataset)
+                .expect("Training data clustering");
 
-        // GMX for prediction
-        let weights = gmm.weights().to_owned();
-        let means = gmm.means().slice(s![.., ..nx]).to_owned();
-        let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
-        let factor = match recomb {
-            Recombination::Smooth(Some(f)) => f,
-            Recombination::Smooth(None) => 1.,
-            Recombination::Hard => 1.,
+            // GMX for prediction
+            let weights = gmm.weights().to_owned();
+            let means = gmm.means().slice(s![.., ..nx]).to_owned();
+            let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
+            let factor = match recomb {
+                Recombination::Smooth(Some(f)) => f,
+                Recombination::Smooth(None) => 1.,
+                Recombination::Hard => 1.,
+            };
+            MultivariateNormal::new(weights, means, covariances)?.heaviside_factor(factor)
         };
-        let gmx = GaussianMixture::new(weights, means, covariances)?.with_heaviside_factor(factor);
 
         let clustering = Clustering::new(gmx, recomb);
         self.train_on_clusters(&xt.view(), &yt.view(), &clustering)
@@ -271,7 +278,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
     fn optimize_heaviside_factor(
         &self,
         experts: &[Box<dyn Surrogate>],
-        gmx: &GaussianMixture<f64>,
+        gmx: &MultivariateNormal<f64>,
         xtest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         ytest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> f64 {
@@ -281,7 +288,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             let scale_factors = Array1::linspace(0.1, 2.1, 20);
             let errors = scale_factors.map(move |&factor| {
                 let gmx2 = gmx.clone();
-                let gmx2 = gmx2.with_heaviside_factor(factor);
+                let gmx2 = gmx2.heaviside_factor(factor);
                 let pred = predict_values_smooth(experts, &gmx2, xtest).unwrap();
                 pred.sub(ytest).mapv(|x| x * x).sum().sqrt() / xtest.mapv(|x| x * x).sum().sqrt()
             });
@@ -325,7 +332,7 @@ fn factorial(n: usize) -> usize {
 /// output values predict by each cluster experts.
 fn predict_values_smooth(
     experts: &[Box<dyn Surrogate>],
-    gmx: &GaussianMixture<f64>,
+    gmx: &MultivariateNormal<f64>,
     points: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Result<Array2<f64>> {
     let probas = gmx.predict_probas(points);
@@ -353,7 +360,7 @@ pub struct Moe {
     /// The list of the best experts trained on each cluster
     experts: Vec<Box<dyn Surrogate>>,
     /// The gaussian mixture allowing to predict cluster responsabilities for a given point
-    gmx: GaussianMixture<f64>,
+    gmx: MultivariateNormal<f64>,
     /// The dimension of the predicted output
     output_dim: usize,
 }
@@ -454,7 +461,7 @@ impl Moe {
     }
 
     /// Recombination mode
-    pub fn gmx(&self) -> &GaussianMixture<f64> {
+    pub fn gmx(&self) -> &MultivariateNormal<f64> {
         &self.gmx
     }
 
@@ -471,6 +478,10 @@ impl Moe {
             Recombination::Smooth(Some(_)) => recombination,
         };
         self
+    }
+
+    pub fn set_gmx(&mut self, weights: Array1<f64>, means: Array2<f64>, covariances: Array3<f64>) {
+        self.gmx = MultivariateNormal::new(weights, means, covariances).unwrap();
     }
 
     /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
@@ -514,7 +525,48 @@ impl Moe {
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        self.predict_jacobian_hard(x)
+        println!("predict_jacobian_smooth x ={}", x);
+        let probas = self.gmx.predict_probas(x);
+        let der_probas = self.gmx.predict_probas_jacobian(x);
+        println!("probas = {}", probas);
+        println!("der_probas = {}", der_probas);
+        let mut jac = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+
+        let fake_preds = array![41.99614984014161, 119.25787325805254];
+        let fake_jacs = vec![
+            array![-280.02930409, -134.93765252],
+            array![-279.47406951, 73.87492899],
+        ];
+
+        Zip::from(jac.rows_mut())
+            .and(x.rows())
+            .and(probas.rows())
+            .and(der_probas.outer_iter())
+            .for_each(|mut y, x, p, pprime| {
+                let obs = x.insert_axis(Axis(0));
+                let subpreds: Array1<f64> = self
+                    .experts
+                    .iter()
+                    .map(|gp| gp.predict_values(&obs).unwrap()[[0, 0]])
+                    .collect();
+                let jacs: Vec<Array1<f64>> = self
+                    .experts
+                    .iter()
+                    .map(|gp| gp.predict_jacobian(&obs).unwrap().row(0).to_owned())
+                    .collect();
+                let subpreds = fake_preds.clone();
+                let jacs = fake_jacs.clone();
+                let mut subpreds_jac = Array2::zeros((self.experts.len(), x.len()));
+                Zip::indexed(subpreds_jac.rows_mut()).for_each(|i, mut jc| jc.assign(&jacs[i]));
+                println!("proba = {}", p);
+                println!("jacs = {}", subpreds_jac);
+                println!("proba_prime = {}", pprime);
+                println!("preds = {}", subpreds);
+                //let term1 = probas.to_owned().dot(&subpreds_jac);
+
+                y.assign(&(p.to_owned() * subpreds_jac + pprime.to_owned() * subpreds.t()));
+            });
+        Ok(jac)
     }
 
     pub fn predict_variance_jacobian_smooth(
@@ -702,14 +754,16 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use egobox_doe::{Lhs, SamplingMethod};
     use ndarray::{array, Array2, Zip};
     use ndarray_npy::write_npy;
+    use ndarray_rand::rand;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
     use rand_isaac::Isaac64Rng;
 
-    fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
+    fn f_test_1d(x: &Array2<f64>) -> Array2<f64> {
         let mut y = Array2::zeros(x.dim());
         Zip::from(&mut y).and(x).for_each(|yi, &xi| {
             if xi < 0.4 {
@@ -723,23 +777,42 @@ mod tests {
         y
     }
 
+    fn df_test_1d(x: &Array2<f64>) -> Array2<f64> {
+        let mut y = Array2::zeros(x.dim());
+        Zip::from(&mut y).and(x).for_each(|yi, &xi| {
+            if xi < 0.4 {
+                *yi = 2. * xi;
+            } else if (0.4..0.8).contains(&xi) {
+                *yi = 3.;
+            } else {
+                *yi = 10. * f64::cos(10. * xi);
+            }
+        });
+        y
+    }
+
     #[test]
     fn test_moe_hard() {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let moe = Moe::params()
             .n_clusters(3)
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Hard)
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
-        let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
+        let obs = Array1::linspace(0., 1., 30).insert_axis(Axis(1));
         let preds = moe.predict_values(&obs).expect("MOE prediction");
+        let dpreds = moe.predict_jacobian(&obs).expect("MOE jac prediction");
+        println!("dpred = {}", dpreds);
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
         write_npy(format!("{}/obs_hard.npy", test_dir), &obs).expect("obs saved");
         write_npy(format!("{}/preds_hard.npy", test_dir), &preds).expect("preds saved");
+        write_npy(format!("{}/dpreds_hard.npy", test_dir), &dpreds).expect("dpreds saved");
         assert_abs_diff_eq!(
             0.39 * 0.39,
             moe.predict_values(&array![[0.39]]).unwrap()[[0, 0]],
@@ -756,7 +829,7 @@ mod tests {
     fn test_moe_smooth() {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
         let moe = Moe::params()
             .n_clusters(3)
@@ -766,6 +839,7 @@ mod tests {
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&obs).expect("MOE prediction");
+        let dpreds = moe.predict_jacobian(&obs).expect("MOE jac prediction");
         println!("Smooth moe {}", moe);
         assert_abs_diff_eq!(
             0.37579, // true value = 0.37*0.37 = 0.1369
@@ -784,6 +858,7 @@ mod tests {
         std::fs::create_dir_all(test_dir).ok();
         write_npy(format!("{}/obs_smooth.npy", test_dir), &obs).expect("obs saved");
         write_npy(format!("{}/preds_smooth.npy", test_dir), &preds).expect("preds saved");
+        write_npy(format!("{}/dpreds_smooth.npy", test_dir), &dpreds).expect("dpreds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
@@ -796,7 +871,7 @@ mod tests {
         // env_logger::init();
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
         let moe = Moe::params()
             .n_clusters(0)
@@ -819,7 +894,7 @@ mod tests {
     fn test_moe_variances_smooth() {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let moe = Moe::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(None))
@@ -854,7 +929,7 @@ mod tests {
     fn test_find_best_heaviside_factor() {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let _moe = Moe::params()
             .n_clusters(3)
             .with_rng(rng)
@@ -870,7 +945,7 @@ mod tests {
 
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
         let moe = Moe::params()
             .n_clusters(3)
@@ -887,5 +962,176 @@ mod tests {
             new_moe.predict_values(&xtest).unwrap(),
             epsilon = 1e-6
         );
+    }
+
+    #[test]
+    fn test_moe_jac_hard() {
+        let rng = Isaac64Rng::seed_from_u64(0);
+        let xt = Lhs::new(&array![[0., 1.]]).sample(100);
+        let yt = f_test_1d(&xt);
+
+        let moe = Moe::params()
+            .n_clusters(3)
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+            .recombination(Recombination::Hard)
+            .with_rng(rng)
+            .fit(&Dataset::new(xt, yt))
+            .expect("MOE fitted");
+        let obs = Array1::linspace(0., 1., 50).insert_axis(Axis(1));
+        let preds = moe.predict_values(&obs).expect("MOE prediction");
+        let dpreds = moe.predict_jacobian(&obs).expect("MOE jac prediction");
+        println!("dpred = {}", dpreds);
+
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+        write_npy(format!("{}/obs_hard.npy", test_dir), &obs).expect("obs saved");
+        write_npy(format!("{}/preds_hard.npy", test_dir), &preds).expect("preds saved");
+        write_npy(format!("{}/dpreds_hard.npy", test_dir), &dpreds).expect("dpreds saved");
+
+        for _ in 0..20 {
+            let x1: f64 = rand::random::<f64>();
+
+            if (0.39 < x1 && x1 < 0.41) || (0.79 < x1 && x1 < 0.81) {
+                // avoid testing hard on discoontinuity
+                continue;
+            } else {
+                let h = 1e-4;
+                let xtest = array![[x1]];
+
+                let x = array![[x1], [x1 + h], [x1 - h]];
+                let preds = moe.predict_jacobian(&x).unwrap();
+                let fdiff = preds[[1, 0]] - preds[[1, 0]] / 2. * h;
+
+                let jac = moe.predict_jacobian(&xtest).unwrap();
+                let df = df_test_1d(&xtest);
+
+                let err = if jac[[0, 0]] < 0.2 {
+                    (jac[[0, 0]] - fdiff).abs()
+                } else {
+                    (jac[[0, 0]] - fdiff).abs() / jac[[0, 0]]
+                };
+                println!(
+                    "Test predicted derivatives at {}: jac {}, true df {}, fdiff {}",
+                    xtest, jac, df, fdiff
+                );
+                assert_abs_diff_eq!(err, 0.0, epsilon = 1e-1);
+            }
+        }
+    }
+
+    #[test]
+    #[allow(clippy::excessive_precision)]
+    fn test_moe_jac_smooth() {
+        let rng = Isaac64Rng::seed_from_u64(0);
+        let branin_data = array![
+            [0.75995265131225453, 0.26079519790587313, 27.413856556469955],
+            [0.84894004568915193, 0.80302739205770612, 124.08729377805207],
+            [0.68726748138605631, 0.65346310415713116, 89.533227931057937],
+            [0.44974452501493944, 0.34751899935449693, 10.878287247643591],
+            [0.55682300995092937, 0.5849265431496905, 44.932884959302825],
+            [0.88627740147717915, 0.62416594934584435, 64.830308367191918],
+            [
+                0.81775204764384801,
+                0.042196154022979895,
+                15.712266949196216
+            ],
+            [0.4177766615942754, 0.014380375247307521, 28.681202422398538],
+            [0.72827825291615522, 0.38750347099448401, 41.148874722093616],
+            [0.9925696885362203, 0.91677913627656205, 119.30186879624367],
+            [0.50066411471583749, 0.96942357925531941, 139.66117288085078],
+            [
+                0.010996806446222557,
+                0.64007942287598996,
+                61.784705762774074
+            ],
+            [0.92503880783912951, 0.43076540443369776, 21.264868723459951],
+            [0.60689384591767881, 0.42000489901770877, 26.182329221032123],
+            [0.29565445928275541, 0.3005839001387956, 24.023634159735444],
+            [0.97167048017882951, 0.73721527367823791, 71.968581810738641],
+            [0.7752377959676553, 0.50612962709783971, 60.838284481314375],
+            [0.25832467045551272, 0.074226708771860814, 60.93611965583608],
+            [0.23737147394919283, 0.46611483768001949, 13.712846818250346],
+            [0.14754191103105269, 0.11034908131009495, 96.713306093753971],
+            [0.62868483371396366, 0.7952593023639507, 116.41116142984536],
+            [0.87089829204248115, 0.16733416291664127, 8.8940612557011605],
+            [0.10656730695541761, 0.53049331264739186, 25.2319994760445],
+            [0.48472632135451527, 0.47615844132400142, 20.544947002406388],
+            [0.53744687012384518, 0.095909332659171537, 1.237590217166554],
+            [0.19434903593158279, 0.83986960523098408, 12.669879380619737],
+            [0.31415479092439919, 0.70503097578565577, 36.074304011442244],
+            [0.080369359089066103, 0.3570089932983076, 75.371239989968771],
+            [0.35870550688156772, 0.55241395061831078, 27.170423440769184],
+            [0.3379834771033397, 0.86527973630952937, 69.840929358660901],
+            [0.91939579348244926, 0.28325971389978516, 7.3555005965177296],
+            [0.21775934895998508, 0.99094248637867188, 41.124891683745233],
+            [0.57932964524447805, 0.23100636146802719, 4.2985919393100787],
+            [0.39667793013374686, 0.17990857948428171, 19.21599164774678],
+            [0.65154294285455405, 0.92958359792609102, 169.27373704769877],
+            [
+                0.056765241174697265,
+                0.21176965373303497,
+                140.57488603163392
+            ],
+            [0.45782002694659368, 0.7504156346810722, 67.686983708699358],
+            [0.70097955899174469, 0.13594741077482542, 17.690973760768447],
+            [0.047490637953598841, 0.8969607941824036, 9.0862937348881641],
+            [0.1544447325667799, 0.690502880810686, 2.0997165869714083],
+        ];
+        let xt = branin_data.slice(s![.., 0..2]).to_owned();
+        let yt = branin_data.slice(s![.., 2..3]).to_owned();
+
+        let weights = array![0.65709529, 0.34290471];
+        let means = array![[0.38952724, 0.48319967], [0.64382447, 0.50513467]];
+        let covariances = array![
+            [[0.05592868, -0.04013687], [-0.04013687, 0.07469386]],
+            [[0.09693959, 0.07294977], [0.07294977, 0.0925502]]
+        ];
+
+        let moe = Moe::params()
+            .n_clusters(2)
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+            .recombination(Recombination::Smooth(Some(1.)))
+            .gmx(weights, means, covariances)
+            .with_rng(rng)
+            .fit(&Dataset::new(xt, yt))
+            .expect("MOE fitted");
+
+        // moe.set_gmx(
+        //     array![0.65709529, 0.34290471],
+        //     array![[0.38952724, 0.48319967], [0.64382447, 0.50513467]],
+        //     array![
+        //         [[0.05592868, -0.04013687], [-0.04013687, 0.07469386]],
+        //         [[0.09693959, 0.07294977], [0.07294977, 0.0925502]]
+        //     ],
+        // );
+
+        for _ in 0..1 {
+            let xa: f64 = 0.2; //rand::random::<f64>();
+            let xb: f64 = 0.3; //rand::random::<f64>();
+            let e = 1e-5;
+
+            let x = array![
+                [xa, xb],
+                [xa + e, xb],
+                [xa - e, xb],
+                [xa, xb + e],
+                [xa, xb - e]
+            ];
+            println!("predict values");
+            let y_predicted = moe.predict_values(&x).unwrap();
+            println!("moe.predict_jacobian({})", x);
+            let y_jacob = moe.predict_jacobian(&x).unwrap();
+
+            let diff_g = (y_predicted[[1, 0]] - y_predicted[[2, 0]]) / (2. * e);
+            let diff_d = (y_predicted[[3, 0]] - y_predicted[[4, 0]]) / (2. * e);
+
+            let jac_rel_error1 = (y_jacob[[0, 0]] - diff_g).abs() / y_jacob[[0, 0]];
+            assert_abs_diff_eq!(jac_rel_error1, 0.0, epsilon = 0.01);
+
+            let jac_rel_error2 = (y_jacob[[0, 1]] - diff_d).abs() / y_jacob[[0, 1]];
+            assert_abs_diff_eq!(jac_rel_error2, 0.0, epsilon = 0.01);
+        }
     }
 }

@@ -203,7 +203,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     // impl<F: Float> GaussianProcess<F, ConstantMean, SquaredExponentialCorr> {
     /// Predict derivatives of the output prediction
-    /// wrt the kx th components at point a set of points x \[n_samples, n_components\].
+    /// wrt the kx th component at a set of points x \[n_samples, n_components\].
     pub fn predict_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -260,13 +260,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         res
     }
 
-    /// Predict jacobian at one point x
+    /// Predict jacobian at a set of point x
+    /// Returns array \[nsamples, nx\] containing output derivatives at x wrt each x components
     pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let mut jac = Array2::zeros((self.xtrain.data.ncols(), 1));
-        Zip::indexed(jac.rows_mut()).for_each(|i, mut r| {
+        let mut jac = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
+        Zip::indexed(jac.columns_mut()).for_each(|i, mut col| {
             let pred = self.predict_derivatives(x, i);
-            // println!("df/dx{}={}", i, pred);
-            r.assign(&pred);
+            col.assign(&pred);
         });
         jac
     }
@@ -387,7 +387,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     /// Predict derivatives of the output prediction variance
-    /// wrt the kx th components at point one input.
+    /// wrt to each components at a set of point x.
     #[cfg(not(feature = "blas"))]
     pub fn predict_variance_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         // Initialization

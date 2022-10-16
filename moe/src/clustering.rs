@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::gaussian_mixture::GaussianMixture;
+use crate::multivariate_normal::MultivariateNormal;
 use crate::parameters::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use log::debug;
 
@@ -7,7 +7,7 @@ use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
 use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
-use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::Rng;
 use std::ops::Sub;
 
@@ -21,18 +21,18 @@ pub trait Clustered {
 #[derive(Clone)]
 pub struct Clustering {
     pub(crate) recombination: Recombination<f64>,
-    pub(crate) gmx: GaussianMixture<f64>,
+    pub(crate) gmx: MultivariateNormal<f64>,
 }
 
 impl Clustering {
-    pub fn new(gmx: GaussianMixture<f64>, recombination: Recombination<f64>) -> Self {
+    pub fn new(gmx: MultivariateNormal<f64>, recombination: Recombination<f64>) -> Self {
         Clustering { gmx, recombination }
     }
 
     pub fn recombination(&self) -> Recombination<f64> {
         self.recombination
     }
-    pub fn gmx(&self) -> &GaussianMixture<f64> {
+    pub fn gmx(&self) -> &MultivariateNormal<f64> {
         &self.gmx
     }
 }
@@ -80,20 +80,6 @@ pub(crate) fn sort_by_cluster<F: Float>(
     }
     res
 }
-
-// pub(crate) fn proba_cluster_derivative_for_one_sample<F: Float>(
-//     weights: &Array1<F>,
-//     gmx: &GaussianMixture<F>,
-//     x: &ArrayBase<impl Data<Elem = F>, Ix1>,
-// ) {
-//     let deriv_proba = Array1::zeros(weights.len());
-//     let v = 0.;
-//     let vprime = 0.;
-
-//     for k in 0..weights.len() {
-//         v += weights[k] * gmx.co
-//     }
-// }
 
 /// Find the best number of cluster thanks to cross validation
 pub fn find_best_number_of_clusters<R: Rng + Clone>(
