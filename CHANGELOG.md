@@ -1,7 +1,13 @@
+Changes
+-------
+
 Version 0.6.0 - unreleased
 ==========================
 
-* Add `GpMix`/`Gpx` in Python `egobox` module, the Python binding of `egobox-moe::Moe` (#31)
+* Python binding: Add `GpMix`/`Gpx` in Python `egobox` module, the Python binding of `egobox-moe::Moe` (#31)
+* Gp: Add `predict_jacobian` and `predict_variance_jacobian` for kriging surrogate (constant/squaredexponential) only
+* Moe: Add `predict_jacobian` and `predict_variance_jacobian` for hard recombination only of krigings
+* Egor: Use analytic derivatives of infill criteria when using one cluster and kriging surrogates 
 
 Version 0.5.0 - 2022-10-07
 ==========================
@@ -9,9 +15,6 @@ Version 0.5.0 - 2022-10-07
 * Add Egor `minimize` interruption capability (Ctrl+C) from Python (#30)
 * Minor performance improvement in moe clustering (#29)
 * Improvements following JOSS submission review (#34, #36, #38, #39, #40, #42)
-
-Changes
--------
 
 Version 0.4.0 - 2022-07-09
 ==========================

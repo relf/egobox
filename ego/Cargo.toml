@@ -30,7 +30,7 @@ ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
 
-nlopt = "0.5.3"
+nlopt = "0.6.0"
 rand_isaac = "0.3"
 libm = "0.2"
 finitediff = { version="0.1", features = ["ndarray"] }

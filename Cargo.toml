@@ -37,7 +37,6 @@ ndarray-rand = "0.14"
 numpy = "0.16.2"
 anyhow = "=1.0.48"
 
-# nlopt = "0.5.3"
 rand_isaac = "0.3"
 libm = "0.2"
 finitediff = { version="0.1", features = ["ndarray"] }
