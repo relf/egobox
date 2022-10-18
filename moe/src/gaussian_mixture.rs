@@ -269,9 +269,7 @@ impl<F: Float, D: Data<Elem = F>> PredictInplace<ArrayBase<D, Ix2>, Array1<usize
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use ndarray::{array, Array, Array2};
-    use ndarray_npy::write_npy;
 
     #[test]
     fn test_gaussian_mixture() {

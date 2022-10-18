@@ -1157,7 +1157,7 @@ mod tests {
         let df = dsphere(&xtest);
 
         let jac_rel_err1 = (jac[[0, 0]] - df[[0, 0]]).abs() / jac[[0, 0]];
-        let jac_rel_err2 = (jac[[1, 0]] - df[[1, 0]]).abs() / jac[[1, 0]];
+        let jac_rel_err2 = (jac[[0, 1]] - df[[1, 0]]).abs() / jac[[0, 1]];
         println!("Test sphere predicted derivatives at {}", xtest);
         assert_abs_diff_eq!(jac_rel_err1, 0.0, epsilon = 1e-3);
         assert_abs_diff_eq!(jac_rel_err2, 0.0, epsilon = 1e-3);

@@ -93,9 +93,7 @@ impl<F: Float> MultivariateNormal<F> {
         &self,
         x: &ArrayBase<D, Ix1>,
     ) -> Array2<F> {
-        println!("x={} weights={} pdfs={}", x, self.weights, self.pdfs(x));
         let v = self.weights.to_owned().dot(&self.pdfs(x));
-        println!("v={}", v);
         let precs = &self.precisions / self.heaviside_factor;
         let mut deriv = Array2::zeros((self.means.nrows(), self.means.ncols()));
         Zip::from(deriv.rows_mut())
@@ -107,19 +105,15 @@ impl<F: Float> MultivariateNormal<F> {
         let vprime =
             deriv.to_owned() * &(-self.weights.to_owned() * self.pdfs(x)).insert_axis(Axis(1));
         let vprime = vprime.sum_axis(Axis(0));
-        println!("vprime={}", vprime);
 
         let u = (self.weights.to_owned() * self.pdfs(x))
             .to_owned()
             .insert_axis(Axis(1));
-        println!("u={}", u);
         let uprime = -(deriv.to_owned() * &u.to_owned());
-        println!("uprime={}", uprime);
         let v2 = v * v;
         let prob_deriv = (uprime.mapv(|up| up * v)
             - u.to_owned() * vprime.broadcast((u.nrows(), vprime.len())).unwrap())
         .mapv(|w| w / v2);
-        println!("prob_deriv = {}", prob_deriv);
         prob_deriv
     }
 
@@ -129,7 +123,6 @@ impl<F: Float> MultivariateNormal<F> {
             .and(x.rows())
             .for_each(|mut p, xi| {
                 let pred_prob = self.predict_probas_derivatives(&xi);
-                println!("pred_prob={}", pred_prob);
                 p.assign(&pred_prob);
             });
         prob

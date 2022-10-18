@@ -259,12 +259,9 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
 
     #[doc(hidden)]
     /// Sets the gaussian mixture (used to find the optimal number of clusters)
-    pub(crate) fn gmx(
-        mut self,
-        weights: Array1<F>,
-        means: Array2<F>,
-        covariances: Array3<F>,
-    ) -> Self {
+    /// Warning: no consistency check is done on the given initialization data
+    /// *Panic* if multivariate normal init data not sound
+    pub fn gmx(mut self, weights: Array1<F>, means: Array2<F>, covariances: Array3<F>) -> Self {
         self.0.gmx = Some(Box::new(
             MultivariateNormal::new(weights, means, covariances).unwrap(),
         ));

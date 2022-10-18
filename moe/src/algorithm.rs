@@ -21,7 +21,7 @@ use std::ops::Sub;
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
 use ndarray::{
-    array, concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip,
+    concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip,
 };
 
 #[cfg(feature = "blas")]
@@ -525,18 +525,9 @@ impl Moe {
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        println!("predict_jacobian_smooth x ={}", x);
         let probas = self.gmx.predict_probas(x);
         let der_probas = self.gmx.predict_probas_jacobian(x);
-        println!("probas = {}", probas);
-        println!("der_probas = {}", der_probas);
         let mut jac = Array2::<f64>::zeros((x.nrows(), x.ncols()));
-
-        let fake_preds = array![41.99614984014161, 119.25787325805254];
-        let fake_jacs = vec![
-            array![-280.02930409, -134.93765252],
-            array![-279.47406951, 73.87492899],
-        ];
 
         Zip::from(jac.rows_mut())
             .and(x.rows())
@@ -554,17 +545,22 @@ impl Moe {
                     .iter()
                     .map(|gp| gp.predict_jacobian(&obs).unwrap().row(0).to_owned())
                     .collect();
-                let subpreds = fake_preds.clone();
-                let jacs = fake_jacs.clone();
+
+                let subpreds = subpreds.insert_axis(Axis(1));
                 let mut subpreds_jac = Array2::zeros((self.experts.len(), x.len()));
                 Zip::indexed(subpreds_jac.rows_mut()).for_each(|i, mut jc| jc.assign(&jacs[i]));
-                println!("proba = {}", p);
-                println!("jacs = {}", subpreds_jac);
-                println!("proba_prime = {}", pprime);
-                println!("preds = {}", subpreds);
-                //let term1 = probas.to_owned().dot(&subpreds_jac);
 
-                y.assign(&(p.to_owned() * subpreds_jac + pprime.to_owned() * subpreds.t()));
+                let mut term1 = Array2::zeros((self.experts.len(), x.len()));
+                Zip::from(term1.rows_mut())
+                    .and(&p)
+                    .and(subpreds_jac.rows())
+                    .for_each(|mut t, p, der| t.assign(&(der.to_owned().mapv(|v| v * p))));
+                let term1 = term1.sum_axis(Axis(0));
+
+                let term2 = pprime.to_owned() * subpreds;
+                let term2 = term2.sum_axis(Axis(0));
+
+                y.assign(&(term1 + term2));
             });
         Ok(jac)
     }
@@ -839,7 +835,8 @@ mod tests {
             .expect("MOE fitted");
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&obs).expect("MOE prediction");
-        let dpreds = moe.predict_jacobian(&obs).expect("MOE jac prediction");
+        // Work for a kriging only atm
+        // let dpreds = moe.predict_jacobian(&obs).expect("MOE jac prediction");
         println!("Smooth moe {}", moe);
         assert_abs_diff_eq!(
             0.37579, // true value = 0.37*0.37 = 0.1369
@@ -858,7 +855,7 @@ mod tests {
         std::fs::create_dir_all(test_dir).ok();
         write_npy(format!("{}/obs_smooth.npy", test_dir), &obs).expect("obs saved");
         write_npy(format!("{}/preds_smooth.npy", test_dir), &preds).expect("preds saved");
-        write_npy(format!("{}/dpreds_smooth.npy", test_dir), &dpreds).expect("dpreds saved");
+        // write_npy(format!("{}/dpreds_smooth.npy", test_dir), &dpreds).expect("dpreds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
@@ -1081,6 +1078,7 @@ mod tests {
         let xt = branin_data.slice(s![.., 0..2]).to_owned();
         let yt = branin_data.slice(s![.., 2..3]).to_owned();
 
+        // for debug purpose set gmx
         let weights = array![0.65709529, 0.34290471];
         let means = array![[0.38952724, 0.48319967], [0.64382447, 0.50513467]];
         let covariances = array![
@@ -1098,18 +1096,9 @@ mod tests {
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
 
-        // moe.set_gmx(
-        //     array![0.65709529, 0.34290471],
-        //     array![[0.38952724, 0.48319967], [0.64382447, 0.50513467]],
-        //     array![
-        //         [[0.05592868, -0.04013687], [-0.04013687, 0.07469386]],
-        //         [[0.09693959, 0.07294977], [0.07294977, 0.0925502]]
-        //     ],
-        // );
-
-        for _ in 0..1 {
-            let xa: f64 = 0.2; //rand::random::<f64>();
-            let xb: f64 = 0.3; //rand::random::<f64>();
+        for _ in 0..20 {
+            let xa: f64 = rand::random::<f64>();
+            let xb: f64 = rand::random::<f64>();
             let e = 1e-5;
 
             let x = array![
@@ -1119,19 +1108,17 @@ mod tests {
                 [xa, xb + e],
                 [xa, xb - e]
             ];
-            println!("predict values");
             let y_predicted = moe.predict_values(&x).unwrap();
-            println!("moe.predict_jacobian({})", x);
             let y_jacob = moe.predict_jacobian(&x).unwrap();
 
             let diff_g = (y_predicted[[1, 0]] - y_predicted[[2, 0]]) / (2. * e);
             let diff_d = (y_predicted[[3, 0]] - y_predicted[[4, 0]]) / (2. * e);
 
             let jac_rel_error1 = (y_jacob[[0, 0]] - diff_g).abs() / y_jacob[[0, 0]];
-            assert_abs_diff_eq!(jac_rel_error1, 0.0, epsilon = 0.01);
+            assert_abs_diff_eq!(jac_rel_error1, 0.0, epsilon = 1e-3);
 
             let jac_rel_error2 = (y_jacob[[0, 1]] - diff_d).abs() / y_jacob[[0, 1]];
-            assert_abs_diff_eq!(jac_rel_error2, 0.0, epsilon = 0.01);
+            assert_abs_diff_eq!(jac_rel_error2, 0.0, epsilon = 1e-3);
         }
     }
 }
