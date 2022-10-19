@@ -14,8 +14,8 @@ use std::convert::TryFrom;
 
 /// A trait for using a correlation model in GP regression
 pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
-    /// Use the correlation model to compute correlation matrix given
-    /// `theta` parameters, distances `d` between data points and PLS `weights`.
+    /// Compute correlation matrix given `theta` parameters,
+    /// distances `d` between x data points and PLS `weights`.
     fn apply(
         &self,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -24,6 +24,7 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
     ) -> Array2<F>;
 }
 
+/// Squared exponential correlation models
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(
     feature = "serializable",
@@ -31,7 +32,6 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
     serde(into = "String"),
     serde(try_from = "String")
 )]
-/// Squared exponential correlation models
 pub struct SquaredExponentialCorr();
 
 impl From<SquaredExponentialCorr> for String {
