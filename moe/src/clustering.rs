@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::multivariate_normal::MultivariateNormal;
+use crate::gaussian_mixture::GaussianMixture;
 use crate::parameters::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use log::debug;
 
@@ -21,18 +21,18 @@ pub trait Clustered {
 #[derive(Clone)]
 pub struct Clustering {
     pub(crate) recombination: Recombination<f64>,
-    pub(crate) gmx: MultivariateNormal<f64>,
+    pub(crate) gmx: GaussianMixture<f64>,
 }
 
 impl Clustering {
-    pub fn new(gmx: MultivariateNormal<f64>, recombination: Recombination<f64>) -> Self {
+    pub fn new(gmx: GaussianMixture<f64>, recombination: Recombination<f64>) -> Self {
         Clustering { gmx, recombination }
     }
 
     pub fn recombination(&self) -> Recombination<f64> {
         self.recombination
     }
-    pub fn gmx(&self) -> &MultivariateNormal<f64> {
+    pub fn gmx(&self) -> &GaussianMixture<f64> {
         &self.gmx
     }
 }

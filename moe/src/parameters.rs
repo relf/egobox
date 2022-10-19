@@ -1,5 +1,5 @@
 use crate::errors::{MoeError, Result};
-use crate::multivariate_normal::MultivariateNormal;
+use crate::gaussian_mixture::GaussianMixture;
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
@@ -106,8 +106,8 @@ pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     kpls_dim: Option<usize>,
     /// Gaussian Mixture model used to cluster
     gmm: Option<Box<GaussianMixtureModel<F>>>,
-    /// MultivariateNormal preset
-    gmx: Option<Box<MultivariateNormal<F>>>,
+    /// GaussianMixture preset
+    gmx: Option<Box<GaussianMixture<F>>>,
     /// Random number generator
     rng: R,
 }
@@ -160,7 +160,7 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
     }
 
     /// An optional multivariate normal used to cluster (take precedence over gmm)
-    pub fn gmx(&self) -> &Option<Box<MultivariateNormal<F>>> {
+    pub fn gmx(&self) -> &Option<Box<GaussianMixture<F>>> {
         &self.gmx
     }
 
@@ -263,7 +263,7 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// *Panic* if multivariate normal init data not sound
     pub fn gmx(mut self, weights: Array1<F>, means: Array2<F>, covariances: Array3<F>) -> Self {
         self.0.gmx = Some(Box::new(
-            MultivariateNormal::new(weights, means, covariances).unwrap(),
+            GaussianMixture::new(weights, means, covariances).unwrap(),
         ));
         self
     }

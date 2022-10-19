@@ -8,7 +8,7 @@ use linfa::{dataset::WithLapack, dataset::WithoutLapack};
 use linfa::{traits::*, Float};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, triangular::*};
-use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix2, Ix3, Zip};
+use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix1, Ix2, Ix3, Zip};
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, triangular::*};
 use ndarray_stats::QuantileExt;
@@ -16,15 +16,32 @@ use ndarray_stats::QuantileExt;
 #[cfg(feature = "persistent")]
 use serde::{Deserialize, Serialize};
 
+/// Gaussian mixture is a set of n weigthed multivariate normal distributions of dimension nx
+/// This structure is derived from `linfa::GaussianMixtureModel` clustering method
+/// to handle the resulting multivariate normals and related computations in one go.
+/// Moreover an `heaviside factor` is handled in case of smooth Recombination
+/// to control the smoothness between clusters and can be adjusted afterwards
+///
+/// Note: distribution means are handle in a (n, nx) matrix whie covariances
+/// are handled in a (n, nx, nx) ndarray
+
 #[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct GaussianMixture<F: Float> {
+    /// weights vector (n,) of each cluster
     weights: Array1<F>,
+    /// means (n, nx) matrix of the multivariate normal distributions
     means: Array2<F>,
+    /// covariances (n, nx) ndarray of the multivariate normal distributions
     covariances: Array3<F>,
+    /// precisions (n, nx) ndarray of the multivariate normal distributions
     precisions: Array3<F>,
+    /// lower cholesky precisions (n, nx) ndarray of the multivariate normal distributions
     precisions_chol: Array3<F>,
+    /// factor controlling the smoothness (used when smooth recombinatoin is used)
     heaviside_factor: F,
+    /// determinants of the cholesky decomposition matrices of the precision matrices
+    log_det: Array1<F>,
 }
 
 impl<F: Float> Clone for GaussianMixture<F> {
@@ -36,6 +53,7 @@ impl<F: Float> Clone for GaussianMixture<F> {
             precisions: self.precisions.to_owned(),
             precisions_chol: self.precisions_chol.to_owned(),
             heaviside_factor: self.heaviside_factor,
+            log_det: self.log_det.to_owned(),
         }
     }
 }
@@ -46,9 +64,9 @@ impl<F: Float> GaussianMixture<F> {
         means: Array2<F>,
         covariances: Array3<F>,
     ) -> Result<GaussianMixture<F>> {
-        let precisions_chol = Self::compute_precisions_cholesky_full(&covariances)?;
-        let precisions = Self::compute_precisions_full(&precisions_chol);
-
+        let precisions_chol = Self::compute_precisions_cholesky(&covariances)?;
+        let precisions = Self::compute_precisions(&precisions_chol);
+        let log_det = Self::compute_log_det(&precisions_chol, F::one());
         Ok(GaussianMixture {
             weights,
             means,
@@ -56,11 +74,14 @@ impl<F: Float> GaussianMixture<F> {
             precisions,
             precisions_chol,
             heaviside_factor: F::one(),
+            log_det,
         })
     }
 
+    /// Number of clusters corresponding to the number of multivariate normal distributions
+    /// used in the mixture
     pub fn n_clusters(&self) -> usize {
-        self.weights.len()
+        self.means.nrows()
     }
 
     pub fn weights(&self) -> &Array1<F> {
@@ -75,21 +96,81 @@ impl<F: Float> GaussianMixture<F> {
         &self.covariances
     }
 
-    pub fn heaviside_factor(&self) -> F {
-        self.heaviside_factor
-    }
-
-    pub fn predict_probas<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        let (_, log_resp) = self.estimate_log_prob_resp(x);
-        log_resp.mapv(|v| v.exp())
-    }
-
-    pub fn with_heaviside_factor(mut self, heaviside_factor: F) -> Self {
+    /// Setter for heaviside factor which change the transition between
+    /// clusters in case of smooth recombination
+    pub fn heaviside_factor(mut self, heaviside_factor: F) -> Self {
         self.heaviside_factor = heaviside_factor;
+        // refresh log of precision matrix determinant
+        self.log_det = Self::compute_log_det(&self.precisions_chol, self.heaviside_factor);
         self
     }
 
-    fn compute_precisions_cholesky_full<D: Data<Elem = F>>(
+    /// Compute the probability of each n x points given as a (n, nx) matrix to belong to a given cluster.
+    /// Returns the corresponding indexes of the cluster (i.e. the corresponding mvn distribution)
+    /// as a (n,) vector  
+    pub fn predict_probas<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
+        let (_, log_resp) = self.compute_log_prob_resp(x);
+        log_resp.mapv(|v| v.exp())
+    }
+
+    /// Compute the derivatives of the probability at the x point given as a (nx,) vector
+    /// to belong to a given cluster among the n clusters.
+    /// Returns a (n, nx) matrix where the ith row is the derivatives wrt to the nx components valued at x
+    /// of the responsability (the probability of being part of) of the ith cluster (ie the ith mvn distribution)
+    pub fn predict_probas_derivatives<D: Data<Elem = F>>(
+        &self,
+        x: &ArrayBase<D, Ix1>,
+    ) -> Array2<F> {
+        let v = self.weights.to_owned().dot(&self.pdfs(x));
+        let precs = &self.precisions / self.heaviside_factor;
+        let mut deriv = Array2::zeros((self.means.nrows(), self.means.ncols()));
+        Zip::from(deriv.rows_mut())
+            .and(self.means.rows())
+            .and(precs.outer_iter())
+            .for_each(|mut der, mu, prec| {
+                der.assign(&(&x.to_owned() - &mu).dot(&prec));
+            });
+        let vprime =
+            deriv.to_owned() * &(-self.weights.to_owned() * self.pdfs(x)).insert_axis(Axis(1));
+        let vprime = vprime.sum_axis(Axis(0));
+
+        let u = (self.weights.to_owned() * self.pdfs(x))
+            .to_owned()
+            .insert_axis(Axis(1));
+        let uprime = -(deriv.to_owned() * &u.to_owned());
+        let v2 = v * v;
+        let prob_deriv = (uprime.mapv(|up| up * v)
+            - u.to_owned() * vprime.broadcast((u.nrows(), vprime.len())).unwrap())
+        .mapv(|w| w / v2);
+        prob_deriv
+    }
+
+    /// Compute the derivatives of the probability of a set of x point given as a (m, nx) vector
+    /// to belong to a given cluster among the n clusters.
+    /// Returns (m, n, nx) ndarray where the mth element is the derivatives wrt to x valued at x
+    /// of the responsability (the probability of being part of) of the ith cluster (ie the ith mvn distribution)
+    pub fn predict_probas_jacobian<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array3<F> {
+        let mut prob = Array3::zeros((x.nrows(), self.means.nrows(), x.ncols()));
+        Zip::from(prob.outer_iter_mut())
+            .and(x.rows())
+            .for_each(|mut p, xi| {
+                let pred_prob = self.predict_probas_derivatives(&xi);
+                p.assign(&pred_prob);
+            });
+        prob
+    }
+
+    /// Compute the density functions at x for the n multivariate normal distributions
+    /// Returnds the pdf values as a (n,) vaector
+    pub fn pdfs<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix1>) -> Array1<F> {
+        let xx = x.to_owned().insert_axis(Axis(0));
+        self.compute_log_gaussian_prob(&xx).row(0).mapv(|v| v.exp())
+    }
+
+    /// Compute precision matrices cholesky decomposiotions given the covariance matrices of
+    /// the n multivariate normal distributions specified as a (n, nx, nx) ndarray where
+    /// nx is the multivariate dimension.
+    fn compute_precisions_cholesky<D: Data<Elem = F>>(
         covariances: &ArrayBase<D, Ix3>,
     ) -> Result<Array3<F>> {
         let n_clusters = covariances.shape()[0];
@@ -113,9 +194,8 @@ impl<F: Float> GaussianMixture<F> {
         Ok(precisions_chol)
     }
 
-    fn compute_precisions_full<D: Data<Elem = F>>(
-        precisions_chol: &ArrayBase<D, Ix3>,
-    ) -> Array3<F> {
+    /// Compute precision matrices of the multivariate normal distributions
+    fn compute_precisions<D: Data<Elem = F>>(precisions_chol: &ArrayBase<D, Ix3>) -> Array3<F> {
         let mut precisions = Array3::zeros(precisions_chol.dim());
         for (k, prec_chol) in precisions_chol.outer_iter().enumerate() {
             precisions
@@ -125,14 +205,24 @@ impl<F: Float> GaussianMixture<F> {
         precisions
     }
 
-    // Estimate log probabilities (log P(X)) and responsibilities for each sample.
+    /// Compute the log of the determinant of the precision matrix decompositions (of the mvn distributions)
+    /// taking into account the `heaviside factor`.
+    /// Returns the vector of log determinants
+    fn compute_log_det(precisions_chol: &Array3<F>, heaviside_factor: F) -> Array1<F> {
+        let factor =
+            ndarray_rand::rand_distr::num_traits::Float::powf(heaviside_factor, F::cast(-0.5));
+        let precs = precisions_chol * factor;
+        let n_features = precisions_chol.shape()[1];
+        Self::compute_log_det_cholesky(&precs, n_features)
+    }
+
     // Compute weighted log probabilities per component (log P(X)) and responsibilities
     // for each sample in X with respect to the current state of the model.
-    fn estimate_log_prob_resp<D: Data<Elem = F>>(
+    fn compute_log_prob_resp<D: Data<Elem = F>>(
         &self,
-        observations: &ArrayBase<D, Ix2>,
+        x: &ArrayBase<D, Ix2>,
     ) -> (Array1<F>, Array2<F>) {
-        let weighted_log_prob = self.estimate_weighted_log_prob(observations);
+        let weighted_log_prob = self.compute_log_gaussian_prob(x) + self.weights().mapv(|v| v.ln());
         let log_prob_norm = weighted_log_prob
             .mapv(|v| v.exp())
             .sum_axis(Axis(1))
@@ -141,54 +231,38 @@ impl<F: Float> GaussianMixture<F> {
         (log_prob_norm, log_resp)
     }
 
-    // Estimate weighted log probabilities for each samples wrt to the model
-    fn estimate_weighted_log_prob<D: Data<Elem = F>>(
-        &self,
-        observations: &ArrayBase<D, Ix2>,
-    ) -> Array2<F> {
-        self.estimate_log_prob(observations) + self.estimate_log_weights()
-    }
-
-    // Compute log probabilities for each samples wrt to the model which is gaussian
-    fn estimate_log_prob<D: Data<Elem = F>>(&self, observations: &ArrayBase<D, Ix2>) -> Array2<F> {
-        self.estimate_log_gaussian_prob(observations)
-    }
-
-    // Compute the log LikelihoodComputation in case of the gaussian probabilities
+    // Compute the log Likelihood
     // log(P(X|Mean, Precision)) = -0.5*(d*ln(2*PI)-ln(det(Precision)+(X-Mean)^t.Precision.(X-Mean))
-    fn estimate_log_gaussian_prob<D: Data<Elem = F>>(
-        &self,
-        observations: &ArrayBase<D, Ix2>,
-    ) -> Array2<F> {
-        let n_samples = observations.nrows();
-        let n_features = observations.ncols();
+    fn compute_log_gaussian_prob<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
+        let n_samples = x.nrows();
+        let n_features = x.ncols();
         let means = self.means();
         let n_clusters = means.nrows();
-        let factor = ndarray_rand::rand_distr::num_traits::Float::powf(
-            self.heaviside_factor(),
-            F::cast(-0.5),
-        );
+        let factor =
+            ndarray_rand::rand_distr::num_traits::Float::powf(self.heaviside_factor, F::cast(-0.5));
         let precs = &self.precisions_chol * factor;
         // The determinant of the precision matrix from the Cholesky decomposition
         // corresponds to the negative half of the determinant of the full precision
         // matrix.
         // In short: det(precision_chol) = - det(precision) / 2
-        let log_det = Self::compute_log_det_cholesky_full(&precs, n_features);
+        //let log_det = Self::compute_log_det_cholesky(&precs, n_features);
         let mut log_prob: Array2<F> = Array::zeros((n_samples, n_clusters));
         Zip::indexed(means.rows())
             .and(precs.outer_iter())
             .for_each(|k, mu, prec_chol| {
-                let diff = (&observations.to_owned() - &mu).dot(&prec_chol);
+                let diff = (&x.to_owned() - &mu).dot(&prec_chol);
                 log_prob
                     .slice_mut(s![.., k])
                     .assign(&diff.mapv(|v| v * v).sum_axis(Axis(1)))
             });
-        log_prob.mapv(|v| {
-            F::cast(-0.5) * (v + F::cast(n_features as f64 * f64::ln(2. * std::f64::consts::PI)))
-        }) + log_det
+        let cst = F::cast(n_features as f64 * f64::ln(2. * std::f64::consts::PI));
+        let minus_half = F::cast(-0.5);
+        log_prob.mapv(|v| minus_half * (v + cst)) + &self.log_det
     }
 
-    fn compute_log_det_cholesky_full<D: Data<Elem = F>>(
+    /// Compute the determinant of the cholesky decompositions
+    /// (i.e. the product of diagonal eleùments) for each multivariate normal distriutions
+    fn compute_log_det_cholesky<D: Data<Elem = F>>(
         matrix_chol: &ArrayBase<D, Ix3>,
         n_features: usize,
     ) -> Array1<F> {
@@ -202,60 +276,19 @@ impl<F: Float> GaussianMixture<F> {
             .mapv(|v| v.ln());
         log_diags.sum_axis(Axis(1))
     }
-
-    fn estimate_log_weights(&self) -> Array1<F> {
-        self.weights().mapv(|v| v.ln())
-    }
-
-    /// Compute the weighted log probabilities for each sample.
-    pub fn score_samples<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array1<F> {
-        self.estimate_weighted_log_prob(x)
-            .mapv(|v| v.exp())
-            .sum_axis(Axis(1))
-            .mapv(|v| v.ln())
-    }
-
-    // Compute the per-sample average log-likelihood of the given data X.
-    pub fn score<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> F {
-        self.score_samples(x).mean().unwrap()
-    }
-
-    /// Return the number of free parameters in the model.
-    pub fn n_parameters(&self) -> usize {
-        let (n_clusters, n_features) = (self.means.nrows(), self.means.ncols());
-        let cov_params = n_clusters * n_features * (n_features + 1) / 2;
-        let mean_params = n_features * n_clusters;
-        (cov_params + mean_params + n_clusters - 1) as usize
-    }
-
-    /// Bayesian information criterion for the current model on the input X.
-    /// The lower the better.
-    pub fn bic<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> F {
-        let n_samples = F::from(x.shape()[0]).unwrap();
-        F::from(-2.).unwrap() * self.score(x) * n_samples
-            + F::from(self.n_parameters()).unwrap() * n_samples.ln()
-    }
-
-    /// Akaike information criterion for the current model on the input X.
-    /// The lower the better
-    pub fn aic<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> F {
-        let two = F::from(2.).unwrap();
-        -two * (F::from(self.score(x)).unwrap()) * (F::from(x.shape()[0]).unwrap())
-            + two * (F::from(self.n_parameters()).unwrap())
-    }
 }
 
 impl<F: Float, D: Data<Elem = F>> PredictInplace<ArrayBase<D, Ix2>, Array1<usize>>
     for GaussianMixture<F>
 {
-    fn predict_inplace(&self, observations: &ArrayBase<D, Ix2>, targets: &mut Array1<usize>) {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, targets: &mut Array1<usize>) {
         assert_eq!(
-            observations.nrows(),
+            x.nrows(),
             targets.len(),
             "The number of data points must match the number of output targets."
         );
 
-        let (_, log_resp) = self.estimate_log_prob_resp(observations);
+        let (_, log_resp) = self.compute_log_prob_resp(x);
         *targets = log_resp
             .mapv(F::exp)
             .map_axis(Axis(1), |row| row.argmax().unwrap_or(0));
@@ -269,95 +302,59 @@ impl<F: Float, D: Data<Elem = F>> PredictInplace<ArrayBase<D, Ix2>, Array1<usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use approx::assert_abs_diff_eq;
     use ndarray::{array, Array, Array2};
 
     #[test]
-    fn test_gaussian_mixture() {
+    fn test_gmx() {
         let weights = array![0.5, 0.5];
         let means = array![[0., 0.], [4., 4.]];
         let covs = array![[[3., 0.], [0., 3.]], [[3., 0.], [0., 3.]]];
         let gmix = GaussianMixture::new(weights, means, covs)
             .expect("Gaussian mixture creation failed")
-            .with_heaviside_factor(0.99);
+            .heaviside_factor(0.99);
         let mut obs = Array2::from_elem((11, 2), 0.);
         Zip::from(obs.rows_mut())
             .and(&Array::linspace(0., 4., 11))
             .for_each(|mut o, &v| o.assign(&array![v, v]));
         let _preds = gmix.predict(&obs);
-        let _probas = gmix.predict_probas(&obs);
-
-        // let test_dir = "target/tests";
-        // std::fs::create_dir_all(test_dir).ok();
-        // write_npy(format!("{}/probes.npy", test_dir), &obs).expect("failed to save");
-        // write_npy(format!("{}/probas.npy", test_dir), &probas).expect("failed to save");
+        println!("preds =  {:?}", _preds);
+        let probas = gmix.predict_probas(&obs);
+        println!("probas =  {:?}", probas);
     }
 
-    #[cfg(feature = "blas")]
+    fn test_case(
+        means: Array2<f64>,
+        covariances: Array3<f64>,
+        expected: Array1<f64>,
+        x: Array1<f64>,
+    ) {
+        let part = 1. / means.nrows() as f64;
+        let weights = Array::from_elem((means.len(),), part);
+        let mvn = GaussianMixture::new(weights, means, covariances).unwrap();
+        assert_abs_diff_eq!(expected, mvn.pdfs(&x));
+    }
+
     #[test]
-    fn test_gaussian_mixture_aic_bic() {
-        use ndarray::Array;
-
-        use approx::assert_abs_diff_eq;
-        use linfa::DatasetBase;
-        use linfa_clustering::GaussianMixtureModel;
-        use ndarray_linalg::solve::*; // Determinant computation not in linfa-linalg
-        use ndarray_rand::rand::{rngs::SmallRng, SeedableRng};
-        use ndarray_rand::rand_distr::StandardNormal;
-        use ndarray_rand::RandomExt;
-        use ndarray_stats::CorrelationExt;
-        // use ndarray_npy::write_npy;
-
-        // Test the aic and bic criteria
-        let mut rng = SmallRng::seed_from_u64(42);
-        let (n_samples, n_features, n_components) = (50, 3, 2);
-        let x = Array::random_using((n_samples, n_features), StandardNormal, &mut rng);
-        // write_npy("test_bic_aic.npy", &x).expect("failed to save");
-
-        let dataset = DatasetBase::from(x.to_owned());
-        let g = GaussianMixtureModel::params(n_components)
-            .max_n_iterations(200)
-            .with_rng(rng)
-            .fit(&dataset)
-            .expect("GMM fails");
-        let gmx = GaussianMixture::new(
-            g.weights().to_owned(),
-            g.means().to_owned(),
-            g.covariances().to_owned(),
+    fn test_pdfs() {
+        test_case(
+            array![[0., 0.]],
+            array![[[1., 0.], [0., 1.]]],
+            array![0.05854983152431917],
+            array![1., 1.],
+        );
+        test_case(
+            array![[0., 0.]],
+            array![[[1., 0.], [0., 1.]]],
+            array![0.013064233284684921],
+            array![1., 2.],
+        );
+        test_case(
+            array![[0.5, -0.2]],
+            array![[[2.0, 0.3], [0.3, 0.5]]],
+            array![0.00014842259203296995],
+            array![-1., 2.],
         )
-        .unwrap();
-        // write_npy("test_bic_aic_weights.npy", g.weights()).expect("failed to save");
-        // write_npy("test_bic_aic_means.npy", g.means()).expect("failed to save");
-        // write_npy("test_bic_aic_precisions.npy", g.precisions()).expect("failed to save");
-        // write_npy(
-        //     "test_bic_aic_precisions_chol.npy",
-        //     &GaussianMixture::compute_precisions_cholesky_full(g.covariances()).unwrap(),
-        // )
-        // .expect("failed to save");
-
-        // True values checked against sklearn 0.24.1
-        assert_abs_diff_eq!(489.5790028439929, gmx.bic(&x), epsilon = 1e-7);
-        assert_abs_diff_eq!(453.2505657408581, gmx.aic(&x), epsilon = 1e-7);
-        // standard gaussian entropy
-        let sgh = 0.5
-            * (f64::ln(x.t().cov(0.).unwrap().det().unwrap())
-                + (n_features as f64) * (1. + f64::ln(2. * std::f64::consts::PI)));
-
-        assert_abs_diff_eq!(4.193902320935888, sgh, epsilon = 1e-7);
-
-        let aic = 2. * (n_samples as f64) * sgh + 2. * (gmx.n_parameters() as f64);
-        let bic =
-            2. * (n_samples as f64) * sgh + (n_samples as f64).ln() * (gmx.n_parameters() as f64);
-        let bound = (n_features as f64) / (n_samples as f64).sqrt();
-
-        assert_eq!(19, gmx.n_parameters());
-        assert_abs_diff_eq!(493.71866919672357, bic, epsilon = 1e-7);
-        assert_abs_diff_eq!(457.3902320935888, aic, epsilon = 1e-7);
-        assert_abs_diff_eq!(0.4242640687119285, bound, epsilon = 1e-7);
-
-        let v_aic = (gmx.aic(&x) - aic) / (n_samples as f64);
-        let v_bic = (gmx.bic(&x) - bic) / (n_samples as f64);
-
-        assert!(v_aic < bound);
-        assert!(v_bic < bound);
     }
 }

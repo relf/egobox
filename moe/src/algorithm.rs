@@ -1,5 +1,5 @@
 //use super::gaussian_mixture::GaussianMixture;
-use super::multivariate_normal::MultivariateNormal;
+use super::gaussian_mixture::GaussianMixture;
 use crate::clustering::{find_best_number_of_clusters, sort_by_cluster, Clustered, Clustering};
 use crate::errors::MoeError;
 use crate::errors::Result;
@@ -126,13 +126,15 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
                 Recombination::Smooth(None) => 1.,
                 Recombination::Hard => 1.,
             };
-            MultivariateNormal::new(weights, means, covariances)?.heaviside_factor(factor)
+            GaussianMixture::new(weights, means, covariances)?.heaviside_factor(factor)
         };
 
         let clustering = Clustering::new(gmx, recomb);
         self.train_on_clusters(&xt.view(), &yt.view(), &clustering)
     }
 
+    /// Using the current state of the clustering, select and train the experts
+    /// Returns the fitted mixture of experts model
     pub fn train_on_clusters(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -278,7 +280,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
     fn optimize_heaviside_factor(
         &self,
         experts: &[Box<dyn Surrogate>],
-        gmx: &MultivariateNormal<f64>,
+        gmx: &GaussianMixture<f64>,
         xtest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         ytest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> f64 {
@@ -332,7 +334,7 @@ fn factorial(n: usize) -> usize {
 /// output values predict by each cluster experts.
 fn predict_values_smooth(
     experts: &[Box<dyn Surrogate>],
-    gmx: &MultivariateNormal<f64>,
+    gmx: &GaussianMixture<f64>,
     points: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Result<Array2<f64>> {
     let probas = gmx.predict_probas(points);
@@ -360,7 +362,7 @@ pub struct Moe {
     /// The list of the best experts trained on each cluster
     experts: Vec<Box<dyn Surrogate>>,
     /// The gaussian mixture allowing to predict cluster responsabilities for a given point
-    gmx: MultivariateNormal<f64>,
+    gmx: GaussianMixture<f64>,
     /// The dimension of the predicted output
     output_dim: usize,
 }
@@ -461,7 +463,7 @@ impl Moe {
     }
 
     /// Recombination mode
-    pub fn gmx(&self) -> &MultivariateNormal<f64> {
+    pub fn gmx(&self) -> &GaussianMixture<f64> {
         &self.gmx
     }
 
@@ -481,13 +483,13 @@ impl Moe {
     }
 
     pub fn set_gmx(&mut self, weights: Array1<f64>, means: Array2<f64>, covariances: Array3<f64>) {
-        self.gmx = MultivariateNormal::new(weights, means, covariances).unwrap();
+        self.gmx = GaussianMixture::new(weights, means, covariances).unwrap();
     }
 
-    /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
+    /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
-    /// or another (ie responsabilities). Those responsabilities are used to combine
-    /// output values predict by each cluster experts.
+    /// or another (ie responsabilities).     
+    /// The smooth recombination of each cluster expert responsabilty is used to get the result.
     pub fn predict_values_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -495,10 +497,10 @@ impl Moe {
         predict_values_smooth(&self.experts, &self.gmx, x)
     }
 
-    /// Predict variances at a set of points `x` specified as (n, xdim) matrix.
+    /// Predict variances at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
-    /// or another (ie responsabilities). Those responsabilities are used to combine
-    /// variances predict by each cluster experts.
+    /// or another (ie responsabilities).
+    /// The smooth recombination of each cluster expert responsabilty is used to get the result.
     pub fn predict_variances_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -521,6 +523,10 @@ impl Moe {
         Ok(preds.insert_axis(Axis(1)))
     }
 
+    /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.
+    /// Return derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
+    /// of the output wrt the nx components of `x` valued at the ith x point.
+    /// The smooth recombination of each cluster expert responsability is used to get the result.
     pub fn predict_jacobian_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -565,16 +571,21 @@ impl Moe {
         Ok(jac)
     }
 
+    /// Predict derivatives of the variance at a set of points `x` specified as (n, nx) matrix.
+    /// Return derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
+    /// of the vairance wrt the nx components of `x` valued at the ith x point.
+    /// The smooth recombination of each cluster expert responsability is used to get the result.
     pub fn predict_variance_jacobian_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        self.predict_variance_jacobian_hard(x)
+        todo!()
     }
 
-    /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
+    /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
-    /// Then the expert of the cluster is used to predict output value.
+    /// Then the expert of the cluster is used to predict the output value.
+    /// Returns the ouputs as a (n, 1) column vector
     pub fn predict_values_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -596,9 +607,10 @@ impl Moe {
         Ok(preds)
     }
 
-    /// Predict variance at a set of points `x` specified as (n, xdim) matrix.
+    /// Predict variance at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
-    /// Then the expert of the cluster is used to predict output value.
+    /// The expert of the cluster is used to predict variance value.
+    /// Returns the variances as a (n, 1) column vector
     pub fn predict_variances_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -620,6 +632,11 @@ impl Moe {
         Ok(variances)
     }
 
+    /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
+    /// The expert of the cluster is used to predict variance value.
+    /// Returns derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
+    /// of the output wrt the nx components of `x` valued at the ith x point.
     pub fn predict_jacobian_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -638,6 +655,11 @@ impl Moe {
         Ok(jac)
     }
 
+    /// Predict derivatives of the variances at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
+    /// The expert of the cluster is used to predict variance value.
+    /// Returns derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
+    /// of the output wrt the nx components of `x` valued at the ith x point.
     pub fn predict_variance_jacobian_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -723,6 +745,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Moe
     }
 }
 
+/// Adaptator to implement `linfa::Predict` for variance prediction
 struct MoeVariancePredictor<'a>(&'a Moe);
 impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     for MoeVariancePredictor<'a>
