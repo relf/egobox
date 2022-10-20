@@ -39,9 +39,9 @@ pub fn grad_ei(x: &[f64], obj_model: &dyn ClusteredSurrogate, f_min: f64) -> Arr
                 let pred = p[[0, 0]];
                 let diff_y = f_min - pred;
                 let arg = (f_min - pred) / sigma;
-                let y_prime = obj_model.predict_jacobian(&pt).unwrap();
+                let y_prime = obj_model.predict_derivatives(&pt).unwrap();
                 let y_prime = y_prime.row(0);
-                let sig_2_prime = obj_model.predict_variance_jacobian(&pt).unwrap();
+                let sig_2_prime = obj_model.predict_variance_derivatives(&pt).unwrap();
 
                 let sig_2_prime = sig_2_prime.row(0);
                 let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));
@@ -77,7 +77,7 @@ pub fn grad_wbs2(
 ) -> Array1<f64> {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     let grad_ei = grad_ei(x, obj_model, f_min) * scale;
-    grad_ei - obj_model.predict_jacobian(&pt).unwrap().row(0)
+    grad_ei - obj_model.predict_derivatives(&pt).unwrap().row(0)
 }
 
 pub fn compute_wb2s_scale(
@@ -263,7 +263,7 @@ mod tests {
         println!(
             "GP predict derivatives({}) = {}",
             xtest,
-            bgp.predict_jacobian(&basetest.view()).unwrap()
+            bgp.predict_derivatives(&basetest.view()).unwrap()
         );
 
         let h = 1e-4;
@@ -290,7 +290,7 @@ mod tests {
         println!(
             "GP predict variances derivatives({}) = {}",
             xtest,
-            bgp.predict_variance_jacobian(&basetest.view()).unwrap()
+            bgp.predict_variance_derivatives(&basetest.view()).unwrap()
         );
     }
 }

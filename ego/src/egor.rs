@@ -850,7 +850,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                     if let Some(grad) = gradient {
                         if self.is_grad_impl_available() {
                             let grd = cstr_models[i]
-                                .predict_jacobian(
+                                .predict_derivatives(
                                     &Array::from_shape_vec((1, x.len()), x.to_vec())
                                         .unwrap()
                                         .view(),

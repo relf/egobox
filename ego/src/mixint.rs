@@ -452,24 +452,24 @@ impl Surrogate for MixintMoe {
         self.moe.predict_variances(&xcast)
     }
 
-    fn predict_jacobian(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+    fn predict_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
             x.to_owned()
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        self.moe.predict_jacobian(&xcast)
+        self.moe.predict_derivatives(&xcast)
     }
 
-    fn predict_variance_jacobian(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+    fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
             x.to_owned()
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        self.moe.predict_variance_jacobian(&xcast)
+        self.moe.predict_variance_derivatives(&xcast)
     }
 
     /// Save Moe model in given file.

@@ -117,7 +117,7 @@ impl<F: Float> GaussianMixture<F> {
     /// to belong to a given cluster among the n clusters.
     /// Returns a (n, nx) matrix where the ith row is the derivatives wrt to the nx components valued at x
     /// of the responsability (the probability of being part of) of the ith cluster (ie the ith mvn distribution)
-    pub fn predict_probas_derivatives<D: Data<Elem = F>>(
+    pub fn predict_single_probas_derivatives<D: Data<Elem = F>>(
         &self,
         x: &ArrayBase<D, Ix1>,
     ) -> Array2<F> {
@@ -145,16 +145,19 @@ impl<F: Float> GaussianMixture<F> {
         prob_deriv
     }
 
-    /// Compute the derivatives of the probability of a set of x point given as a (m, nx) vector
+    /// Compute the derivatives of the probability of a set of x points given as a (m, nx) vector
     /// to belong to a given cluster among the n clusters.
     /// Returns (m, n, nx) ndarray where the mth element is the derivatives wrt to x valued at x
     /// of the responsability (the probability of being part of) of the ith cluster (ie the ith mvn distribution)
-    pub fn predict_probas_jacobian<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array3<F> {
+    pub fn predict_probas_derivatives<D: Data<Elem = F>>(
+        &self,
+        x: &ArrayBase<D, Ix2>,
+    ) -> Array3<F> {
         let mut prob = Array3::zeros((x.nrows(), self.means.nrows(), x.ncols()));
         Zip::from(prob.outer_iter_mut())
             .and(x.rows())
             .for_each(|mut p, xi| {
-                let pred_prob = self.predict_probas_derivatives(&xi);
+                let pred_prob = self.predict_single_probas_derivatives(&xi);
                 p.assign(&pred_prob);
             });
         prob

@@ -33,10 +33,10 @@ pub trait Surrogate: std::fmt::Display + Send {
     fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict derivatives at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
-    fn predict_jacobian(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict derivatives of the variance at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
-    fn predict_variance_jacobian(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Save model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> Result<()>;
@@ -102,11 +102,11 @@ macro_rules! declare_surrogate {
                 fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_variances(x)?)
                 }
-                fn predict_jacobian(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_jacobian(x))
+                fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_derivatives(x))
                 }
-                fn predict_variance_jacobian(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_variance_jacobian(x))
+                fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_variance_derivatives(x))
                 }
 
                 #[cfg(feature = "persistent")]

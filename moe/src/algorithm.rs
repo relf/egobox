@@ -420,17 +420,17 @@ impl Surrogate for Moe {
         }
     }
 
-    fn predict_jacobian(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_jacobian_hard(x),
-            Recombination::Smooth(_) => self.predict_jacobian_smooth(x),
+            Recombination::Hard => self.predict_derivatives_hard(x),
+            Recombination::Smooth(_) => self.predict_derivatives_smooth(x),
         }
     }
 
-    fn predict_variance_jacobian(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_variance_jacobian_hard(x),
-            Recombination::Smooth(_) => self.predict_variance_jacobian_smooth(x),
+            Recombination::Hard => self.predict_variance_derivatives_hard(x),
+            Recombination::Smooth(_) => self.predict_variance_derivatives_smooth(x),
         }
     }
 
@@ -447,6 +447,7 @@ impl Surrogate for Moe {
     }
 }
 
+/// A trait for surrogates using clustering
 pub trait ClusteredSurrogate: Clustered + Surrogate {}
 
 impl ClusteredSurrogate for Moe {}
@@ -462,7 +463,7 @@ impl Moe {
         self.recombination
     }
 
-    /// Recombination mode
+    /// Gaussian mixture
     pub fn gmx(&self) -> &GaussianMixture<f64> {
         &self.gmx
     }
@@ -527,18 +528,18 @@ impl Moe {
     /// Return derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
     /// of the output wrt the nx components of `x` valued at the ith x point.
     /// The smooth recombination of each cluster expert responsability is used to get the result.
-    pub fn predict_jacobian_smooth(
+    pub fn predict_derivatives_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         let probas = self.gmx.predict_probas(x);
-        let probas_jac = self.gmx.predict_probas_jacobian(x);
-        let mut jac = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let probas_drv = self.gmx.predict_probas_derivatives(x);
+        let mut drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
 
-        Zip::from(jac.rows_mut())
+        Zip::from(drv.rows_mut())
             .and(x.rows())
             .and(probas.rows())
-            .and(probas_jac.outer_iter())
+            .and(probas_drv.outer_iter())
             .for_each(|mut y, x, p, pprime| {
                 let x = x.insert_axis(Axis(0));
                 let preds: Array1<f64> = self
@@ -546,20 +547,20 @@ impl Moe {
                     .iter()
                     .map(|gp| gp.predict_values(&x).unwrap()[[0, 0]])
                     .collect();
-                let jacs: Vec<Array1<f64>> = self
+                let drvs: Vec<Array1<f64>> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_jacobian(&x).unwrap().row(0).to_owned())
+                    .map(|gp| gp.predict_derivatives(&x).unwrap().row(0).to_owned())
                     .collect();
 
                 let preds = preds.insert_axis(Axis(1));
-                let mut preds_jac = Array2::zeros((self.experts.len(), x.len()));
-                Zip::indexed(preds_jac.rows_mut()).for_each(|i, mut jc| jc.assign(&jacs[i]));
+                let mut preds_drv = Array2::zeros((self.experts.len(), x.len()));
+                Zip::indexed(preds_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&drvs[i]));
 
                 let mut term1 = Array2::zeros((self.experts.len(), x.len()));
                 Zip::from(term1.rows_mut())
                     .and(&p)
-                    .and(preds_jac.rows())
+                    .and(preds_drv.rows())
                     .for_each(|mut t, p, der| t.assign(&(der.to_owned().mapv(|v| v * p))));
                 let term1 = term1.sum_axis(Axis(0));
 
@@ -568,47 +569,57 @@ impl Moe {
 
                 y.assign(&(term1 + term2));
             });
-        Ok(jac)
+        Ok(drv)
     }
 
     /// Predict derivatives of the variance at a set of points `x` specified as (n, nx) matrix.
     /// Return derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
     /// of the vairance wrt the nx components of `x` valued at the ith x point.
     /// The smooth recombination of each cluster expert responsability is used to get the result.
-    pub fn predict_variance_jacobian_smooth(
+    pub fn predict_variance_derivatives_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         let probas = self.gmx.predict_probas(x);
-        let probas_jac = self.gmx.predict_probas_jacobian(x);
+        println!("probas={}", probas);
+        let probas_drv = self.gmx.predict_probas_derivatives(x);
+        println!("der_probas={}", probas_drv);
 
-        let mut jac = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let mut drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
 
-        Zip::from(jac.rows_mut())
+        Zip::from(drv.rows_mut())
             .and(x.rows())
             .and(probas.rows())
-            .and(probas_jac.outer_iter())
-            .for_each(|mut y, x, p, pprime| {
-                let x = x.insert_axis(Axis(0));
+            .and(probas_drv.outer_iter())
+            .for_each(|mut y, xi, p, pprime| {
+                let xii = xi.insert_axis(Axis(0));
                 let preds: Array1<f64> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_variances(&x).unwrap()[[0, 0]])
+                    .map(|gp| gp.predict_variances(&xii).unwrap()[[0, 0]])
                     .collect();
-                let jacs: Vec<Array1<f64>> = self
+                let drvs: Vec<Array1<f64>> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_variance_jacobian(&x).unwrap().row(0).to_owned())
+                    .map(|gp| {
+                        gp.predict_variance_derivatives(&xii)
+                            .unwrap()
+                            .row(0)
+                            .to_owned()
+                    })
                     .collect();
 
                 let preds = preds.insert_axis(Axis(1));
-                let mut preds_jac = Array2::zeros((self.experts.len(), x.len()));
-                Zip::indexed(preds_jac.rows_mut()).for_each(|i, mut jc| jc.assign(&jacs[i]));
+                let mut preds_drv = Array2::zeros((self.experts.len(), xi.len()));
+                Zip::indexed(preds_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&drvs[i]));
 
-                let mut term1 = Array2::zeros((self.experts.len(), x.len()));
+                println!("deriv = {}", preds_drv);
+                println!("preds = {}", preds);
+
+                let mut term1 = Array2::zeros((self.experts.len(), xi.len()));
                 Zip::from(term1.rows_mut())
                     .and(&p)
-                    .and(preds_jac.rows())
+                    .and(preds_drv.rows())
                     .for_each(|mut t, p, der| t.assign(&(der.to_owned().mapv(|v| v * p * p))));
                 let term1 = term1.sum_axis(Axis(0));
 
@@ -618,7 +629,7 @@ impl Moe {
                 y.assign(&(term1 + term2));
             });
 
-        Ok(jac)
+        Ok(drv)
     }
 
     /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
@@ -676,22 +687,22 @@ impl Moe {
     /// The expert of the cluster is used to predict variance value.
     /// Returns derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
     /// of the output wrt the nx components of `x` valued at the ith x point.
-    pub fn predict_jacobian_hard(
+    pub fn predict_derivatives_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        let mut jac = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let mut drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
         let clustering = self.gmx.predict(x);
-        Zip::from(jac.rows_mut())
+        Zip::from(drv.rows_mut())
             .and(x.rows())
             .and(&clustering)
-            .for_each(|mut jac_i, xi, &c| {
+            .for_each(|mut drv_i, xi, &c| {
                 let x = xi.to_owned().insert_axis(Axis(0));
-                let x_jac: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> =
-                    self.experts[c].predict_jacobian(&x.view()).unwrap();
-                jac_i.assign(&x_jac.column(0))
+                let x_drv: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> =
+                    self.experts[c].predict_derivatives(&x.view()).unwrap();
+                drv_i.assign(&x_drv.column(0))
             });
-        Ok(jac)
+        Ok(drv)
     }
 
     /// Predict derivatives of the variances at a set of points `x` specified as (n, nx) matrix.
@@ -699,24 +710,24 @@ impl Moe {
     /// The expert of the cluster is used to predict variance value.
     /// Returns derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
     /// of the output wrt the nx components of `x` valued at the ith x point.
-    pub fn predict_variance_jacobian_hard(
+    pub fn predict_variance_derivatives_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        let mut varjac = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let mut vardrv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
         let clustering = self.gmx.predict(x);
-        Zip::from(varjac.rows_mut())
+        Zip::from(vardrv.rows_mut())
             .and(x.rows())
             .and(&clustering)
-            .for_each(|mut varjac_i, xi, &c| {
+            .for_each(|mut vardrv_i, xi, &c| {
                 let x = xi.to_owned().insert_axis(Axis(0));
-                let x_varjac: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> = self
+                let x_vardrv: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> = self
                     .experts[c]
-                    .predict_variance_jacobian(&x.view())
+                    .predict_variance_derivatives(&x.view())
                     .unwrap();
-                varjac_i.assign(&x_varjac.row(0))
+                vardrv_i.assign(&x_vardrv.row(0))
             });
-        Ok(varjac)
+        Ok(vardrv)
     }
 
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
@@ -730,18 +741,18 @@ impl Moe {
         <Moe as Surrogate>::predict_variances(self, &x.view())
     }
 
-    pub fn predict_jacobian(
+    pub fn predict_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as Surrogate>::predict_jacobian(self, &x.view())
+        <Moe as Surrogate>::predict_derivatives(self, &x.view())
     }
 
-    pub fn predict_variance_jacobian(
+    pub fn predict_variance_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as Surrogate>::predict_variance_jacobian(self, &x.view())
+        <Moe as Surrogate>::predict_variance_derivatives(self, &x.view())
     }
 
     #[cfg(feature = "persistent")]
@@ -812,6 +823,7 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
     use ndarray::{array, Array2, Zip};
     use ndarray_npy::write_npy;
@@ -864,7 +876,7 @@ mod tests {
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 30).insert_axis(Axis(1));
         let preds = moe.predict_values(&x).expect("MOE prediction");
-        let dpreds = moe.predict_jacobian(&x).expect("MOE jac prediction");
+        let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
         println!("dpred = {}", dpreds);
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
@@ -898,7 +910,7 @@ mod tests {
         let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&x).expect("MOE prediction");
         // Work for a kriging only atm
-        // let dpreds = moe.predict_jacobian(&x).expect("MOE jac prediction");
+        // let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
         println!("Smooth moe {}", moe);
         assert_abs_diff_eq!(
             0.37579, // true value = 0.37*0.37 = 0.1369
@@ -1022,7 +1034,7 @@ mod tests {
     }
 
     #[test]
-    fn test_moe_jac_hard() {
+    fn test_moe_drv_hard() {
         let rng = Isaac64Rng::seed_from_u64(0);
         let xt = Lhs::new(&array![[0., 1.]]).sample(100);
         let yt = f_test_1d(&xt);
@@ -1037,7 +1049,7 @@ mod tests {
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 50).insert_axis(Axis(1));
         let preds = moe.predict_values(&x).expect("MOE prediction");
-        let dpreds = moe.predict_jacobian(&x).expect("MOE jac prediction");
+        let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
         println!("dpred = {}", dpreds);
 
         let test_dir = "target/tests";
@@ -1057,101 +1069,53 @@ mod tests {
                 let xtest = array![[x1]];
 
                 let x = array![[x1], [x1 + h], [x1 - h]];
-                let preds = moe.predict_jacobian(&x).unwrap();
+                let preds = moe.predict_derivatives(&x).unwrap();
                 let fdiff = preds[[1, 0]] - preds[[1, 0]] / 2. * h;
 
-                let jac = moe.predict_jacobian(&xtest).unwrap();
+                let drv = moe.predict_derivatives(&xtest).unwrap();
                 let df = df_test_1d(&xtest);
 
-                let err = if jac[[0, 0]] < 0.2 {
-                    (jac[[0, 0]] - fdiff).abs()
+                let err = if drv[[0, 0]] < 0.2 {
+                    (drv[[0, 0]] - fdiff).abs()
                 } else {
-                    (jac[[0, 0]] - fdiff).abs() / jac[[0, 0]]
+                    (drv[[0, 0]] - fdiff).abs() / drv[[0, 0]]
                 };
                 println!(
-                    "Test predicted derivatives at {}: jac {}, true df {}, fdiff {}",
-                    xtest, jac, df, fdiff
+                    "Test predicted derivatives at {}: drv {}, true df {}, fdiff {}",
+                    xtest, drv, df, fdiff
                 );
                 assert_abs_diff_eq!(err, 0.0, epsilon = 1e-1);
             }
         }
     }
 
-    #[test]
-    #[allow(clippy::excessive_precision)]
-    fn test_moe_jac_smooth() {
-        let rng = Isaac64Rng::seed_from_u64(0);
-        let branin_data = array![
-            [0.75995265131225453, 0.26079519790587313, 27.413856556469955],
-            [0.84894004568915193, 0.80302739205770612, 124.08729377805207],
-            [0.68726748138605631, 0.65346310415713116, 89.533227931057937],
-            [0.44974452501493944, 0.34751899935449693, 10.878287247643591],
-            [0.55682300995092937, 0.5849265431496905, 44.932884959302825],
-            [0.88627740147717915, 0.62416594934584435, 64.830308367191918],
-            [
-                0.81775204764384801,
-                0.042196154022979895,
-                15.712266949196216
-            ],
-            [0.4177766615942754, 0.014380375247307521, 28.681202422398538],
-            [0.72827825291615522, 0.38750347099448401, 41.148874722093616],
-            [0.9925696885362203, 0.91677913627656205, 119.30186879624367],
-            [0.50066411471583749, 0.96942357925531941, 139.66117288085078],
-            [
-                0.010996806446222557,
-                0.64007942287598996,
-                61.784705762774074
-            ],
-            [0.92503880783912951, 0.43076540443369776, 21.264868723459951],
-            [0.60689384591767881, 0.42000489901770877, 26.182329221032123],
-            [0.29565445928275541, 0.3005839001387956, 24.023634159735444],
-            [0.97167048017882951, 0.73721527367823791, 71.968581810738641],
-            [0.7752377959676553, 0.50612962709783971, 60.838284481314375],
-            [0.25832467045551272, 0.074226708771860814, 60.93611965583608],
-            [0.23737147394919283, 0.46611483768001949, 13.712846818250346],
-            [0.14754191103105269, 0.11034908131009495, 96.713306093753971],
-            [0.62868483371396366, 0.7952593023639507, 116.41116142984536],
-            [0.87089829204248115, 0.16733416291664127, 8.8940612557011605],
-            [0.10656730695541761, 0.53049331264739186, 25.2319994760445],
-            [0.48472632135451527, 0.47615844132400142, 20.544947002406388],
-            [0.53744687012384518, 0.095909332659171537, 1.237590217166554],
-            [0.19434903593158279, 0.83986960523098408, 12.669879380619737],
-            [0.31415479092439919, 0.70503097578565577, 36.074304011442244],
-            [0.080369359089066103, 0.3570089932983076, 75.371239989968771],
-            [0.35870550688156772, 0.55241395061831078, 27.170423440769184],
-            [0.3379834771033397, 0.86527973630952937, 69.840929358660901],
-            [0.91939579348244926, 0.28325971389978516, 7.3555005965177296],
-            [0.21775934895998508, 0.99094248637867188, 41.124891683745233],
-            [0.57932964524447805, 0.23100636146802719, 4.2985919393100787],
-            [0.39667793013374686, 0.17990857948428171, 19.21599164774678],
-            [0.65154294285455405, 0.92958359792609102, 169.27373704769877],
-            [
-                0.056765241174697265,
-                0.21176965373303497,
-                140.57488603163392
-            ],
-            [0.45782002694659368, 0.7504156346810722, 67.686983708699358],
-            [0.70097955899174469, 0.13594741077482542, 17.690973760768447],
-            [0.047490637953598841, 0.8969607941824036, 9.0862937348881641],
-            [0.1544447325667799, 0.690502880810686, 2.0997165869714083],
-        ];
-        let xt = branin_data.slice(s![.., 0..2]).to_owned();
-        let yt = branin_data.slice(s![.., 2..3]).to_owned();
+    fn norm1(x: &Array2<f64>) -> Array2<f64> {
+        x.mapv(|v| v.abs())
+            .sum_axis(Axis(1))
+            .insert_axis(Axis(1))
+            .to_owned()
+    }
 
-        // for debug purpose set gmx
-        let weights = array![0.65709529, 0.34290471];
-        let means = array![[0.38952724, 0.48319967], [0.64382447, 0.50513467]];
-        let covariances = array![
-            [[0.05592868, -0.04013687], [-0.04013687, 0.07469386]],
-            [[0.09693959, 0.07294977], [0.07294977, 0.0925502]]
-        ];
+    fn rosenb(x: &Array2<f64>) -> Array2<f64> {
+        let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
+        Zip::from(y.rows_mut())
+            .and(x.rows())
+            .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]));
+        y
+    }
+
+    #[allow(clippy::excessive_precision)]
+    fn test_variance_derivatives(f: fn(&Array2<f64>) -> Array2<f64>) {
+        let rng = Isaac64Rng::seed_from_u64(0);
+
+        let xt = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]).sample(100);
+        let yt = f(&xt);
 
         let moe = Moe::params()
             .n_clusters(2)
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Smooth(Some(1.)))
-            .gmx(weights, means, covariances)
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
@@ -1159,7 +1123,9 @@ mod tests {
         for _ in 0..20 {
             let xa: f64 = rand::random::<f64>();
             let xb: f64 = rand::random::<f64>();
-            let e = 1e-5;
+            let e = 1e-4;
+
+            println!("Test derivatives at [{}, {}]", xa, xb);
 
             let x = array![
                 [xa, xb],
@@ -1168,29 +1134,42 @@ mod tests {
                 [xa, xb + e],
                 [xa, xb - e]
             ];
-            let y_predicted = moe.predict_values(&x).unwrap();
-            let y_jacob = moe.predict_jacobian(&x).unwrap();
+            let y_pred = moe.predict_values(&x).unwrap();
+            let y_deriv = moe.predict_derivatives(&x).unwrap();
 
-            let diff_g = (y_predicted[[1, 0]] - y_predicted[[2, 0]]) / (2. * e);
-            let diff_d = (y_predicted[[3, 0]] - y_predicted[[4, 0]]) / (2. * e);
+            let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
+            let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
 
-            let jac_rel_error1 = (y_jacob[[0, 0]] - diff_g).abs() / y_jacob[[0, 0]];
-            assert_abs_diff_eq!(jac_rel_error1, 0.0, epsilon = 1e-3);
+            assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
+            assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
 
-            let jac_rel_error2 = (y_jacob[[0, 1]] - diff_d).abs() / y_jacob[[0, 1]];
-            assert_abs_diff_eq!(jac_rel_error2, 0.0, epsilon = 1e-3);
+            let y_pred = moe.predict_variances(&x).unwrap();
+            let y_deriv = moe.predict_variance_derivatives(&x).unwrap();
 
-            let y_predicted = moe.predict_variances(&x).unwrap();
-            let y_jacob = moe.predict_variance_jacobian(&x).unwrap();
+            let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
+            let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
 
-            let diff_g = (y_predicted[[1, 0]] - y_predicted[[2, 0]]) / (2. * e);
-            let diff_d = (y_predicted[[3, 0]] - y_predicted[[4, 0]]) / (2. * e);
-
-            let jac_rel_error1 = (y_jacob[[0, 0]] - diff_g).abs() / y_jacob[[0, 0]];
-            assert_abs_diff_eq!(jac_rel_error1, 0.0, epsilon = 1e-3);
-
-            let jac_rel_error2 = (y_jacob[[0, 1]] - diff_d).abs() / y_jacob[[0, 1]];
-            assert_abs_diff_eq!(jac_rel_error2, 0.0, epsilon = 1e-3);
+            assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
+            assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
         }
+    }
+
+    fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
+        println!("analytic deriv = {}, fdiff = {}", y_deriv, fdiff);
+        if y_deriv.abs() < 1e-2 {
+            assert_abs_diff_eq!(fdiff, 0.0, epsilon = 1e-1); // check absolute when close to zero
+        } else {
+            let drv_rel_error1 = (y_deriv - fdiff).abs() / y_deriv; // check relative
+            assert_abs_diff_eq!(drv_rel_error1, 0.0, epsilon = 1e-1);
+        }
+    }
+
+    #[test]
+    fn test_moe_var_deriv_norm1() {
+        test_variance_derivatives(norm1);
+    }
+    #[test]
+    fn test_moe_var_deriv_rosenb() {
+        test_variance_derivatives(rosenb);
     }
 }
