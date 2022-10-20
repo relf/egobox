@@ -1152,9 +1152,9 @@ mod tests {
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
 
-        for _ in 0..1 {
-            let xa: f64 = 0.2; //rand::random::<f64>() * 10. - 10.;
-            let xb: f64 = 0.3; //rand::random::<f64>() * 10. - 10.;
+        for _ in 0..20 {
+            let xa: f64 = rand::random::<f64>() * 10. - 10.;
+            let xb: f64 = rand::random::<f64>() * 10. - 10.;
             let e = 1e-5;
 
             let x = array![
