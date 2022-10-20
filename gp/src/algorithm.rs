@@ -395,7 +395,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .unwrap();
         let inv_kf = cholesky_k
             .t()
-            .solve_triangular(UPLO::Lower, Diag::NonUnit, &rho2)
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &rho2)
             .unwrap();
 
         let a_mat = f_x.t().to_owned().with_lapack() - r.t().dot(&inv_kf);
@@ -406,7 +406,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let d_mat = match b_mat.cholesky(UPLO::Lower) {
             Ok(rho3) => {
                 let inv_bat = rho3
-                    .solve_triangular(UPLO::Lower, Diag::NonUnit, &a_mat.t().to_owned())
+                    .solve_triangular(UPLO::Upper, Diag::NonUnit, &a_mat.t().to_owned())
                     .unwrap();
                 rho3.t()
                     .solve_triangular(UPLO::Upper, Diag::NonUnit, &inv_bat)
@@ -869,7 +869,7 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
-    use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
+    use egobox_doe::{Lhs, SamplingMethod};
     use linfa::prelude::Predict;
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
