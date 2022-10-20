@@ -825,7 +825,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
-    use ndarray::{array, Array2, Zip};
+    use ndarray::{array, Array, Array2, Zip};
     use ndarray_npy::write_npy;
     use ndarray_rand::rand;
     use ndarray_rand::rand::SeedableRng;
@@ -1107,7 +1107,6 @@ mod tests {
     #[allow(clippy::excessive_precision)]
     fn test_variance_derivatives(f: fn(&Array2<f64>) -> Array2<f64>) {
         let rng = Isaac64Rng::seed_from_u64(0);
-
         let xt = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]).sample(100);
         let yt = f(&xt);
 
@@ -1121,8 +1120,10 @@ mod tests {
             .expect("MOE fitted");
 
         for _ in 0..20 {
-            let xa: f64 = rand::random::<f64>();
-            let xb: f64 = rand::random::<f64>();
+            let mut rng = Isaac64Rng::seed_from_u64(42);
+            let x = Array::random_using((2,), Uniform::new(0., 1.), &mut rng);
+            let xa: f64 = x[0];
+            let xb: f64 = x[1];
             let e = 1e-4;
 
             println!("Test derivatives at [{}, {}]", xa, xb);
