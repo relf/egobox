@@ -10,7 +10,7 @@ use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
-use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
@@ -204,7 +204,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Predict derivatives of the output prediction
     /// wrt the k th component at a set of n points `x` specified as a (n, nx) matrix where x has nx components.
     /// *Warning*: work only for kriging (regression model: constant and correlation model: squared_exponential
-    pub fn predict_derivatives(
+    pub fn predict_kth_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
         kx: usize,
@@ -250,23 +250,47 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         res
     }
 
-    /// Predict jacobian at a set of point `x` specified as a (n, nx) matrix where x has nx components.
+    /// Predict derivatives at a set of point `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing output derivatives at x wrt each nx components
     /// *Warning*: work only for kriging (regression model: constant and correlation model: squared_exponential
-    pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let mut jac = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
-        Zip::indexed(jac.columns_mut()).for_each(|i, mut col| {
-            let pred = self.predict_derivatives(x, i);
+    pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
+        Zip::indexed(drv.columns_mut()).for_each(|i, mut col| {
+            let pred = self.predict_kth_derivatives(x, i);
             col.assign(&pred);
         });
-        jac
+        drv
     }
 
-    /// Predict variance jacobian at a set of points `x` specified as a (n, nx) matrix where x has nx components.
+    #[allow(clippy::too_many_arguments)]
+    pub fn init(
+        mut self,
+        theta: Array1<F>,
+        sigma2: Array1<F>,
+        beta: Array2<F>,
+        gamma: Array2<F>,
+        r_chol: Array2<F>,
+        ft: Array2<F>,
+        ft_qr_r: Array2<F>,
+    ) {
+        self.theta = theta;
+        self.inner_params.sigma2 = sigma2;
+        self.inner_params.beta = beta;
+        self.inner_params.gamma = gamma;
+        self.inner_params.r_chol = r_chol;
+        self.inner_params.ft = ft;
+        self.inner_params.ft_qr_r = ft_qr_r;
+    }
+
+    /// Predict variance derivatives at a set of points `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing variance derivatives at `x` wrt each nx components
     /// *Warning*: work only for kriging (regression model: constant and correlation model: squared_exponential
     #[cfg(not(feature = "blas"))]
-    pub fn predict_variance_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+    pub fn predict_variance_derivatives_single(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    ) -> Array1<F> {
+        let x = &(x.to_owned().insert_axis(Axis(0)));
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         let theta = &self.theta;
 
@@ -321,12 +345,15 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
                 dv.assign(&dv_val);
             });
 
-        dvar.t().to_owned()
+        dvar.row(0).to_owned()
     }
 
     /// See non blas version
     #[cfg(feature = "blas")]
-    pub fn predict_variance_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+    pub fn predict_variance_derivatives_single(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    ) -> Array2<F> {
         // Initialization
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         let theta = &self.theta;
@@ -385,7 +412,10 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
                     .solve_triangular(UPLO::Upper, Diag::NonUnit, &inv_bat)
                     .unwrap()
             }
-            Err(_) => Array2::zeros((b_mat.nrows(), b_mat.ncols())),
+            Err(_) => {
+                println!("Warn cholesky error");
+                Array2::zeros((b_mat.nrows(), b_mat.ncols()))
+            }
         };
 
         // TODO: here work on ly for mean = constant
@@ -405,7 +435,21 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
                 dv.assign(&dv_val);
             });
 
-        dvar.t().to_owned()
+        dvar.to_owned()
+    }
+
+    /// Predict variance derivatives at a set of points `x` specified as a (n, nx) matrix where x has nx components.
+    /// Returns a (n, nx) matrix containing variance derivatives at `x` wrt each nx components
+    /// *Warning*: work only for kriging (regression model: constant and correlation model: squared_exponential
+    pub fn predict_variance_derivatives(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        let mut derivs = Array::zeros((x.nrows(), x.ncols()));
+        Zip::from(derivs.rows_mut())
+            .and(x.rows())
+            .for_each(|mut der, x| der.assign(&self.predict_variance_derivatives_single(&x)));
+        derivs
     }
 }
 
@@ -531,10 +575,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             let rxx = self.corr().apply(&theta, &x_distances.d, &w_star);
             match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
                 Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
-                Err(_) => {
-                    // println!("GP lkh ERROR: {:?}", err);
-                    f64::INFINITY
-                }
+                Err(_) => f64::INFINITY,
             }
         };
 
@@ -1089,20 +1130,21 @@ mod tests {
         let x2: f64 = rand::random::<f64>() * 20. - 10.;
         let xtest = array![[x1, x2]];
 
-        let jac = gp.predict_jacobian(&xtest);
+        let drv = gp.predict_derivatives(&xtest);
         let df = dsphere(&xtest);
 
-        let jac_rel_err1 = (jac[[0, 0]] - df[[0, 0]]).abs() / jac[[0, 0]];
-        let jac_rel_err2 = (jac[[0, 1]] - df[[1, 0]]).abs() / jac[[0, 1]];
+        let drv_rel_err1 = (drv[[0, 0]] - df[[0, 0]]).abs() / drv[[0, 0]];
+        let drv_rel_err2 = (drv[[0, 1]] - df[[1, 0]]).abs() / drv[[0, 1]];
         println!("Test sphere predicted derivatives at {}", xtest);
-        assert_abs_diff_eq!(jac_rel_err1, 0.0, epsilon = 1e-3);
-        assert_abs_diff_eq!(jac_rel_err2, 0.0, epsilon = 1e-3);
+        assert_abs_diff_eq!(drv_rel_err1, 0.0, epsilon = 1e-3);
+        assert_abs_diff_eq!(drv_rel_err2, 0.0, epsilon = 1e-3);
     }
 
     #[test]
     fn test_variance_derivatives() {
-        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
-        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(20);
+        let yt = sphere(&xt);
+
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
@@ -1110,8 +1152,39 @@ mod tests {
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
 
-        let x = array![[0.5]];
-        let dvar = gp.predict_variance_jacobian(&x);
-        println!("dvar={}", dvar)
+        for _ in 0..20 {
+            let xa: f64 = rand::random::<f64>() * 10. - 10.;
+            let xb: f64 = rand::random::<f64>() * 10. - 10.;
+            let e = 1e-5;
+
+            let x = array![
+                [xa, xb],
+                [xa + e, xb],
+                [xa - e, xb],
+                [xa, xb + e],
+                [xa, xb - e]
+            ];
+            let y_pred = gp.predict_variances(&x).unwrap();
+            println!("variance at [{},{}] = {}", xa, xb, y_pred);
+            let y_deriv = gp.predict_variance_derivatives(&x);
+            println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
+
+            let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
+            let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+
+            if y_deriv[[0, 0]].abs() < 1e-3 {
+                assert_abs_diff_eq!(diff_g, 0.0, epsilon = 1e-1); // check absolute when close to zero
+            } else {
+                let drv_rel_error1 = (y_deriv[[0, 0]] - diff_g).abs() / y_deriv[[0, 0]]; // check relative
+                assert_abs_diff_eq!(drv_rel_error1, 0.0, epsilon = 1e-3);
+            }
+
+            if y_deriv[[0, 1]].abs() < 1e-3 {
+                assert_abs_diff_eq!(diff_d, 0.0, epsilon = 1e-1);
+            } else {
+                let drv_rel_error2 = (y_deriv[[0, 1]] - diff_d).abs() / y_deriv[[0, 1]];
+                assert_abs_diff_eq!(drv_rel_error2, 0.0, epsilon = 1e-3);
+            }
+        }
     }
 }
