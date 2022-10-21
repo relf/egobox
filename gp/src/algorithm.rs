@@ -203,7 +203,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives of the output prediction
     /// wrt the k th component at a set of n points `x` specified as a (n, nx) matrix where x has nx components.
-    /// *Warning*: work only for kriging (regression model: constant and correlation model: squared_exponential
     pub fn predict_kth_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -212,8 +211,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let corr = self._compute_correlation(x);
         let x = (x - &self.xtrain.mean) / &self.xtrain.std;
 
-        // TODO: only for constant regression
-        let df = Array2::<F>::zeros((1, x.ncols()));
+        let df = self.mean.jac(&x.row(0));
 
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
@@ -254,7 +252,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives at a set of point `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing output derivatives at x wrt each nx components
-    /// *Warning*: work only for kriging (regression model: constant and correlation model: squared_exponential
     pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
         Zip::indexed(drv.columns_mut()).for_each(|i, mut col| {
@@ -266,7 +263,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict variance derivatives at a point `x` specified as a (nx,) vector where x has nx components.
     /// Returns a (nx,) vector containing variance derivatives at `x` wrt each nx components
-    /// *Warning*: work only for kriging (regression model: constant and correlation model: squared_exponential
     #[cfg(not(feature = "blas"))]
     pub fn predict_variance_derivatives_single(
         &self,
@@ -310,8 +306,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let inv_bat = rho3.solve_triangular(&a_mat.t(), UPLO::Lower).unwrap();
         let d_mat = rho3.t().solve_triangular(&inv_bat, UPLO::Upper).unwrap();
 
-        // TODO: here work on ly for mean = constant
-        let df = Array2::zeros((1, x.ncols()));
+        let df = self.mean.jac(&xnorm.row(0));
 
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
         let p3 = d_a.dot(&d_mat).t().to_owned();
@@ -400,8 +395,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             }
         };
 
-        // TODO: here work on ly for mean = constant
-        let df = Array2::zeros((1, x.ncols()));
+        let df = self.mean.jac(&xnorm.row(0));
 
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
         let p3 = d_a.dot(&d_mat).t().to_owned();
@@ -422,7 +416,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict variance derivatives at a set of points `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing variance derivatives at `x` wrt each nx components
-    /// *Warning*: work only for kriging (regression model: constant and correlation model: squared_exponential
     pub fn predict_variance_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -1093,10 +1086,6 @@ mod tests {
         s.insert_axis(Axis(1))
     }
 
-    fn dsphere(x: &Array2<f64>) -> Array2<f64> {
-        x.mapv(|v| 2. * v).t().to_owned()
-    }
-
     #[test]
     fn test_derivatives() {
         let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(100);
@@ -1108,18 +1097,28 @@ mod tests {
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
 
-        let x1: f64 = rand::random::<f64>() * 20. - 10.;
-        let x2: f64 = rand::random::<f64>() * 20. - 10.;
-        let xtest = array![[x1, x2]];
+        let xa: f64 = rand::random::<f64>() * 10. - 10.;
+        let xb: f64 = rand::random::<f64>() * 10. - 10.;
+        let e = 1e-5;
 
-        let drv = gp.predict_derivatives(&xtest);
-        let df = dsphere(&xtest);
+        let x = array![
+            [xa, xb],
+            [xa + e, xb],
+            [xa - e, xb],
+            [xa, xb + e],
+            [xa, xb - e]
+        ];
 
-        let drv_rel_err1 = (drv[[0, 0]] - df[[0, 0]]).abs() / drv[[0, 0]];
-        let drv_rel_err2 = (drv[[0, 1]] - df[[1, 0]]).abs() / drv[[0, 1]];
-        println!("Test sphere predicted derivatives at {}", xtest);
-        assert_abs_diff_eq!(drv_rel_err1, 0.0, epsilon = 1e-3);
-        assert_abs_diff_eq!(drv_rel_err2, 0.0, epsilon = 1e-3);
+        let y_pred = gp.predict_values(&x).unwrap();
+        println!("variance at [{},{}] = {}", xa, xb, y_pred);
+        let y_deriv = gp.predict_derivatives(&x);
+        println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
+
+        let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
+        let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+
+        assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
+        assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
     }
 
     #[test]
@@ -1154,19 +1153,18 @@ mod tests {
             let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
             let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
 
-            if y_deriv[[0, 0]].abs() < 1e-3 {
-                assert_abs_diff_eq!(diff_g, 0.0, epsilon = 1e-1); // check absolute when close to zero
-            } else {
-                let drv_rel_error1 = (y_deriv[[0, 0]] - diff_g).abs() / y_deriv[[0, 0]]; // check relative
-                assert_abs_diff_eq!(drv_rel_error1, 0.0, epsilon = 1e-3);
-            }
+            assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
+            assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
+        }
+    }
 
-            if y_deriv[[0, 1]].abs() < 1e-3 {
-                assert_abs_diff_eq!(diff_d, 0.0, epsilon = 1e-1);
-            } else {
-                let drv_rel_error2 = (y_deriv[[0, 1]] - diff_d).abs() / y_deriv[[0, 1]];
-                assert_abs_diff_eq!(drv_rel_error2, 0.0, epsilon = 1e-3);
-            }
+    fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
+        println!("analytic deriv = {}, fdiff = {}", y_deriv, fdiff);
+        if y_deriv.abs() < 2e-1 {
+            assert_abs_diff_eq!(fdiff, 0.0, epsilon = 1e-1); // check absolute when close to zero
+        } else {
+            let drv_rel_error1 = (y_deriv - fdiff).abs() / y_deriv; // check relative
+            assert_abs_diff_eq!(drv_rel_error1, 0.0, epsilon = 1e-1);
         }
     }
 }
