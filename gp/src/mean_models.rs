@@ -15,7 +15,8 @@ use std::convert::TryFrom;
 
 /// A trait for mean models used in GP regression
 pub trait RegressionModel<F: Float>: Clone + Copy + Default {
-    /// Use the regression model to get the mean behaviour of the GP model.
+    /// Compute regression coefficient defining the mean behaviour of the GP model
+    /// for the given `x` data points specified as (n, nx) matrix.
     fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F>;
 }
 

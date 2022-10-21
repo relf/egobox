@@ -1,5 +1,6 @@
+//use super::gaussian_mixture::GaussianMixture;
 use super::gaussian_mixture::GaussianMixture;
-use crate::clustering::{find_best_number_of_clusters, Clustered, Clustering};
+use crate::clustering::{find_best_number_of_clusters, sort_by_cluster, Clustered, Clustering};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
@@ -19,7 +20,9 @@ use std::ops::Sub;
 
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
-use ndarray::{concatenate, s, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
+use ndarray::{
+    concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip,
+};
 
 #[cfg(feature = "blas")]
 use ndarray_linalg::Norm;
@@ -105,27 +108,33 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         };
         let dataset = Dataset::from(training);
 
-        let gmm = GaussianMixtureModel::params(n_clusters)
-            .n_runs(20)
-            .with_rng(self.rng())
-            .fit(&dataset)
-            .expect("Training data clustering");
+        let gmx = if self.gmx().is_some() {
+            *self.gmx().as_ref().unwrap().clone()
+        } else {
+            let gmm = GaussianMixtureModel::params(n_clusters)
+                .n_runs(20)
+                .with_rng(self.rng())
+                .fit(&dataset)
+                .expect("Training data clustering");
 
-        // GMX for prediction
-        let weights = gmm.weights().to_owned();
-        let means = gmm.means().slice(s![.., ..nx]).to_owned();
-        let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
-        let factor = match recomb {
-            Recombination::Smooth(Some(f)) => f,
-            Recombination::Smooth(None) => 1.,
-            Recombination::Hard => 1.,
+            // GMX for prediction
+            let weights = gmm.weights().to_owned();
+            let means = gmm.means().slice(s![.., ..nx]).to_owned();
+            let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
+            let factor = match recomb {
+                Recombination::Smooth(Some(f)) => f,
+                Recombination::Smooth(None) => 1.,
+                Recombination::Hard => 1.,
+            };
+            GaussianMixture::new(weights, means, covariances)?.heaviside_factor(factor)
         };
-        let gmx = GaussianMixture::new(weights, means, covariances)?.with_heaviside_factor(factor);
 
         let clustering = Clustering::new(gmx, recomb);
         self.train_on_clusters(&xt.view(), &yt.view(), &clustering)
     }
 
+    /// Using the current state of the clustering, select and train the experts
+    /// Returns the fitted mixture of experts model
     pub fn train_on_clusters(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -281,7 +290,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             let scale_factors = Array1::linspace(0.1, 2.1, 20);
             let errors = scale_factors.map(move |&factor| {
                 let gmx2 = gmx.clone();
-                let gmx2 = gmx2.with_heaviside_factor(factor);
+                let gmx2 = gmx2.heaviside_factor(factor);
                 let pred = predict_values_smooth(experts, &gmx2, xtest).unwrap();
                 pred.sub(ytest).mapv(|x| x * x).sum().sqrt() / xtest.mapv(|x| x * x).sum().sqrt()
             });
@@ -319,35 +328,8 @@ fn factorial(n: usize) -> usize {
     (1..=n).product()
 }
 
-/// Return a vector of clustered data set given the `data_clustering` indices which contraints
-/// for each `data` rows the cluster number.     
-pub(crate) fn sort_by_cluster<F: Float>(
-    n_clusters: usize,
-    data: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    dataset_clustering: &Array1<usize>,
-) -> Vec<Array2<F>> {
-    let mut res: Vec<Array2<F>> = Vec::new();
-    let ndim = data.ncols();
-    for n in 0..n_clusters {
-        let cluster_data_indices: Array1<usize> = dataset_clustering
-            .iter()
-            .enumerate()
-            .filter_map(|(k, i)| if *i == n { Some(k) } else { None })
-            .collect();
-        let nsamples = cluster_data_indices.len();
-        let mut subset = Array2::zeros((nsamples, ndim));
-        Zip::from(subset.rows_mut())
-            .and(&cluster_data_indices)
-            .for_each(|mut r, &k| {
-                r.assign(&data.row(k));
-            });
-        res.push(subset);
-    }
-    res
-}
-
 /// Predict outputs at given points with `experts` and gaussian mixture `gmx`.
-/// `gmx` is used to get the probability of the observation to belongs to one cluster
+/// `gmx` is used to get the probability of x to belongs to one cluster
 /// or another (ie responsabilities). Those responsabilities are used to combine
 /// output values predict by each cluster experts.
 fn predict_values_smooth(
@@ -362,12 +344,12 @@ fn predict_values_smooth(
         .and(points.rows())
         .and(probas.rows())
         .for_each(|y, x, p| {
-            let obs = x.insert_axis(Axis(0));
-            let subpreds: Array1<f64> = experts
+            let x = x.insert_axis(Axis(0));
+            let preds: Array1<f64> = experts
                 .iter()
-                .map(|gp| gp.predict_values(&obs).unwrap()[[0, 0]])
+                .map(|gp| gp.predict_values(&x).unwrap()[[0, 0]])
                 .collect();
-            *y = (subpreds * p).sum();
+            *y = (preds * p).sum();
         });
     Ok(preds.insert_axis(Axis(1)))
 }
@@ -438,17 +420,17 @@ impl Surrogate for Moe {
         }
     }
 
-    fn predict_jacobian(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_jacobian_hard(x),
-            Recombination::Smooth(_) => self.predict_jacobian_smooth(x),
+            Recombination::Hard => self.predict_derivatives_hard(x),
+            Recombination::Smooth(_) => self.predict_derivatives_smooth(x),
         }
     }
 
-    fn predict_variance_jacobian(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_variance_jacobian_hard(x),
-            Recombination::Smooth(_) => self.predict_variance_jacobian_smooth(x),
+            Recombination::Hard => self.predict_variance_derivatives_hard(x),
+            Recombination::Smooth(_) => self.predict_variance_derivatives_smooth(x),
         }
     }
 
@@ -465,6 +447,7 @@ impl Surrogate for Moe {
     }
 }
 
+/// A trait for surrogates using clustering
 pub trait ClusteredSurrogate: Clustered + Surrogate {}
 
 impl ClusteredSurrogate for Moe {}
@@ -480,7 +463,7 @@ impl Moe {
         self.recombination
     }
 
-    /// Recombination mode
+    /// Gaussian mixture
     pub fn gmx(&self) -> &GaussianMixture<f64> {
         &self.gmx
     }
@@ -500,10 +483,14 @@ impl Moe {
         self
     }
 
-    /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
+    pub fn set_gmx(&mut self, weights: Array1<f64>, means: Array2<f64>, covariances: Array3<f64>) {
+        self.gmx = GaussianMixture::new(weights, means, covariances).unwrap();
+    }
+
+    /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
-    /// or another (ie responsabilities). Those responsabilities are used to combine
-    /// output values predict by each cluster experts.
+    /// or another (ie responsabilities).     
+    /// The smooth recombination of each cluster expert responsabilty is used to get the result.
     pub fn predict_values_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -511,10 +498,10 @@ impl Moe {
         predict_values_smooth(&self.experts, &self.gmx, x)
     }
 
-    /// Predict variances at a set of points `x` specified as (n, xdim) matrix.
+    /// Predict variances at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
-    /// or another (ie responsabilities). Those responsabilities are used to combine
-    /// variances predict by each cluster experts.
+    /// or another (ie responsabilities).
+    /// The smooth recombination of each cluster expert responsabilty is used to get the result.
     pub fn predict_variances_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -526,34 +513,129 @@ impl Moe {
             .and(x.rows())
             .and(probas.rows())
             .for_each(|y, x, p| {
-                let obs = x.insert_axis(Axis(0));
-                let subpreds: Array1<f64> = self
+                let x = x.insert_axis(Axis(0));
+                let preds: Array1<f64> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_variances(&obs).unwrap()[[0, 0]])
+                    .map(|gp| gp.predict_variances(&x).unwrap()[[0, 0]])
                     .collect();
-                *y = (subpreds * p * p).sum();
+                *y = (preds * p * p).sum();
             });
         Ok(preds.insert_axis(Axis(1)))
     }
 
-    pub fn predict_jacobian_smooth(
+    /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.
+    /// Return derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
+    /// of the output wrt the nx components of `x` valued at the ith x point.
+    /// The smooth recombination of each cluster expert responsability is used to get the result.
+    pub fn predict_derivatives_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        self.predict_jacobian_hard(x)
+        let probas = self.gmx.predict_probas(x);
+        let probas_drv = self.gmx.predict_probas_derivatives(x);
+        let mut drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+
+        Zip::from(drv.rows_mut())
+            .and(x.rows())
+            .and(probas.rows())
+            .and(probas_drv.outer_iter())
+            .for_each(|mut y, x, p, pprime| {
+                let x = x.insert_axis(Axis(0));
+                let preds: Array1<f64> = self
+                    .experts
+                    .iter()
+                    .map(|gp| gp.predict_values(&x).unwrap()[[0, 0]])
+                    .collect();
+                let drvs: Vec<Array1<f64>> = self
+                    .experts
+                    .iter()
+                    .map(|gp| gp.predict_derivatives(&x).unwrap().row(0).to_owned())
+                    .collect();
+
+                let preds = preds.insert_axis(Axis(1));
+                let mut preds_drv = Array2::zeros((self.experts.len(), x.len()));
+                Zip::indexed(preds_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&drvs[i]));
+
+                let mut term1 = Array2::zeros((self.experts.len(), x.len()));
+                Zip::from(term1.rows_mut())
+                    .and(&p)
+                    .and(preds_drv.rows())
+                    .for_each(|mut t, p, der| t.assign(&(der.to_owned().mapv(|v| v * p))));
+                let term1 = term1.sum_axis(Axis(0));
+
+                let term2 = pprime.to_owned() * preds;
+                let term2 = term2.sum_axis(Axis(0));
+
+                y.assign(&(term1 + term2));
+            });
+        Ok(drv)
     }
 
-    pub fn predict_variance_jacobian_smooth(
+    /// Predict derivatives of the variance at a set of points `x` specified as (n, nx) matrix.
+    /// Return derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
+    /// of the vairance wrt the nx components of `x` valued at the ith x point.
+    /// The smooth recombination of each cluster expert responsability is used to get the result.
+    pub fn predict_variance_derivatives_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        self.predict_variance_jacobian_hard(x)
+        let probas = self.gmx.predict_probas(x);
+        println!("probas={}", probas);
+        let probas_drv = self.gmx.predict_probas_derivatives(x);
+        println!("der_probas={}", probas_drv);
+
+        let mut drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+
+        Zip::from(drv.rows_mut())
+            .and(x.rows())
+            .and(probas.rows())
+            .and(probas_drv.outer_iter())
+            .for_each(|mut y, xi, p, pprime| {
+                let xii = xi.insert_axis(Axis(0));
+                let preds: Array1<f64> = self
+                    .experts
+                    .iter()
+                    .map(|gp| gp.predict_variances(&xii).unwrap()[[0, 0]])
+                    .collect();
+                let drvs: Vec<Array1<f64>> = self
+                    .experts
+                    .iter()
+                    .map(|gp| {
+                        gp.predict_variance_derivatives(&xii)
+                            .unwrap()
+                            .row(0)
+                            .to_owned()
+                    })
+                    .collect();
+
+                let preds = preds.insert_axis(Axis(1));
+                let mut preds_drv = Array2::zeros((self.experts.len(), xi.len()));
+                Zip::indexed(preds_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&drvs[i]));
+
+                println!("deriv = {}", preds_drv);
+                println!("preds = {}", preds);
+
+                let mut term1 = Array2::zeros((self.experts.len(), xi.len()));
+                Zip::from(term1.rows_mut())
+                    .and(&p)
+                    .and(preds_drv.rows())
+                    .for_each(|mut t, p, der| t.assign(&(der.to_owned().mapv(|v| v * p * p))));
+                let term1 = term1.sum_axis(Axis(0));
+
+                let term2 = (p.to_owned() * pprime * preds).mapv(|v| 2. * v);
+                let term2 = term2.sum_axis(Axis(0));
+
+                y.assign(&(term1 + term2));
+            });
+
+        Ok(drv)
     }
 
-    /// Predict outputs at a set of points `x` specified as (n, xdim) matrix.
+    /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
-    /// Then the expert of the cluster is used to predict output value.
+    /// Then the expert of the cluster is used to predict the output value.
+    /// Returns the ouputs as a (n, 1) column vector
     pub fn predict_values_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -575,9 +657,10 @@ impl Moe {
         Ok(preds)
     }
 
-    /// Predict variance at a set of points `x` specified as (n, xdim) matrix.
+    /// Predict variance at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
-    /// Then the expert of the cluster is used to predict output value.
+    /// The expert of the cluster is used to predict variance value.
+    /// Returns the variances as a (n, 1) column vector
     pub fn predict_variances_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -599,42 +682,52 @@ impl Moe {
         Ok(variances)
     }
 
-    pub fn predict_jacobian_hard(
+    /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
+    /// The expert of the cluster is used to predict variance value.
+    /// Returns derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
+    /// of the output wrt the nx components of `x` valued at the ith x point.
+    pub fn predict_derivatives_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        let mut jac = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let mut drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
         let clustering = self.gmx.predict(x);
-        Zip::from(jac.rows_mut())
+        Zip::from(drv.rows_mut())
             .and(x.rows())
             .and(&clustering)
-            .for_each(|mut jac_i, xi, &c| {
+            .for_each(|mut drv_i, xi, &c| {
                 let x = xi.to_owned().insert_axis(Axis(0));
-                let x_jac: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> =
-                    self.experts[c].predict_jacobian(&x.view()).unwrap();
-                jac_i.assign(&x_jac.column(0))
+                let x_drv: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> =
+                    self.experts[c].predict_derivatives(&x.view()).unwrap();
+                drv_i.assign(&x_drv.column(0))
             });
-        Ok(jac)
+        Ok(drv)
     }
 
-    pub fn predict_variance_jacobian_hard(
+    /// Predict derivatives of the variances at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
+    /// The expert of the cluster is used to predict variance value.
+    /// Returns derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
+    /// of the output wrt the nx components of `x` valued at the ith x point.
+    pub fn predict_variance_derivatives_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        let mut varjac = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let mut vardrv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
         let clustering = self.gmx.predict(x);
-        Zip::from(varjac.rows_mut())
+        Zip::from(vardrv.rows_mut())
             .and(x.rows())
             .and(&clustering)
-            .for_each(|mut varjac_i, xi, &c| {
+            .for_each(|mut vardrv_i, xi, &c| {
                 let x = xi.to_owned().insert_axis(Axis(0));
-                let x_varjac: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> = self
+                let x_vardrv: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> = self
                     .experts[c]
-                    .predict_variance_jacobian(&x.view())
+                    .predict_variance_derivatives(&x.view())
                     .unwrap();
-                varjac_i.assign(&x_varjac.row(0))
+                vardrv_i.assign(&x_vardrv.row(0))
             });
-        Ok(varjac)
+        Ok(vardrv)
     }
 
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
@@ -648,18 +741,18 @@ impl Moe {
         <Moe as Surrogate>::predict_variances(self, &x.view())
     }
 
-    pub fn predict_jacobian(
+    pub fn predict_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as Surrogate>::predict_jacobian(self, &x.view())
+        <Moe as Surrogate>::predict_derivatives(self, &x.view())
     }
 
-    pub fn predict_variance_jacobian(
+    pub fn predict_variance_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as Surrogate>::predict_variance_jacobian(self, &x.view())
+        <Moe as Surrogate>::predict_variance_derivatives(self, &x.view())
     }
 
     #[cfg(feature = "persistent")]
@@ -702,6 +795,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Moe
     }
 }
 
+/// Adaptator to implement `linfa::Predict` for variance prediction
 struct MoeVariancePredictor<'a>(&'a Moe);
 impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     for MoeVariancePredictor<'a>
@@ -729,14 +823,17 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use ndarray::{array, Array2, Zip};
+    use argmin_testfunctions::rosenbrock;
+    use egobox_doe::{Lhs, SamplingMethod};
+    use ndarray::{array, Array, Array2, Zip};
     use ndarray_npy::write_npy;
+    use ndarray_rand::rand;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
     use rand_isaac::Isaac64Rng;
 
-    fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
+    fn f_test_1d(x: &Array2<f64>) -> Array2<f64> {
         let mut y = Array2::zeros(x.dim());
         Zip::from(&mut y).and(x).for_each(|yi, &xi| {
             if xi < 0.4 {
@@ -750,23 +847,42 @@ mod tests {
         y
     }
 
+    fn df_test_1d(x: &Array2<f64>) -> Array2<f64> {
+        let mut y = Array2::zeros(x.dim());
+        Zip::from(&mut y).and(x).for_each(|yi, &xi| {
+            if xi < 0.4 {
+                *yi = 2. * xi;
+            } else if (0.4..0.8).contains(&xi) {
+                *yi = 3.;
+            } else {
+                *yi = 10. * f64::cos(10. * xi);
+            }
+        });
+        y
+    }
+
     #[test]
     fn test_moe_hard() {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let moe = Moe::params()
             .n_clusters(3)
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Hard)
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
-        let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&obs).expect("MOE prediction");
+        let x = Array1::linspace(0., 1., 30).insert_axis(Axis(1));
+        let preds = moe.predict_values(&x).expect("MOE prediction");
+        let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
+        println!("dpred = {}", dpreds);
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
-        write_npy(format!("{}/obs_hard.npy", test_dir), &obs).expect("obs saved");
+        write_npy(format!("{}/x_hard.npy", test_dir), &x).expect("x saved");
         write_npy(format!("{}/preds_hard.npy", test_dir), &preds).expect("preds saved");
+        write_npy(format!("{}/dpreds_hard.npy", test_dir), &dpreds).expect("dpreds saved");
         assert_abs_diff_eq!(
             0.39 * 0.39,
             moe.predict_values(&array![[0.39]]).unwrap()[[0, 0]],
@@ -783,7 +899,7 @@ mod tests {
     fn test_moe_smooth() {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
         let moe = Moe::params()
             .n_clusters(3)
@@ -791,8 +907,10 @@ mod tests {
             .with_rng(rng.clone())
             .fit(&ds)
             .expect("MOE fitted");
-        let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&obs).expect("MOE prediction");
+        let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
+        let preds = moe.predict_values(&x).expect("MOE prediction");
+        // Work for a kriging only atm
+        // let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
         println!("Smooth moe {}", moe);
         assert_abs_diff_eq!(
             0.37579, // true value = 0.37*0.37 = 0.1369
@@ -809,8 +927,9 @@ mod tests {
 
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
-        write_npy(format!("{}/obs_smooth.npy", test_dir), &obs).expect("obs saved");
+        write_npy(format!("{}/x_smooth.npy", test_dir), &x).expect("x saved");
         write_npy(format!("{}/preds_smooth.npy", test_dir), &preds).expect("preds saved");
+        // write_npy(format!("{}/dpreds_smooth.npy", test_dir), &dpreds).expect("dpreds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
@@ -823,7 +942,7 @@ mod tests {
         // env_logger::init();
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
         let moe = Moe::params()
             .n_clusters(0)
@@ -846,7 +965,7 @@ mod tests {
     fn test_moe_variances_smooth() {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let moe = Moe::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(None))
@@ -855,10 +974,8 @@ mod tests {
             .with_rng(rng.clone())
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
-        let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let variances = moe
-            .predict_variances(&obs)
-            .expect("MOE variances prediction");
+        let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
+        let variances = moe.predict_variances(&x).expect("MOE variances prediction");
         assert_abs_diff_eq!(*variances.max().unwrap(), 0., epsilon = 1e-10);
     }
 
@@ -881,7 +998,7 @@ mod tests {
     fn test_find_best_heaviside_factor() {
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let _moe = Moe::params()
             .n_clusters(3)
             .with_rng(rng)
@@ -897,7 +1014,7 @@ mod tests {
 
         let mut rng = Isaac64Rng::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
-        let yt = function_test_1d(&xt);
+        let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
         let moe = Moe::params()
             .n_clusters(3)
@@ -914,5 +1031,146 @@ mod tests {
             new_moe.predict_values(&xtest).unwrap(),
             epsilon = 1e-6
         );
+    }
+
+    #[test]
+    fn test_moe_drv_hard() {
+        let rng = Isaac64Rng::seed_from_u64(0);
+        let xt = Lhs::new(&array![[0., 1.]]).sample(100);
+        let yt = f_test_1d(&xt);
+
+        let moe = Moe::params()
+            .n_clusters(3)
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+            .recombination(Recombination::Hard)
+            .with_rng(rng)
+            .fit(&Dataset::new(xt, yt))
+            .expect("MOE fitted");
+        let x = Array1::linspace(0., 1., 50).insert_axis(Axis(1));
+        let preds = moe.predict_values(&x).expect("MOE prediction");
+        let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
+        println!("dpred = {}", dpreds);
+
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+        write_npy(format!("{}/x_hard.npy", test_dir), &x).expect("x saved");
+        write_npy(format!("{}/preds_hard.npy", test_dir), &preds).expect("preds saved");
+        write_npy(format!("{}/dpreds_hard.npy", test_dir), &dpreds).expect("dpreds saved");
+
+        for _ in 0..20 {
+            let x1: f64 = rand::random::<f64>();
+
+            if (0.39 < x1 && x1 < 0.41) || (0.79 < x1 && x1 < 0.81) {
+                // avoid testing hard on discoontinuity
+                continue;
+            } else {
+                let h = 1e-4;
+                let xtest = array![[x1]];
+
+                let x = array![[x1], [x1 + h], [x1 - h]];
+                let preds = moe.predict_derivatives(&x).unwrap();
+                let fdiff = preds[[1, 0]] - preds[[1, 0]] / 2. * h;
+
+                let drv = moe.predict_derivatives(&xtest).unwrap();
+                let df = df_test_1d(&xtest);
+
+                let err = if drv[[0, 0]] < 0.2 {
+                    (drv[[0, 0]] - fdiff).abs()
+                } else {
+                    (drv[[0, 0]] - fdiff).abs() / drv[[0, 0]]
+                };
+                println!(
+                    "Test predicted derivatives at {}: drv {}, true df {}, fdiff {}",
+                    xtest, drv, df, fdiff
+                );
+                assert_abs_diff_eq!(err, 0.0, epsilon = 1e-1);
+            }
+        }
+    }
+
+    fn norm1(x: &Array2<f64>) -> Array2<f64> {
+        x.mapv(|v| v.abs())
+            .sum_axis(Axis(1))
+            .insert_axis(Axis(1))
+            .to_owned()
+    }
+
+    fn rosenb(x: &Array2<f64>) -> Array2<f64> {
+        let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
+        Zip::from(y.rows_mut())
+            .and(x.rows())
+            .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]));
+        y
+    }
+
+    #[allow(clippy::excessive_precision)]
+    fn test_variance_derivatives(f: fn(&Array2<f64>) -> Array2<f64>) {
+        let rng = Isaac64Rng::seed_from_u64(0);
+        let xt = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]).sample(100);
+        let yt = f(&xt);
+
+        let moe = Moe::params()
+            .n_clusters(2)
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+            .recombination(Recombination::Smooth(Some(1.)))
+            .with_rng(rng)
+            .fit(&Dataset::new(xt, yt))
+            .expect("MOE fitted");
+
+        for _ in 0..20 {
+            let mut rng = Isaac64Rng::seed_from_u64(42);
+            let x = Array::random_using((2,), Uniform::new(0., 1.), &mut rng);
+            let xa: f64 = x[0];
+            let xb: f64 = x[1];
+            let e = 1e-4;
+
+            println!("Test derivatives at [{}, {}]", xa, xb);
+
+            let x = array![
+                [xa, xb],
+                [xa + e, xb],
+                [xa - e, xb],
+                [xa, xb + e],
+                [xa, xb - e]
+            ];
+            let y_pred = moe.predict_values(&x).unwrap();
+            let y_deriv = moe.predict_derivatives(&x).unwrap();
+
+            let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
+            let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+
+            assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
+            assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
+
+            let y_pred = moe.predict_variances(&x).unwrap();
+            let y_deriv = moe.predict_variance_derivatives(&x).unwrap();
+
+            let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
+            let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+
+            assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
+            assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
+        }
+    }
+
+    fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
+        println!("analytic deriv = {}, fdiff = {}", y_deriv, fdiff);
+        if y_deriv.abs() < 1e-2 {
+            assert_abs_diff_eq!(fdiff, 0.0, epsilon = 1e-1); // check absolute when close to zero
+        } else {
+            let drv_rel_error1 = (y_deriv - fdiff).abs() / y_deriv; // check relative
+            assert_abs_diff_eq!(drv_rel_error1, 0.0, epsilon = 1e-1);
+        }
+    }
+
+    #[test]
+    fn test_moe_var_deriv_norm1() {
+        test_variance_derivatives(norm1);
+    }
+    #[test]
+    fn test_moe_var_deriv_rosenb() {
+        test_variance_derivatives(rosenb);
     }
 }

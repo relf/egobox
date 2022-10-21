@@ -1,13 +1,13 @@
 #![allow(dead_code)]
-use crate::algorithm::sort_by_cluster;
 use crate::gaussian_mixture::GaussianMixture;
 use crate::parameters::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
 use log::debug;
 
 use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
+use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
-use ndarray::{concatenate, ArrayBase, Axis, Data, Ix2};
+use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::Rng;
 use std::ops::Sub;
 
@@ -52,6 +52,33 @@ fn median(v: &[f64]) -> f64 {
     } else {
         list[mid]
     }
+}
+
+/// Return a vector of clustered data set given the `data_clustering` indices which contraints
+/// for each `data` rows the cluster number.     
+pub(crate) fn sort_by_cluster<F: Float>(
+    n_clusters: usize,
+    data: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    dataset_clustering: &Array1<usize>,
+) -> Vec<Array2<F>> {
+    let mut res: Vec<Array2<F>> = Vec::new();
+    let ndim = data.ncols();
+    for n in 0..n_clusters {
+        let cluster_data_indices: Array1<usize> = dataset_clustering
+            .iter()
+            .enumerate()
+            .filter_map(|(k, i)| if *i == n { Some(k) } else { None })
+            .collect();
+        let nsamples = cluster_data_indices.len();
+        let mut subset = Array2::zeros((nsamples, ndim));
+        Zip::from(subset.rows_mut())
+            .and(&cluster_data_indices)
+            .for_each(|mut r, &k| {
+                r.assign(&data.row(k));
+            });
+        res.push(subset);
+    }
+    res
 }
 
 /// Find the best number of cluster thanks to cross validation
