@@ -212,7 +212,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let corr = self._compute_correlation(x);
         let x = (x - &self.xtrain.mean) / &self.xtrain.std;
 
+        // TODO: only for constant regression
         let df = Array2::<F>::zeros((1, x.ncols()));
+
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
         let df_dx = &df.t().dot(beta);
