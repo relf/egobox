@@ -264,28 +264,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         drv
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn init(
-        mut self,
-        theta: Array1<F>,
-        sigma2: Array1<F>,
-        beta: Array2<F>,
-        gamma: Array2<F>,
-        r_chol: Array2<F>,
-        ft: Array2<F>,
-        ft_qr_r: Array2<F>,
-    ) {
-        self.theta = theta;
-        self.inner_params.sigma2 = sigma2;
-        self.inner_params.beta = beta;
-        self.inner_params.gamma = gamma;
-        self.inner_params.r_chol = r_chol;
-        self.inner_params.ft = ft;
-        self.inner_params.ft_qr_r = ft_qr_r;
-    }
-
-    /// Predict variance derivatives at a set of points `x` specified as a (n, nx) matrix where x has nx components.
-    /// Returns a (n, nx) matrix containing variance derivatives at `x` wrt each nx components
+    /// Predict variance derivatives at a point `x` specified as a (nx,) vector where x has nx components.
+    /// Returns a (nx,) vector containing variance derivatives at `x` wrt each nx components
     /// *Warning*: work only for kriging (regression model: constant and correlation model: squared_exponential
     #[cfg(not(feature = "blas"))]
     pub fn predict_variance_derivatives_single(
