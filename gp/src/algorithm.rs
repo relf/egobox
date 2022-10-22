@@ -1086,6 +1086,60 @@ mod tests {
         s.insert_axis(Axis(1))
     }
 
+    fn norm1(x: &Array2<f64>) -> Array2<f64> {
+        x.mapv(|v| v.abs())
+            .sum_axis(Axis(1))
+            .insert_axis(Axis(1))
+            .to_owned()
+    }
+
+    macro_rules! test_gp_derivatives {
+        ($regr:ident, $corr:ident, $func:ident, $limit:expr) => {
+            paste! {
+
+                #[test]
+                fn [<test_gp_derivatives_ $regr:snake _ $corr:snake>]() {
+                    let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]]).sample(100);
+                    let yt = [<$func>](&xt);
+                    let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
+                        [<$regr Mean>]::default(),
+                        [<$corr Corr>]::default(),
+                    )
+                    .fit(&Dataset::new(xt, yt))
+                    .expect("GP fitting");
+
+                    let xa: f64 = rand::random::<f64>() * $limit - $limit;
+                    let xb: f64 = rand::random::<f64>() * $limit - $limit;
+                    let e = 1e-5;
+
+                    let x = array![
+                        [xa, xb],
+                        [xa + e, xb],
+                        [xa - e, xb],
+                        [xa, xb + e],
+                        [xa, xb - e]
+                    ];
+
+                    let y_pred = gp.predict_values(&x).unwrap();
+                    println!("variance at [{},{}] = {}", xa, xb, y_pred);
+                    let y_deriv = gp.predict_derivatives(&x);
+                    println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
+
+                    let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
+                    let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+
+                    assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
+                    assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
+                }
+            }
+        };
+    }
+
+    test_gp_derivatives!(Constant, SquaredExponential, sphere, 10.);
+    test_gp_derivatives!(Linear, SquaredExponential, norm1, 10.);
+    // TODO: Make it work
+    // test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 100.);
+
     #[test]
     fn test_derivatives() {
         let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(100);
@@ -1161,10 +1215,13 @@ mod tests {
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
         println!("analytic deriv = {}, fdiff = {}", y_deriv, fdiff);
         if y_deriv.abs() < 2e-1 {
-            assert_abs_diff_eq!(fdiff, 0.0, epsilon = 1e-1); // check absolute when close to zero
+            let atol = 1e-1;
+            println!("Check absolute error: should be < {}", atol);
+            assert_abs_diff_eq!(fdiff, 0.0, epsilon = atol); // check absolute when close to zero
         } else {
-            let drv_rel_error1 = (y_deriv - fdiff).abs() / y_deriv; // check relative
-            assert_abs_diff_eq!(drv_rel_error1, 0.0, epsilon = 1e-1);
+            let rtol = 1e-1;
+            let rel_error = (y_deriv - fdiff).abs() / y_deriv; // check relative
+            assert_abs_diff_eq!(rel_error, 0.0, epsilon = rtol);
         }
     }
 }
