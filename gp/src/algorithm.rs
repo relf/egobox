@@ -395,7 +395,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             }
         };
 
-        let df = self.mean.jac(&xnorm.row(0));
+        let df = self.mean.jac(&xnorm.row(0)).with_lapack();
 
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
         let p3 = d_a.dot(&d_mat).t().to_owned();
