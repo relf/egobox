@@ -795,12 +795,8 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
     #[cfg(not(feature = "blas"))]
     /// True whether surrogate gradient computation implemented
     fn is_grad_impl_available(&self) -> bool {
-        if let Some(n) = self.n_clusters {
-            return n == 1
-                && self.regression_spec == RegressionSpec::CONSTANT
-                && self.correlation_spec == CorrelationSpec::SQUAREDEXPONENTIAL;
-        }
-        false
+        !self.regression_spec.contains(RegressionSpec::QUADRATIC)
+            && self.correlation_spec == CorrelationSpec::SQUAREDEXPONENTIAL
     }
 
     #[cfg(feature = "blas")]

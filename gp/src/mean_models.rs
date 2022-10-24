@@ -117,7 +117,7 @@ impl TryFrom<String> for LinearMean {
 pub struct QuadraticMean();
 
 impl<F: Float> RegressionModel<F> for QuadraticMean {
-    /// Second order polynomial (quadratic, p = n*(n-1)/2+n+1) regression model.
+    /// Second order polynomial (quadratic) regression model.
     /// regr(x) = [ 1, { x_i, i = 1,...,n }, { x_i * x_j,  (i,j) = 1,...,n  , i > j } ].T
     fn apply(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut res = concatenate![Axis(1), Array2::ones((x.nrows(), 1)), x.to_owned()];
