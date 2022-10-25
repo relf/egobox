@@ -1219,7 +1219,7 @@ mod tests {
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
         println!("analytic deriv = {}, fdiff = {}", y_deriv, fdiff);
-        if fdiff.abs() < 1e-1 {
+        if fdiff.abs() < 2e-1 {
             let atol = 2e-1;
             println!("Check absolute error: should be < {}", atol);
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
