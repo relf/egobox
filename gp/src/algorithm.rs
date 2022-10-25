@@ -202,7 +202,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     /// Predict derivatives of the output prediction
-    /// wrt the k th component at a set of n points `x` specified as a (n, nx) matrix where x has nx components.
+    /// wrt the kxth component at a set of n points `x` specified as a (n, nx) matrix where x has nx components.
+    /// **Warning**: works only for constant/linear and squared_exponential combination
     pub fn predict_kth_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -211,6 +212,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let corr = self._compute_correlation(x);
         let x = (x - &self.xtrain.mean) / &self.xtrain.std;
 
+        // Works only for constant / linear
         let df = self.mean.jac(&x.row(0));
 
         let beta = &self.inner_params.beta;
@@ -252,6 +254,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives at a set of point `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing output derivatives at x wrt each nx components
+    /// **Warning**: works only for constant/linear and squared_exponential combination
     pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
         Zip::indexed(drv.columns_mut()).for_each(|i, mut col| {
@@ -306,6 +309,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let inv_bat = rho3.solve_triangular(&a_mat.t(), UPLO::Lower).unwrap();
         let d_mat = rho3.t().solve_triangular(&inv_bat, UPLO::Upper).unwrap();
 
+        // Works only for constant / linear
         let df = self.mean.jac(&xnorm.row(0));
 
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
@@ -395,6 +399,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             }
         };
 
+        // Works only for constant / linear
         let df = self.mean.jac(&xnorm.row(0)).with_lapack();
 
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
