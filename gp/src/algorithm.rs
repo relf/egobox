@@ -857,8 +857,9 @@ mod tests {
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
     use ndarray_npy::{read_npy, write_npy};
-    use ndarray_rand::rand;
     use ndarray_rand::rand::SeedableRng;
+    use ndarray_rand::rand_distr::Uniform;
+    use ndarray_rand::RandomExt;
     use ndarray_stats::DeviationExt;
     use paste::paste;
     use rand_isaac::Isaac64Rng;
@@ -1113,8 +1114,10 @@ mod tests {
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fitting");
 
-                    let xa: f64 = rand::random::<f64>() * $limit - $limit;
-                    let xb: f64 = rand::random::<f64>() * $limit - $limit;
+                    let mut rng = Isaac64Rng::seed_from_u64(42);
+                    let x = Array::random_using((2,), Uniform::new(-$limit, $limit), &mut rng);
+                    let xa: f64 = x[0];
+                    let xb: f64 = x[1];
                     let e = 1e-5;
 
                     let x = array![
@@ -1156,8 +1159,10 @@ mod tests {
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
 
-        let xa: f64 = rand::random::<f64>() * 10. - 10.;
-        let xb: f64 = rand::random::<f64>() * 10. - 10.;
+        let mut rng = Isaac64Rng::seed_from_u64(42);
+        let x = Array::random_using((2,), Uniform::new(-10., 10.), &mut rng);
+        let xa: f64 = x[0];
+        let xb: f64 = x[1];
         let e = 1e-5;
 
         let x = array![
@@ -1193,8 +1198,10 @@ mod tests {
         .expect("GP fitting");
 
         for _ in 0..20 {
-            let xa: f64 = rand::random::<f64>() * 10. - 10.;
-            let xb: f64 = rand::random::<f64>() * 10. - 10.;
+            let mut rng = Isaac64Rng::seed_from_u64(42);
+            let x = Array::random_using((2,), Uniform::new(-10., 10.), &mut rng);
+            let xa: f64 = x[0];
+            let xb: f64 = x[1];
             let e = 1e-5;
 
             let x = array![
@@ -1224,7 +1231,7 @@ mod tests {
             println!("Check absolute error: should be < {}", atol);
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
         } else {
-            let rtol = 1e-1;
+            let rtol = 1.2e-1;
             let rel_error = (y_deriv - fdiff).abs() / fdiff; // check relative
             println!("Check relative error: should be < {}", rtol);
             assert_abs_diff_eq!(rel_error, 0.0, epsilon = rtol);

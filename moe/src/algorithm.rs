@@ -1157,10 +1157,10 @@ mod tests {
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
         println!("analytic deriv = {}, fdiff = {}", y_deriv, fdiff);
-        if y_deriv.abs() < 1e-2 {
-            assert_abs_diff_eq!(fdiff, 0.0, epsilon = 1e-1); // check absolute when close to zero
+        if fdiff.abs() < 1e-2 {
+            assert_abs_diff_eq!(y_deriv, 0.0, epsilon = 1e-1); // check absolute when close to zero
         } else {
-            let drv_rel_error1 = (y_deriv - fdiff).abs() / y_deriv; // check relative
+            let drv_rel_error1 = (y_deriv - fdiff).abs() / fdiff; // check relative
             assert_abs_diff_eq!(drv_rel_error1, 0.0, epsilon = 1e-1);
         }
     }
