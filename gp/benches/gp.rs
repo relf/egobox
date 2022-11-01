@@ -14,10 +14,11 @@ fn criterion_gp(c: &mut Criterion) {
     let nts = vec![100, 300, 400, 800];
 
     let mut group = c.benchmark_group("gp");
+    group.sample_size(20);
     for i in 0..2 {
         let dim = dims[i];
         let nt = nts[i];
-        let griewak = |x: &Array1<f64>| -> f64 {
+        let griewank = |x: &Array1<f64>| -> f64 {
             let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
             x.mapv(|v| v * v).sum() / 4000. - (x / &d).mapv(|v| v.cos()).fold(1., |acc, x| acc * x)
                 + 1.0
@@ -41,7 +42,7 @@ fn criterion_gp(c: &mut Criterion) {
             Err(_) => {
                 let mut yv: Array1<f64> = Array1::zeros(xt.nrows());
                 Zip::from(&mut yv).and(xt.rows()).par_for_each(|y, x| {
-                    *y = griewak(&x.to_owned());
+                    *y = griewank(&x.to_owned());
                 });
                 let yt = yv.into_shape((xt.nrows(), 1)).unwrap();
                 write_npy(&yfilename, &yt).expect("cannot save yt");
@@ -56,8 +57,8 @@ fn criterion_gp(c: &mut Criterion) {
                         ConstantMean::default(),
                         SquaredExponentialCorr::default(),
                     )
-                    //.with_kpls_dim(1)
-                    //.with_initial_theta(1.0)
+                    .kpls_dim(Some(1))
+                    .initial_theta(Some(vec![1.0]))
                     .fit(&Dataset::new(xt.to_owned(), yt.to_owned()))
                     .expect("GP fit error"),
                 )
