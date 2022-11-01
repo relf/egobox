@@ -1159,11 +1159,11 @@ mod tests {
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
 
-        let mut rng = Isaac64Rng::seed_from_u64(42);
+        let mut rng = Isaac64Rng::seed_from_u64(0);
         let x = Array::random_using((2,), Uniform::new(-10., 10.), &mut rng);
         let xa: f64 = x[0];
         let xb: f64 = x[1];
-        let e = 1e-5;
+        let e = 1e-4;
 
         let x = array![
             [xa, xb],
@@ -1231,7 +1231,7 @@ mod tests {
             println!("Check absolute error: should be < {}", atol);
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
         } else {
-            let rtol = 1.2e-1;
+            let rtol = 1.5e-1;
             let rel_error = (y_deriv - fdiff).abs() / fdiff; // check relative
             println!("Check relative error: should be < {}", rtol);
             assert_abs_diff_eq!(rel_error, 0.0, epsilon = rtol);
