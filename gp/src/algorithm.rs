@@ -1105,7 +1105,10 @@ mod tests {
 
                 #[test]
                 fn [<test_gp_derivatives_ $regr:snake _ $corr:snake>]() {
-                    let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]]).sample(100);
+                    let mut rng = Isaac64Rng::seed_from_u64(42);
+                    let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]])
+                    .with_rng(rng.clone())
+                    .sample(100);
                     let yt = [<$func>](&xt);
                     let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
                         [<$regr Mean>]::default(),
@@ -1114,7 +1117,6 @@ mod tests {
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fitting");
 
-                    let mut rng = Isaac64Rng::seed_from_u64(42);
                     let x = Array::random_using((2,), Uniform::new(-$limit, $limit), &mut rng);
                     let xa: f64 = x[0];
                     let xb: f64 = x[1];
