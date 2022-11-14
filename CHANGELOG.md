@@ -1,13 +1,19 @@
 Changes
 -------
 
-Version 0.6.0 - unreleased
+Version 0.7.0 - unreleased
 ==========================
 
-* Python binding: Add `GpMix`/`Gpx` in Python `egobox` module, the Python binding of `egobox-moe::Moe` (#31)
-* Gp: Add `predict_jacobian` and `predict_variance_jacobian` for kriging surrogate (constant/squaredexponential) only
-* Moe: Add `predict_jacobian` and `predict_variance_jacobian` for hard recombination only of krigings
-* Egor: Use analytic derivatives of infill criteria when using one cluster and kriging surrogates 
+
+Version 0.6.0 - 2022-11-14
+==========================
+
+* `gp`: Kriging derivatives predictions are implemented (#44, #45), derivatives for Gp with linear regression are implemented (#47)
+  * `predict_derivatives`: prediction of the output derivatives y wtr the input x
+  * `predict_variance_derivatives`: prediction of the derivatives of the output variance wrt the input x
+* `moe`: as for `gp`, derivatives methods for smooth and hard predictions are implemented  (#46)
+* `ego`: when available derivatives are used to optimize the infill criterion with slsqp (#44)  
+* `egobox` Python binding: add `GpMix`/`Gpx` in Python `egobox` module, the Python binding of `egobox-moe::Moe` (#31)
 
 Version 0.5.0 - 2022-10-07
 ==========================
