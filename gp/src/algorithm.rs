@@ -22,6 +22,7 @@ use rand_isaac::Isaac64Rng;
 use serde::{Deserialize, Serialize};
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
+const N_START: usize = 10; // number of optimization restart (aka multistart)
 
 /// Internal parameters computed Gp during training
 /// used later on in prediction computations
@@ -119,9 +120,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Predict output values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n scalar output values as (n, 1) column vector.
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
-        let corr = self._compute_correlation(x);
-        // Compute the mean at x
-        let f = self.mean.apply(x);
+        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        // Compute the mean term at x
+        let f = self.mean.apply(&xnorm);
+        // Compute the correlation term at x
+        let corr = self._compute_correlation_wrt_norm(&xnorm);
         // Scaled predictor
         let y_ = &f.dot(&self.inner_params.beta) + &corr.dot(&self.inner_params.gamma);
         // Predictor
@@ -131,7 +134,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Predict variance values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n variance values as (n, 1) column vector.
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
-        let corr = self._compute_correlation(x);
+        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let corr = self._compute_correlation_wrt_norm(&xnorm);
         let inners = &self.inner_params;
 
         let corr_t = corr.t().to_owned();
@@ -145,7 +149,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         #[cfg(not(feature = "blas"))]
         let rt = inners.r_chol.solve_triangular(&corr_t, UPLO::Lower)?;
 
-        let lhs = inners.ft.t().dot(&rt) - self.mean.apply(x).t();
+        let lhs = inners.ft.t().dot(&rt) - self.mean.apply(&xnorm).t();
         #[cfg(feature = "blas")]
         let u = inners
             .ft_qr_r
@@ -171,13 +175,16 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     /// Compute correlation matrix given x points specified as a (n, nx) matrix
-    fn _compute_correlation(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+    /// and where is x is normalized wrt training data x (eg xnorm = (x - xt.mean)/ xt.std))
+    fn _compute_correlation_wrt_norm(
+        &self,
+        xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
         // Get pairwise componentwise L1-distances to the input training set
-        let dx = pairwise_differences(&xnorm, &self.xtrain.data);
+        let dx = pairwise_differences(xnorm, &self.xtrain.data);
         // Compute the correlation function
         let r = self.corr.apply(&self.theta, &dx, &self.w_star);
-        let n_obs = x.nrows();
+        let n_obs = xnorm.nrows();
         let nt = self.xtrain.data.nrows();
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
@@ -209,11 +216,16 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
         kx: usize,
     ) -> Array1<F> {
-        let corr = self._compute_correlation(x);
-        let x = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let corr = self._compute_correlation_wrt_norm(&xnorm);
 
         // Works only for constant / linear
-        let df = self.mean.jac(&x.row(0));
+        let df = if self.inner_params.beta.nrows() <= 1 + self.xtrain.data.ncols() {
+            // constant or linear: df/dx = [0] or df/dx = [1] for all x
+            self.mean.jac(&x.row(0))
+        } else {
+            todo!();
+        };
 
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
@@ -221,7 +233,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let nr = x.nrows();
         let nc = self.xtrain.data.nrows();
-        let d_dx_1 = &x
+        let d_dx_1 = &xnorm
             .column(kx)
             .to_owned()
             .into_shape((nr, 1))
@@ -245,11 +257,15 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // Get pairwise componentwise L1-distances to the input training set
         let theta = &self.theta.to_owned();
         let d_dx_corr = d_dx * corr;
-        let res = (df_dx.row(kx).to_owned()
-            - F::cast(2.) * theta[kx] * d_dx_corr.dot(gamma)[[0, 0]])
+
+        // (df(xnew)/dx).beta + (dr(xnew)/dx).R^-1(ytrain - f.beta)
+        // gamma = R^-1(ytrain - f.beta)
+        // Warning: squared exponential only
+        let res = (df_dx.row(kx).broadcast((x.nrows(), 1)).unwrap().to_owned()
+            - d_dx_corr.dot(gamma).map(|v| F::cast(2.) * theta[kx] * *v))
             * self.ytrain.std[0]
             / self.xtrain.std[kx];
-        res
+        res.column(0).to_owned()
     }
 
     /// Predict derivatives at a set of point `x` specified as a (n, nx) matrix where x has nx components.
@@ -544,7 +560,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             .map_or(Array1::from_elem(w_star.ncols(), F::cast(1e-2)), |v| {
                 Array::from_vec(v)
             });
-        let fx = self.mean().apply(x);
+        let fx = self.mean().apply(&xtrain.data);
         let y_t = ytrain.clone();
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
@@ -560,22 +576,23 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         };
 
         // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
-        let mut theta0s = Array2::zeros((8, theta0.len()));
-        theta0s.row_mut(0).assign(&theta0);
+        let mut theta0s = Array2::zeros((N_START + 1, theta0.len()));
+        theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
         let mut xlimits: Array2<F> = Array2::zeros((theta0.len(), 2));
         for mut row in xlimits.rows_mut() {
-            row.assign(&arr1(&[F::cast(1e-6), F::cast(20.)]));
+            row.assign(&arr1(&[F::cast(-6), F::cast(LOG10_20)]));
         }
         // Use a seed here for reproducibility. Do we need to make it truly random
         // Probably no, as it is just to get init values spread over
         // [1e-6, 20] for multistart thanks to LHS method.
         let seeds = Lhs::new(&xlimits)
+            .kind(egobox_doe::LhsKind::Maximin)
             .with_rng(Isaac64Rng::seed_from_u64(42))
-            .sample(7);
+            .sample(N_START);
         Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
             .and(seeds.rows())
             .par_for_each(|mut theta, row| theta.assign(&row));
-        // println!("theta0s = {:?}", theta0s);
+
         let opt_thetas =
             theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
 
@@ -650,7 +667,6 @@ where
             .unwrap();
     }
     let mut theta_vec = theta0
-        .mapv(F::log10)
         .map(|v| unsafe { *(v as *const F as *const f64) })
         .into_raw_vec();
     optimizer.set_initial_step1(0.5).unwrap();
@@ -736,11 +752,15 @@ fn reduced_likelihood<F: Float>(
     // the diagonal elements of its Cholesky decomposition r_chol
     let n_obs: F = F::cast(x_distances.n_obs);
 
-    let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
+    // let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
+    let logdet = r_chol
+        .diag()
+        .mapv(|v| v.powf(F::cast(2.) / n_obs))
+        .product();
 
     // Reduced likelihood
     let sigma2: Array1<F> = rho_sqr / n_obs;
-    let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
+    let reduced_likelihood = -n_obs * (sigma2.sum().log10() + F::log10(logdet));
     Ok((
         reduced_likelihood,
         GpInnerParams {
@@ -888,7 +908,7 @@ mod tests {
     }
 
     macro_rules! test_gp {
-        ($regr:ident, $corr:ident, $expected:expr) => {
+        ($regr:ident, $corr:ident) => {
             paste! {
 
                 #[test]
@@ -903,7 +923,6 @@ mod tests {
                     .initial_theta(Some(vec![0.1]))
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fit error");
-                    assert_abs_diff_eq!($expected, gp.theta[0], epsilon = 1e-2);
                     let yvals = gp
                         .predict_values(&arr2(&[[1.0], [3.5]]))
                         .expect("prediction error");
@@ -939,20 +958,20 @@ mod tests {
         };
     }
 
-    test_gp!(Constant, SquaredExponential, 1.67);
-    test_gp!(Constant, AbsoluteExponential, 22.35);
-    test_gp!(Constant, Matern32, 21.68);
-    test_gp!(Constant, Matern52, 21.68);
+    test_gp!(Constant, SquaredExponential);
+    test_gp!(Constant, AbsoluteExponential);
+    test_gp!(Constant, Matern32);
+    test_gp!(Constant, Matern52);
 
-    test_gp!(Linear, SquaredExponential, 1.56);
-    test_gp!(Linear, AbsoluteExponential, 21.68);
-    test_gp!(Linear, Matern32, 21.68);
-    test_gp!(Linear, Matern52, 21.68);
+    test_gp!(Linear, SquaredExponential);
+    test_gp!(Linear, AbsoluteExponential);
+    test_gp!(Linear, Matern32);
+    test_gp!(Linear, Matern52);
 
-    test_gp!(Quadratic, SquaredExponential, 21.14);
-    test_gp!(Quadratic, AbsoluteExponential, 24.98);
-    test_gp!(Quadratic, Matern32, 22.35);
-    test_gp!(Quadratic, Matern52, 21.68);
+    test_gp!(Quadratic, SquaredExponential);
+    test_gp!(Quadratic, AbsoluteExponential);
+    test_gp!(Quadratic, Matern32);
+    test_gp!(Quadratic, Matern52);
 
     #[test]
     fn test_kpls_griewank() {
@@ -1092,12 +1111,16 @@ mod tests {
         s.insert_axis(Axis(1))
     }
 
-    fn norm1(x: &Array2<f64>) -> Array2<f64> {
-        x.mapv(|v| v.abs())
-            .sum_axis(Axis(1))
-            .insert_axis(Axis(1))
-            .to_owned()
+    fn dsphere(x: &Array2<f64>) -> Array2<f64> {
+        x.mapv(|v| 2. * v)
     }
+
+    // fn norm1(x: &Array2<f64>) -> Array2<f64> {
+    //     x.mapv(|v| v.abs())
+    //         .sum_axis(Axis(1))
+    //         .insert_axis(Axis(1))
+    //         .to_owned()
+    // }
 
     macro_rules! test_gp_derivatives {
         ($regr:ident, $corr:ident, $func:ident, $limit:expr) => {
@@ -1106,9 +1129,20 @@ mod tests {
                 #[test]
                 fn [<test_gp_derivatives_ $regr:snake _ $corr:snake>]() {
                     let mut rng = Isaac64Rng::seed_from_u64(42);
-                    let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]])
-                    .with_rng(rng.clone())
-                    .sample(100);
+                    // let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]])
+                    // .with_rng(rng.clone())
+                    // .sample(100);
+                    let xt = array!
+                   [[-7.,  7.],
+                    [ 1., -5.],
+                    [-1.,  1.],
+                    [ 7.,  5.],
+                    [-9., -3.],
+                    [ 5., -7.],
+                    [ 3.,  9.],
+                    [-3., -9.],
+                    [-5., -1.],
+                    [ 9.,  3.]];
                     let yt = [<$func>](&xt);
                     let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
                         [<$regr Mean>]::default(),
@@ -1131,9 +1165,10 @@ mod tests {
                     ];
 
                     let y_pred = gp.predict_values(&x).unwrap();
-                    println!("variance at [{},{}] = {}", xa, xb, y_pred);
+                    println!("value at [{},{}] = {}", xa, xb, y_pred);
                     let y_deriv = gp.predict_derivatives(&x);
-                    println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
+                    println!("deriv at [{},{}] = {}", xa, xb, y_deriv);
+                    println!("true deriv at [{},{}] = {}", xa, xb, dsphere(&array![[xa, xb]]));
 
                     let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
                     let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
@@ -1146,7 +1181,7 @@ mod tests {
     }
 
     test_gp_derivatives!(Constant, SquaredExponential, sphere, 10.);
-    test_gp_derivatives!(Linear, SquaredExponential, norm1, 10.);
+    test_gp_derivatives!(Linear, SquaredExponential, sphere, 10.);
     // TODO: Make it work
     // test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 100.);
 
@@ -1176,9 +1211,9 @@ mod tests {
         ];
 
         let y_pred = gp.predict_values(&x).unwrap();
-        println!("variance at [{},{}] = {}", xa, xb, y_pred);
+        println!("values at [{},{}] = {}", xa, xb, y_pred);
         let y_deriv = gp.predict_derivatives(&x);
-        println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
+        println!("deriv at [{},{}] = {}", xa, xb, y_deriv);
 
         let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
         let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
@@ -1228,12 +1263,12 @@ mod tests {
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
         println!("analytic deriv = {}, fdiff = {}", y_deriv, fdiff);
-        if fdiff.abs() < 2e-1 {
-            let atol = 2e-1;
+        if fdiff.abs() < 1e-3 {
+            let atol = 1e-3;
             println!("Check absolute error: should be < {}", atol);
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
         } else {
-            let rtol = 1.5e-1;
+            let rtol = 5e-2;
             let rel_error = (y_deriv - fdiff).abs() / fdiff; // check relative
             println!("Check relative error: should be < {}", rtol);
             assert_abs_diff_eq!(rel_error, 0.0, epsilon = rtol);
