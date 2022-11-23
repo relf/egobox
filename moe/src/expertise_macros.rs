@@ -23,9 +23,9 @@ macro_rules! compute_error {
         let mut errors = Vec::new();
         let input_dim = $dataset.records().shape()[1];
         let n_fold = std::cmp::min($dataset.nsamples(), 5 * input_dim);
-        if (n_fold < 4 * input_dim && stringify!($regr) == "Quadratic") {
+        if (n_fold < 5 * input_dim && stringify!($regr) == "Quadratic") {
             f64::INFINITY // not enough points => huge error
-        } else if (n_fold < 3 * input_dim && stringify!($regr) == "Linear") {
+        } else if (n_fold < 4 * input_dim && stringify!($regr) == "Linear") {
             f64::INFINITY // not enough points => huge error
         } else {
             for (gp, valid) in $dataset.iter_fold(n_fold, |train| {
