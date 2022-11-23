@@ -219,17 +219,27 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         let corr = self._compute_correlation_wrt_norm(&xnorm);
 
-        // Works only for constant / linear
-        let df = if self.inner_params.beta.nrows() <= 1 + self.xtrain.data.ncols() {
-            // constant or linear: df/dx = [0] or df/dx = [1] for all x
-            self.mean.jac(&x.row(0))
-        } else {
-            todo!();
-        };
-
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
-        let df_dx = &df.t().dot(beta);
+
+        // Works only for constant / linear
+        let df_dx_kx = if self.inner_params.beta.nrows() <= 1 + self.xtrain.data.ncols() {
+            // for constant or linear: df/dx = cst ([0] or [1]) for all x, so takes use x[0] to get the constant
+            let df = self.mean.jac(&x.row(0));
+            let df_dx = df.t().row(kx).dot(beta);
+            df_dx.broadcast((x.nrows(), 1)).unwrap().to_owned()
+        } else {
+            // for quadratic df/dx really depends on x
+            let mut dfdx = Array2::zeros((x.nrows(), 1));
+            Zip::from(dfdx.rows_mut())
+                .and(xnorm.rows())
+                .for_each(|mut dfxi, xi| {
+                    let df = self.mean.jac(&xi);
+                    let df_dx = (df.t().row(kx)).dot(beta);
+                    dfxi.assign(&df_dx);
+                });
+            dfdx
+        };
 
         let nr = x.nrows();
         let nc = self.xtrain.data.nrows();
@@ -261,8 +271,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // (df(xnew)/dx).beta + (dr(xnew)/dx).R^-1(ytrain - f.beta)
         // gamma = R^-1(ytrain - f.beta)
         // Warning: squared exponential only
-        let res = (df_dx.row(kx).broadcast((x.nrows(), 1)).unwrap().to_owned()
-            - d_dx_corr.dot(gamma).map(|v| F::cast(2.) * theta[kx] * *v))
+        let res = (df_dx_kx - d_dx_corr.dot(gamma).map(|v| F::cast(2.) * theta[kx] * *v))
             * self.ytrain.std[0]
             / self.xtrain.std[kx];
         res.column(0).to_owned()
@@ -757,7 +766,6 @@ fn reduced_likelihood<F: Float>(
     // Reduced likelihood
     let sigma2: Array1<F> = rho_sqr / n_obs;
     let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
-    println!("{}", reduced_likelihood);
     Ok((
         reduced_likelihood,
         GpInnerParams {
@@ -1179,8 +1187,7 @@ mod tests {
 
     test_gp_derivatives!(Constant, SquaredExponential, sphere, 10.);
     test_gp_derivatives!(Linear, SquaredExponential, sphere, 10.);
-    // TODO: Make it work
-    // test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 100.);
+    test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 10.);
 
     #[test]
     fn test_derivatives() {
