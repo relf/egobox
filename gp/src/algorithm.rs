@@ -752,15 +752,12 @@ fn reduced_likelihood<F: Float>(
     // the diagonal elements of its Cholesky decomposition r_chol
     let n_obs: F = F::cast(x_distances.n_obs);
 
-    // let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
-    let logdet = r_chol
-        .diag()
-        .mapv(|v| v.powf(F::cast(2.) / n_obs))
-        .product();
+    let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
 
     // Reduced likelihood
     let sigma2: Array1<F> = rho_sqr / n_obs;
-    let reduced_likelihood = -n_obs * (sigma2.sum().log10() + F::log10(logdet));
+    let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
+    println!("{}", reduced_likelihood);
     Ok((
         reduced_likelihood,
         GpInnerParams {
