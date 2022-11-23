@@ -409,6 +409,19 @@ pub struct MixintMoe {
     work_in_folded_space: bool,
 }
 
+impl MixintMoe {
+    fn is_mixint(&self) -> bool {
+        for xtype in &self.xtypes {
+            if let Xtype::Cont(_, _) = xtype {
+                continue;
+            } else {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 impl std::fmt::Display for MixintMoe {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.moe)
@@ -453,6 +466,11 @@ impl Surrogate for MixintMoe {
     }
 
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+        if self.is_mixint() {
+            return Err(egobox_moe::MoeError::InvalidValueError(
+                "Cannot use derivatives with mixed integer variables".to_string(),
+            ));
+        }
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -463,6 +481,11 @@ impl Surrogate for MixintMoe {
     }
 
     fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+        if self.is_mixint() {
+            return Err(egobox_moe::MoeError::InvalidValueError(
+                "Cannot use derivatives with mixed integer variables".to_string(),
+            ));
+        }
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -653,6 +676,25 @@ mod tests {
             yvar,
             epsilon = 1e-6
         );
+    }
+
+    #[test]
+    fn test_bad_derivatives_usage() {
+        let xtypes = vec![Xtype::Int(0, 4)];
+
+        let mixi = MixintContext::new(&xtypes);
+
+        let surrogate_builder = MoeBuilder::new();
+        let xt = array![[0.], [2.], [3.0], [4.]];
+        let yt = array![[0.], [1.5], [0.9], [1.]];
+        let ds = Dataset::new(xt, yt);
+        let mixi_moe = mixi
+            .create_surrogate(&surrogate_builder, &ds)
+            .expect("Mixint surrogate creation");
+
+        let _expect_invalidvalue_error = mixi_moe
+            .predict_derivatives(&array![[2.]].view())
+            .unwrap_err();
     }
 
     fn ftest(x: &Array2<f64>) -> Array2<f64> {

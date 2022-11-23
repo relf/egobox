@@ -34,6 +34,9 @@ pub enum EgoError {
     /// When a linfa error occurs
     #[error(transparent)]
     LinfaError(#[from] linfa::error::Error),
+    /// When trying to use derivatives with integer variables
+    #[error("Can not use derivatives with integer variables")]
+    ForbiddenDerivativesError,
 }
 
 impl From<FailState> for EgoError {

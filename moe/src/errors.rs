@@ -34,7 +34,7 @@ pub enum MoeError {
     /// When error during loading
     #[error("Load error: {0}")]
     LoadError(String),
-    /// When error during loading
+    /// When bad value encountered
     #[error("InvalidValue error: {0}")]
     InvalidValueError(String),
     /// When a linfa error occurs
