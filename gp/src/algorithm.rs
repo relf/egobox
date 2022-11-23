@@ -210,7 +210,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives of the output prediction
     /// wrt the kxth component at a set of n points `x` specified as a (n, nx) matrix where x has nx components.
-    /// **Warning**: works only for constant/linear and squared_exponential combination
+    /// **Warning**: works only for squared_exponential
     pub fn predict_kth_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -279,7 +279,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives at a set of point `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing output derivatives at x wrt each nx components
-    /// **Warning**: works only for constant/linear and squared_exponential combination
+    /// **Warning**: works only for squared_exponential
     pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
         Zip::indexed(drv.columns_mut()).for_each(|i, mut col| {
