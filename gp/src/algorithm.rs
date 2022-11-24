@@ -562,7 +562,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 "Warning: multiple x input features have the same value (at least same row twice)."
             );
         }
-
         let theta0 = self
             .initial_theta()
             .clone()
@@ -576,6 +575,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             let theta =
                 Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
                     .unwrap();
+            for v in theta.iter() {
+                // check theta as optimizer may return nan values
+                if v.is_nan() {
+                    // shortcut return worst value wrt to rlf minimization
+                    return f64::INFINITY;
+                }
+            }
             let theta = theta.mapv(F::cast);
             let rxx = self.corr().apply(&theta, &x_distances.d, &w_star);
             match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
@@ -604,10 +610,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 
         let opt_thetas =
             theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
-
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(F::cast);
-
         let rxx = self.corr().apply(opt_theta, &x_distances.d, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
@@ -720,13 +724,10 @@ fn reduced_likelihood<F: Float>(
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
     }
     let fxl = fx;
-
     // R cholesky decomposition
     let r_chol = r_mx.cholesky()?;
-
     // Solve generalized least squared problem
     let ft = r_chol.solve_triangular(fxl, UPLO::Lower)?;
-
     let (ft_qr_q, ft_qr_r) = ft.qr().unwrap().into_decomp();
 
     // Check whether we have an ill-conditionned problem
@@ -751,12 +752,10 @@ fn reduced_likelihood<F: Float>(
     let yt = r_chol.solve_triangular(&ytrain.data, UPLO::Lower)?;
 
     let beta = ft_qr_r.solve_triangular_into(ft_qr_q.t().dot(&yt), UPLO::Upper)?;
-
     let rho = yt - ft.dot(&beta);
     let rho_sqr = rho.mapv(|v| v * v).sum_axis(Axis(0));
 
     let gamma = r_chol.t().solve_triangular_into(rho, UPLO::Upper)?;
-
     // The determinant of R is equal to the squared product of
     // the diagonal elements of its Cholesky decomposition r_chol
     let n_obs: F = F::cast(x_distances.n_obs);
