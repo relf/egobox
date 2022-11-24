@@ -792,17 +792,9 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         (x_dat, y_dat)
     }
 
-    #[cfg(not(feature = "blas"))]
     /// True whether surrogate gradient computation implemented
     fn is_grad_impl_available(&self) -> bool {
-        !self.regression_spec.contains(RegressionSpec::QUADRATIC)
-            && self.correlation_spec == CorrelationSpec::SQUAREDEXPONENTIAL
-    }
-
-    #[cfg(feature = "blas")]
-    /// True whether surrogate gradient computation implemented
-    fn is_grad_impl_available(&self) -> bool {
-        false
+        self.correlation_spec == CorrelationSpec::SQUAREDEXPONENTIAL
     }
 
     fn find_best_point(

@@ -210,7 +210,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives of the output prediction
     /// wrt the kxth component at a set of n points `x` specified as a (n, nx) matrix where x has nx components.
-    /// **Warning**: works only for constant/linear and squared_exponential combination
+    /// **Warning**: works only for squared_exponential
     pub fn predict_kth_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -219,17 +219,27 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         let corr = self._compute_correlation_wrt_norm(&xnorm);
 
-        // Works only for constant / linear
-        let df = if self.inner_params.beta.nrows() <= 1 + self.xtrain.data.ncols() {
-            // constant or linear: df/dx = [0] or df/dx = [1] for all x
-            self.mean.jac(&x.row(0))
-        } else {
-            todo!();
-        };
-
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
-        let df_dx = &df.t().dot(beta);
+
+        // Works only for constant / linear
+        let df_dx_kx = if self.inner_params.beta.nrows() <= 1 + self.xtrain.data.ncols() {
+            // for constant or linear: df/dx = cst ([0] or [1]) for all x, so takes use x[0] to get the constant
+            let df = self.mean.jac(&x.row(0));
+            let df_dx = df.t().row(kx).dot(beta);
+            df_dx.broadcast((x.nrows(), 1)).unwrap().to_owned()
+        } else {
+            // for quadratic df/dx really depends on x
+            let mut dfdx = Array2::zeros((x.nrows(), 1));
+            Zip::from(dfdx.rows_mut())
+                .and(xnorm.rows())
+                .for_each(|mut dfxi, xi| {
+                    let df = self.mean.jac(&xi);
+                    let df_dx = (df.t().row(kx)).dot(beta);
+                    dfxi.assign(&df_dx);
+                });
+            dfdx
+        };
 
         let nr = x.nrows();
         let nc = self.xtrain.data.nrows();
@@ -261,8 +271,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // (df(xnew)/dx).beta + (dr(xnew)/dx).R^-1(ytrain - f.beta)
         // gamma = R^-1(ytrain - f.beta)
         // Warning: squared exponential only
-        let res = (df_dx.row(kx).broadcast((x.nrows(), 1)).unwrap().to_owned()
-            - d_dx_corr.dot(gamma).map(|v| F::cast(2.) * theta[kx] * *v))
+        let res = (df_dx_kx - d_dx_corr.dot(gamma).map(|v| F::cast(2.) * theta[kx] * *v))
             * self.ytrain.std[0]
             / self.xtrain.std[kx];
         res.column(0).to_owned()
@@ -270,7 +279,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives at a set of point `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing output derivatives at x wrt each nx components
-    /// **Warning**: works only for constant/linear and squared_exponential combination
+    /// **Warning**: works only for squared_exponential
     pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
         Zip::indexed(drv.columns_mut()).for_each(|i, mut col| {
@@ -553,7 +562,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 "Warning: multiple x input features have the same value (at least same row twice)."
             );
         }
-
         let theta0 = self
             .initial_theta()
             .clone()
@@ -567,6 +575,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             let theta =
                 Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
                     .unwrap();
+            for v in theta.iter() {
+                // check theta as optimizer may return nan values
+                if v.is_nan() {
+                    // shortcut return worst value wrt to rlf minimization
+                    return f64::INFINITY;
+                }
+            }
             let theta = theta.mapv(F::cast);
             let rxx = self.corr().apply(&theta, &x_distances.d, &w_star);
             match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
@@ -595,10 +610,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 
         let opt_thetas =
             theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
-
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(F::cast);
-
         let rxx = self.corr().apply(opt_theta, &x_distances.d, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
@@ -711,13 +724,10 @@ fn reduced_likelihood<F: Float>(
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
     }
     let fxl = fx;
-
     // R cholesky decomposition
     let r_chol = r_mx.cholesky()?;
-
     // Solve generalized least squared problem
     let ft = r_chol.solve_triangular(fxl, UPLO::Lower)?;
-
     let (ft_qr_q, ft_qr_r) = ft.qr().unwrap().into_decomp();
 
     // Check whether we have an ill-conditionned problem
@@ -742,25 +752,19 @@ fn reduced_likelihood<F: Float>(
     let yt = r_chol.solve_triangular(&ytrain.data, UPLO::Lower)?;
 
     let beta = ft_qr_r.solve_triangular_into(ft_qr_q.t().dot(&yt), UPLO::Upper)?;
-
     let rho = yt - ft.dot(&beta);
     let rho_sqr = rho.mapv(|v| v * v).sum_axis(Axis(0));
 
     let gamma = r_chol.t().solve_triangular_into(rho, UPLO::Upper)?;
-
     // The determinant of R is equal to the squared product of
     // the diagonal elements of its Cholesky decomposition r_chol
     let n_obs: F = F::cast(x_distances.n_obs);
 
-    // let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
-    let logdet = r_chol
-        .diag()
-        .mapv(|v| v.powf(F::cast(2.) / n_obs))
-        .product();
+    let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
 
     // Reduced likelihood
     let sigma2: Array1<F> = rho_sqr / n_obs;
-    let reduced_likelihood = -n_obs * (sigma2.sum().log10() + F::log10(logdet));
+    let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
     Ok((
         reduced_likelihood,
         GpInnerParams {
@@ -1182,8 +1186,7 @@ mod tests {
 
     test_gp_derivatives!(Constant, SquaredExponential, sphere, 10.);
     test_gp_derivatives!(Linear, SquaredExponential, sphere, 10.);
-    // TODO: Make it work
-    // test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 100.);
+    test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 10.);
 
     #[test]
     fn test_derivatives() {
