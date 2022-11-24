@@ -11,9 +11,10 @@ use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use std::fmt;
 
 /// A trait for using a correlation model in GP regression
-pub trait CorrelationModel<F: Float>: Clone + Copy + Default {
+pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
     /// Compute correlation matrix given `theta` parameters,
     /// distances `d` between x data points and PLS `weights`.
     fn apply(
@@ -64,6 +65,13 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 }
+
+impl fmt::Display for SquaredExponentialCorr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SquaredExponential")
+    }
+}
+
 /// Absolute exponential correlation models
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(
@@ -102,6 +110,12 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         let theta_r = theta.to_owned().insert_axis(Axis(0));
         let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
         r.into_shape((d.nrows(), 1)).unwrap()
+    }
+}
+
+impl fmt::Display for AbsoluteExponentialCorr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "AbsoluteExponential")
     }
 }
 
@@ -152,6 +166,12 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
     }
 }
 
+impl fmt::Display for Matern32Corr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Matern32")
+    }
+}
+
 /// Matern 5/2 correlation model
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(
@@ -196,6 +216,12 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
         let b = theta_wd.sum_axis(Axis(1)).mapv(|v| F::exp(-v));
         let r = a * b;
         r.into_shape((d.nrows(), 1)).unwrap()
+    }
+}
+
+impl fmt::Display for Matern52Corr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Matern52")
     }
 }
 
