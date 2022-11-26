@@ -222,7 +222,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
 
-        // Works only for constant / linear
         let df_dx_kx = if self.inner_params.beta.nrows() <= 1 + self.xtrain.data.ncols() {
             // for constant or linear: df/dx = cst ([0] or [1]) for all x, so takes use x[0] to get the constant
             let df = self.mean.jac(&x.row(0));
@@ -282,11 +281,45 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// **Warning**: works only for squared_exponential
     pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
-        Zip::indexed(drv.columns_mut()).for_each(|i, mut col| {
-            let pred = self.predict_kth_derivatives(x, i);
-            col.assign(&pred);
-        });
+        Zip::from(drv.rows_mut())
+            .and(x.rows())
+            .for_each(|mut row, xi| {
+                let pred = self.predict_jacobian(&xi);
+                row.assign(&pred.column(0));
+            });
         drv
+    }
+
+    pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix1>) -> Array2<F> {
+        let xx = x.to_owned().insert_axis(Axis(0));
+        let mut jac = Array2::zeros((xx.ncols(), 1));
+
+        let xnorm = (xx - &self.xtrain.mean) / &self.xtrain.std;
+        // let corr = self._compute_correlation_wrt_norm(&xnorm);
+
+        let beta = &self.inner_params.beta;
+        let gamma = &self.inner_params.gamma;
+
+        let df = self.mean.jac(&xnorm.row(0));
+        let df_dx = df.t().dot(beta);
+
+        let dr = self
+            .corr
+            .jac(&xnorm.row(0), &self.theta, &self.xtrain.data, &self.w_star);
+
+        let dr_dx = df_dx + dr.t().dot(gamma);
+
+        println!("dr_dx={}", dr_dx);
+        println!("self.xtrain.std={}", self.xtrain.std);
+        Zip::from(jac.rows_mut())
+            .and(dr_dx.rows())
+            .and(&self.xtrain.std)
+            .for_each(|mut jc, dr_i, std_i| {
+                let jc_i = dr_i.map(|v| *v * self.ytrain.std[0] / *std_i);
+                jc.assign(&jc_i)
+            });
+
+        jac
     }
 
     /// Predict variance derivatives at a point `x` specified as a (nx,) vector where x has nx components.
@@ -1119,34 +1152,30 @@ mod tests {
         x.mapv(|v| 2. * v)
     }
 
-    // fn norm1(x: &Array2<f64>) -> Array2<f64> {
-    //     x.mapv(|v| v.abs())
-    //         .sum_axis(Axis(1))
-    //         .insert_axis(Axis(1))
-    //         .to_owned()
-    // }
+    fn norm1(x: &Array2<f64>) -> Array2<f64> {
+        x.mapv(|v| v.abs())
+            .sum_axis(Axis(1))
+            .insert_axis(Axis(1))
+            .to_owned()
+    }
+
+    fn dnorm1(x: &Array2<f64>) -> Array2<f64> {
+        x.mapv(|v| if v > 0. { 1. } else { -1. })
+    }
 
     macro_rules! test_gp_derivatives {
-        ($regr:ident, $corr:ident, $func:ident, $limit:expr) => {
+        ($regr:ident, $corr:ident, $func:ident, $limit:expr, $nt:expr) => {
             paste! {
 
                 #[test]
                 fn [<test_gp_derivatives_ $regr:snake _ $corr:snake>]() {
                     let mut rng = Isaac64Rng::seed_from_u64(42);
-                    // let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]])
-                    // .with_rng(rng.clone())
-                    // .sample(100);
-                    let xt = array!
-                   [[-7.,  7.],
-                    [ 1., -5.],
-                    [-1.,  1.],
-                    [ 7.,  5.],
-                    [-9., -3.],
-                    [ 5., -7.],
-                    [ 3.,  9.],
-                    [-3., -9.],
-                    [-5., -1.],
-                    [ 9.,  3.]];
+                    let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]])
+                    .kind(egobox_doe::LhsKind::CenteredMaximin)
+                    .with_rng(rng.clone())
+                    .sample($nt);
+                    println!("{}", xt);
+
                     let yt = [<$func>](&xt);
                     let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
                         [<$regr Mean>]::default(),
@@ -1155,7 +1184,8 @@ mod tests {
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fitting");
 
-                    let x = Array::random_using((2,), Uniform::new(-$limit, $limit), &mut rng);
+                    let _x = Array::random_using((2,), Uniform::new(-$limit, $limit), &mut rng);
+                    let x = array![3., 5.];
                     let xa: f64 = x[0];
                     let xb: f64 = x[1];
                     let e = 1e-5;
@@ -1172,7 +1202,8 @@ mod tests {
                     println!("value at [{},{}] = {}", xa, xb, y_pred);
                     let y_deriv = gp.predict_derivatives(&x);
                     println!("deriv at [{},{}] = {}", xa, xb, y_deriv);
-                    println!("true deriv at [{},{}] = {}", xa, xb, dsphere(&array![[xa, xb]]));
+                    println!("true deriv at [{},{}] = {}", xa, xb, [<d $func>](&array![[xa, xb]]));
+                    println!("jacob = at [{},{}] = {}", xa, xb, gp.predict_jacobian(&array![xa, xb]));
 
                     let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
                     let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
@@ -1184,9 +1215,10 @@ mod tests {
         };
     }
 
-    test_gp_derivatives!(Constant, SquaredExponential, sphere, 10.);
-    test_gp_derivatives!(Linear, SquaredExponential, sphere, 10.);
-    test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 10.);
+    test_gp_derivatives!(Constant, SquaredExponential, sphere, 10., 10);
+    test_gp_derivatives!(Linear, SquaredExponential, sphere, 10., 10);
+    test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 10., 10);
+    test_gp_derivatives!(Constant, AbsoluteExponential, norm1, 10., 16);
 
     #[test]
     fn test_derivatives() {

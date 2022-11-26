@@ -107,7 +107,7 @@ impl<F: Float> DistanceMatrix<F> {
     }
 }
 
-/// Computes differences between each element of x and each element oy y
+/// Computes differences between each element of x and each element of y
 /// resulting in a 2d array of shape (nrows(x) * nrows(y), ncols(x));
 /// *Panics* if x and y have not the same column numbers
 pub fn pairwise_differences<F: Float>(
