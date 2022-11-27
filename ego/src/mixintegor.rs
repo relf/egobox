@@ -186,9 +186,14 @@ mod tests {
         let n_eval = 30;
         let xtypes = vec![Xtype::Int(0, 25)];
 
-        let surrogate_builder = MixintMoeParams::new(&xtypes, &MoeParams::default())
-            .check()
-            .unwrap();
+        let surrogate_builder = MixintMoeParams::new(
+            &xtypes,
+            &MoeParams::default()
+                .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
+                .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL),
+        )
+        .check()
+        .unwrap();
         let pre_proc = MixintPreProcessor::new(&xtypes);
         let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &pre_proc);
         mixintegor
