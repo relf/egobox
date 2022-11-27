@@ -67,12 +67,12 @@ def six_humps(x):
     x2 = x[:, 1]
     print(x)
     sum1 = (
-        4 * x1 ** 2
-        - 2.1 * x1 ** 4
-        + 1.0 / 3.0 * x1 ** 6
+        4 * x1**2
+        - 2.1 * x1**4
+        + 1.0 / 3.0 * x1**6
         + x1 * x2
-        - 4 * x2 ** 2
-        + 4 * x2 ** 4
+        - 4 * x2**2
+        + 4 * x2**4
     )
     print(np.atleast_2d(sum1).T)
     return np.atleast_2d(sum1).T
@@ -123,8 +123,6 @@ class TestOptimizer(unittest.TestCase):
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             n_cstr=2,
             infill_strategy=egx.InfillStrategy.EI,
-            regr_spec=egx.RegressionSpec.CONSTANT,
-            corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
             seed=42,
         )
         start = time.process_time()
@@ -145,7 +143,7 @@ class TestOptimizer(unittest.TestCase):
             corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL
             | egx.CorrelationSpec.ABSOLUTE_EXPONENTIAL,
             kpls_dim=1,
-            seed=0,
+            seed=1,
         )
         start = time.process_time()
         res = egor.minimize(n_eval=20)
@@ -158,8 +156,6 @@ class TestOptimizer(unittest.TestCase):
             six_humps,
             egx.to_specs([[-3.0, 3.0], [-2.0, 2.0]]),
             infill_strategy=egx.InfillStrategy.WB2,
-            regr_spec=egx.RegressionSpec.CONSTANT,
-            corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
             seed=42,
         )
         start = time.process_time()
