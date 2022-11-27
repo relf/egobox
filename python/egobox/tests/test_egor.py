@@ -140,8 +140,7 @@ class TestOptimizer(unittest.TestCase):
             n_cstr=2,
             cstr_tol=1e-3,
             regr_spec=egx.RegressionSpec.CONSTANT,
-            corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL
-            | egx.CorrelationSpec.ABSOLUTE_EXPONENTIAL,
+            corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
             kpls_dim=1,
             seed=1,
         )
