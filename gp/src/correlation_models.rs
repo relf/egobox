@@ -8,10 +8,13 @@
 
 use linfa::Float;
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray_einsum_beta::einsum;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fmt;
+
+use crate::utils::pairwise_differences;
 
 /// A trait for using a correlation model in GP regression
 pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
@@ -21,6 +24,14 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
         &self,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F>;
+
+    fn jac(
+        &self,
+        xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F>;
 }
@@ -64,6 +75,34 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
         r.into_shape((d.nrows(), 1)).unwrap()
     }
+
+    fn jac(
+        &self,
+        xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        let xn = xnorm.to_owned().insert_axis(Axis(0));
+        let d = pairwise_differences(&xn, xtrain);
+
+        // correlation r
+        let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
+        let theta_r = theta.to_owned().insert_axis(Axis(0));
+        let r = (theta_r.to_owned() * wd)
+            .sum_axis(Axis(1))
+            .mapv(|v| F::exp(-v));
+
+        // correlation dr/dx(xnorm)
+        let wd = d.dot(weights);
+        let dr = einsum("j,ij->ij", &[theta, &wd])
+            .unwrap()
+            .mapv(|v| F::cast(-2) * v);
+        einsum("i,ij->ij", &[&r, &dr])
+            .unwrap()
+            .into_shape((xtrain.nrows(), xtrain.ncols()))
+            .unwrap()
+    }
 }
 
 impl fmt::Display for SquaredExponentialCorr {
@@ -106,10 +145,39 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
+        let wd = d.dot(weights).mapv(|v| v.abs());
         let theta_r = theta.to_owned().insert_axis(Axis(0));
         let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
         r.into_shape((d.nrows(), 1)).unwrap()
+    }
+
+    fn jac(
+        &self,
+        xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        let xn = xnorm.to_owned().insert_axis(Axis(0));
+        let d = pairwise_differences(&xn, xtrain);
+
+        // correlation r
+        let wd = (d.dot(weights)).mapv(|v| v.abs());
+        let theta_r = theta.to_owned().insert_axis(Axis(0));
+        let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+
+        // correlation dr/dx(xnorm)
+        // (x - mean).weights
+        // (1, nx).(nx, ncomp) -> shape(1 x ncomp)   (ncomp=nx when no PLS)
+        let sign_wd = (d.dot(weights)).mapv(|v| v.signum());
+
+        // - (theta * wd)
+        // (ncomp,) * (nx, ncomp)
+        let dr = -einsum("j,ij->ij", &[theta, &sign_wd]).unwrap();
+        einsum("i,ij->ij", &[&r, &dr])
+            .unwrap()
+            .into_shape((xtrain.nrows(), xtrain.ncols()))
+            .unwrap()
     }
 }
 
@@ -164,6 +232,16 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
         let r = a * b;
         r.into_shape((d.nrows(), 1)).unwrap()
     }
+
+    fn jac(
+        &self,
+        _xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        _xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        _theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        _weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        todo!()
+    }
 }
 
 impl fmt::Display for Matern32Corr {
@@ -216,6 +294,16 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
         let b = theta_wd.sum_axis(Axis(1)).mapv(|v| F::exp(-v));
         let r = a * b;
         r.into_shape((d.nrows(), 1)).unwrap()
+    }
+
+    fn jac(
+        &self,
+        _xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        _xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        _theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        _weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        todo!()
     }
 }
 
