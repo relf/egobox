@@ -295,7 +295,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let mut jac = Array2::zeros((xx.ncols(), 1));
 
         let xnorm = (xx - &self.xtrain.mean) / &self.xtrain.std;
-        // let corr = self._compute_correlation_wrt_norm(&xnorm);
 
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
@@ -305,12 +304,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let dr = self
             .corr
-            .jac(&xnorm.row(0), &self.theta, &self.xtrain.data, &self.w_star);
+            .jac(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star);
 
         let dr_dx = df_dx + dr.t().dot(gamma);
-
-        println!("dr_dx={}", dr_dx);
-        println!("self.xtrain.std={}", self.xtrain.std);
         Zip::from(jac.rows_mut())
             .and(dr_dx.rows())
             .and(&self.xtrain.std)
@@ -1174,7 +1170,6 @@ mod tests {
                     .kind(egobox_doe::LhsKind::CenteredMaximin)
                     .with_rng(rng.clone())
                     .sample($nt);
-                    println!("{}", xt);
 
                     let yt = [<$func>](&xt);
                     let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
@@ -1219,6 +1214,8 @@ mod tests {
     test_gp_derivatives!(Linear, SquaredExponential, sphere, 10., 10);
     test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 10., 10);
     test_gp_derivatives!(Constant, AbsoluteExponential, norm1, 10., 16);
+    test_gp_derivatives!(Linear, AbsoluteExponential, norm1, 10., 16);
+    test_gp_derivatives!(Quadratic, AbsoluteExponential, norm1, 10., 16);
 
     #[test]
     fn test_derivatives() {
