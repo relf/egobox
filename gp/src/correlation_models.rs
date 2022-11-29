@@ -89,9 +89,7 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         // correlation r
         let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
         let theta_r = theta.to_owned().insert_axis(Axis(0));
-        let r = (theta_r.to_owned() * wd)
-            .sum_axis(Axis(1))
-            .mapv(|v| F::exp(-v));
+        let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
 
         // correlation dr/dx(xnorm)
         let wd = d.dot(&weights.mapv(|v| v * v));
@@ -393,6 +391,7 @@ mod tests {
     use crate::utils::{DistanceMatrix, NormalizedMatrix};
     use approx::assert_abs_diff_eq;
     use ndarray::{arr1, array};
+    use paste::paste;
 
     #[test]
     fn test_squared_exponential() {
@@ -439,67 +438,70 @@ mod tests {
         assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }
 
-    #[test]
-    fn test_matern32_2d_derivatives() {
-        let x = array![3., 5.];
-        let xt = array![
-            [-9.375, -5.625],
-            [-5.625, -4.375],
-            [9.375, 1.875],
-            [8.125, 5.625],
-            [-4.375, -0.625],
-            [6.875, -3.125],
-            [4.375, 9.375],
-            [3.125, 4.375],
-            [5.625, -8.125],
-            [-8.125, 3.125],
-            [1.875, -6.875],
-            [-0.625, 8.125],
-            [-1.875, -1.875],
-            [0.625, 0.625],
-            [-6.875, -9.375],
-            [-3.125, 6.875]
-        ];
-        let xtrain = NormalizedMatrix::new(&xt);
-        let xnorm = (x.to_owned() - &xtrain.mean) / &xtrain.std;
+    macro_rules! test_correlation {
+        ($corr:ident) => {
+            paste! {
+                #[test]
+                fn [<test_corr_ $corr:lower _derivatives>]() {
+                    let x = array![3., 5.];
+                    let xt = array![
+                        [-9.375, -5.625],
+                        [-5.625, -4.375],
+                        [9.375, 1.875],
+                        [8.125, 5.625],
+                        [-4.375, -0.625],
+                        [6.875, -3.125],
+                        [4.375, 9.375],
+                        [3.125, 4.375],
+                        [5.625, -8.125],
+                        [-8.125, 3.125],
+                        [1.875, -6.875],
+                        [-0.625, 8.125],
+                        [-1.875, -1.875],
+                        [0.625, 0.625],
+                        [-6.875, -9.375],
+                        [-3.125, 6.875]
+                    ];
+                    let xtrain = NormalizedMatrix::new(&xt);
+                    let xnorm = (x.to_owned() - &xtrain.mean) / &xtrain.std;
 
-        let theta = array![0.34599115925909146, 0.32083374253611624];
-        let weights = array![[1., 0.], [0., 1.]];
-        let jac = SquaredExponentialCorr::default().jac(
-            &xnorm,
-            &xtrain.data.to_owned(),
-            &theta,
-            &weights,
-        );
+                    let theta = array![0.34599115925909146, 0.32083374253611624];
+                    let weights = array![[1., 0.], [0., 1.]];
 
-        let xa: f64 = x[0];
-        let xb: f64 = x[1];
-        let e = 1e-4;
-        let x = array![
-            [xa, xb],
-            [xa + e, xb],
-            [xa - e, xb],
-            [xa, xb + e],
-            [xa, xb - e]
-        ];
+                    let corr = [< $corr Corr >]::default();
+                    let jac = corr.jac(&xnorm, &xtrain.data, &theta, &weights);
 
-        let r = SquaredExponentialCorr::default();
-        let mut rxx = Array2::zeros((xtrain.data.nrows(), x.nrows()));
-        Zip::from(rxx.columns_mut())
-            .and(x.rows())
-            .for_each(move |mut rxxi, xi| {
-                let xnorm = xi.to_owned() - &xtrain.mean / &xtrain.std;
-                let d = pairwise_differences(&xnorm.insert_axis(Axis(0)), &xtrain.data.to_owned());
-                rxxi.assign(&(r.apply(&theta, &d, &weights).column(0)));
-            });
-        let fdiffa = (rxx.column(1).to_owned() - rxx.column(2)).mapv(|v| v / (2. * e));
-        println!("fdiffa={}", fdiffa);
-        println!("jac={}", jac.column(0));
-        println!("fdiffa/jac = {}", fdiffa / jac.column(0));
-        let fdiffb = (rxx.column(3).to_owned() - rxx.column(4)).mapv(|v| v / (2. * e));
-        println!("fdiffb={}", fdiffb);
-        println!("jac={}", jac.column(1));
+                    let xa: f64 = x[0];
+                    let xb: f64 = x[1];
+                    let e = 1e-5;
+                    let x = array![
+                        [xa, xb],
+                        [xa + e, xb],
+                        [xa - e, xb],
+                        [xa, xb + e],
+                        [xa, xb - e]
+                    ];
+
+                    let mut rxx = Array2::zeros((xtrain.data.nrows(), x.nrows()));
+                    Zip::from(rxx.columns_mut())
+                        .and(x.rows())
+                        .for_each(|mut rxxi, xi| {
+                            let xnorm = (xi.to_owned() - &xtrain.mean) / &xtrain.std;
+                            let d = pairwise_differences(&xnorm.insert_axis(Axis(0)), &xtrain.data);
+                            rxxi.assign(&(corr.apply(&theta, &d, &weights).column(0)));
+                        });
+                    let fdiffa = (rxx.column(1).to_owned() - rxx.column(2)).mapv(|v| v * xtrain.std[0] / (2. * e));
+                    assert_abs_diff_eq!(fdiffa, jac.column(0), epsilon=1e-6);
+                    let fdiffb = (rxx.column(3).to_owned() - rxx.column(4)).mapv(|v| v * xtrain.std[1] / (2. * e));
+                    assert_abs_diff_eq!(fdiffb, jac.column(1), epsilon=1e-6);
+                }
+            }
+        };
     }
+
+    test_correlation!(SquaredExponential);
+    test_correlation!(AbsoluteExponential);
+    // test_correlation!(Matern32);
 
     #[test]
     fn test_matern52_2d() {
