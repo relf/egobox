@@ -1218,7 +1218,10 @@ mod tests {
     test_gp_derivatives!(Quadratic, AbsoluteExponential, norm1, 10., 16);
     test_gp_derivatives!(Constant, Matern32, norm1, 10., 16);
     test_gp_derivatives!(Linear, Matern32, norm1, 10., 16);
-    test_gp_derivatives!(Quadratic, Matern32, norm1, 10., 16);
+    test_gp_derivatives!(Quadratic, Matern32, sphere, 10., 16);
+    test_gp_derivatives!(Constant, Matern52, sphere, 10., 16);
+    test_gp_derivatives!(Linear, Matern52, norm1, 10., 16);
+    test_gp_derivatives!(Quadratic, Matern52, sphere, 10., 10);
 
     #[test]
     fn test_derivatives() {

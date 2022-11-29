@@ -244,7 +244,6 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
         let d = pairwise_differences(&xn, xtrain);
 
         // correlation r
-        //let theta = theta.to_owned().insert_axis(Axis(0));
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
         let theta_wd = theta.to_owned() * &wd;
         let a = theta_wd
@@ -360,26 +359,112 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let theta = theta.to_owned().insert_axis(Axis(0));
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
-        let theta_wd = (theta.to_owned() * &wd).mapv(|v| F::cast(5.).sqrt() * v);
+        let theta_wd = theta.to_owned() * &wd;
         let a = theta_wd
             .to_owned()
-            .mapv(|v| (F::one() + v + v * v / F::cast(3.)))
+            .mapv(|v| F::one() + F::cast(5).sqrt() * v + F::cast(5. / 3.) * v * v)
             .map_axis(Axis(1), |row| row.product());
-        let b = theta_wd.sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+        let b = theta_wd
+            .sum_axis(Axis(1))
+            .mapv(|v| F::exp(-F::cast(5).sqrt() * v));
         let r = a * b;
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 
     fn jac(
         &self,
-        _xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
-        _xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
-        _theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
-        _weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        todo!()
+        let xn = xnorm.to_owned().insert_axis(Axis(0));
+        let d = pairwise_differences(&xn, xtrain);
+
+        // correlation
+        let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
+        let theta_wd = theta.to_owned() * &wd;
+        let a = theta_wd
+            .to_owned()
+            .mapv(|v| F::one() + F::cast(5).sqrt() * v + F::cast(5. / 3.) * v * v)
+            .map_axis(Axis(1), |row| row.product());
+        let b = theta_wd
+            .sum_axis(Axis(1))
+            .mapv(|v| F::exp(-F::cast(5).sqrt() * v));
+
+        // correlation dr/dx(xnorm)
+        // (x - mean).weights
+        // (1, nx).(nx, ncomp) -> shape(1 x ncomp)   (ncomp=nx when no PLS)
+        let sign_wd = (d.dot(weights)).mapv(|v| v.signum());
+
+        let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
+        let abs_d = d.mapv(|v| v.abs());
+        let abs_w = weights.mapv(|v| v.abs());
+        Zip::from(db.rows_mut())
+            .and(&a)
+            .and(&b)
+            .and(sign_wd.rows())
+            .for_each(|mut db_i, ai, bi, si| {
+                Zip::from(&mut db_i)
+                    .and(abs_w.rows())
+                    .and(&si)
+                    .for_each(|db_ij, abs_wi, sij| {
+                        let coef = (theta.to_owned() * abs_wi)
+                            .mapv(|v| -F::cast(5).sqrt() * v)
+                            .sum();
+                        *db_ij = *ai * coef * *sij * *bi;
+                    });
+            });
+        let mut da = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
+        Zip::from(da.rows_mut())
+            .and(abs_d.rows())
+            .and(sign_wd.rows())
+            .for_each(|mut da_p, abs_d_p, sign_p| {
+                Zip::indexed(&mut da_p)
+                    .and(abs_w.rows())
+                    .and(&abs_d_p)
+                    .and(&sign_p)
+                    .for_each(|i, da_pi, abs_w_i, abs_d_pi, sign_pi| {
+                        let mut coef = F::zero();
+                        Zip::indexed(&abs_w_i).for_each(|k, abs_w_ik| {
+                            let mut ter = F::one();
+                            let dev = F::cast(5.).sqrt() * theta[k] * *abs_w_ik * *sign_pi
+                                + F::cast((5. / 3.) * 2.)
+                                    * theta[k].powf(F::cast(2.))
+                                    * abs_w_ik.powf(F::cast(2.))
+                                    * *sign_pi
+                                    * *abs_d_pi;
+                            Zip::indexed(abs_w.rows()).and(abs_d_p).for_each(
+                                |j, abs_w_j, abs_d_pj| {
+                                    Zip::indexed(abs_w_j).and(theta).for_each(
+                                        |l, abs_w_jl, theta_l| {
+                                            if l != k || j != i {
+                                                ter *= F::one()
+                                                    + F::cast(5).sqrt()
+                                                        * *theta_l
+                                                        * *abs_w_jl
+                                                        * *abs_d_pj
+                                                    + F::cast(5. / 3.)
+                                                        * theta_l.powf(F::cast(2.))
+                                                        * abs_w_jl.powf(F::cast(2.))
+                                                        * abs_d_pj.powf(F::cast(2.));
+                                            }
+                                        },
+                                    );
+                                },
+                            );
+                            coef += dev * ter;
+                        });
+                        *da_pi = coef;
+                    });
+            });
+
+        let da = einsum("i,ij->ij", &[&b, &da])
+            .unwrap()
+            .into_shape((xtrain.nrows(), xtrain.ncols()))
+            .unwrap();
+        db.to_owned() + da
     }
 }
 
@@ -506,6 +591,7 @@ mod tests {
     test_correlation!(SquaredExponential);
     test_correlation!(AbsoluteExponential);
     test_correlation!(Matern32);
+    test_correlation!(Matern52);
 
     #[test]
     fn test_matern52_2d() {
