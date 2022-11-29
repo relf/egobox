@@ -219,14 +219,16 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let theta = theta.to_owned().insert_axis(Axis(0));
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
-        let theta_wd = (theta.to_owned() * &wd).mapv(|v| F::cast(3).sqrt() * v);
+
+        let theta_wd = theta.to_owned() * &wd;
         let a = theta_wd
             .to_owned()
-            .mapv(|v| F::one() + v)
+            .mapv(|v| F::one() + F::cast(3).sqrt() * v)
             .map_axis(Axis(1), |row| row.product());
-        let b = theta_wd.sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+        let b = theta_wd
+            .sum_axis(Axis(1))
+            .mapv(|v| F::exp(-F::cast(3).sqrt() * v));
         let r = a * b;
         r.into_shape((d.nrows(), 1)).unwrap()
     }
@@ -244,50 +246,51 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
         // correlation r
         //let theta = theta.to_owned().insert_axis(Axis(0));
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
-        let theta_wd = (theta.to_owned() * &wd).mapv(|v| F::cast(3).sqrt() * v);
+        let theta_wd = theta.to_owned() * &wd;
         let a = theta_wd
             .to_owned()
-            .mapv(|v| F::one() + v)
+            .mapv(|v| F::one() + F::cast(3).sqrt() * v)
             .map_axis(Axis(1), |row| row.product());
-        let b = theta_wd.sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+        let b = theta_wd
+            .sum_axis(Axis(1))
+            .mapv(|v| F::exp(-F::cast(3).sqrt() * v));
 
         // correlation dr/dx(xnorm)
         // (x - mean).weights
         // (1, nx).(nx, ncomp) -> shape(1 x ncomp)   (ncomp=nx when no PLS)
         let sign_wd = (d.dot(weights)).mapv(|v| v.signum());
 
-        let mut da = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
+        let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         let abs_d = d.mapv(|v| v.abs());
         let abs_w = weights.mapv(|v| v.abs());
-        println!("da shape={:?}", da.shape());
-        println!("abs_w={:?}", abs_w.shape());
-        println!("b={:?}", b.shape());
-        println!("sign_wd={:?}", sign_wd.shape());
-        Zip::from(da.rows_mut())
+        Zip::from(db.rows_mut())
+            .and(&a)
             .and(&b)
             .and(sign_wd.rows())
-            .for_each(|mut da_i, bi, si| {
-                Zip::from(&mut da_i)
+            .for_each(|mut db_i, ai, bi, si| {
+                Zip::from(&mut db_i)
                     .and(abs_w.rows())
-                    .for_each(|da_ij, abs_wi| {
-                        let coef =
-                            (theta.to_owned() * abs_wi * si).mapv(|v| F::cast(3).sqrt() * v * *bi);
-                        *da_ij = coef.sum();
+                    .and(&si)
+                    .for_each(|db_ij, abs_wi, sij| {
+                        let coef = (theta.to_owned() * abs_wi)
+                            .mapv(|v| -F::cast(3).sqrt() * v)
+                            .sum();
+                        *db_ij = *ai * coef * *sij * *bi;
                     });
             });
-
-        let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
-        Zip::from(db.rows_mut())
+        let mut da = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
+        Zip::from(da.rows_mut())
             .and(abs_d.rows())
             .and(sign_wd.rows())
-            .for_each(|mut db_p, abs_d_p, sign_p| {
-                Zip::indexed(&mut db_p)
+            .for_each(|mut da_p, abs_d_p, sign_p| {
+                Zip::indexed(&mut da_p)
+                    .and(abs_w.rows())
                     .and(&sign_p)
-                    .for_each(|i, db_pi, sign_pi| {
+                    .for_each(|i, da_pi, abs_w_i, sign_pi| {
                         let mut coef = F::zero();
-                        Zip::indexed(abs_w.rows()).for_each(|k, abs_wi| {
-                            let mut ter = F::zero();
-                            let dev = (theta[k] * abs_wi[k]) * F::cast(3).sqrt() * *sign_pi;
+                        Zip::indexed(&abs_w_i).for_each(|k, abs_w_ik| {
+                            let mut ter = F::one();
+                            let dev = F::cast(3).sqrt() * theta[k] * *abs_w_ik * *sign_pi;
                             Zip::indexed(abs_w.rows()).and(abs_d_p).for_each(
                                 |j, abs_w_j, abs_d_pj| {
                                     Zip::indexed(abs_w_j).and(theta).for_each(
@@ -305,14 +308,15 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
                             );
                             coef += dev * ter;
                         });
-                        *db_pi = coef;
+                        *da_pi = coef;
                     });
             });
-        let db = einsum("i,ij->ij", &[&a, &db])
+
+        let da = einsum("i,ij->ij", &[&b, &da])
             .unwrap()
             .into_shape((xtrain.nrows(), xtrain.ncols()))
             .unwrap();
-        da.to_owned() + db
+        db.to_owned() + da
     }
 }
 
@@ -501,7 +505,7 @@ mod tests {
 
     test_correlation!(SquaredExponential);
     test_correlation!(AbsoluteExponential);
-    // test_correlation!(Matern32);
+    test_correlation!(Matern32);
 
     #[test]
     fn test_matern52_2d() {
