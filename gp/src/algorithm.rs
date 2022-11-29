@@ -1303,7 +1303,7 @@ mod tests {
             println!("Check absolute error: should be < {}", atol);
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
         } else {
-            let rtol = 5e-2;
+            let rtol = 6e-2;
             let rel_error = (y_deriv - fdiff).abs() / fdiff; // check relative
             println!("Check relative error: should be < {}", rtol);
             assert_abs_diff_eq!(rel_error, 0.0, epsilon = rtol);
