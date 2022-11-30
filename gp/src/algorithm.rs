@@ -183,7 +183,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // Get pairwise componentwise L1-distances to the input training set
         let dx = pairwise_differences(xnorm, &self.xtrain.data);
         // Compute the correlation function
-        let r = self.corr.apply(&self.theta, &dx, &self.w_star);
+        let r = self.corr.apply(&dx, &self.theta, &self.w_star);
         let n_obs = xnorm.nrows();
         let nt = self.xtrain.data.nrows();
         r.into_shape((n_obs, nt)).unwrap().to_owned()
@@ -336,7 +336,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let sigma2 = &self.inner_params.sigma2;
         let cholesky_k = &self.inner_params.r_chol;
 
-        let r = self.corr.apply(&self.theta, &dx, &self.w_star);
+        let r = self.corr.apply(&dx, &self.theta, &self.w_star);
         let dr = -einsum("i,ij->ij", &[&r.t().row(0), &dd])
             .unwrap()
             .into_shape((dd.shape()[0], dd.shape()[1]))
@@ -612,7 +612,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 }
             }
             let theta = theta.mapv(F::cast);
-            let rxx = self.corr().apply(&theta, &x_distances.d, &w_star);
+            let rxx = self.corr().apply(&x_distances.d, &theta, &w_star);
             match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
                 Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
                 Err(_) => f64::INFINITY,
@@ -641,7 +641,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(F::cast);
-        let rxx = self.corr().apply(opt_theta, &x_distances.d, &w_star);
+        let rxx = self.corr().apply(&x_distances.d, opt_theta, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
             theta: opt_theta.to_owned(),

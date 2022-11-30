@@ -21,8 +21,8 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
     /// distances `d` between x data points and PLS `weights`.
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F>;
 
@@ -65,8 +65,8 @@ impl TryFrom<String> for SquaredExponentialCorr {
 impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
@@ -137,8 +137,8 @@ impl TryFrom<String> for AbsoluteExponentialCorr {
 impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let wd = d.mapv(|v| v.abs()).dot(weights).mapv(|v| v.abs());
@@ -212,8 +212,8 @@ impl TryFrom<String> for Matern32Corr {
 impl<F: Float> CorrelationModel<F> for Matern32Corr {
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
@@ -351,8 +351,8 @@ impl TryFrom<String> for Matern52Corr {
 impl<F: Float> CorrelationModel<F> for Matern52Corr {
     fn apply(
         &self,
-        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
@@ -481,7 +481,7 @@ mod tests {
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let dm = DistanceMatrix::new(&xt);
-        let res = SquaredExponentialCorr::default().apply(&arr1(&[0.1]), &dm.d, &array![[1.]]);
+        let res = SquaredExponentialCorr::default().apply(&dm.d, &arr1(&[0.1]), &array![[1.]]);
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],
@@ -503,8 +503,8 @@ mod tests {
         let dm = DistanceMatrix::new(&xt);
         dbg!(&dm);
         let res = SquaredExponentialCorr::default().apply(
-            &arr1(&[1., 2.]),
             &dm.d,
+            &arr1(&[1., 2.]),
             &array![[1., 0.], [0., 1.]],
         );
         let expected = array![[6.14421235e-06], [1.42516408e-21], [6.14421235e-06]];
@@ -517,7 +517,7 @@ mod tests {
         let dm = DistanceMatrix::new(&xt);
         dbg!(&dm);
         let res =
-            Matern32Corr::default().apply(&arr1(&[1., 2.]), &dm.d, &array![[1., 0.], [0., 1.]]);
+            Matern32Corr::default().apply(&dm.d, &arr1(&[1., 2.]), &array![[1., 0.], [0., 1.]]);
         let expected = array![[1.08539595e-03], [1.10776401e-07], [1.08539595e-03]];
         assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }
@@ -572,7 +572,7 @@ mod tests {
                         .for_each(|mut rxxi, xi| {
                             let xnorm = (xi.to_owned() - &xtrain.mean) / &xtrain.std;
                             let d = differences(&xnorm, &xtrain.data);
-                            rxxi.assign(&(corr.apply(&theta, &d, &weights).column(0)));
+                            rxxi.assign(&(corr.apply( &d, &theta, &weights).column(0)));
                         });
                     let fdiffa = (rxx.column(1).to_owned() - rxx.column(2)).mapv(|v| v * xtrain.std[0] / (2. * e));
                     assert_abs_diff_eq!(fdiffa, jac.column(0), epsilon=1e-6);
@@ -593,7 +593,7 @@ mod tests {
         let xt = array![[0., 1.], [2., 3.], [4., 5.]];
         let dm = DistanceMatrix::new(&xt);
         let res =
-            Matern52Corr::default().apply(&arr1(&[1., 2.]), &dm.d, &array![[1., 0.], [0., 1.]]);
+            Matern52Corr::default().apply(&dm.d, &arr1(&[1., 2.]), &array![[1., 0.], [0., 1.]]);
         let expected = array![[6.62391590e-04], [1.02117882e-08], [6.62391590e-04]];
         assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }
