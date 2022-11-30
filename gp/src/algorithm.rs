@@ -324,20 +324,15 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     ) -> Array1<F> {
         let x = &(x.to_owned().insert_axis(Axis(0)));
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let theta = &self.theta;
-
         let dx = pairwise_differences(&xnorm, &self.xtrain.data);
-        let dd = einsum("j,ij->ij", &[&theta.t(), &dx])
-            .unwrap()
-            .mapv(|v| F::cast(2) * v);
+
         let sigma2 = &self.inner_params.sigma2;
         let cholesky_k = &self.inner_params.r_chol;
 
         let r = self.corr.apply(&dx, &self.theta, &self.w_star);
-        let dr = -einsum("i,ij->ij", &[&r.t().row(0), &dd])
-            .unwrap()
-            .into_shape((dd.shape()[0], dd.shape()[1]))
-            .unwrap();
+        let dr = self
+            .corr
+            .jac(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star);
 
         let rho1 = cholesky_k.solve_triangular(&r, UPLO::Lower).unwrap();
         let inv_kr = cholesky_k.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
@@ -360,7 +355,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let inv_bat = rho3.solve_triangular(&a_mat.t(), UPLO::Lower).unwrap();
         let d_mat = rho3.t().solve_triangular(&inv_bat, UPLO::Upper).unwrap();
 
-        // Works only for constant / linear
         let df = self.mean.jac(&xnorm.row(0));
 
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
@@ -388,13 +382,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     ) -> Array1<F> {
         let x = &(x.to_owned().insert_axis(Axis(0)));
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let theta = &self.theta;
 
         let dx = pairwise_differences(&xnorm, &self.xtrain.data);
-        let dd = einsum("j,ij->ij", &[&theta.t(), &dx])
-            .unwrap()
-            .mapv(|v| F::cast(2) * v)
-            .with_lapack();
+
         let sigma2 = &self.inner_params.sigma2;
         let cholesky_k = &self.inner_params.r_chol.to_owned().with_lapack();
 
@@ -402,10 +392,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .corr
             .apply(&dx, &self.theta, &self.w_star)
             .with_lapack();
-        let dr = -einsum("i,ij->ij", &[&r.t().row(0), &dd])
-            .unwrap()
-            .into_shape((dd.shape()[0], dd.shape()[1]))
-            .unwrap();
+        let dr = self
+            .corr
+            .jac(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star);
 
         let rho1 = cholesky_k
             .solve_triangular(UPLO::Lower, Diag::NonUnit, &r)
@@ -450,7 +439,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             }
         };
 
-        // Works only for constant / linear
         let df = self.mean.jac(&xnorm.row(0)).with_lapack();
 
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
@@ -1220,46 +1208,59 @@ mod tests {
     test_gp_derivatives!(Linear, Matern52, norm1, 10., 16);
     test_gp_derivatives!(Quadratic, Matern52, sphere, 10., 10);
 
-    #[test]
-    fn test_derivatives() {
-        let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(100);
-        let yt = sphere(&xt);
-        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
-            ConstantMean::default(),
-            SquaredExponentialCorr::default(),
-        )
-        .fit(&Dataset::new(xt, yt))
-        .expect("GP fitting");
+    macro_rules! test_gp_variance_derivatives {
+        ($regr:ident, $corr:ident, $func:ident, $limit:expr, $nt:expr) => {
+            paste! {
 
-        let mut rng = Isaac64Rng::seed_from_u64(0);
-        let x = Array::random_using((2,), Uniform::new(-10., 10.), &mut rng);
-        let xa: f64 = x[0];
-        let xb: f64 = x[1];
-        let e = 1e-4;
+                #[test]
+                fn [<test_gp_variance_derivatives_ $regr:snake _ $corr:snake>]() {
+                    let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(10);
+                    let yt = [<$func>](&xt);
 
-        let x = array![
-            [xa, xb],
-            [xa + e, xb],
-            [xa - e, xb],
-            [xa, xb + e],
-            [xa, xb - e]
-        ];
+                    let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
+                        [<$regr Mean>]::default(),
+                        [<$corr Corr>]::default(),
+                    )
+                    .fit(&Dataset::new(xt, yt))
+                    .expect("GP fitting");
 
-        let y_pred = gp.predict_values(&x).unwrap();
-        println!("values at [{},{}] = {}", xa, xb, y_pred);
-        let y_deriv = gp.predict_derivatives(&x);
-        println!("deriv at [{},{}] = {}", xa, xb, y_deriv);
+                    for _ in 0..1 {
+                        let mut rng = Isaac64Rng::seed_from_u64(42);
+                        let x = Array::random_using((2,), Uniform::new(-10., 10.), &mut rng);
+                        let xa: f64 = x[0];
+                        let xb: f64 = x[1];
+                        let e = 1e-5;
 
-        let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
-        let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+                        let x = array![
+                            [xa, xb],
+                            [xa + e, xb],
+                            [xa - e, xb],
+                            [xa, xb + e],
+                            [xa, xb - e]
+                        ];
+                        let y_pred = gp.predict_variances(&x).unwrap();
+                        println!("variance at [{},{}] = {}", xa, xb, y_pred);
+                        let y_deriv = gp.predict_variance_derivatives(&x);
+                        println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
 
-        assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
-        assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
+                        let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
+                        let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+
+                        assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
+                        assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
+                    }
+                }
+            }
+        };
     }
+
+    test_gp_variance_derivatives!(Constant, SquaredExponential, sphere, 10., 10);
+    test_gp_variance_derivatives!(Linear, SquaredExponential, sphere, 10., 10);
+    test_gp_variance_derivatives!(Quadratic, SquaredExponential, sphere, 10., 10);
 
     #[test]
     fn test_variance_derivatives() {
-        let xt = egobox_doe::FullFactorial::new(&array![[-10., 10.], [-10., 10.]]).sample(40);
+        let xt = egobox_doe::FullFactorial::new(&array![[-10., 10.], [-10., 10.]]).sample(10);
         let yt = sphere(&xt);
 
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
