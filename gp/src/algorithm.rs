@@ -124,7 +124,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // Compute the mean term at x
         let f = self.mean.apply(&xnorm);
         // Compute the correlation term at x
-        let corr = self._compute_correlation_wrt_norm(&xnorm);
+        let corr = self._compute_correlation(&xnorm);
         // Scaled predictor
         let y_ = &f.dot(&self.inner_params.beta) + &corr.dot(&self.inner_params.gamma);
         // Predictor
@@ -135,7 +135,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Returns n variance values as (n, 1) column vector.
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let corr = self._compute_correlation_wrt_norm(&xnorm);
+        let corr = self._compute_correlation(&xnorm);
         let inners = &self.inner_params;
 
         let corr_t = corr.t().to_owned();
@@ -176,14 +176,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Compute correlation matrix given x points specified as a (n, nx) matrix
     /// and where is x is normalized wrt training data x (eg xnorm = (x - xt.mean)/ xt.std))
-    fn _compute_correlation_wrt_norm(
-        &self,
-        xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> Array2<F> {
+    fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         // Get pairwise componentwise L1-distances to the input training set
         let dx = pairwise_differences(xnorm, &self.xtrain.data);
         // Compute the correlation function
-        let r = self.corr.apply(&self.theta, &dx, &self.w_star);
+        let r = self.corr.apply(&dx, &self.theta, &self.w_star);
         let n_obs = xnorm.nrows();
         let nt = self.xtrain.data.nrows();
         r.into_shape((n_obs, nt)).unwrap().to_owned()
@@ -217,7 +214,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         kx: usize,
     ) -> Array1<F> {
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let corr = self._compute_correlation_wrt_norm(&xnorm);
+        let corr = self._compute_correlation(&xnorm);
 
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
@@ -336,7 +333,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let sigma2 = &self.inner_params.sigma2;
         let cholesky_k = &self.inner_params.r_chol;
 
-        let r = self.corr.apply(&self.theta, &dx, &self.w_star);
+        let r = self.corr.apply(&dx, &self.theta, &self.w_star);
         let dr = -einsum("i,ij->ij", &[&r.t().row(0), &dd])
             .unwrap()
             .into_shape((dd.shape()[0], dd.shape()[1]))
@@ -403,7 +400,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let r = self
             .corr
-            .apply(&self.theta, &dx, &self.w_star)
+            .apply(&dx, &self.theta, &self.w_star)
             .with_lapack();
         let dr = -einsum("i,ij->ij", &[&r.t().row(0), &dd])
             .unwrap()
@@ -612,7 +609,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 }
             }
             let theta = theta.mapv(F::cast);
-            let rxx = self.corr().apply(&theta, &x_distances.d, &w_star);
+            let rxx = self.corr().apply(&x_distances.d, &theta, &w_star);
             match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
                 Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
                 Err(_) => f64::INFINITY,
@@ -641,7 +638,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(F::cast);
-        let rxx = self.corr().apply(opt_theta, &x_distances.d, &w_star);
+        let rxx = self.corr().apply(&x_distances.d, opt_theta, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
             theta: opt_theta.to_owned(),
@@ -736,7 +733,7 @@ where
 /// fx: mean factors term at x samples,
 /// rxx: correlation factors at x samples,
 /// x_distances: pairwise distances between x samples
-/// ytrian: normalized output training values
+/// ytrain: normalized output training values
 /// nugget: factor to improve numerical stability  
 #[cfg(not(feature = "blas"))]
 fn reduced_likelihood<F: Float>(
@@ -1216,6 +1213,12 @@ mod tests {
     test_gp_derivatives!(Constant, AbsoluteExponential, norm1, 10., 16);
     test_gp_derivatives!(Linear, AbsoluteExponential, norm1, 10., 16);
     test_gp_derivatives!(Quadratic, AbsoluteExponential, norm1, 10., 16);
+    test_gp_derivatives!(Constant, Matern32, norm1, 10., 16);
+    test_gp_derivatives!(Linear, Matern32, norm1, 10., 16);
+    test_gp_derivatives!(Quadratic, Matern32, sphere, 10., 16);
+    test_gp_derivatives!(Constant, Matern52, sphere, 10., 16);
+    test_gp_derivatives!(Linear, Matern52, norm1, 10., 16);
+    test_gp_derivatives!(Quadratic, Matern52, sphere, 10., 10);
 
     #[test]
     fn test_derivatives() {
@@ -1300,7 +1303,7 @@ mod tests {
             println!("Check absolute error: should be < {}", atol);
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
         } else {
-            let rtol = 5e-2;
+            let rtol = 0.5;
             let rel_error = (y_deriv - fdiff).abs() / fdiff; // check relative
             println!("Check relative error: should be < {}", rtol);
             assert_abs_diff_eq!(rel_error, 0.0, epsilon = rtol);
