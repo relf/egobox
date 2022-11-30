@@ -17,8 +17,12 @@ use std::fmt;
 
 /// A trait for using a correlation model in GP regression
 pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
-    /// Compute correlation matrix given `theta` parameters,
-    /// distances `d` between x data points and PLS `weights`.
+    /// Compute correlation function matrix r(x, x') given distances `d` between x and x',
+    /// `theta` parameters, and PLS `weights`, where:
+    /// `theta`   : hyperparameters (1xd)
+    /// `d`     : distances (nxd)
+    /// `weight`: PLS weights (dxh)
+    /// where d is the initial dimension and h (<d) is the reduced dimension when PLS is used (kpls_dim)
     fn apply(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -26,9 +30,11 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F>;
 
+    /// Compute jacobian matrix of `r(x, x')` at given `x` given a set of `xtrain` training samples,
+    /// `theta` parameters, and PLS `weights`.
     fn jac(
         &self,
-        xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -63,6 +69,9 @@ impl TryFrom<String> for SquaredExponentialCorr {
 }
 
 impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
+    ///   h    d
+    /// prod prod exp( - theta_l * |d_i . weight_i|^2 )
+    ///  l=1  i=1
     fn apply(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -77,12 +86,12 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
 
     fn jac(
         &self,
-        xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let d = differences(xnorm, xtrain);
+        let d = differences(x, xtrain);
 
         // correlation r
         let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
@@ -135,6 +144,9 @@ impl TryFrom<String> for AbsoluteExponentialCorr {
 }
 
 impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
+    ///   h    d
+    /// prod prod exp( - theta_l * |d_i . weight_i| )
+    ///  l=1  i=1
     fn apply(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -149,12 +161,12 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
 
     fn jac(
         &self,
-        xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let d = differences(xnorm, xtrain);
+        let d = differences(x, xtrain);
 
         // correlation r
         let wd = (d.mapv(|v| v.abs()).dot(weights)).mapv(|v| v.abs());
@@ -210,6 +222,9 @@ impl TryFrom<String> for Matern32Corr {
 }
 
 impl<F: Float> CorrelationModel<F> for Matern32Corr {
+    ///   h    d         
+    /// prod prod (1 + sqrt(3) * theta_l * |d_i . weight_i|) exp( - sqrt(3) * theta_l * |d_i . weight_i| )
+    ///  l=1  i=1
     fn apply(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -232,12 +247,12 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
 
     fn jac(
         &self,
-        xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let d = differences(xnorm, xtrain);
+        let d = differences(x, xtrain);
 
         // correlation r
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
@@ -349,6 +364,9 @@ impl TryFrom<String> for Matern52Corr {
 }
 
 impl<F: Float> CorrelationModel<F> for Matern52Corr {
+    ///   h    d         
+    /// prod prod (1 + sqrt(5) * theta_l * |d_i . weight_i| + (5./3.) * theta_l^2 * |d_i . weight_i|^2) exp( - sqrt(5) * theta_l * |d_i . weight_i| )
+    ///  l=1  i=1
     fn apply(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -370,12 +388,12 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
 
     fn jac(
         &self,
-        xnorm: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let d = differences(xnorm, xtrain);
+        let d = differences(x, xtrain);
 
         // correlation
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
