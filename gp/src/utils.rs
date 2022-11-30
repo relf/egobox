@@ -1,5 +1,5 @@
 use linfa::Float;
-use ndarray::{s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2};
+use ndarray::{s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
@@ -123,6 +123,17 @@ pub fn pairwise_differences<F: Float>(
     res.into_shape((n / x.ncols(), x.ncols())).unwrap()
 }
 
+/// Computes differences between x and each element of y
+/// resulting in a 2d array of shape (nrows(y), ncols(x));
+/// *Panics* if x and y have not the same number of components
+pub fn differences<F: Float>(
+    x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    y: &ArrayBase<impl Data<Elem = F>, Ix2>,
+) -> Array2<F> {
+    assert!(x.len() == y.ncols());
+    x.to_owned() - y
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,6 +164,29 @@ mod tests {
                 [-2.08710326]
             ],
             &pairwise_differences(&x, &y),
+            epsilon = 1e-6
+        )
+    }
+
+    #[test]
+    fn test_differences() {
+        let x = array![-0.9486833];
+        let y = array![
+            [-1.26491106],
+            [-0.63245553],
+            [0.],
+            [0.63245553],
+            [1.26491106]
+        ];
+        assert_abs_diff_eq!(
+            &array![
+                [0.31622777],
+                [-0.31622777],
+                [-0.9486833],
+                [-1.58113883],
+                [-2.21359436],
+            ],
+            &differences(&x, &y),
             epsilon = 1e-6
         )
     }

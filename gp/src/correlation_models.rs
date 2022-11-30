@@ -6,6 +6,7 @@
 //! * matern 3/2,
 //! * matern 5/2.
 
+use crate::utils::differences;
 use linfa::Float;
 use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_einsum_beta::einsum;
@@ -13,8 +14,6 @@ use ndarray_einsum_beta::einsum;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fmt;
-
-use crate::utils::pairwise_differences;
 
 /// A trait for using a correlation model in GP regression
 pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
@@ -83,8 +82,7 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let xn = xnorm.to_owned().insert_axis(Axis(0));
-        let d = pairwise_differences(&xn, xtrain);
+        let d = differences(xnorm, xtrain);
 
         // correlation r
         let wd = d.mapv(|v| v * v).dot(&weights.mapv(|v| v * v));
@@ -156,8 +154,7 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let xn = xnorm.to_owned().insert_axis(Axis(0));
-        let d = pairwise_differences(&xn, xtrain);
+        let d = differences(xnorm, xtrain);
 
         // correlation r
         let wd = (d.mapv(|v| v.abs()).dot(weights)).mapv(|v| v.abs());
@@ -240,8 +237,7 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let xn = xnorm.to_owned().insert_axis(Axis(0));
-        let d = pairwise_differences(&xn, xtrain);
+        let d = differences(xnorm, xtrain);
 
         // correlation r
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
@@ -379,8 +375,7 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let xn = xnorm.to_owned().insert_axis(Axis(0));
-        let d = pairwise_differences(&xn, xtrain);
+        let d = differences(xnorm, xtrain);
 
         // correlation
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
@@ -576,7 +571,7 @@ mod tests {
                         .and(x.rows())
                         .for_each(|mut rxxi, xi| {
                             let xnorm = (xi.to_owned() - &xtrain.mean) / &xtrain.std;
-                            let d = pairwise_differences(&xnorm.insert_axis(Axis(0)), &xtrain.data);
+                            let d = differences(&xnorm, &xtrain.data);
                             rxxi.assign(&(corr.apply(&theta, &d, &weights).column(0)));
                         });
                     let fdiffa = (rxx.column(1).to_owned() - rxx.column(2)).mapv(|v| v * xtrain.std[0] / (2. * e));
