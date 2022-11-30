@@ -124,7 +124,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // Compute the mean term at x
         let f = self.mean.apply(&xnorm);
         // Compute the correlation term at x
-        let corr = self._compute_correlation_wrt_norm(&xnorm);
+        let corr = self._compute_correlation(&xnorm);
         // Scaled predictor
         let y_ = &f.dot(&self.inner_params.beta) + &corr.dot(&self.inner_params.gamma);
         // Predictor
@@ -135,7 +135,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Returns n variance values as (n, 1) column vector.
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let corr = self._compute_correlation_wrt_norm(&xnorm);
+        let corr = self._compute_correlation(&xnorm);
         let inners = &self.inner_params;
 
         let corr_t = corr.t().to_owned();
@@ -176,10 +176,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Compute correlation matrix given x points specified as a (n, nx) matrix
     /// and where is x is normalized wrt training data x (eg xnorm = (x - xt.mean)/ xt.std))
-    fn _compute_correlation_wrt_norm(
-        &self,
-        xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> Array2<F> {
+    fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         // Get pairwise componentwise L1-distances to the input training set
         let dx = pairwise_differences(xnorm, &self.xtrain.data);
         // Compute the correlation function
@@ -217,7 +214,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         kx: usize,
     ) -> Array1<F> {
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let corr = self._compute_correlation_wrt_norm(&xnorm);
+        let corr = self._compute_correlation(&xnorm);
 
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
@@ -403,7 +400,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let r = self
             .corr
-            .apply(&self.theta, &dx, &self.w_star)
+            .apply(&dx, &self.theta, &self.w_star)
             .with_lapack();
         let dr = -einsum("i,ij->ij", &[&r.t().row(0), &dd])
             .unwrap()
@@ -736,7 +733,7 @@ where
 /// fx: mean factors term at x samples,
 /// rxx: correlation factors at x samples,
 /// x_distances: pairwise distances between x samples
-/// ytrian: normalized output training values
+/// ytrain: normalized output training values
 /// nugget: factor to improve numerical stability  
 #[cfg(not(feature = "blas"))]
 fn reduced_likelihood<F: Float>(
