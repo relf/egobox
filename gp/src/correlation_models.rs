@@ -571,7 +571,7 @@ mod tests {
                     let weights = array![[1., 0.], [0., 1.]];
 
                     let corr = [< $corr Corr >]::default();
-                    let jac = corr.jac(&xnorm, &xtrain.data, &theta, &weights);
+                    let jac = corr.jac(&xnorm, &xtrain.data, &theta, &weights) / &xtrain.std;
 
                     let xa: f64 = x[0];
                     let xb: f64 = x[1];
@@ -592,9 +592,9 @@ mod tests {
                             let d = differences(&xnorm, &xtrain.data);
                             rxxi.assign(&(corr.apply( &d, &theta, &weights).column(0)));
                         });
-                    let fdiffa = (rxx.column(1).to_owned() - rxx.column(2)).mapv(|v| v * xtrain.std[0] / (2. * e));
+                    let fdiffa = (rxx.column(1).to_owned() - rxx.column(2)).mapv(|v| v / (2. * e));
                     assert_abs_diff_eq!(fdiffa, jac.column(0), epsilon=1e-6);
-                    let fdiffb = (rxx.column(3).to_owned() - rxx.column(4)).mapv(|v| v * xtrain.std[1] / (2. * e));
+                    let fdiffb = (rxx.column(3).to_owned() - rxx.column(4)).mapv(|v| v / (2. * e));
                     assert_abs_diff_eq!(fdiffb, jac.column(1), epsilon=1e-6);
                 }
             }
