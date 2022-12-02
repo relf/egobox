@@ -581,9 +581,7 @@ impl Moe {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         let probas = self.gmx.predict_probas(x);
-        println!("probas={}", probas);
         let probas_drv = self.gmx.predict_probas_derivatives(x);
-        println!("der_probas={}", probas_drv);
 
         let mut drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
 
