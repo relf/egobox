@@ -10,6 +10,8 @@ use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
+#[cfg(feature = "blas")]
+use log::warn;
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
@@ -207,7 +209,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives of the output prediction
     /// wrt the kxth component at a set of n points `x` specified as a (n, nx) matrix where x has nx components.
-    /// **Warning**: works only for squared_exponential
     pub fn predict_kth_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -275,7 +276,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict derivatives at a set of point `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing output derivatives at x wrt each nx components
-    /// **Warning**: works only for squared_exponential
     pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
         Zip::from(drv.rows_mut())
@@ -334,23 +334,16 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .corr
             .jac(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star)
             / &self.xtrain.std.to_owned().insert_axis(Axis(0));
-        println!("shape dr = {:?}", dr.shape());
-        println!("shape r = {:?}", r.shape());
-        println!("shape r_chol = {:?}", r_chol.shape());
 
         // rho1 = Rc^-1 . r(x, X)
         let rho1 = r_chol.solve_triangular(&r, UPLO::Lower).unwrap();
         // inv_kr = Rc^t^-1 . Rc^-1 . r(x, X) = R^-1 . r(x, X)
         let inv_kr = r_chol.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
-        println!("shape inv_kr = {:?}", inv_kr.shape());
 
         // p1 = ((dr(x, X)/dx)^t . R^-1 . r(x, X))^t = ((R^-1 . r(x, X))^t . dr(x, X)/dx) = r(x, X)^t . R^-1 . dr(x, X)/dx
         let p1 = dr.t().dot(&inv_kr).t().to_owned();
-        println!("shape p1 = {:?}", p1);
-
         // p2 = ((R^-1 . r(x, X))^t . dr(x, X)/dx)^t = dr(x, X)/dx)^t . R^-1 . r(x, X)
         let p2 = inv_kr.t().dot(&dr);
-        println!("shape p2 = {:?}", p2);
 
         let f_x = self.mean.apply(&xnorm).t().to_owned();
         let f_mean = self.mean.apply(&self.xtrain.data);
@@ -379,27 +372,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         // p3 = (dA/dx . B^-1 . A^t)^t = A . B^-1 . dA/dx^t
         let p3 = d_a.dot(&d_mat).t().to_owned();
-        println!("shape p3 = {:?}", p3.shape());
 
         // p4 = (B^-1 . A)^t . dA/dx^t = A^t . B^-1 . dA/dx^t
         let p4 = d_mat.t().dot(&d_a.t());
-        println!("shape p4 = {:?}", p4.shape());
 
         let prime_t = (-p1 - p2 + p3 + p4).t().to_owned();
-        println!("shape prime_t = {:?}", prime_t.shape());
-        println!("shape prime_t = {:?}", prime_t);
 
         let x_std = &self.xtrain.std;
-        // let mut dvar = Array2::<F>::zeros((x_std.len(), x_std.len()));
-        // Zip::from(dvar.rows_mut())
-        //     .and(prime_t.rows())
-        //     .for_each(|mut dv, p| {
-        //         let dv_val = (sigma2.to_owned() * p) / x_std;
-        //         dv.assign(&dv_val);
-        //     });
-
         let dvar = sigma2 * prime_t / x_std;
-
         dvar.row(0).to_owned()
     }
 
@@ -423,7 +403,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .with_lapack();
         let dr = self
             .corr
-            .jac(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star);
+            .jac(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star)
+            .with_lapack();
 
         let rho1 = r_chol
             .solve_triangular(UPLO::Lower, Diag::NonUnit, &r)
@@ -452,7 +433,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let b_mat = f_mean.t().dot(&inv_kf);
 
-        // TODO: manage cholesky error here, should do it for the others
         let d_mat = match b_mat.cholesky(UPLO::Lower) {
             Ok(rho3) => {
                 let inv_bat = rho3
@@ -463,7 +443,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
                     .unwrap()
             }
             Err(_) => {
-                println!("Warn cholesky error");
+                warn!("Cholesky decomposition error during variance dervivatives computation");
                 Array2::zeros((b_mat.nrows(), b_mat.ncols()))
             }
         };
@@ -476,14 +456,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let prime_t = (-p1 - p2 + p3 + p4).t().to_owned().without_lapack();
 
         let x_std = &self.xtrain.std;
-        let mut dvar = Array2::<F>::zeros((x_std.len(), x_std.len()));
-        Zip::from(dvar.rows_mut())
-            .and(prime_t.rows())
-            .for_each(|mut dv, p| {
-                let dv_val = (sigma2.to_owned() * p) / x_std;
-                dv.assign(&dv_val);
-            });
-
+        let dvar = sigma2 * prime_t / x_std;
         dvar.row(0).to_owned()
     }
 
@@ -1237,6 +1210,7 @@ mod tests {
     test_gp_derivatives!(Linear, Matern52, norm1, 10., 16);
     test_gp_derivatives!(Quadratic, Matern52, sphere, 10., 10);
 
+    #[allow(unused_macros)]
     macro_rules! test_gp_variance_derivatives {
         ($regr:ident, $corr:ident, $func:ident, $limit:expr, $nt:expr) => {
             paste! {
