@@ -101,7 +101,6 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
     ) -> Array2<F> {
         let d = differences(x, xtrain);
 
-        // correlation r
         let mut r = Array2::zeros((d.nrows(), 1));
         Zip::from(r.rows_mut())
             .and(d.rows())
@@ -114,11 +113,6 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
                 r_i[0] = F::exp(-coef)
             });
 
-        println!("d={}", d);
-        println!("theta={}", theta);
-        println!("weights={}", weights);
-
-        println!("r={}", r);
         let mut dr = Array2::zeros((d.nrows(), d.ncols()));
         Zip::from(dr.rows_mut())
             .and(d.rows())
@@ -134,8 +128,6 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
                         *dr_ij = coef * *d_ij * r_i[0]
                     });
             });
-        println!("dr={}", dr);
-        // correlation dr/dx(xnorm)
         dr
     }
 }
@@ -208,7 +200,6 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
     ) -> Array2<F> {
         let d = differences(x, xtrain);
 
-        // correlation r
         let mut r = Array2::zeros((d.nrows(), 1));
         Zip::from(r.rows_mut())
             .and(d.rows())
@@ -220,12 +211,11 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
                         .for_each(|l, w_l| coef_b += theta[l] * w_l[j].abs());
                     coef += coef_b * d_ij.abs();
                 });
-                r_i[0] = (-coef).exp()
+                r_i[0] = F::exp(-coef)
             });
 
         let sign_d = d.mapv(|v| v.signum());
 
-        println!("r={}", r);
         let mut dr = Array2::zeros((d.nrows(), d.ncols()));
         Zip::from(dr.rows_mut())
             .and(sign_d.rows())
@@ -241,7 +231,6 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
                         *dr_ij = coef * *s_ij * r_i[0]
                     });
             });
-        println!("dr={}", dr);
         dr
     }
 }
@@ -318,7 +307,6 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
     ) -> Array2<F> {
         let d = differences(x, xtrain);
 
-        // correlation r
         let mut a = Array1::zeros(d.nrows());
         Zip::from(&mut a).and(d.rows()).for_each(|a_i, d_i| {
             let mut coef = F::one();
@@ -337,7 +325,7 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
             .mapv(|v| F::exp(-F::cast(3).sqrt() * v));
 
         let sign_d = d.mapv(|v| v.signum());
-        println!("sign = {}", sign_d);
+
         let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         let abs_d = d.mapv(|v| v.abs());
         let abs_w = weights.mapv(|v| v.abs());
@@ -354,7 +342,6 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
                         *db_ij = *ai * coef * *sij * *bi;
                     });
             });
-        println!("db={}", db);
 
         let mut da = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         Zip::from(da.rows_mut())
@@ -368,7 +355,6 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
                         Zip::indexed(abs_w.columns()).for_each(|k, abs_w_k| {
                             let mut ter = F::one();
                             let dev = F::cast(3.).sqrt() * theta[k] * abs_w_k[i] * *sign_pi;
-                            println!("dev={}", dev);
                             Zip::indexed(abs_w.rows()).and(abs_d_p).for_each(
                                 |j, abs_w_j, abs_d_pj| {
                                     Zip::indexed(abs_w_j).and(theta).for_each(
@@ -386,7 +372,6 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
                         *da_pi = coef;
                     });
             });
-        println!("da={}", da);
 
         let da = einsum("i,ij->ij", &[&b, &da])
             .unwrap()
@@ -450,7 +435,6 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
             });
             *a_i = coef;
         });
-        println!("A={}", a);
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
         let theta_wd = theta.to_owned() * &wd;
         let b = theta_wd
@@ -468,10 +452,6 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let d = differences(x, xtrain);
-
-        println!("d={}", d);
-        println!("theta={}", theta);
-        println!("weights={}", weights);
 
         // correlation
         let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
@@ -491,13 +471,9 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
         let b = theta_wd
             .sum_axis(Axis(1))
             .mapv(|v| F::exp(-F::cast(5).sqrt() * v));
-        println!("A={}", a);
-        println!("B={}", b);
-        // correlation dr/dx(xnorm)
-        // (x - mean).weights
-        // (1, nx).(nx, ncomp) -> shape(1 x ncomp)   (ncomp=nx when no PLS)
+
         let sign_d = d.mapv(|v| v.signum());
-        println!("sign = {}", sign_d);
+
         let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         let abs_d = d.mapv(|v| v.abs());
         let abs_w = weights.mapv(|v| v.abs());
@@ -514,7 +490,6 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
                         *db_ij = *ai * coef * *sij * *bi;
                     });
             });
-        println!("db={}", db);
 
         let mut da = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         Zip::from(da.rows_mut())
@@ -532,7 +507,6 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
                                     * abs_w_k[i].powf(F::cast(2.))
                                     * *sign_pi
                                     * *abs_d_pi;
-                            println!("dev={}", dev);
                             Zip::indexed(abs_w.rows()).and(abs_d_p).for_each(
                                 |j, abs_w_j, abs_d_pj| {
                                     Zip::indexed(abs_w_j).and(theta).for_each(
@@ -553,12 +527,10 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
                     },
                 );
             });
-        println!("da={}", da);
         let da = einsum("i,ij->ij", &[&b, &da])
             .unwrap()
             .into_shape((xtrain.nrows(), xtrain.ncols()))
             .unwrap();
-        println!("da={}", db.to_owned() + &da);
         db.to_owned() + da
     }
 }
@@ -648,10 +620,6 @@ mod tests {
                     ];
                     let xtrain = NormalizedMatrix::new(&xt);
                     let xnorm = (x.to_owned() - &xtrain.mean) / &xtrain.std;
-                    println!("xt mean={}", xtrain.mean);
-                    println!("xt std={}", xtrain.std);
-                    println!("xt ={}", xtrain.data);
-                    println!("xnorm={}", xnorm);
                     let (theta, weights) = if $kpls {
                         (array![0.31059002],
                             array![[-0.02701716],
@@ -669,10 +637,10 @@ mod tests {
                     let e = 1e-5;
                     let x = array![
                         [xa, xb],
-                        // [xa + e, xb],
-                        // [xa - e, xb],
-                        // [xa, xb + e],
-                        // [xa, xb - e]
+                        [xa + e, xb],
+                        [xa - e, xb],
+                        [xa, xb + e],
+                        [xa, xb - e]
                     ];
 
                     let mut rxx = Array2::zeros((xtrain.data.nrows(), x.nrows()));
@@ -683,10 +651,10 @@ mod tests {
                             let d = differences(&xnorm, &xtrain.data);
                             rxxi.assign(&(corr.apply( &d, &theta, &weights).column(0)));
                         });
-                    // let fdiffa = (rxx.column(1).to_owned() - rxx.column(2)).mapv(|v| v / (2. * e));
-                    // assert_abs_diff_eq!(fdiffa, jac.column(0), epsilon=1e-6);
-                    // let fdiffb = (rxx.column(3).to_owned() - rxx.column(4)).mapv(|v| v / (2. * e));
-                    // assert_abs_diff_eq!(fdiffb, jac.column(1), epsilon=1e-6);
+                    let fdiffa = (rxx.column(1).to_owned() - rxx.column(2)).mapv(|v| v / (2. * e));
+                    assert_abs_diff_eq!(fdiffa, jac.column(0), epsilon=1e-6);
+                    let fdiffb = (rxx.column(3).to_owned() - rxx.column(4)).mapv(|v| v / (2. * e));
+                    assert_abs_diff_eq!(fdiffb, jac.column(1), epsilon=1e-6);
                 }
             }
         };
