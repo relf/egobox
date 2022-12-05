@@ -628,6 +628,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(F::cast);
+        // println!("opt_theta={}", opt_theta);
         let rxx = self.corr().apply(&x_distances.d, opt_theta, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
@@ -1206,7 +1207,7 @@ mod tests {
     test_gp_derivatives!(Constant, Matern32, norm1, 10., 16);
     test_gp_derivatives!(Linear, Matern32, norm1, 10., 16);
     test_gp_derivatives!(Quadratic, Matern32, sphere, 10., 16);
-    test_gp_derivatives!(Constant, Matern52, sphere, 10., 16);
+    test_gp_derivatives!(Constant, Matern52, norm1, 10., 16);
     test_gp_derivatives!(Linear, Matern52, norm1, 10., 16);
     test_gp_derivatives!(Quadratic, Matern52, sphere, 10., 10);
 
@@ -1217,7 +1218,7 @@ mod tests {
 
                 #[test]
                 fn [<test_gp_variance_derivatives_ $regr:snake _ $corr:snake>]() {
-                    let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(10);
+                    let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).kind(LhsKind::Centered).sample(16);
                     let yt = [<$func>](&xt);
 
                     let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
@@ -1241,7 +1242,11 @@ mod tests {
                             [xa, xb + e],
                             [xa, xb - e]
                         ];
-                        let y_pred = gp.predict_variances(&x).unwrap();
+                        let y_pred = gp.predict_values(&x).unwrap();
+                        println!("value at [{},{}] = {}", xa, xb, y_pred);
+                        let y_deriv = gp.predict_derivatives(&x);
+                        println!("deriv at [{},{}] = {}", xa, xb, y_deriv);
+                            let y_pred = gp.predict_variances(&x).unwrap();
                         println!("variance at [{},{}] = {}", xa, xb, y_pred);
                         let y_deriv = gp.predict_variance_derivatives(&x);
                         println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
@@ -1316,7 +1321,7 @@ mod tests {
             println!("Check absolute error: should be < {}", atol);
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
         } else {
-            let rtol = 0.5;
+            let rtol = 1e-1;
             let rel_error = (y_deriv - fdiff).abs() / fdiff; // check relative
             println!("Check relative error: should be < {}", rtol);
             assert_abs_diff_eq!(rel_error, 0.0, epsilon = rtol);
