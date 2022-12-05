@@ -183,10 +183,20 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let wd = d.mapv(|v| v.abs()).dot(weights).mapv(|v| v.abs());
-        let theta_r = theta.to_owned().insert_axis(Axis(0));
-        let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
-        r.into_shape((d.nrows(), 1)).unwrap()
+        let mut r = Array2::zeros((d.nrows(), 1));
+        Zip::from(r.rows_mut())
+            .and(d.rows())
+            .for_each(|mut r_i, d_i| {
+                let mut coef = F::zero();
+                Zip::indexed(&d_i).for_each(|j, d_ij| {
+                    let mut coef_b = F::zero();
+                    Zip::indexed(weights.columns())
+                        .for_each(|l, w_l| coef_b += theta[l] * w_l[j].abs());
+                    coef += coef_b * d_ij.abs();
+                });
+                r_i[0] = F::exp(-coef)
+            });
+        r
     }
 
     fn jac(
@@ -199,22 +209,40 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         let d = differences(x, xtrain);
 
         // correlation r
-        let wd = (d.mapv(|v| v.abs()).dot(weights)).mapv(|v| v.abs());
-        let theta_r = theta.to_owned().insert_axis(Axis(0));
-        let r = (theta_r * wd).sum_axis(Axis(1)).mapv(|v| F::exp(-v));
+        let mut r = Array2::zeros((d.nrows(), 1));
+        Zip::from(r.rows_mut())
+            .and(d.rows())
+            .for_each(|mut r_i, d_i| {
+                let mut coef = F::zero();
+                Zip::indexed(&d_i).for_each(|j, d_ij| {
+                    let mut coef_b = F::zero();
+                    Zip::indexed(weights.columns())
+                        .for_each(|l, w_l| coef_b += theta[l] * w_l[j].abs());
+                    coef += coef_b * d_ij.abs();
+                });
+                r_i[0] = (-coef).exp()
+            });
 
-        // correlation dr/dx(xnorm)
-        // (x - mean).weights
-        // (1, nx).(nx, ncomp) -> shape(1 x ncomp)   (ncomp=nx when no PLS)
-        let sign_wd = (d.dot(weights)).mapv(|v| v.signum());
+        let sign_d = d.mapv(|v| v.signum());
 
-        // - (theta * wd)
-        // (ncomp,) * (nx, ncomp)
-        let dr = -einsum("j,ij->ij", &[theta, &sign_wd]).unwrap();
-        einsum("i,ij->ij", &[&r, &dr])
-            .unwrap()
-            .into_shape((xtrain.nrows(), weights.ncols()))
-            .unwrap()
+        println!("r={}", r);
+        let mut dr = Array2::zeros((d.nrows(), d.ncols()));
+        Zip::from(dr.rows_mut())
+            .and(sign_d.rows())
+            .and(r.rows())
+            .for_each(|mut dr_i, s_i, r_i| {
+                Zip::indexed(&mut dr_i)
+                    .and(&s_i)
+                    .for_each(|j, dr_ij, s_ij| {
+                        let mut coef = F::zero();
+                        Zip::indexed(weights.columns())
+                            .for_each(|l, w_l| coef += theta[l] * w_l[j].abs());
+                        coef *= F::cast(-1.);
+                        *dr_ij = coef * *s_ij * r_i[0]
+                    });
+            });
+        println!("dr={}", dr);
+        dr
     }
 }
 
@@ -625,7 +653,7 @@ mod tests {
                     println!("xt ={}", xtrain.data);
                     println!("xnorm={}", xnorm);
                     let (theta, weights) = if $kpls {
-                        (array![1.43301257],
+                        (array![0.31059002],
                             array![[-0.02701716],
                             [-0.99963497]])
                     } else {
