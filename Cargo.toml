@@ -30,12 +30,12 @@ egobox-gp = { version = "0.6.0", path="./gp" }
 egobox-moe = { version = "0.6.0", path="./moe", features=["persistent"] }
 egobox-ego = { version = "0.6.0", path="./ego", features=["persistent"] }
 
-linfa = { version = "0.6.0", default-features = false }
+linfa = { version = "0.6.1", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx"]}
 ndarray-rand = "0.14"
 numpy = "0.16.2"
-anyhow = "=1.0.48"
+anyhow = "1"
 
 rand_isaac = "0.3"
 libm = "0.2"
