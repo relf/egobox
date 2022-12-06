@@ -794,7 +794,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
 
     /// True whether surrogate gradient computation implemented
     fn is_grad_impl_available(&self) -> bool {
-        self.correlation_spec == CorrelationSpec::SQUAREDEXPONENTIAL
+        true
     }
 
     fn find_best_point(
