@@ -1082,7 +1082,7 @@ mod tests {
                     "Test predicted derivatives at {}: drv {}, true df {}, fdiff {}",
                     xtest, drv, df, fdiff
                 );
-                assert_abs_diff_eq!(err, 0.0, epsilon = 1e-1);
+                assert_abs_diff_eq!(err, 0.0, epsilon = 2e-1);
             }
         }
     }
