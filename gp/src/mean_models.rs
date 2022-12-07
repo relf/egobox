@@ -1,6 +1,6 @@
 //! A module for regression models to model the mean term of the GP model.
 //! In practice small degree (<= 2) polynomial regression models are used,
-//! as the gaussian process is then fitted using the [correlated error term](struct.CorrelationModel).
+//! as the gaussian process is then fitted using the correlated error term.
 //!
 //! The following models are implemented:
 //! * constant,
