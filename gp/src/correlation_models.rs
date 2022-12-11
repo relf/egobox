@@ -70,7 +70,7 @@ impl TryFrom<String> for SquaredExponentialCorr {
 
 impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
     ///   h    d
-    /// prod prod exp( - theta_l * |d_i . weight_i|^2 )
+    /// prod prod exp( - theta_l * |weight_i_l * d_i|^2 )
     ///  l=1  i=1
     fn apply(
         &self,
@@ -78,18 +78,9 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let mut r = Array2::zeros((d.nrows(), 1));
-        Zip::from(r.rows_mut())
-            .and(d.rows())
-            .for_each(|mut r_i, d_i| {
-                let mut coef = F::zero();
-                Zip::indexed(&d_i).for_each(|j, d_ij| {
-                    Zip::indexed(weights.columns())
-                        .for_each(|l, w_l| coef += theta[l] * (w_l[j] * *d_ij).powf(F::cast(2.)))
-                });
-                r_i[0] = F::exp(-coef)
-            });
-        r
+        let theta_w = (theta * weights.mapv(|v| v.powf(F::cast(2.)))).sum_axis(Axis(1));
+        let r = d.mapv(|v| v.powf(F::cast(2.))).dot(&theta_w);
+        r.mapv(|v| F::exp(-v)).into_shape((d.nrows(), 1)).unwrap()
     }
 
     fn jac(
@@ -102,22 +93,11 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         let d = differences(x, xtrain);
         let r = self.apply(&d, theta, weights);
 
-        let mut dr = Array2::zeros((d.nrows(), d.ncols()));
-        Zip::from(dr.rows_mut())
-            .and(d.rows())
-            .and(r.rows())
-            .for_each(|mut dr_i, d_i, r_i| {
-                Zip::indexed(&mut dr_i)
-                    .and(&d_i)
-                    .for_each(|j, dr_ij, d_ij| {
-                        let mut coef = F::zero();
-                        Zip::indexed(weights.columns())
-                            .for_each(|l, w_l| coef += theta[l] * (w_l[j]).powf(F::cast(2.)));
-                        coef *= F::cast(-2.);
-                        *dr_ij = coef * *d_ij * r_i[0]
-                    });
-            });
-        dr
+        let dtheta_w = (theta * weights.mapv(|v| v.powf(F::cast(2))))
+            .sum_axis(Axis(1))
+            .mapv(|v| F::cast(-2.) * v);
+
+        d * &dtheta_w * &r
     }
 }
 
@@ -156,7 +136,7 @@ impl TryFrom<String> for AbsoluteExponentialCorr {
 
 impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
     ///   h    d
-    /// prod prod exp( - theta_l * |d_i . weight_i| )
+    /// prod prod exp( - theta_l * |weighl_i_l * d_i| )
     ///  l=1  i=1
     fn apply(
         &self,
@@ -164,20 +144,9 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let mut r = Array2::zeros((d.nrows(), 1));
-        Zip::from(r.rows_mut())
-            .and(d.rows())
-            .for_each(|mut r_i, d_i| {
-                let mut coef = F::zero();
-                Zip::indexed(&d_i).for_each(|j, d_ij| {
-                    let mut coef_b = F::zero();
-                    Zip::indexed(weights.columns())
-                        .for_each(|l, w_l| coef_b += theta[l] * w_l[j].abs());
-                    coef += coef_b * d_ij.abs();
-                });
-                r_i[0] = F::exp(-coef)
-            });
-        r
+        let theta_w = (theta * weights.mapv(|v| v.abs())).sum_axis(Axis(1));
+        let r = d.mapv(|v| v.abs()).dot(&theta_w);
+        r.mapv(|v| F::exp(-v)).into_shape((d.nrows(), 1)).unwrap()
     }
 
     fn jac(
@@ -191,22 +160,11 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         let r = self.apply(&d, theta, weights);
         let sign_d = d.mapv(|v| v.signum());
 
-        let mut dr = Array2::zeros((d.nrows(), d.ncols()));
-        Zip::from(dr.rows_mut())
-            .and(sign_d.rows())
-            .and(r.rows())
-            .for_each(|mut dr_i, s_i, r_i| {
-                Zip::indexed(&mut dr_i)
-                    .and(&s_i)
-                    .for_each(|j, dr_ij, s_ij| {
-                        let mut coef = F::zero();
-                        Zip::indexed(weights.columns())
-                            .for_each(|l, w_l| coef += theta[l] * w_l[j].abs());
-                        coef *= F::cast(-1.);
-                        *dr_ij = coef * *s_ij * r_i[0]
-                    });
-            });
-        dr
+        let dtheta_w = sign_d
+            * (theta * weights.mapv(|v| v.abs()))
+                .sum_axis(Axis(1))
+                .mapv(|v| F::cast(-1.) * v);
+        &dtheta_w * &r
     }
 }
 
