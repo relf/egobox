@@ -340,9 +340,10 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // inv_kr = Rc^t^-1 . Rc^-1 . r(x, X) = R^-1 . r(x, X)
         let inv_kr = r_chol.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
 
-        // p1 = ((dr(x, X)/dx)^t . R^-1 . r(x, X))^t = ((R^-1 . r(x, X))^t . dr(x, X)/dx) = r(x, X)^t . R^-1 . dr(x, X)/dx
-        let p1 = dr.t().dot(&inv_kr).t().to_owned();
-        // p2 = ((R^-1 . r(x, X))^t . dr(x, X)/dx)^t = dr(x, X)/dx)^t . R^-1 . r(x, X)
+        // p1 = ((dr(x, X)/dx)^t . R^-1 . r(x, X))^t = ((R^-1 . r(x, X))^t . dr(x, X)/dx) = r(x, X)^t . R^-1 . dr(x, X)/dx = p2
+        // let p1 = dr.t().dot(&inv_kr).t().to_owned();
+
+        // p2 = ((R^-1 . r(x, X))^t . dr(x, X)/dx)^t = dr(x, X)/dx)^t . R^-1 . r(x, X) = p1
         let p2 = inv_kr.t().dot(&dr);
 
         let f_x = self.mean.apply(&xnorm).t().to_owned();
@@ -371,12 +372,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
 
         // p3 = (dA/dx . B^-1 . A^t)^t = A . B^-1 . dA/dx^t
-        let p3 = d_a.dot(&d_mat).t().to_owned();
+        // let p3 = d_a.dot(&d_mat).t().to_owned();
 
-        // p4 = (B^-1 . A)^t . dA/dx^t = A^t . B^-1 . dA/dx^t
+        // p4 = (B^-1 . A)^t . dA/dx^t = A^t . B^-1 . dA/dx^t = p3
         let p4 = d_mat.t().dot(&d_a.t());
 
-        let prime_t = (-p1 - p2 + p3 + p4).t().to_owned();
+        let two = F::cast(2.);
+        let prime_t = (-p2 + p4).mapv(|v| two * v).t().to_owned();
 
         let x_std = &self.xtrain.std;
         let dvar = sigma2 * prime_t / x_std;
@@ -414,7 +416,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .solve_triangular(UPLO::Upper, Diag::NonUnit, &rho1)
             .unwrap();
 
-        let p1 = dr.t().dot(&inv_kr).t().to_owned();
+        // let p1 = dr.t().dot(&inv_kr).t().to_owned();
 
         let p2 = inv_kr.t().dot(&dr);
 
@@ -451,9 +453,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let df = self.mean.jac(&xnorm.row(0)).with_lapack();
 
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
-        let p3 = d_a.dot(&d_mat).t().to_owned();
+        // let p3 = d_a.dot(&d_mat).t();
         let p4 = d_mat.t().dot(&d_a.t());
-        let prime_t = (-p1 - p2 + p3 + p4).t().to_owned().without_lapack();
+
+        let two = F::cast(2.);
+        let prime_t = (-p2 + p4).without_lapack().mapv(|v| two * v).t().to_owned();
 
         let x_std = &self.xtrain.std;
         let dvar = sigma2 * prime_t / x_std;
@@ -1201,7 +1205,7 @@ mod tests {
     test_gp_derivatives!(Constant, SquaredExponential, sphere, 10., 10);
     test_gp_derivatives!(Linear, SquaredExponential, sphere, 10., 10);
     test_gp_derivatives!(Quadratic, SquaredExponential, sphere, 10., 10);
-    test_gp_derivatives!(Constant, AbsoluteExponential, norm1, 10., 16);
+    test_gp_derivatives!(Constant, AbsoluteExponential, sphere, 10., 10);
     test_gp_derivatives!(Linear, AbsoluteExponential, norm1, 10., 16);
     test_gp_derivatives!(Quadratic, AbsoluteExponential, norm1, 10., 16);
     test_gp_derivatives!(Constant, Matern32, norm1, 10., 16);
@@ -1218,7 +1222,8 @@ mod tests {
 
                 #[test]
                 fn [<test_gp_variance_derivatives_ $regr:snake _ $corr:snake>]() {
-                    let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).kind(LhsKind::Centered).sample(16);
+                    let mut rng = Isaac64Rng::seed_from_u64(42);
+                    let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]]).with_rng(rng.clone()).sample($nt);
                     let yt = [<$func>](&xt);
 
                     let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
@@ -1228,12 +1233,11 @@ mod tests {
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fitting");
 
-                    let mut rng = Isaac64Rng::seed_from_u64(42);
                     for _ in 0..10 {
-                        let x = Array::random_using((2,), Uniform::new(-10., 10.), &mut rng);
+                        let x = Array::random_using((2,), Uniform::new(-$limit, $limit), &mut rng);
                         let xa: f64 = x[0];
                         let xb: f64 = x[1];
-                        let e = 1e-5;
+                        let e = 1e-4;
 
                         let x = array![
                             [xa, xb],
@@ -1242,6 +1246,7 @@ mod tests {
                             [xa, xb + e],
                             [xa, xb - e]
                         ];
+                        println!("****************************************");
                         let y_pred = gp.predict_values(&x).unwrap();
                         println!("value at [{},{}] = {}", xa, xb, y_pred);
                         let y_deriv = gp.predict_derivatives(&x);
@@ -1254,26 +1259,31 @@ mod tests {
                         let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
                         let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
 
-                        assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
-                        assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
+                        if "[<$corr>]" == "SquaredExponential" {
+                            assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
+                            assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
+                        } else {
+                            assert_abs_diff_eq!(y_deriv[[0, 0]], diff_g, epsilon=5e-1);
+                            assert_abs_diff_eq!(y_deriv[[1, 0]], diff_d, epsilon=5e-1);
+                        }
                     }
                 }
             }
         };
     }
 
-    // test_gp_variance_derivatives!(Constant, SquaredExponential, sphere, 10., 10);
-    // test_gp_variance_derivatives!(Linear, SquaredExponential, sphere, 10., 10);
-    // test_gp_variance_derivatives!(Quadratic, SquaredExponential, sphere, 10., 10);
-    // test_gp_variance_derivatives!(Constant, AbsoluteExponential, norm1, 10., 16);
-    // test_gp_variance_derivatives!(Linear, AbsoluteExponential, norm1, 10., 16);
-    // test_gp_variance_derivatives!(Quadratic, AbsoluteExponential, norm1, 10., 16);
-    // test_gp_variance_derivatives!(Constant, Matern32, norm1, 10., 16);
-    // test_gp_variance_derivatives!(Linear, Matern32, norm1, 10., 16);
-    // test_gp_variance_derivatives!(Quadratic, Matern32, sphere, 10., 10);
-    // test_gp_variance_derivatives!(Constant, Matern52, sphere, 10., 10);
-    // test_gp_variance_derivatives!(Linear, Matern52, norm1, 10., 16);
-    // test_gp_variance_derivatives!(Quadratic, Matern52, sphere, 10., 10);
+    test_gp_variance_derivatives!(Constant, SquaredExponential, sphere, 10., 100);
+    test_gp_variance_derivatives!(Linear, SquaredExponential, sphere, 10., 100);
+    test_gp_variance_derivatives!(Quadratic, SquaredExponential, sphere, 10., 100);
+    test_gp_variance_derivatives!(Constant, AbsoluteExponential, norm1, 10., 100);
+    test_gp_variance_derivatives!(Linear, AbsoluteExponential, norm1, 10., 100);
+    test_gp_variance_derivatives!(Quadratic, AbsoluteExponential, norm1, 10., 100);
+    test_gp_variance_derivatives!(Constant, Matern32, norm1, 10., 100);
+    test_gp_variance_derivatives!(Linear, Matern32, norm1, 10., 100);
+    test_gp_variance_derivatives!(Quadratic, Matern32, sphere, 10., 100);
+    test_gp_variance_derivatives!(Constant, Matern52, sphere, 10., 100);
+    test_gp_variance_derivatives!(Linear, Matern52, sphere, 10., 100);
+    test_gp_variance_derivatives!(Quadratic, Matern52, sphere, 10., 100);
 
     #[test]
     fn test_variance_derivatives() {
