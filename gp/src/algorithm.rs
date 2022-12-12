@@ -1167,8 +1167,8 @@ mod tests {
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fitting");
 
-                    let _x = Array::random_using((2,), Uniform::new(-$limit, $limit), &mut rng);
-                    let x = array![3., 5.];
+                    let x = Array::random_using((2,), Uniform::new(-$limit, $limit), &mut rng);
+                    //let x = array![3., 5.];
                     let xa: f64 = x[0];
                     let xb: f64 = x[1];
                     let e = 1e-5;
@@ -1228,8 +1228,8 @@ mod tests {
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fitting");
 
-                    for _ in 0..1 {
-                        let mut rng = Isaac64Rng::seed_from_u64(42);
+                    let mut rng = Isaac64Rng::seed_from_u64(42);
+                    for _ in 0..10 {
                         let x = Array::random_using((2,), Uniform::new(-10., 10.), &mut rng);
                         let xa: f64 = x[0];
                         let xb: f64 = x[1];

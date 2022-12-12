@@ -144,8 +144,9 @@ impl<R: Rng + SeedableRng + Clone> SurrogateBuilder for MoeParams<f64, R> {
 /// EGO optimization parameterization
 #[derive(Clone)]
 pub struct Egor<'a, O: GroupFunc, R: SeedableRng> {
-    /// Number of function evaluations allocated to find the optimum
-    /// Note: if the initial doe has to be evaluated, doe size should be substract.  
+    /// Number of function evaluations allocated to find the optimum (aka evaluation budget)
+    /// Note 1: if the initial doe has to be evaluated, doe size is taken into account in the avaluation budget.
+    /// Note 2: Number of iteration is deduced using the following formula (n_eval - initial doe to evaluate) / q_parallel  
     pub n_eval: usize,
     /// Number of starts for multistart approach used for hyperparameters optimization
     pub n_start: usize,
