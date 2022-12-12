@@ -69,9 +69,9 @@ impl TryFrom<String> for SquaredExponentialCorr {
 }
 
 impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
-    ///   h    d
-    /// prod prod exp( - theta_l * |weight_i_l * d_i|^2 )
-    ///  l=1  i=1
+    ///   d    h
+    /// prod prod exp( - theta_l * |weight_j_l * d_j|^2 )
+    ///  j=1  l=1
     fn apply(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -135,9 +135,9 @@ impl TryFrom<String> for AbsoluteExponentialCorr {
 }
 
 impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
-    ///   h    d
-    /// prod prod exp( - theta_l * |weighl_i_l * d_i| )
-    ///  l=1  i=1
+    ///   d    h
+    /// prod prod exp( - theta_l * |weight_j_l * d_j| )
+    ///  j=1  l=1
     fn apply(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -175,6 +175,7 @@ impl fmt::Display for AbsoluteExponentialCorr {
 }
 
 /// Matern 3/2 correlation model
+
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(
     feature = "serializable",
@@ -208,6 +209,7 @@ impl Matern32Corr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> (Array1<F>, Array1<F>) {
+        let sqrt3 = F::cast(3.).sqrt();
         let theta_w = theta * weights.mapv(|v| v.abs());
 
         let mut a = Array1::ones(d.nrows());
@@ -216,23 +218,20 @@ impl Matern32Corr {
                 .and(theta_w.rows())
                 .for_each(|d_ij, theta_w_j| {
                     *a_i *= theta_w_j
-                        .to_owned()
-                        .mapv(|v| F::one() + F::cast(3.).sqrt() * v * d_ij.abs())
+                        .mapv(|v| F::one() + sqrt3 * v * d_ij.abs())
                         .product();
                 });
         });
         let d_theta_w = d.mapv(|v| v.abs()).dot(&theta_w);
-        let b = d_theta_w
-            .sum_axis(Axis(1))
-            .mapv(|v| F::exp(-F::cast(3).sqrt() * v));
+        let b = d_theta_w.sum_axis(Axis(1)).mapv(|v| F::exp(-sqrt3 * v));
         (a, b)
     }
 }
 
 impl<F: Float> CorrelationModel<F> for Matern32Corr {
-    ///   h    d         
-    /// prod prod (1 + sqrt(3) * theta_l * |d_i . weight_i|) exp( - sqrt(3) * theta_l * |d_i . weight_i| )
-    ///  l=1  i=1
+    ///   d    h         
+    /// prod prod (1 + sqrt(3) * theta_l * |d_j . weight_j|) exp( - sqrt(3) * theta_l * |d_j . weight_j| )
+    ///  j=1  l=1
     fn apply(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -350,6 +349,8 @@ impl Matern52Corr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> (Array1<F>, Array1<F>) {
+        let sqrt5 = F::cast(5).sqrt();
+        let div5_3 = F::cast(5. / 3.);
         let theta_w = theta * weights.mapv(|v| v.abs());
 
         let mut a = Array1::ones(d.nrows());
@@ -358,28 +359,23 @@ impl Matern52Corr {
                 .and(theta_w.rows())
                 .for_each(|d_ij, theta_w_j| {
                     *a_i *= theta_w_j
-                        .to_owned()
                         .mapv(|v| {
-                            F::one()
-                                + F::cast(5.).sqrt() * v * d_ij.abs()
-                                + F::cast(5. / 3.) * (v * *d_ij).powf(F::cast(2))
+                            F::one() + sqrt5 * v * d_ij.abs() + div5_3 * (v * v * *d_ij * *d_ij)
                         })
                         .product();
                 });
         });
 
         let d_theta_w = d.mapv(|v| v.abs()).dot(&theta_w);
-        let b = d_theta_w
-            .sum_axis(Axis(1))
-            .mapv(|v| F::exp(-F::cast(5).sqrt() * v));
+        let b = d_theta_w.sum_axis(Axis(1)).mapv(|v| F::exp(-sqrt5 * v));
         (a, b)
     }
 }
 
 impl<F: Float> CorrelationModel<F> for Matern52Corr {
-    ///   h    d         
-    /// prod prod (1 + sqrt(5) * theta_l * |d_i . weight_i| + (5./3.) * theta_l^2 * |d_i . weight_i|^2) exp( - sqrt(5) * theta_l * |d_i . weight_i| )
-    ///  l=1  i=1
+    ///   d    h         
+    /// prod prod (1 + sqrt(5) * theta_l * |d_j . weight_j| + (5./3.) * theta_l^2 * |d_j . weight_j|^2) exp( - sqrt(5) * theta_l * |d_j . weight_j| )
+    ///  j=1  l=1
     fn apply(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
