@@ -611,9 +611,6 @@ impl Moe {
                 let mut preds_drv = Array2::zeros((self.experts.len(), xi.len()));
                 Zip::indexed(preds_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&drvs[i]));
 
-                println!("deriv = {}", preds_drv);
-                println!("preds = {}", preds);
-
                 let mut term1 = Array2::zeros((self.experts.len(), xi.len()));
                 Zip::from(term1.rows_mut())
                     .and(&p)
@@ -825,7 +822,6 @@ mod tests {
     use egobox_doe::{Lhs, SamplingMethod};
     use ndarray::{array, Array, Array2, Zip};
     use ndarray_npy::write_npy;
-    use ndarray_rand::rand;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
