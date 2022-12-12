@@ -221,8 +221,8 @@ impl Matern32Corr {
                         .product();
                 });
         });
-        let theta_dw = d.mapv(|v| v.abs()).dot(&theta_w);
-        let b = theta_dw
+        let d_theta_w = d.mapv(|v| v.abs()).dot(&theta_w);
+        let b = d_theta_w
             .sum_axis(Axis(1))
             .mapv(|v| F::exp(-F::cast(3).sqrt() * v));
         (a, b)
@@ -350,20 +350,26 @@ impl Matern52Corr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> (Array1<F>, Array1<F>) {
-        let mut a = Array1::zeros(d.nrows());
+        let theta_w = theta * weights.mapv(|v| v.abs());
+
+        let mut a = Array1::ones(d.nrows());
         Zip::from(&mut a).and(d.rows()).for_each(|a_i, d_i| {
-            let mut coef = F::one();
-            Zip::indexed(weights.rows()).for_each(|j, w_j| {
-                Zip::indexed(theta).for_each(|l, theta_l| {
-                    let v = *theta_l * w_j[l].abs() * d_i[j].abs();
-                    coef *= F::one() + F::cast(5.).sqrt() * v + F::cast(5. / 3.) * v * v;
-                })
-            });
-            *a_i = coef;
+            Zip::from(&d_i)
+                .and(theta_w.rows())
+                .for_each(|d_ij, theta_w_j| {
+                    *a_i *= theta_w_j
+                        .to_owned()
+                        .mapv(|v| {
+                            F::one()
+                                + F::cast(5.).sqrt() * v * d_ij.abs()
+                                + F::cast(5. / 3.) * (v * *d_ij).powf(F::cast(2))
+                        })
+                        .product();
+                });
         });
-        let wd = d.mapv(|v| v.abs()).dot(&weights.mapv(|v| v.abs()));
-        let theta_wd = theta.to_owned() * &wd;
-        let b = theta_wd
+
+        let d_theta_w = d.mapv(|v| v.abs()).dot(&theta_w);
+        let b = d_theta_w
             .sum_axis(Axis(1))
             .mapv(|v| F::exp(-F::cast(5).sqrt() * v));
         (a, b)
