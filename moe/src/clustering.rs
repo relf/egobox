@@ -330,6 +330,7 @@ mod tests {
     use crate::algorithm::Moe;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
+    use env_logger::{Builder, Env};
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
     use ndarray::{array, Array1, Array2, Axis, Zip};
@@ -393,8 +394,12 @@ mod tests {
 
     #[test]
     fn test_find_best_cluster_nb_2d() {
-        let doe = Lhs::new(&array![[-1., 1.], [-1., 1.]]);
-        let xtrain = doe.sample(200);
+        let env = Env::new().filter_or("EGOBOX_LOG", "info");
+        let mut builder = Builder::from_env(env);
+        let builder = builder.target(env_logger::Target::Stdout);
+        builder.try_init().ok();
+        let doe = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]);
+        let xtrain = doe.sample(100);
         let ytrain = l1norm(&xtrain);
         let rng = Isaac64Rng::seed_from_u64(42);
         let (n_clusters, recomb) = find_best_number_of_clusters(
@@ -402,7 +407,7 @@ mod tests {
             &ytrain,
             5,
             None,
-            RegressionSpec::ALL,
+            RegressionSpec::LINEAR,
             CorrelationSpec::ALL,
             rng,
         );
@@ -412,10 +417,12 @@ mod tests {
         let moe = Moe::params()
             .n_clusters(n_clusters)
             .recombination(recomb)
+            .regression_spec(RegressionSpec::LINEAR)
+            .correlation_spec(CorrelationSpec::ALL)
             .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();
         let ypreds = moe.predict_values(&xvalid).expect("moe not fitted");
         debug!("{:?}", concatenate![Axis(1), ypreds, yvalid]);
-        assert_abs_diff_eq!(&ypreds, &yvalid, epsilon = 1e-2);
+        assert_abs_diff_eq!(&ypreds, &yvalid, epsilon = 1e-6);
     }
 }
