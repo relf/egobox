@@ -347,7 +347,7 @@ mod tests {
     use ndarray_linalg::Norm;
     use ndarray_npy::write_npy;
     use ndarray_rand::rand::SeedableRng;
-    use rand_isaac::Isaac64Rng;
+    use rand_xoshiro::Xoshiro256Plus;
 
     fn l1norm(x: &Array2<f64>) -> Array2<f64> {
         x.map_axis(Axis(1), |x| x.norm_l1()).insert_axis(Axis(1))
@@ -369,14 +369,14 @@ mod tests {
 
     #[test]
     fn test_find_best_cluster_nb_1d() {
-        let rng = Isaac64Rng::seed_from_u64(42);
+        let rng = Xoshiro256Plus::seed_from_u64(42);
         let doe = Lhs::new(&array![[0., 1.]]).with_rng(rng);
         //write_npy("doe.npy", &doe);
         let xtrain = doe.sample(50);
         //write_npy("xtrain.npy", &xtrain);
         let ytrain = function_test_1d(&xtrain);
         //write_npy("ytrain.npy", &ytrain);
-        let rng = Isaac64Rng::seed_from_u64(42);
+        let rng = Xoshiro256Plus::seed_from_u64(42);
         let (nb_clusters, recombination) = find_best_number_of_clusters(
             &xtrain,
             &ytrain,
@@ -410,7 +410,7 @@ mod tests {
         let doe = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]);
         let xtrain = doe.sample(100);
         let ytrain = l1norm(&xtrain);
-        let rng = Isaac64Rng::seed_from_u64(42);
+        let rng = Xoshiro256Plus::seed_from_u64(42);
         let (n_clusters, recomb) = find_best_number_of_clusters(
             &xtrain,
             &ytrain,

@@ -11,7 +11,7 @@ use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
 use ndarray_rand::rand::{Rng, SeedableRng};
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 use std::fmt::Display;
 
 #[cfg(feature = "persistent")]
@@ -112,8 +112,8 @@ pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float> Default for MoeValidParams<F, Isaac64Rng> {
-    fn default() -> MoeValidParams<F, Isaac64Rng> {
+impl<F: Float> Default for MoeValidParams<F, Xoshiro256Plus> {
+    fn default() -> MoeValidParams<F, Xoshiro256Plus> {
         MoeValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
@@ -122,7 +122,7 @@ impl<F: Float> Default for MoeValidParams<F, Isaac64Rng> {
             kpls_dim: None,
             gmm: None,
             gmx: None,
-            rng: Isaac64Rng::from_entropy(),
+            rng: Xoshiro256Plus::from_entropy(),
         }
     }
 }
@@ -174,13 +174,13 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
 #[derive(Clone)]
 pub struct MoeParams<F: Float, R: Rng + Clone>(MoeValidParams<F, R>);
 
-impl<F: Float> Default for MoeParams<F, Isaac64Rng> {
-    fn default() -> MoeParams<F, Isaac64Rng> {
+impl<F: Float> Default for MoeParams<F, Xoshiro256Plus> {
+    fn default() -> MoeParams<F, Xoshiro256Plus> {
         MoeParams(MoeValidParams::default())
     }
 }
 
-impl<F: Float> MoeParams<F, Isaac64Rng> {
+impl<F: Float> MoeParams<F, Xoshiro256Plus> {
     /// Constructor of Moe parameters with `n_clusters`.
     ///
     /// Default values are provided as follows:
@@ -190,8 +190,8 @@ impl<F: Float> MoeParams<F, Isaac64Rng> {
     /// * correlation_spec: `ALL`
     /// * kpls_dim: `None`
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> MoeParams<F, Isaac64Rng> {
-        Self::new_with_rng(Isaac64Rng::from_entropy())
+    pub fn new() -> MoeParams<F, Xoshiro256Plus> {
+        Self::new_with_rng(Xoshiro256Plus::from_entropy())
     }
 }
 

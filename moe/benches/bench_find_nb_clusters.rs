@@ -4,7 +4,7 @@ use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::*;
 use ndarray::{array, Array2, Zip};
 use ndarray_rand::rand::SeedableRng;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
     let mut y = Array2::zeros(x.dim());
@@ -21,12 +21,12 @@ fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let rng = Isaac64Rng::seed_from_u64(42);
+    let rng = Xoshiro256Plus::seed_from_u64(42);
     let doe = Lhs::new(&array![[0., 1.]]).with_rng(rng);
     let xtrain = doe.sample(50);
     let ytrain = function_test_1d(&xtrain);
 
-    let rng = Isaac64Rng::seed_from_u64(42);
+    let rng = Xoshiro256Plus::seed_from_u64(42);
     let mut group = c.benchmark_group("find_nb_clusters");
 
     group.sample_size(10);

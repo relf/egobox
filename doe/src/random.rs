@@ -2,7 +2,7 @@ use crate::SamplingMethod;
 use linfa::Float;
 use ndarray::{Array, Array2, ArrayBase, Data, Ix2};
 use ndarray_rand::{rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt};
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 /// The Random design consists in drawing samples randomly.
 pub struct Random<F: Float, R: Rng + Clone> {
@@ -13,7 +13,7 @@ pub struct Random<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float> Random<F, Isaac64Rng> {
+impl<F: Float> Random<F, Xoshiro256Plus> {
     /// Constructor given a design space given a (nx, 2) matrix \[\[lower bound, upper bound\], ...\]
     ///
     /// ```
@@ -23,7 +23,7 @@ impl<F: Float> Random<F, Isaac64Rng> {
     /// let doe = Random::new(&arr2(&[[0.0, 1.0], [5.0, 10.0]]));
     /// ```
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
-        Self::new_with_rng(xlimits, Isaac64Rng::from_entropy())
+        Self::new_with_rng(xlimits, Xoshiro256Plus::from_entropy())
     }
 }
 
@@ -84,7 +84,7 @@ mod tests {
             [8.02670850570956, 0.2310179777619814]
         ];
         let actual = Random::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(9);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }

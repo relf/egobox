@@ -13,7 +13,7 @@ use linfa::{traits::Fit, DatasetBase, ParamGuard};
 use ndarray::{s, Array, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 #[cfg(feature = "persistent")]
 use egobox_moe::MoeError;
@@ -194,7 +194,7 @@ pub fn cast_to_discrete_values(
 /// casting continuous LHS result from floats to discrete types.
 pub struct MixintSampling {
     /// The continuous LHS sampling method
-    lhs: Lhs<f64, Isaac64Rng>,
+    lhs: Lhs<f64, Xoshiro256Plus>,
     /// The input specifications
     xtypes: Vec<Xtype>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
@@ -240,7 +240,7 @@ impl SamplingMethod<f64> for MixintSampling {
 }
 
 /// Moe type for MixintEgor optimizer
-pub type MoeBuilder = MoeParams<f64, Isaac64Rng>;
+pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
 /// A decorator of Moe surrogate that takes into account Xtype specifications
 pub struct MixintMoeValidParams {
     /// The surrogate factory
@@ -556,7 +556,7 @@ impl MixintContext {
         let lhs = seed.map_or(
             Lhs::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)),
             |seed| {
-                let rng = Isaac64Rng::seed_from_u64(seed);
+                let rng = Xoshiro256Plus::seed_from_u64(seed);
                 Lhs::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)).with_rng(rng)
             },
         );

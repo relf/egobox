@@ -19,7 +19,7 @@ use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -307,9 +307,9 @@ impl Egor {
         };
 
         let rng = if let Some(seed) = self.seed {
-            Isaac64Rng::seed_from_u64(seed)
+            Xoshiro256Plus::seed_from_u64(seed)
         } else {
-            Isaac64Rng::from_entropy()
+            Xoshiro256Plus::from_entropy()
         };
 
         let expected = self.expected.map(|opt| egobox_ego::ApproxValue {

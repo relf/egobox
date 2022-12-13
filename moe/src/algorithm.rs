@@ -28,7 +28,7 @@ use ndarray::{
 use ndarray_linalg::Norm;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 #[cfg(feature = "persistent")]
 use serde::{Deserialize, Serialize};
@@ -454,7 +454,7 @@ impl ClusteredSurrogate for Moe {}
 
 impl Moe {
     /// Constructor of mixture of experts parameters
-    pub fn params() -> MoeParams<f64, Isaac64Rng> {
+    pub fn params() -> MoeParams<f64, Xoshiro256Plus> {
         MoeParams::new()
     }
 
@@ -825,7 +825,7 @@ mod tests {
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
-    use rand_isaac::Isaac64Rng;
+    use rand_xoshiro::Xoshiro256Plus;
 
     fn f_test_1d(x: &Array2<f64>) -> Array2<f64> {
         let mut y = Array2::zeros(x.dim());
@@ -857,7 +857,7 @@ mod tests {
 
     #[test]
     fn test_moe_hard() {
-        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let moe = Moe::params()
@@ -891,7 +891,7 @@ mod tests {
 
     #[test]
     fn test_moe_smooth() {
-        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
@@ -934,7 +934,7 @@ mod tests {
     #[test]
     fn test_moe_auto() {
         // env_logger::init();
-        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
@@ -957,7 +957,7 @@ mod tests {
 
     #[test]
     fn test_moe_variances_smooth() {
-        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let moe = Moe::params()
@@ -979,7 +979,7 @@ mod tests {
 
     #[test]
     fn test_find_best_expert() {
-        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((10, 1), Uniform::new(0., 1.), &mut rng);
         let yt = xt.mapv(|x| xsinx(&[x]));
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
@@ -990,7 +990,7 @@ mod tests {
 
     #[test]
     fn test_find_best_heaviside_factor() {
-        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let _moe = Moe::params()
@@ -1006,7 +1006,7 @@ mod tests {
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
 
-        let mut rng = Isaac64Rng::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
@@ -1029,7 +1029,7 @@ mod tests {
 
     #[test]
     fn test_moe_drv_hard() {
-        let rng = Isaac64Rng::seed_from_u64(0);
+        let rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Lhs::new(&array![[0., 1.]]).sample(100);
         let yt = f_test_1d(&xt);
 
@@ -1052,7 +1052,7 @@ mod tests {
         write_npy(format!("{}/preds_hard.npy", test_dir), &preds).expect("preds saved");
         write_npy(format!("{}/dpreds_hard.npy", test_dir), &dpreds).expect("dpreds saved");
 
-        let mut rng = Isaac64Rng::seed_from_u64(42);
+        let mut rng = Xoshiro256Plus::seed_from_u64(42);
         for _ in 0..20 {
             let x1: f64 = rng.gen_range(0.0..1.0);
 
@@ -1101,7 +1101,7 @@ mod tests {
 
     #[allow(clippy::excessive_precision)]
     fn test_variance_derivatives(f: fn(&Array2<f64>) -> Array2<f64>) {
-        let rng = Isaac64Rng::seed_from_u64(0);
+        let rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]).sample(100);
         let yt = f(&xt);
 
@@ -1115,7 +1115,7 @@ mod tests {
             .expect("MOE fitted");
 
         for _ in 0..20 {
-            let mut rng = Isaac64Rng::seed_from_u64(42);
+            let mut rng = Xoshiro256Plus::seed_from_u64(42);
             let x = Array::random_using((2,), Uniform::new(0., 1.), &mut rng);
             let xa: f64 = x[0];
             let xb: f64 = x[1];

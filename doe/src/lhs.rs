@@ -6,7 +6,7 @@ use ndarray_rand::{
     rand::seq::SliceRandom, rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt,
 };
 use ndarray_stats::QuantileExt;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 use std::cmp;
 
 /// Kinds of Latin Hypercube Design
@@ -39,7 +39,7 @@ pub struct Lhs<F: Float, R: Rng + Clone> {
 }
 
 /// LHS with default random generator
-impl<F: Float> Lhs<F, Isaac64Rng> {
+impl<F: Float> Lhs<F, Xoshiro256Plus> {
     /// Constructor given a design space given a (nx, 2) matrix \[\[lower bound, upper bound\], ...\]
     ///
     /// ```
@@ -49,7 +49,7 @@ impl<F: Float> Lhs<F, Isaac64Rng> {
     /// let doe = Lhs::new(&arr2(&[[0.0, 1.0], [5.0, 10.0]]));
     /// ```
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
-        Self::new_with_rng(xlimits, Isaac64Rng::from_entropy())
+        Self::new_with_rng(xlimits, Xoshiro256Plus::from_entropy())
     }
 }
 
@@ -302,7 +302,7 @@ mod tests {
             [7.411727120621207, 0.5524919394042328]
         ];
         let actual = Lhs::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
@@ -328,7 +328,7 @@ mod tests {
             [7.411727120621207, 0.1556358466576374]
         ];
         let actual = Lhs::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .kind(LhsKind::Classic)
             .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
@@ -339,7 +339,7 @@ mod tests {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![[5.5, 0.7], [6.5, 0.5], [8.5, 0.9], [9.5, 0.3], [7.5, 0.1]];
         let actual = Lhs::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(0))
+            .with_rng(Xoshiro256Plus::seed_from_u64(0))
             .kind(LhsKind::Centered)
             .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
@@ -350,7 +350,7 @@ mod tests {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![[9.5, 0.5], [8.5, 0.3], [5.5, 0.7], [6.5, 0.1], [7.5, 0.9]];
         let actual = Lhs::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(0))
+            .with_rng(Xoshiro256Plus::seed_from_u64(0))
             .kind(LhsKind::CenteredMaximin)
             .sample(5);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
@@ -374,7 +374,7 @@ mod tests {
             [0.6500000000000001, 0.6500000000000001]
         ];
         let p = 10.;
-        let mut rng = Isaac64Rng::seed_from_u64(42);
+        let mut rng = Xoshiro256Plus::seed_from_u64(42);
         let _res = Lhs::new(&xlimits)._phip_swap(&mut p0, k, phip, p, &mut rng);
     }
 }

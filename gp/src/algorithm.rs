@@ -19,7 +19,7 @@ use ndarray_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
@@ -622,7 +622,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         // [1e-6, 20] for multistart thanks to LHS method.
         let seeds = Lhs::new(&xlimits)
             .kind(egobox_doe::LhsKind::Maximin)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(N_START);
         Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
             .and(seeds.rows())
@@ -907,14 +907,14 @@ mod tests {
     use ndarray_rand::RandomExt;
     use ndarray_stats::DeviationExt;
     use paste::paste;
-    use rand_isaac::Isaac64Rng;
+    use rand_xoshiro::Xoshiro256Plus;
 
     #[test]
     fn test_constant_function() {
         let dim = 3;
         let lim = array![[0., 1.]];
         let xlimits = lim.broadcast((dim, 2)).unwrap();
-        let rng = Isaac64Rng::seed_from_u64(42);
+        let rng = Xoshiro256Plus::seed_from_u64(42);
         let nt = 5;
         let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let yt = Array::from_vec(vec![3.1; nt]).insert_axis(Axis(1));
@@ -926,7 +926,7 @@ mod tests {
         .kpls_dim(Some(1))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fit error");
-        let rng = Isaac64Rng::seed_from_u64(43);
+        let rng = Xoshiro256Plus::seed_from_u64(43);
         let xtest = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let ytest = gp.predict_values(&xtest).expect("prediction error");
         assert_abs_diff_eq!(Array::from_elem((nt, 1), 3.1), ytest, epsilon = 1e-6);
@@ -1025,7 +1025,7 @@ mod tests {
                 Err(_) => {
                     let lim = array![[-600., 600.]];
                     let xlimits = lim.broadcast((dim, 2)).unwrap();
-                    let rng = Isaac64Rng::seed_from_u64(42);
+                    let rng = Xoshiro256Plus::seed_from_u64(42);
                     let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
                     write_npy(&xfilename, &xt).expect("cannot save xt");
                     xt
@@ -1072,7 +1072,7 @@ mod tests {
         let nt = 300;
         let lim = array![[-1., 1.]];
         let xlimits = lim.broadcast((dim, 2)).unwrap();
-        let rng = Isaac64Rng::seed_from_u64(42);
+        let rng = Xoshiro256Plus::seed_from_u64(42);
         let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let yt = tensor_product_exp(&xt);
 
@@ -1108,7 +1108,7 @@ mod tests {
         let nt = 200;
         let lim = array![[-1., 1.]];
         let xlimits = lim.broadcast((dim, 2)).unwrap();
-        let rng = Isaac64Rng::seed_from_u64(42);
+        let rng = Xoshiro256Plus::seed_from_u64(42);
         let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let yt = rosenb(&xt);
 
@@ -1157,7 +1157,7 @@ mod tests {
 
                 #[test]
                 fn [<test_gp_derivatives_ $regr:snake _ $corr:snake>]() {
-                    let mut rng = Isaac64Rng::seed_from_u64(42);
+                    let mut rng = Xoshiro256Plus::seed_from_u64(42);
                     let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]])
                     .kind(egobox_doe::LhsKind::CenteredMaximin)
                     .with_rng(rng.clone())
@@ -1222,7 +1222,7 @@ mod tests {
 
                 #[test]
                 fn [<test_gp_variance_derivatives_ $regr:snake _ $corr:snake>]() {
-                    let mut rng = Isaac64Rng::seed_from_u64(42);
+                    let mut rng = Xoshiro256Plus::seed_from_u64(42);
                     let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]]).with_rng(rng.clone()).sample($nt);
                     let yt = [<$func>](&xt);
 
@@ -1298,7 +1298,7 @@ mod tests {
         .expect("GP fitting");
 
         for _ in 0..20 {
-            let mut rng = Isaac64Rng::seed_from_u64(42);
+            let mut rng = Xoshiro256Plus::seed_from_u64(42);
             let x = Array::random_using((2,), Uniform::new(-10., 10.), &mut rng);
             let xa: f64 = x[0];
             let xb: f64 = x[1];
