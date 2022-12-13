@@ -23,7 +23,7 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
     /// `d`     : distances (nxd)
     /// `weight`: PLS weights (dxh)
     /// where d is the initial dimension and h (<d) is the reduced dimension when PLS is used (kpls_dim)
-    fn apply(
+    fn value(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -32,7 +32,7 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
 
     /// Compute jacobian matrix of `r(x, x')` at given `x` given a set of `xtrain` training samples,
     /// `theta` parameters, and PLS `weights`.
-    fn jac(
+    fn jacobian(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -72,7 +72,7 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
     ///   d    h
     /// prod prod exp( - theta_l * |weight_j_l * d_j|^2 )
     ///  j=1  l=1
-    fn apply(
+    fn value(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -83,7 +83,7 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         r.mapv(|v| F::exp(-v)).into_shape((d.nrows(), 1)).unwrap()
     }
 
-    fn jac(
+    fn jacobian(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -91,7 +91,7 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let d = differences(x, xtrain);
-        let r = self.apply(&d, theta, weights);
+        let r = self.value(&d, theta, weights);
 
         let dtheta_w = (theta * weights.mapv(|v| v.powf(F::cast(2))))
             .sum_axis(Axis(1))
@@ -138,7 +138,7 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
     ///   d    h
     /// prod prod exp( - theta_l * |weight_j_l * d_j| )
     ///  j=1  l=1
-    fn apply(
+    fn value(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -149,7 +149,7 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         r.mapv(|v| F::exp(-v)).into_shape((d.nrows(), 1)).unwrap()
     }
 
-    fn jac(
+    fn jacobian(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -157,7 +157,7 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let d = differences(x, xtrain);
-        let r = self.apply(&d, theta, weights);
+        let r = self.value(&d, theta, weights);
         let sign_d = d.mapv(|v| v.signum());
 
         let dtheta_w = sign_d
@@ -232,7 +232,7 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
     ///   d    h         
     /// prod prod (1 + sqrt(3) * theta_l * |d_j . weight_j|) exp( - sqrt(3) * theta_l * |d_j . weight_j| )
     ///  j=1  l=1
-    fn apply(
+    fn value(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -243,7 +243,7 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 
-    fn jac(
+    fn jacobian(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -375,7 +375,7 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
     ///   d    h         
     /// prod prod (1 + sqrt(5) * theta_l * |d_j . weight_j| + (5./3.) * theta_l^2 * |d_j . weight_j|^2) exp( - sqrt(5) * theta_l * |d_j . weight_j| )
     ///  j=1  l=1
-    fn apply(
+    fn value(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -386,7 +386,7 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
         r.into_shape((d.nrows(), 1)).unwrap()
     }
 
-    fn jac(
+    fn jacobian(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -471,7 +471,7 @@ mod tests {
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let dm = DistanceMatrix::new(&xt);
-        let res = SquaredExponentialCorr::default().apply(&dm.d, &arr1(&[0.1]), &array![[1.]]);
+        let res = SquaredExponentialCorr::default().value(&dm.d, &arr1(&[0.1]), &array![[1.]]);
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],
@@ -492,7 +492,7 @@ mod tests {
         let xt = array![[0., 1.], [2., 3.], [4., 5.]];
         let dm = DistanceMatrix::new(&xt);
         dbg!(&dm);
-        let res = SquaredExponentialCorr::default().apply(
+        let res = SquaredExponentialCorr::default().value(
             &dm.d,
             &arr1(&[1., 2.]),
             &array![[1., 0.], [0., 1.]],
@@ -507,7 +507,7 @@ mod tests {
         let dm = DistanceMatrix::new(&xt);
         dbg!(&dm);
         let res =
-            Matern32Corr::default().apply(&dm.d, &arr1(&[1., 2.]), &array![[1., 0.], [0., 1.]]);
+            Matern32Corr::default().value(&dm.d, &arr1(&[1., 2.]), &array![[1., 0.], [0., 1.]]);
         let expected = array![[1.08539595e-03], [1.10776401e-07], [1.08539595e-03]];
         assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }
@@ -548,7 +548,7 @@ mod tests {
                     };
 
                     let corr = [< $corr Corr >]::default();
-                    let jac = corr.jac(&xnorm, &xtrain.data, &theta, &weights) / &xtrain.std;
+                    let jac = corr.jacobian(&xnorm, &xtrain.data, &theta, &weights) / &xtrain.std;
 
                     let xa: f64 = x[0];
                     let xb: f64 = x[1];
@@ -567,7 +567,7 @@ mod tests {
                         .for_each(|mut rxxi, xi| {
                             let xnorm = (xi.to_owned() - &xtrain.mean) / &xtrain.std;
                             let d = differences(&xnorm, &xtrain.data);
-                            rxxi.assign(&(corr.apply( &d, &theta, &weights).column(0)));
+                            rxxi.assign(&(corr.value( &d, &theta, &weights).column(0)));
                         });
                     let fdiffa = (rxx.column(1).to_owned() - rxx.column(2)).mapv(|v| v / (2. * e));
                     assert_abs_diff_eq!(fdiffa, jac.column(0), epsilon=1e-6);
@@ -592,7 +592,7 @@ mod tests {
         let xt = array![[0., 1.], [2., 3.], [4., 5.]];
         let dm = DistanceMatrix::new(&xt);
         let res =
-            Matern52Corr::default().apply(&dm.d, &arr1(&[1., 2.]), &array![[1., 0.], [0., 1.]]);
+            Matern52Corr::default().value(&dm.d, &arr1(&[1., 2.]), &array![[1., 0.], [0., 1.]]);
         let expected = array![[6.62391590e-04], [1.02117882e-08], [6.62391590e-04]];
         assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }
