@@ -611,9 +611,6 @@ impl Moe {
                 let mut preds_drv = Array2::zeros((self.experts.len(), xi.len()));
                 Zip::indexed(preds_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&drvs[i]));
 
-                println!("deriv = {}", preds_drv);
-                println!("preds = {}", preds);
-
                 let mut term1 = Array2::zeros((self.experts.len(), xi.len()));
                 Zip::from(term1.rows_mut())
                     .and(&p)
@@ -825,7 +822,6 @@ mod tests {
     use egobox_doe::{Lhs, SamplingMethod};
     use ndarray::{array, Array, Array2, Zip};
     use ndarray_npy::write_npy;
-    use ndarray_rand::rand;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
@@ -1056,8 +1052,9 @@ mod tests {
         write_npy(format!("{}/preds_hard.npy", test_dir), &preds).expect("preds saved");
         write_npy(format!("{}/dpreds_hard.npy", test_dir), &dpreds).expect("dpreds saved");
 
+        let mut rng = Isaac64Rng::seed_from_u64(42);
         for _ in 0..20 {
-            let x1: f64 = rand::random::<f64>();
+            let x1: f64 = rng.gen_range(0.0..1.0);
 
             if (0.39 < x1 && x1 < 0.41) || (0.79 < x1 && x1 < 0.81) {
                 // avoid testing hard on discoontinuity
