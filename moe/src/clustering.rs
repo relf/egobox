@@ -384,11 +384,12 @@ mod tests {
             None,
             RegressionSpec::ALL,
             CorrelationSpec::ALL,
-            rng,
+            rng.clone(),
         );
         let moe = Moe::params()
             .n_clusters(nb_clusters)
             .recombination(recombination)
+            .with_rng(rng)
             .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
