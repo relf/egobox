@@ -50,6 +50,7 @@ bitflags! {
     /// ```
     ///
     /// See [bitflags::bitflags]
+    #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
     pub struct RegressionSpec: u8 {
         /// Constant regression
         const CONSTANT = 0x01;
@@ -73,6 +74,7 @@ bitflags! {
     /// ```
     ///
     /// See [bitflags::bitflags]
+    #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
     pub struct CorrelationSpec: u8 {
         /// Squared exponential correlation model
         const SQUAREDEXPONENTIAL = 0x01;
