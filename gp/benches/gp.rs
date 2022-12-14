@@ -7,7 +7,7 @@ use linfa::prelude::{Dataset, Fit};
 use ndarray::{array, Array1, Zip};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 fn criterion_gp(c: &mut Criterion) {
     let dims = vec![5, 10, 20, 60];
@@ -31,7 +31,7 @@ fn criterion_gp(c: &mut Criterion) {
             Err(_) => {
                 let lim = array![[-600., 600.]];
                 let xlimits = lim.broadcast((dim, 2)).unwrap();
-                let rng = Isaac64Rng::seed_from_u64(42);
+                let rng = Xoshiro256Plus::seed_from_u64(42);
                 let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
                 write_npy(&xfilename, &xt).expect("cannot save xt");
                 xt

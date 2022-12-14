@@ -4,7 +4,7 @@
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! # use egobox_doe::{Lhs, SamplingMethod};
 //! # use egobox_ego::{ApproxValue, Egor, InfillStrategy, InfillOptimizer};
-//! # use rand_isaac::Isaac64Rng;
+//! # use rand_xoshiro::Xoshiro256Plus;
 //! # use ndarray_rand::rand::SeedableRng;
 //! use argmin_testfunctions::rosenbrock;
 //!
@@ -43,7 +43,7 @@
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! # use egobox_doe::{Lhs, SamplingMethod};
 //! # use egobox_ego::{ApproxValue, Egor, InfillStrategy, InfillOptimizer};
-//! # use rand_isaac::Isaac64Rng;
+//! # use rand_xoshiro::Xoshiro256Plus;
 //! # use ndarray_rand::rand::SeedableRng;
 //!
 //! // Function G24: 1 global optimum y_opt = -5.5080 at x_opt =(2.3295, 3.1785)
@@ -111,7 +111,7 @@ use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use nlopt::*;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -198,20 +198,23 @@ pub struct Egor<'a, O: GroupFunc, R: SeedableRng> {
     /// The function under optimization f(x) = [objective, cstr1, ..., cstrn], (n_cstr+1 size)
     pub obj: O,
     /// A random generator used to get reproductible results.
-    /// For instance: Isaac64Rng::from_u64_seed(42) for reproducibility
+    /// For instance: Xoshiro256Plus::from_u64_seed(42) for reproducibility
     pub rng: R,
     /// Shared atomic boolean to allow iteration loop interruption
     interruptor: Arc<std::sync::atomic::AtomicBool>,
 }
 
-impl<'a, O: GroupFunc> Egor<'a, O, Isaac64Rng> {
+impl<'a, O: GroupFunc> Egor<'a, O, Xoshiro256Plus> {
     /// Constructor of the optimization of the function `f`
     ///
     /// The function `f` shoud return an objective but also constraint values if any.
     /// Design space is specified by the 2D array `xlimits` which is `[nx, 2]`-shaped and
     /// constains lower and upper bounds of `x` components.
-    pub fn new(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Egor<'a, O, Isaac64Rng> {
-        Self::new_with_rng(f, xlimits, Isaac64Rng::from_entropy())
+    pub fn new(
+        f: O,
+        xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Egor<'a, O, Xoshiro256Plus> {
+        Self::new_with_rng(f, xlimits, Xoshiro256Plus::from_entropy())
     }
 }
 
@@ -659,7 +662,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         }
     }
 
-    fn make_default_builder(&self) -> egobox_moe::MoeParams<f64, rand_isaac::Isaac64Rng> {
+    fn make_default_builder(&self) -> egobox_moe::MoeParams<f64, rand_xoshiro::Xoshiro256Plus> {
         let moe = Moe::params()
             .kpls_dim(self.kpls_dim)
             .regression_spec(self.regression_spec)
@@ -1148,7 +1151,7 @@ mod tests {
     fn test_xsinx_with_hotstart() {
         let xlimits = array![[0.0, 25.0]];
         let doe = Lhs::new(&xlimits).sample(10);
-        let res = Egor::new_with_rng(xsinx, &xlimits, Isaac64Rng::seed_from_u64(42))
+        let res = Egor::new_with_rng(xsinx, &xlimits, Xoshiro256Plus::seed_from_u64(42))
             .n_eval(15)
             .doe(Some(doe))
             .outdir(Some("target/tests".to_string()))
@@ -1157,12 +1160,16 @@ mod tests {
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
 
-        let res = Egor::new_with_rng(xsinx, &array![[0.0, 25.0]], Isaac64Rng::seed_from_u64(41))
-            .n_eval(5)
-            .outdir(Some("target/tests".to_string()))
-            .hot_start(true)
-            .minimize()
-            .expect("Minimize failure");
+        let res = Egor::new_with_rng(
+            xsinx,
+            &array![[0.0, 25.0]],
+            Xoshiro256Plus::seed_from_u64(41),
+        )
+        .n_eval(5)
+        .outdir(Some("target/tests".to_string()))
+        .hot_start(true)
+        .minimize()
+        .expect("Minimize failure");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
@@ -1204,10 +1211,10 @@ mod tests {
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
         let doe = Lhs::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
         let res = Egor::new(rosenb, &xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .doe(Some(doe))
             .n_eval(100)
             .regression_spec(RegressionSpec::ALL)
@@ -1231,10 +1238,10 @@ mod tests {
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
         let doe = Lhs::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
         let res = Egor::new(rosenb, &xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .doe(Some(doe))
             .n_eval(100)
             .infill_strategy(InfillStrategy::EI)
@@ -1279,17 +1286,13 @@ mod tests {
     #[test]
     #[serial]
     fn test_egor_g24_basic() {
-        let x = array![[1., 2.]];
-        println!("{:?}", f_g24(&x.view()));
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
-            .sample(5);
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .sample(3);
         let res = Egor::new(f_g24, &xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .n_cstr(2)
-            .infill_strategy(InfillStrategy::EI)
-            .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .doe(Some(doe))
             .n_eval(20)
             .minimize()
@@ -1303,10 +1306,10 @@ mod tests {
     fn test_egor_g24_qei() {
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
         let res = Egor::new(f_g24, &xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
             .n_cstr(2)

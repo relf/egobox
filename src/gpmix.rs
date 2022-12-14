@@ -4,7 +4,7 @@ use linfa::{traits::Fit, Dataset};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 /// Gaussian processes mixture builder
 ///
@@ -106,9 +106,9 @@ impl GpMix {
             Recombination::Smooth => egobox_moe::Recombination::Smooth(None),
         };
         let rng = if let Some(seed) = self.seed {
-            Isaac64Rng::seed_from_u64(seed)
+            Xoshiro256Plus::seed_from_u64(seed)
         } else {
-            Isaac64Rng::from_entropy()
+            Xoshiro256Plus::from_entropy()
         };
         let moe = Moe::params()
             .n_clusters(self.n_clusters)

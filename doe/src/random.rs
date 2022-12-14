@@ -2,7 +2,7 @@ use crate::SamplingMethod;
 use linfa::Float;
 use ndarray::{Array, Array2, ArrayBase, Data, Ix2};
 use ndarray_rand::{rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt};
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 /// The Random design consists in drawing samples randomly.
 pub struct Random<F: Float, R: Rng + Clone> {
@@ -13,7 +13,7 @@ pub struct Random<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float> Random<F, Isaac64Rng> {
+impl<F: Float> Random<F, Xoshiro256Plus> {
     /// Constructor given a design space given a (nx, 2) matrix \[\[lower bound, upper bound\], ...\]
     ///
     /// ```
@@ -23,7 +23,7 @@ impl<F: Float> Random<F, Isaac64Rng> {
     /// let doe = Random::new(&arr2(&[[0.0, 1.0], [5.0, 10.0]]));
     /// ```
     pub fn new(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Self {
-        Self::new_with_rng(xlimits, Isaac64Rng::from_entropy())
+        Self::new_with_rng(xlimits, Xoshiro256Plus::from_entropy())
     }
 }
 
@@ -73,18 +73,18 @@ mod tests {
     fn test_random() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![
-            [7.35493967304704, 0.778179233288187],
-            [8.64019935221146, 0.24949100191426288],
-            [7.058635603106036, 0.7624596970211635],
-            [8.960428015214697, 0.68138502792473],
-            [8.356856694478974, 0.8515178964314147],
-            [6.559097971176039, 0.7398254113552798],
-            [5.452725391445714, 0.7288312058240056],
-            [5.2348966430803925, 0.5846614636962431],
-            [8.02670850570956, 0.2310179777619814]
+            [5.4287779764773045, 0.31041139572710486],
+            [5.31284890781607, 0.306461322653673],
+            [5.0002147942961885, 0.3030653113049855],
+            [5.438048037018622, 0.2270337387265695],
+            [9.31397733563812, 0.5232539513550647],
+            [6.0549173955055435, 0.8198009346946455],
+            [8.303444344933911, 0.8588635290560207],
+            [5.721154177502889, 0.3516459308028457],
+            [5.457086177138239, 0.11691074717669259]
         ];
         let actual = Random::new(&xlimits)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(9);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }

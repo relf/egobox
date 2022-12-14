@@ -2,7 +2,7 @@ use crate::types::ObjData;
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
@@ -23,14 +23,20 @@ pub(crate) struct LhsOptimizer<'a, R: Rng + Clone> {
     rng: R,
 }
 
-impl<'a> LhsOptimizer<'a, Isaac64Rng> {
+impl<'a> LhsOptimizer<'a, Xoshiro256Plus> {
     pub fn new(
         xlimits: &Array2<f64>,
         obj: &'a dyn ObjFn<ObjData<f64>>,
         cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
         obj_data: &ObjData<f64>,
-    ) -> LhsOptimizer<'a, Isaac64Rng> {
-        Self::new_with_rng(xlimits, obj, cstrs, obj_data, Isaac64Rng::from_entropy())
+    ) -> LhsOptimizer<'a, Xoshiro256Plus> {
+        Self::new_with_rng(
+            xlimits,
+            obj,
+            cstrs,
+            obj_data,
+            Xoshiro256Plus::from_entropy(),
+        )
     }
 }
 
@@ -167,7 +173,7 @@ mod tests {
         };
         let cstrs = vec![];
 
-        let xlimits = array![[-10., 10.]];
+        let xlimits = array![[-1., 1.]];
         let obj_data = ObjData {
             scale_obj: 1.,
             scale_cstr: array![],
@@ -175,7 +181,7 @@ mod tests {
         };
 
         let res = LhsOptimizer::new(&xlimits, &obj, cstrs, &obj_data)
-            .with_rng(Isaac64Rng::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .minimize();
         assert_abs_diff_eq!(res, array![0.], epsilon = 1e-1)
     }

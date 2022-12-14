@@ -13,7 +13,7 @@ Example:
 use egobox_doe::{FullFactorial, Lhs, LhsKind, Random, SamplingMethod};
 use ndarray::{arr2};
 use ndarray_rand::rand::SeedableRng;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 // Design space is defined as [5., 10.] x [0., 1.], samples are 2-dimensional.
 let xlimits = arr2(&[[5., 10.], [0., 1.]]);
@@ -22,7 +22,7 @@ let samples = Lhs::new(&xlimits).kind(LhsKind::Centered).sample(5);
 // or else with FullFactorial sampling
 let samples = FullFactorial::new(&xlimits).sample(5);
 // or else randomly with random generator for reproducibility
-let samples = Random::new(&xlimits).with_rng(Isaac64Rng::seed_from_u64(42)).sample(5);
+let samples = Random::new(&xlimits).with_rng(Xoshiro256Plus::seed_from_u64(42)).sample(5);
 ```
 
 This library contains three kinds of sampling methods:

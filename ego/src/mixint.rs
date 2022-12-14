@@ -13,7 +13,7 @@ use linfa::{traits::Fit, DatasetBase, ParamGuard};
 use ndarray::{s, Array, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 #[cfg(feature = "persistent")]
 use egobox_moe::MoeError;
@@ -194,7 +194,7 @@ pub fn cast_to_discrete_values(
 /// casting continuous LHS result from floats to discrete types.
 pub struct MixintSampling {
     /// The continuous LHS sampling method
-    lhs: Lhs<f64, Isaac64Rng>,
+    lhs: Lhs<f64, Xoshiro256Plus>,
     /// The input specifications
     xtypes: Vec<Xtype>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
@@ -240,7 +240,7 @@ impl SamplingMethod<f64> for MixintSampling {
 }
 
 /// Moe type for MixintEgor optimizer
-pub type MoeBuilder = MoeParams<f64, Isaac64Rng>;
+pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
 /// A decorator of Moe surrogate that takes into account Xtype specifications
 pub struct MixintMoeValidParams {
     /// The surrogate factory
@@ -556,7 +556,7 @@ impl MixintContext {
         let lhs = seed.map_or(
             Lhs::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)),
             |seed| {
-                let rng = Isaac64Rng::seed_from_u64(seed);
+                let rng = Xoshiro256Plus::seed_from_u64(seed);
                 Lhs::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)).with_rng(rng)
             },
         );
@@ -605,16 +605,16 @@ mod tests {
 
         let actual = mixi_lhs.sample(10);
         let expected = array![
-            [2.5506163720107278, 0.0, -9.0, 1.0],
-            [-5.6951210599033315, 2.0, 4.0, 1.0],
-            [8.00413910535675, 2.0, -5.0, 5.0],
-            [7.204222718105676, 1.0, -3.0, 5.0],
-            [4.937191086579546, 0.0, 4.0, 3.0],
-            [-3.486137077103643, 2.0, -2.0, 5.0],
-            [-6.013086019937296, 0.0, -8.0, 8.0],
-            [1.434149013952382, 0.0, 7.0, 5.0],
-            [-8.074280304556137, 1.0, 1.0, 3.0],
-            [-1.4935174827024618, 1.0, 9.0, 8.0],
+            [-1.4333973977708876, 2.0, 10.0, 5.0],
+            [-3.012628232178356, 2.0, 1.0, 8.0],
+            [5.021749742902275, 2.0, -7.0, 5.0],
+            [3.5274476356096063, 0.0, -2.0, 1.0],
+            [7.6267468405479235, 0.0, 3.0, 1.0],
+            [-4.8307414212425375, 1.0, -4.0, 3.0],
+            [-6.60764078463793, 0.0, -3.0, 8.0],
+            [-8.291614427265058, 0.0, 7.0, 3.0],
+            [8.455590615130134, 1.0, 6.0, 5.0],
+            [0.9688101123304538, 0.0, -9.0, 5.0]
         ];
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
@@ -649,7 +649,7 @@ mod tests {
         );
         println!("{:?}", yvar);
         assert_abs_diff_eq!(
-            array![[0.], [0.353005250269743], [0.], [0.], [0.]],
+            array![[0.], [0.35302771336218247], [0.], [0.], [0.]],
             yvar,
             epsilon = 1e-6
         );
@@ -678,7 +678,7 @@ mod tests {
         let mixi = MixintContext::new(&xtypes);
         let mixi_lhs = mixi.create_sampling(Some(0));
 
-        let n = mixi.get_unfolded_dim() * 5;
+        let n = mixi.get_unfolded_dim() * 10;
         let xt = mixi_lhs.sample(n);
         let yt = ftest(&xt);
 
@@ -697,6 +697,6 @@ mod tests {
             .predict_values(&xtest.view())
             .expect("Predict val fail");
         let ytrue = ftest(&xtest);
-        assert_abs_diff_eq!(ytrue, ytest, epsilon = 1.5);
+        assert_abs_diff_eq!(ytrue, ytest, epsilon = 2.0);
     }
 }

@@ -40,7 +40,7 @@
 //! use ndarray::{Array2, Array1, Zip, Axis};
 //! use egobox_moe::{Moe, Recombination};
 //! use ndarray_rand::{RandomExt, rand::SeedableRng, rand_distr::Uniform};
-//! use rand_isaac::Isaac64Rng;
+//! use rand_xoshiro::Xoshiro256Plus;
 //! use linfa::{traits::Fit, ParamGuard, Dataset};
 //!
 //! // One-dimensional test function with 3 modes
@@ -59,7 +59,7 @@
 //! }
 //!
 //! // Training data
-//! let mut rng = Isaac64Rng::from_entropy();
+//! let mut rng = Xoshiro256Plus::from_entropy();
 //! let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
 //! let yt = f3modes(&xt);
 //! let ds = Dataset::new(xt, yt);

@@ -4,7 +4,7 @@ use crate::mixint::*;
 use crate::types::*;
 use ndarray::{Array2, Axis};
 use ndarray_rand::rand::{Rng, SeedableRng};
-use rand_isaac::Isaac64Rng;
+use rand_xoshiro::Xoshiro256Plus;
 
 /// The MixintEgor structure wraps the [Egor] structure to implement
 /// continuous relaxation allowing to manage function optimization which
@@ -17,7 +17,7 @@ pub struct MixintEgor<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> {
     pub egor: Egor<'a, O, R>,
 }
 
-impl<'a, O: GroupFunc> MixintEgor<'a, O, Isaac64Rng> {
+impl<'a, O: GroupFunc> MixintEgor<'a, O, Xoshiro256Plus> {
     /// Constructor of MixintEgor optimizer.
     ///
     /// the function `f` under optimization accepts mixed integer variables
@@ -30,8 +30,8 @@ impl<'a, O: GroupFunc> MixintEgor<'a, O, Isaac64Rng> {
         f: O,
         mix_params: &'a MixintMoeValidParams,
         pre_proc: &'a MixintPreProcessor,
-    ) -> MixintEgor<'a, O, Isaac64Rng> {
-        Self::new_with_rng(f, mix_params, pre_proc, Isaac64Rng::from_entropy())
+    ) -> MixintEgor<'a, O, Xoshiro256Plus> {
+        Self::new_with_rng(f, mix_params, pre_proc, Xoshiro256Plus::from_entropy())
     }
 }
 
