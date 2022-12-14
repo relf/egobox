@@ -184,6 +184,7 @@ mod tests {
     #[serial]
     fn test_mixintegor_wb2() {
         let n_eval = 30;
+        let rng = rand_xoshiro::Xoshiro256Plus::seed_from_u64(42);
         let xtypes = vec![Xtype::Int(0, 25)];
 
         let surrogate_builder = MixintMoeParams::new(
@@ -195,7 +196,7 @@ mod tests {
         .check()
         .unwrap();
         let pre_proc = MixintPreProcessor::new(&xtypes);
-        let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &pre_proc);
+        let mut mixintegor = MixintEgor::new_with_rng(mixsinx, &surrogate_builder, &pre_proc, rng);
         mixintegor
             .egor
             .n_eval(n_eval)
