@@ -280,12 +280,12 @@ impl Egor {
     fn minimize(&self, py: Python, n_eval: usize) -> PyResult<OptimResult> {
         let fun = self.fun.to_object(py);
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
-            let gil = Python::acquire_gil();
-            let py = gil.python();
-            let args = (x.to_owned().into_pyarray(py),);
-            let res = fun.call1(py, args).unwrap();
-            let pyarray: &PyArray2<f64> = res.extract(py).unwrap();
-            pyarray.to_owned_array()
+            Python::with_gil(|py| {
+                let args = (x.to_owned().into_pyarray(py),);
+                let res = fun.call1(py, args).unwrap();
+                let pyarray: &PyArray2<f64> = res.extract(py).unwrap();
+                pyarray.to_owned_array()
+            })
         };
 
         let infill_strategy = match self.infill_strategy {

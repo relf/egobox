@@ -41,13 +41,12 @@ serde_json = { version = "1", optional = true }
 typetag = { version = "0.1", optional = true }
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.4.0"
 approx = "0.4"
 ndarray-npy = "0.8"
 ndarray-csv = "0.5"
 csv = "1.1"
-env_logger = "0.9"
-plotters = "0.2"
+plotters = "0.3"
 argmin_testfunctions = "0.1"
 rand_isaac = "0.3"
 
