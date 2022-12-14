@@ -10,9 +10,10 @@ keywords = ["machine-learning", "bayesian", "optimization"]
 categories = ["algorithms", "mathematics", "science"]
 
 [features]
-default = []
+default = ["serializable"]
 
-persistent = ["serde", "typetag", "egobox-moe/persistent", "serde_json"]
+persistent = ["serializable", "serde_json"]
+serializable = ["serde", "typetag", "egobox-moe/serializable"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
