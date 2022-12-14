@@ -1120,7 +1120,8 @@ mod tests {
         .fit(&Dataset::new(xt.to_owned(), yt))
         .expect("GP training");
 
-        let xv = Lhs::new(&xlimits).sample(500);
+        let rng2 = Xoshiro256Plus::seed_from_u64(41);
+        let xv = Lhs::new(&xlimits).with_rng(rng2).sample(300);
         let yv = rosenb(&xv);
 
         let ytest = gp.predict(&xv);
@@ -1251,7 +1252,7 @@ mod tests {
                         println!("value at [{},{}] = {}", xa, xb, y_pred);
                         let y_deriv = gp.predict_derivatives(&x);
                         println!("deriv at [{},{}] = {}", xa, xb, y_deriv);
-                            let y_pred = gp.predict_variances(&x).unwrap();
+                        let y_pred = gp.predict_variances(&x).unwrap();
                         println!("variance at [{},{}] = {}", xa, xb, y_pred);
                         let y_deriv = gp.predict_variance_derivatives(&x);
                         println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
@@ -1276,13 +1277,13 @@ mod tests {
     test_gp_variance_derivatives!(Linear, SquaredExponential, sphere, 10., 100);
     test_gp_variance_derivatives!(Quadratic, SquaredExponential, sphere, 10., 100);
     test_gp_variance_derivatives!(Constant, AbsoluteExponential, norm1, 10., 100);
-    test_gp_variance_derivatives!(Linear, AbsoluteExponential, norm1, 10., 100);
-    test_gp_variance_derivatives!(Quadratic, AbsoluteExponential, norm1, 10., 100);
-    test_gp_variance_derivatives!(Constant, Matern32, norm1, 10., 100);
-    test_gp_variance_derivatives!(Linear, Matern32, norm1, 10., 100);
+    test_gp_variance_derivatives!(Linear, AbsoluteExponential, norm1, 1., 50);
+    test_gp_variance_derivatives!(Quadratic, AbsoluteExponential, sphere, 10., 100);
+    test_gp_variance_derivatives!(Constant, Matern32, sphere, 10., 100);
+    test_gp_variance_derivatives!(Linear, Matern32, norm1, 1., 50);
     test_gp_variance_derivatives!(Quadratic, Matern32, sphere, 10., 100);
     test_gp_variance_derivatives!(Constant, Matern52, sphere, 10., 100);
-    test_gp_variance_derivatives!(Linear, Matern52, sphere, 10., 100);
+    test_gp_variance_derivatives!(Linear, Matern52, norm1, 1., 50);
     test_gp_variance_derivatives!(Quadratic, Matern52, sphere, 10., 100);
 
     #[test]
