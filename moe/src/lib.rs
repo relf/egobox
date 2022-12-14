@@ -29,10 +29,14 @@
 //!  
 //! # Features
 //!
+//! ## serializable
+//!
+//! The `serializable` feature enables serialization based on [serde crate](https://serde.rs/).
+//!
 //! ## persistent
 //!
 //! The `persistent` feature enables `save()`/`load()` methods for a MoE model
-//! to/from a json file using the [serde crate](https://serde.rs/).
+//! to/from a json file using the [serde and serde_json crates](https://serde.rs/).
 //!
 //! # Example
 //!

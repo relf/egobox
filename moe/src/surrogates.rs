@@ -4,13 +4,13 @@ use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array2, ArrayView2};
 use paste::paste;
 
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use crate::MoeError;
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use std::fs;
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use std::io::Write;
 /// A trait for surrogate parameters to build surrogate once fitted.
 pub trait SurrogateParams {
@@ -25,7 +25,7 @@ pub trait SurrogateParams {
 }
 
 /// A trait for a surrogate used as expert in the mixture.
-#[cfg_attr(feature = "persistent", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
 pub trait Surrogate: std::fmt::Display + Send {
     /// Predict output values at n points given as (n, xdim) matrix.
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
@@ -38,7 +38,7 @@ pub trait Surrogate: std::fmt::Display + Send {
     /// where each column is the partial derivatives wrt the ith component
     fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Save model in given file.
-    #[cfg(feature = "persistent")]
+    #[cfg(feature = "serializable")]
     fn save(&self, path: &str) -> Result<()>;
 }
 
@@ -89,12 +89,12 @@ macro_rules! declare_surrogate {
 
             #[doc = "GP surrogate with `" $regr "` regression model and `" $corr "` correlation model. \n\nSee [egobox_gp::GaussianProcess]"]
             #[derive(Clone, Debug)]
-            #[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+            #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
             pub struct [<Gp $regr $corr Surrogate>](
                 pub GaussianProcess<f64, [<$regr Mean>], [<$corr Corr>]>,
             );
 
-            #[cfg_attr(feature = "persistent", typetag::serde)]
+            #[cfg_attr(feature = "serializable", typetag::serde)]
             impl Surrogate for [<Gp $regr $corr Surrogate>] {
                 fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_values(x)?)
@@ -109,7 +109,7 @@ macro_rules! declare_surrogate {
                     Ok(self.0.predict_variance_derivatives(x))
                 }
 
-                #[cfg(feature = "persistent")]
+                #[cfg(feature = "serializable")]
                 fn save(&self, path: &str) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
                     let bytes = match serde_json::to_string(self as &dyn Surrogate) {
@@ -163,7 +163,7 @@ macro_rules! make_surrogate_params {
     };
 }
 
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 /// Load GP surrogate from given json file.
 pub fn load(path: &str) -> Result<Box<dyn Surrogate>> {
     let data = fs::read_to_string(path)?;
@@ -173,7 +173,7 @@ pub fn load(path: &str) -> Result<Box<dyn Surrogate>> {
 
 pub(crate) use make_surrogate_params;
 
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -14,12 +14,12 @@ use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
 use std::fmt::Display;
 
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 /// Enumeration of recombination modes handled by the mixture
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum Recombination<F: Float> {
     /// prediction is taken from the expert with highest responsability
     /// resulting in a model with discontinuities

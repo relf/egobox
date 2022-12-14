@@ -25,7 +25,7 @@ pub enum MoeError {
     #[error("Clustering error: {0}")]
     ClusteringError(String),
     /// When error during saving
-    #[cfg(feature = "persistent")]
+    #[cfg(feature = "serializable")]
     #[error("Save error: {0}")]
     SaveError(#[from] serde_json::Error),
     /// When error during loading

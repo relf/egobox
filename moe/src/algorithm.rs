@@ -30,11 +30,11 @@ use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use std::fs;
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use std::io::Write;
 
 macro_rules! check_allowed {
@@ -355,7 +355,7 @@ fn predict_values_smooth(
 }
 
 /// Mixture of gaussian process experts
-#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct Moe {
     /// The mode of recombination to get the output prediction from experts prediction
     recombination: Recombination<f64>,
@@ -404,7 +404,7 @@ impl Clustered for Moe {
     }
 }
 
-#[cfg_attr(feature = "persistent", typetag::serde)]
+#[cfg_attr(feature = "serializable", typetag::serde)]
 impl Surrogate for Moe {
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
