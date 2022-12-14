@@ -49,6 +49,7 @@ csv = "1.1"
 env_logger = "0.9"
 plotters = "0.2"
 argmin_testfunctions = "0.1"
+rand_isaac = "0.3"
 
 [[bench]]
 name = "bench_find_nb_clusters"

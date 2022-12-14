@@ -1286,17 +1286,13 @@ mod tests {
     #[test]
     #[serial]
     fn test_egor_g24_basic() {
-        let x = array![[1., 2.]];
-        println!("{:?}", f_g24(&x.view()));
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
-            .sample(5);
+            .sample(3);
         let res = Egor::new(f_g24, &xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .n_cstr(2)
-            .infill_strategy(InfillStrategy::EI)
-            .infill_optimizer(InfillOptimizer::Cobyla) // test passes also with WB2S and Slsqp
             .doe(Some(doe))
             .n_eval(20)
             .minimize()

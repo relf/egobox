@@ -173,7 +173,7 @@ mod tests {
         };
         let cstrs = vec![];
 
-        let xlimits = array![[-10., 10.]];
+        let xlimits = array![[-1., 1.]];
         let obj_data = ObjData {
             scale_obj: 1.,
             scale_cstr: array![],

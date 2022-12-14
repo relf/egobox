@@ -891,10 +891,11 @@ mod tests {
 
     #[test]
     fn test_moe_smooth() {
-        let mut rng = Xoshiro256Plus::seed_from_u64(0);
-        let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
+        let test_dir = "target/tests";
+        let mut rng = Xoshiro256Plus::seed_from_u64(42);
+        let xt = Array2::random_using((60, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
-        let ds = Dataset::new(xt, yt);
+        let ds = Dataset::new(xt.to_owned(), yt.to_owned());
         let moe = Moe::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(Some(0.5)))
@@ -903,14 +904,20 @@ mod tests {
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&x).expect("MOE prediction");
-        // Work for a kriging only atm
-        // let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
+        write_npy(format!("{}/xt.npy", test_dir), &xt).expect("x saved");
+        write_npy(format!("{}/yt.npy", test_dir), &yt).expect("preds saved");
+        write_npy(format!("{}/x_smooth.npy", test_dir), &x).expect("x saved");
+        write_npy(format!("{}/preds_smooth.npy", test_dir), &preds).expect("preds saved");
+
+        // Predict with smooth 0.5 which is not good
         println!("Smooth moe {}", moe);
         assert_abs_diff_eq!(
-            0.37579, // true value = 0.37*0.37 = 0.1369
+            0.2623, // test we are not good as the true value = 0.37*0.37 = 0.1369
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
+
+        // Predict with smooth adjusted automatically which is better
         let moe = Moe::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(None))
@@ -919,11 +926,11 @@ mod tests {
             .expect("MOE fitted");
         println!("Smooth moe {}", moe);
 
-        let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
-        write_npy(format!("{}/x_smooth.npy", test_dir), &x).expect("x saved");
-        write_npy(format!("{}/preds_smooth.npy", test_dir), &preds).expect("preds saved");
-        // write_npy(format!("{}/dpreds_smooth.npy", test_dir), &dpreds).expect("dpreds saved");
+        let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
+        let preds = moe.predict_values(&x).expect("MOE prediction");
+        write_npy(format!("{}/x_smooth2.npy", test_dir), &x).expect("x saved");
+        write_npy(format!("{}/preds_smooth2.npy", test_dir), &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
@@ -933,7 +940,6 @@ mod tests {
 
     #[test]
     fn test_moe_auto() {
-        // env_logger::init();
         let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
@@ -957,8 +963,8 @@ mod tests {
 
     #[test]
     fn test_moe_variances_smooth() {
-        let mut rng = Xoshiro256Plus::seed_from_u64(0);
-        let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
+        let mut rng = Xoshiro256Plus::seed_from_u64(42);
+        let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let moe = Moe::params()
             .n_clusters(3)
@@ -968,7 +974,8 @@ mod tests {
             .with_rng(rng.clone())
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
-        let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
+        // Smoke test: prediction is pretty good hence variance is very low
+        let x = Array1::linspace(0., 1., 20).insert_axis(Axis(1));
         let variances = moe.predict_variances(&x).expect("MOE variances prediction");
         assert_abs_diff_eq!(*variances.max().unwrap(), 0., epsilon = 1e-10);
     }
