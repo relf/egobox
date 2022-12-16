@@ -112,8 +112,8 @@ pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float> Default for MoeValidParams<F, Xoshiro256Plus> {
-    fn default() -> MoeValidParams<F, Xoshiro256Plus> {
+impl<F: Float, R: Rng + SeedableRng + Clone> Default for MoeValidParams<F, R> {
+    fn default() -> MoeValidParams<F, R> {
         MoeValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
@@ -122,7 +122,7 @@ impl<F: Float> Default for MoeValidParams<F, Xoshiro256Plus> {
             kpls_dim: None,
             gmm: None,
             gmx: None,
-            rng: Xoshiro256Plus::from_entropy(),
+            rng: R::from_entropy(),
         }
     }
 }

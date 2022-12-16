@@ -10,11 +10,11 @@ use rand_xoshiro::Xoshiro256Plus;
 /// continuous relaxation allowing to manage function optimization which
 /// takes discrete input variables.  
 #[derive(Clone)]
-pub struct MixintEgor<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> {
+pub struct MixintEgor<O: GroupFunc, R: Rng + SeedableRng + Clone> {
     /// Specifications of the x input variables being either coninuous (float) or discrete (integer)
     xtypes: Vec<Xtype>,
     /// The EGO algorithm. the object is accessible to be parametirizable using Egor API (see [`Egor`])
-    pub egor: Egor<'a, O, R>,
+    pub egor: Egor<O, R>,
 }
 
 impl<'a, O: GroupFunc> MixintEgor<'a, O, Xoshiro256Plus> {

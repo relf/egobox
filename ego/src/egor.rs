@@ -92,6 +92,7 @@
 //!
 use crate::errors::{EgoError, Result};
 use crate::lhs_optimizer::LhsOptimizer;
+use crate::mixint::*;
 use crate::sort_axis::*;
 use crate::types::*;
 use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale, grad_wbs2};
@@ -99,7 +100,7 @@ use crate::utils::{ei, wb2s};
 use crate::utils::{grad_ei, update_data};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
-use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec};
+use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, MoeParams, RegressionSpec};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
 use linfa::ParamGuard;
@@ -108,7 +109,7 @@ use ndarray::{
     concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
 };
 use ndarray_npy::{read_npy, write_npy};
-use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_xoshiro::Xoshiro256Plus;
@@ -118,7 +119,49 @@ use std::sync::Arc;
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
 
-impl<R: Rng + SeedableRng + Clone> SurrogateBuilder for MoeParams<f64, R> {
+fn extract_xlimits(xtypes: &[Xtype]) -> Array2<f64> {
+    let mut v: Vec<f64> = vec![];
+    xtypes
+        .iter()
+        .filter_map(|xtype| match xtype {
+            Xtype::Cont(lower, upper) => Some((lower, upper)),
+            _ => None,
+        })
+        .for_each(|(l, u)| v.extend_from_slice(&[*l, *u]));
+    Array::from_shape_vec((v.len() / 2, 2), v).unwrap()
+}
+
+fn to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<Xtype> {
+    let mut xtypes: Vec<Xtype> = vec![];
+    Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(Xtype::Cont(limits[0], limits[1])));
+    xtypes
+}
+
+impl SurrogateBuilder for MoeParams<f64, Xoshiro256Plus> {
+    fn new_with_xtypes_rng(_xtypes: &[Xtype]) -> Self {
+        MoeParams::new()
+    }
+
+    /// Sets the allowed regression models used in gaussian processes.
+    fn set_regression_spec(&mut self, regression_spec: RegressionSpec) {
+        *self = self.clone().regression_spec(regression_spec);
+    }
+
+    /// Sets the allowed correlation models used in gaussian processes.
+    fn set_correlation_spec(&mut self, correlation_spec: CorrelationSpec) {
+        *self = self.clone().correlation_spec(correlation_spec);
+    }
+
+    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
+    fn set_kpls_dim(&mut self, kpls_dim: Option<usize>) {
+        *self = self.clone().kpls_dim(kpls_dim);
+    }
+
+    /// Sets the number of clusters used by the mixture of surrogate experts.
+    fn set_n_clusters(&mut self, n_clusters: usize) {
+        *self = self.clone().n_clusters(n_clusters);
+    }
+
     fn train(
         &self,
         xt: &ArrayView2<f64>,
@@ -141,9 +184,45 @@ impl<R: Rng + SeedableRng + Clone> SurrogateBuilder for MoeParams<f64, R> {
     }
 }
 
+pub struct EgorBuilder<O: GroupFunc> {
+    fobj: O,
+    seed: Option<u64>,
+}
+
+impl<O: GroupFunc> EgorBuilder<O> {
+    pub fn new(fobj: O) -> EgorBuilder<O> {
+        EgorBuilder { fobj, seed: None }
+    }
+
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
+    }
+
+    pub fn build(
+        self,
+        xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Egor<O, MoeParams<f64, Xoshiro256Plus>> {
+        let rng = if let Some(seed) = self.seed {
+            Xoshiro256Plus::seed_from_u64(seed)
+        } else {
+            Xoshiro256Plus::from_entropy()
+        };
+        Egor::new_with_xlimits_rng(self.fobj, xlimits, rng)
+    }
+
+    pub fn build_mixint(self, xtypes: &[Xtype]) -> Egor<O, MixintMoeParams> {
+        let rng = if let Some(seed) = self.seed {
+            Xoshiro256Plus::seed_from_u64(seed)
+        } else {
+            Xoshiro256Plus::from_entropy()
+        };
+        Egor::new_with_xtypes_rng(self.fobj, xtypes, rng)
+    }
+}
+
 /// EGO optimization parameterization
-#[derive(Clone)]
-pub struct Egor<'a, O: GroupFunc, R: SeedableRng> {
+pub struct Egor<O: GroupFunc, SB: SurrogateBuilder> {
     /// Number of function evaluations allocated to find the optimum (aka evaluation budget)
     /// Note 1: if the initial doe has to be evaluated, doe size is taken into account in the avaluation budget.
     /// Note 2: Number of iteration is deduced using the following formula (n_eval - initial doe to evaluate) / q_parallel  
@@ -163,8 +242,6 @@ pub struct Egor<'a, O: GroupFunc, R: SeedableRng> {
     /// Initial doe can be either \[x\] with x inputs only or an evaluated doe \[x, y\]
     /// Note: x dimension is determined using xlimits
     pub doe: Option<Array2<f64>>,
-    /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
-    pub xlimits: Array2<f64>,
     /// Parallel strategy used to define several points (q_parallel) evaluations at each iteration
     pub q_ei: QEiStrategy,
     /// Criterium to select next point to evaluate
@@ -187,43 +264,44 @@ pub struct Egor<'a, O: GroupFunc, R: SeedableRng> {
     pub outdir: Option<String>,
     /// If true use <outdir> to retrieve and start from previous results
     pub hot_start: bool,
+    /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
+    pub xlimits: Array2<f64>,
+    pub xtypes: Option<Vec<Xtype>>,
+    pub no_discrete: bool,
     /// An optional surrogate builder used to model objective and constraint
     /// functions, otherwise [mixture of expert](egobox_moe) is used
     /// Note: if specified takes precedence over individual settings
-    pub surrogate_builder: Option<&'a dyn SurrogateBuilder>,
-    /// An optional pre-processor to preprocess continuous input given
-    /// to the function under optimization, specially used with mixed integer
-    /// function optimization
-    pub pre_proc: Option<&'a dyn PreProcessor>,
+    pub surrogate_builder: SB,
     /// The function under optimization f(x) = [objective, cstr1, ..., cstrn], (n_cstr+1 size)
     pub obj: O,
     /// A random generator used to get reproductible results.
     /// For instance: Xoshiro256Plus::from_u64_seed(42) for reproducibility
-    pub rng: R,
+    pub rng: Xoshiro256Plus,
     /// Shared atomic boolean to allow iteration loop interruption
     interruptor: Arc<std::sync::atomic::AtomicBool>,
 }
 
-impl<'a, O: GroupFunc> Egor<'a, O, Xoshiro256Plus> {
+impl<O: GroupFunc> Egor<O, MoeParams<f64, Xoshiro256Plus>> {
     /// Constructor of the optimization of the function `f`
     ///
     /// The function `f` shoud return an objective but also constraint values if any.
     /// Design space is specified by the 2D array `xlimits` which is `[nx, 2]`-shaped and
     /// constains lower and upper bounds of `x` components.
-    pub fn new(
-        f: O,
-        xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Egor<'a, O, Xoshiro256Plus> {
-        Self::new_with_rng(f, xlimits, Xoshiro256Plus::from_entropy())
+    pub fn new(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Self {
+        Self::new_with_xlimits_rng(f, xlimits, Xoshiro256Plus::from_entropy())
     }
 }
 
-impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
+impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Constructor of the optimization of the function `f` with specified random generator
     /// to get reproducibility.
     ///
     /// See [`Egor::new()`]
-    pub fn new_with_rng(f: O, xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: R) -> Self {
+    pub fn new_with_xlimits_rng(
+        f: O,
+        xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        rng: Xoshiro256Plus,
+    ) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
@@ -236,7 +314,6 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             n_cstr: 0,
             cstr_tol: 1e-6,
             doe: None,
-            xlimits: xlimits.to_owned(),
             q_ei: QEiStrategy::KrigingBeliever,
             infill: InfillStrategy::WB2,
             infill_optimizer: InfillOptimizer::Slsqp,
@@ -247,8 +324,46 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
             expected: None,
             outdir: None,
             hot_start: false,
-            surrogate_builder: None,
-            pre_proc: None,
+            xlimits: xlimits.to_owned(),
+            xtypes: None,
+            no_discrete: true,
+            surrogate_builder: SB::new_with_xtypes_rng(&to_xtypes(xlimits)),
+            obj: f,
+            rng,
+            interruptor: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn new_with_xtypes_rng(f: O, xtypes: &[Xtype], rng: Xoshiro256Plus) -> Self {
+        let env = Env::new().filter_or("EGOBOX_LOG", "info");
+        let mut builder = Builder::from_env(env);
+        let builder = builder.target(env_logger::Target::Stdout);
+        builder.try_init().ok();
+        let v_xtypes = xtypes.to_vec();
+        let xlimits = extract_xlimits(xtypes);
+        let ndim = xlimits.nrows();
+        Egor {
+            n_eval: 20,
+            n_start: 20,
+            q_parallel: 1,
+            n_doe: 0,
+            n_cstr: 0,
+            cstr_tol: 1e-6,
+            doe: None,
+            q_ei: QEiStrategy::KrigingBeliever,
+            infill: InfillStrategy::WB2,
+            infill_optimizer: InfillOptimizer::Slsqp,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
+            kpls_dim: None,
+            n_clusters: Some(1),
+            expected: None,
+            outdir: None,
+            hot_start: false,
+            xlimits,
+            xtypes: Some(v_xtypes),
+            surrogate_builder: SB::new_with_xtypes_rng(xtypes),
+            no_discrete: ndim == xtypes.to_vec().len(),
             obj: f,
             rng,
             interruptor: Arc::new(AtomicBool::new(false)),
@@ -370,25 +485,6 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         self
     }
 
-    /// Sets the surrogate builder used to model objective and constraints.
-    ///
-    /// If none Mixture of Experts [MoeParams] will be used.
-    pub fn surrogate_builder(
-        &mut self,
-        surrogate_builder: Option<&'a dyn SurrogateBuilder>,
-    ) -> &mut Self {
-        self.surrogate_builder = surrogate_builder;
-        self
-    }
-
-    /// Sets a pre processor for inputs before being evaluated by the function under optimization
-    ///
-    /// Used for mixed-integer optimizatio. See [crate::MixintEgor]
-    pub fn pre_proc(&mut self, pre_proc: Option<&'a dyn PreProcessor>) -> &mut Self {
-        self.pre_proc = pre_proc;
-        self
-    }
-
     /// Sets a shared boolean to allow interruption handling
     ///
     /// Allows to interrupt iteration loop when `interrupt` method is called
@@ -398,33 +494,37 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
     }
 
     /// Sets a random generator for reproducibility
-    pub fn with_rng<R2: Rng + SeedableRng + Clone>(self, rng: R2) -> Egor<'a, O, R2> {
-        Egor {
-            n_eval: self.n_eval,
-            n_start: self.n_start,
-            q_parallel: self.q_parallel,
-            n_doe: self.n_doe,
-            n_cstr: self.n_cstr,
-            cstr_tol: self.cstr_tol,
-            doe: self.doe,
-            xlimits: self.xlimits,
-            q_ei: self.q_ei,
-            infill: self.infill,
-            infill_optimizer: self.infill_optimizer,
-            regression_spec: self.regression_spec,
-            correlation_spec: self.correlation_spec,
-            kpls_dim: self.kpls_dim,
-            n_clusters: self.n_clusters,
-            expected: self.expected,
-            outdir: self.outdir,
-            hot_start: self.hot_start,
-            surrogate_builder: self.surrogate_builder,
-            pre_proc: self.pre_proc,
-            obj: self.obj,
-            rng,
-            interruptor: self.interruptor,
-        }
-    }
+    // pub fn with_rng<R2: Rng + SeedableRng + Clone>(
+    //     self,
+    //     rng: R2,
+    // ) -> Egor<O, SurrogateBuilder<R2>, R2> {
+    //     Egor {
+    //         n_eval: self.n_eval,
+    //         n_start: self.n_start,
+    //         q_parallel: self.q_parallel,
+    //         n_doe: self.n_doe,
+    //         n_cstr: self.n_cstr,
+    //         cstr_tol: self.cstr_tol,
+    //         doe: self.doe,
+    //         q_ei: self.q_ei,
+    //         infill: self.infill,
+    //         infill_optimizer: self.infill_optimizer,
+    //         regression_spec: self.regression_spec,
+    //         correlation_spec: self.correlation_spec,
+    //         kpls_dim: self.kpls_dim,
+    //         n_clusters: self.n_clusters,
+    //         expected: self.expected,
+    //         outdir: self.outdir,
+    //         hot_start: self.hot_start,
+    //         xlimits: self.xlimits,
+    //         xtypes: self.xtypes,
+    //         no_discrete: self.no_discrete,
+    //         surrogate_builder: self.surrogate_builder.with_rng(rng.clone()),
+    //         obj: self.obj,
+    //         rng,
+    //         interruptor: self.interruptor,
+    //     }
+    // }
 
     /// Given an evaluated doe (x, y) data, return the next promising x point
     /// where optimum may occurs regarding the infill criterium.
@@ -662,22 +762,6 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         }
     }
 
-    fn make_default_builder(&self) -> egobox_moe::MoeParams<f64, rand_xoshiro::Xoshiro256Plus> {
-        let moe = Moe::params()
-            .kpls_dim(self.kpls_dim)
-            .regression_spec(self.regression_spec)
-            .correlation_spec(self.correlation_spec);
-        if let Some(nc) = self.n_clusters {
-            if nc > 0 {
-                moe.n_clusters(nc)
-            } else {
-                moe
-            }
-        } else {
-            moe
-        }
-    }
-
     fn make_clustered_surrogate(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -687,8 +771,16 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         clustering: &Option<Clustering>,
         model_name: &str,
     ) -> Box<dyn ClusteredSurrogate> {
-        let default_builder = &self.make_default_builder() as &dyn SurrogateBuilder;
-        let builder = self.surrogate_builder.unwrap_or(default_builder);
+        let mut builder = self.surrogate_builder.clone();
+        builder.set_kpls_dim(self.kpls_dim);
+        builder.set_regression_spec(self.regression_spec);
+        builder.set_correlation_spec(self.correlation_spec);
+        if let Some(nc) = self.n_clusters {
+            if nc > 0 {
+                builder.set_n_clusters(nc);
+            }
+        };
+
         if init || recluster {
             if recluster {
                 info!("{} reclustering...", model_name);
@@ -715,13 +807,13 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
 
     #[allow(clippy::too_many_arguments)]
     fn next_points(
-        &'a self,
+        &self,
         init: bool,
         recluster: bool,
         clusterings: &mut [Option<Clustering>],
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        sampling: &Lhs<f64, R>,
+        sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
     ) -> (Array2<f64>, Array2<f64>) {
         debug!("Make surrogate with {}", x_data);
@@ -805,7 +897,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        sampling: &Lhs<f64, R>,
+        sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn ClusteredSurrogate,
         cstr_models: &[Box<dyn ClusteredSurrogate>],
         lhs_optim_seed: Option<u64>,
@@ -910,7 +1002,7 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
                 };
                 let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
                 let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
-                    .with_rng(<R as ndarray_rand::rand::SeedableRng>::seed_from_u64(seed))
+                    .with_rng(Xoshiro256Plus::seed_from_u64(seed))
                     .minimize();
                 info!("LHS optimization best_x {}", x_opt);
                 best_x = Some(x_opt);
@@ -1058,8 +1150,10 @@ impl<'a, O: GroupFunc, R: Rng + SeedableRng + Clone> Egor<'a, O, R> {
     }
 
     fn eval(&self, x: &Array2<f64>) -> Array2<f64> {
-        if let Some(pre_proc) = self.pre_proc {
-            (self.obj)(&pre_proc.run(x).view())
+        if let Some(xtypes) = &self.xtypes {
+            let fold = fold_with_enum_index(xtypes, &x.view());
+            let x = cast_to_discrete_values(xtypes, &fold);
+            (self.obj)(&x.view())
         } else {
             (self.obj)(&x.view())
         }
@@ -1075,6 +1169,11 @@ mod tests {
     use ndarray_npy::read_npy;
     use serial_test::serial;
     use std::time::Instant;
+
+    #[cfg(not(feature = "blas"))]
+    use linfa_linalg::norm::*;
+    #[cfg(feature = "blas")]
+    use ndarray_linalg::Norm;
 
     fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
         (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
@@ -1151,7 +1250,9 @@ mod tests {
     fn test_xsinx_with_hotstart() {
         let xlimits = array![[0.0, 25.0]];
         let doe = Lhs::new(&xlimits).sample(10);
-        let res = Egor::new_with_rng(xsinx, &xlimits, Xoshiro256Plus::seed_from_u64(42))
+        let res = EgorBuilder::new(xsinx)
+            .with_seed(42)
+            .build(&xlimits)
             .n_eval(15)
             .doe(Some(doe))
             .outdir(Some("target/tests".to_string()))
@@ -1160,16 +1261,14 @@ mod tests {
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
 
-        let res = Egor::new_with_rng(
-            xsinx,
-            &array![[0.0, 25.0]],
-            Xoshiro256Plus::seed_from_u64(41),
-        )
-        .n_eval(5)
-        .outdir(Some("target/tests".to_string()))
-        .hot_start(true)
-        .minimize()
-        .expect("Minimize failure");
+        let res = EgorBuilder::new(xsinx)
+            .with_seed(42)
+            .build(&xlimits)
+            .n_eval(5)
+            .outdir(Some("target/tests".to_string()))
+            .hot_start(true)
+            .minimize()
+            .expect("Minimize failure");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
@@ -1177,7 +1276,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_suggestions() {
-        let mut ego = Egor::new(xsinx, &array![[0.0, 25.0]]);
+        let mut ego = EgorBuilder::new(xsinx)
+            .with_seed(42)
+            .build(&array![[0., 25.]]);
         let ego = ego
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
@@ -1213,8 +1314,9 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
-        let res = Egor::new(rosenb, &xlimits)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+        let res = EgorBuilder::new(rosenb)
+            .with_seed(42)
+            .build(&xlimits)
             .doe(Some(doe))
             .n_eval(100)
             .regression_spec(RegressionSpec::ALL)
@@ -1240,8 +1342,9 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
-        let res = Egor::new(rosenb, &xlimits)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+        let res = EgorBuilder::new(rosenb)
+            .with_seed(42)
+            .build(&xlimits)
             .doe(Some(doe))
             .n_eval(100)
             .infill_strategy(InfillStrategy::EI)
@@ -1290,8 +1393,9 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(3);
-        let res = Egor::new(f_g24, &xlimits)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+        let res = EgorBuilder::new(f_g24)
+            .with_seed(42)
+            .build(&xlimits)
             .n_cstr(2)
             .doe(Some(doe))
             .n_eval(20)
@@ -1308,8 +1412,9 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
-        let res = Egor::new(f_g24, &xlimits)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+        let res = EgorBuilder::new(f_g24)
+            .with_seed(42)
+            .build(&xlimits)
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
             .n_cstr(2)
@@ -1322,5 +1427,76 @@ mod tests {
         println!("G24 optim result = {:?}", res);
         let expected = array![2.3295, 3.1785];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
+    }
+
+    // Mixed-interger tests
+
+    fn mixsinx(x: &ArrayView2<f64>) -> Array2<f64> {
+        if (x.mapv(|v| v.round()).norm_l2() - x.norm_l2()).abs() < 1e-6 {
+            (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
+        } else {
+            panic!("Error: mixsinx works only on integer, got {:?}", x)
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_mixintegor_ei() {
+        let n_eval = 30;
+        let doe = array![[0.], [7.], [25.]];
+        let xtypes = vec![Xtype::Int(0, 25)];
+
+        let res = EgorBuilder::new(mixsinx)
+            .with_seed(42)
+            .build_mixint(&xtypes)
+            .doe(Some(doe))
+            .n_eval(n_eval)
+            .expect(Some(ApproxValue {
+                value: -15.1,
+                tolerance: 1e-1,
+            }))
+            .infill_strategy(InfillStrategy::EI)
+            .minimize()
+            .unwrap();
+        assert_abs_diff_eq!(array![18.], res.x_opt, epsilon = 2.);
+    }
+
+    #[test]
+    fn test_mixintegor_reclustering() {
+        let n_eval = 30;
+        let doe = array![[0.], [7.], [25.]];
+        let xtypes = vec![Xtype::Int(0, 25)];
+
+        let res = EgorBuilder::new(mixsinx)
+            .with_seed(42)
+            .build_mixint(&xtypes)
+            .doe(Some(doe))
+            .n_eval(n_eval)
+            .expect(Some(ApproxValue {
+                value: -15.1,
+                tolerance: 1e-1,
+            }))
+            .infill_strategy(InfillStrategy::EI)
+            .minimize()
+            .unwrap();
+        assert_abs_diff_eq!(array![18.], res.x_opt, epsilon = 2.);
+    }
+
+    #[test]
+    #[serial]
+    fn test_mixintegor_wb2() {
+        let n_eval = 30;
+        let xtypes = vec![Xtype::Int(0, 25)];
+
+        let res = EgorBuilder::new(mixsinx)
+            .with_seed(42)
+            .build_mixint(&xtypes)
+            .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
+            .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
+            .n_eval(n_eval)
+            .infill_strategy(InfillStrategy::WB2)
+            .minimize()
+            .unwrap();
+        assert_abs_diff_eq!(&array![18.], &res.x_opt, epsilon = 3.);
     }
 }

@@ -12,14 +12,11 @@
 
 use crate::types::*;
 use egobox_doe::SamplingMethod;
-use linfa::ParamGuard;
 use log::info;
 use ndarray::{Array2, ArrayView2};
-use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use rand_xoshiro::Xoshiro256Plus;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -306,12 +303,6 @@ impl Egor {
             InfillOptimizer::SLSQP => egobox_ego::InfillOptimizer::Slsqp,
         };
 
-        let rng = if let Some(seed) = self.seed {
-            Xoshiro256Plus::seed_from_u64(seed)
-        } else {
-            Xoshiro256Plus::from_entropy()
-        };
-
         let expected = self.expected.map(|opt| egobox_ego::ApproxValue {
             value: opt.val,
             tolerance: opt.tol,
@@ -340,22 +331,24 @@ impl Egor {
             })
             .collect();
 
-        let surrogate_builder = egobox_moe::MoeParams::default()
-            .n_clusters(self.n_clusters.unwrap_or(1))
-            .kpls_dim(self.kpls_dim)
-            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-            .correlation_spec(
-                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-            );
-        let surrogate_builder = egobox_ego::MixintMoeParams::new(&xtypes, &surrogate_builder)
-            .check()
-            .unwrap();
-        let pre_proc = egobox_ego::MixintPreProcessor::new(&xtypes);
+        // let surrogate_builder = egobox_moe::MoeParams::default()
+        //     .n_clusters(self.n_clusters.unwrap_or(1))
+        //     .kpls_dim(self.kpls_dim)
+        //     .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+        //     .correlation_spec(
+        //         egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+        //     );
         let interruptor = Arc::new(AtomicBool::new(false));
-        let mut mixintegor =
-            egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &pre_proc, rng);
+        // let mut mixintegor =
+        //     egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &pre_proc, rng);
+        let mut mixintegor = egobox_ego::EgorBuilder::new(obj);
+
+        if let Some(seed) = self.seed {
+            mixintegor = mixintegor.with_seed(seed);
+        };
+
+        let mut mixintegor = mixintegor.build_mixint(&xtypes);
         mixintegor
-            .egor
             .n_cstr(self.n_cstr)
             .n_eval(n_eval)
             .n_start(self.n_start)

@@ -4,12 +4,14 @@
 #![allow(dead_code)]
 use crate::errors::{EgoError, Result};
 use crate::types::SurrogateBuilder;
+use crate::types::Xtype;
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{
-    Clustered, ClusteredSurrogate, Clustering, Moe, MoeParams, RegressionSpec, Surrogate,
+    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec,
+    Surrogate,
 };
-use linfa::traits::PredictInplace;
-use linfa::{traits::Fit, DatasetBase, ParamGuard};
+use linfa::traits::{Fit, PredictInplace};
+use linfa::{DatasetBase, ParamGuard};
 use ndarray::{s, Array, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -23,21 +25,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 #[cfg(feature = "persistent")]
 use std::io::Write;
-
-/// An enumeration to define the type of an input variable component
-/// with its domain definition
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
-pub enum Xtype {
-    /// Continuous variable in [lower bound, upper bound]
-    Cont(f64, f64),
-    /// Integer variable in lower bound .. upper bound
-    Int(i32, i32),
-    /// An Ordered variable in { int_1, int_2, ... int_n }
-    Ord(Vec<i32>),
-    /// An Enum variable in { str_1, str_2, ..., str_n }
-    Enum(Vec<String>),
-}
 
 /// Expand xlimits to add continuous dimensions for enumeration x features.
 ///
@@ -147,6 +134,8 @@ fn cast_to_discrete_values_mut(xtypes: &[Xtype], x: &mut ArrayBase<impl DataMut<
     xtypes.iter().for_each(|s| match s {
         Xtype::Cont(_, _) => xcol += 1,
         Xtype::Int(_, _) => {
+            println!("xtypes={:?}", xtypes);
+            println!("x={}", x);
             let xround = x.column(xcol).mapv(|v| v.round()).to_owned();
             x.column_mut(xcol).assign(&xround);
             xcol += 1;
@@ -242,9 +231,10 @@ impl SamplingMethod<f64> for MixintSampling {
 /// Moe type for MixintEgor optimizer
 pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
 /// A decorator of Moe surrogate that takes into account Xtype specifications
+#[derive(Clone)]
 pub struct MixintMoeValidParams {
     /// The surrogate factory
-    surrogate_builder: MoeBuilder,
+    surrogate_builder: MoeParams<f64, Xoshiro256Plus>,
     /// The input specifications
     xtypes: Vec<Xtype>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
@@ -264,6 +254,7 @@ impl MixintMoeValidParams {
     }
 }
 
+#[derive(Clone)]
 pub struct MixintMoeParams(MixintMoeValidParams);
 
 impl MixintMoeParams {
@@ -294,18 +285,20 @@ impl MixintMoeValidParams {
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<MixintMoe> {
+        println!("xt = {}", xt);
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, &xt.view())
         } else {
             xt.to_owned()
         };
+        println!("xcast = {}", xcast);
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
         let mixmoe = MixintMoe {
             moe: self
                 .surrogate_builder
                 .clone()
                 .regression_spec(RegressionSpec::CONSTANT)
-                .check()? // mixinteger works on ly with constant regression
+                .check()?
                 .train(&xcast, &yt.to_owned())
                 .unwrap(),
             xtypes: self.xtypes.clone(),
@@ -341,13 +334,61 @@ impl MixintMoeValidParams {
     }
 }
 
-impl SurrogateBuilder for MixintMoeValidParams {
+impl SurrogateBuilder for MixintMoeParams {
+    fn new_with_xtypes_rng(xtypes: &[Xtype]) -> Self {
+        MixintMoeParams::new(xtypes, &MoeParams::new())
+    }
+
+    /// Sets the allowed regression models used in gaussian processes.
+    fn set_regression_spec(&mut self, regression_spec: RegressionSpec) {
+        self.0 = MixintMoeValidParams {
+            surrogate_builder: self
+                .0
+                .surrogate_builder
+                .clone()
+                .regression_spec(regression_spec),
+            xtypes: self.0.xtypes.clone(),
+            work_in_folded_space: self.0.work_in_folded_space,
+        }
+    }
+
+    /// Sets the allowed correlation models used in gaussian processes.
+    fn set_correlation_spec(&mut self, correlation_spec: CorrelationSpec) {
+        self.0 = MixintMoeValidParams {
+            surrogate_builder: self
+                .0
+                .surrogate_builder
+                .clone()
+                .correlation_spec(correlation_spec),
+            xtypes: self.0.xtypes.clone(),
+            work_in_folded_space: self.0.work_in_folded_space,
+        }
+    }
+
+    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
+    fn set_kpls_dim(&mut self, kpls_dim: Option<usize>) {
+        self.0 = MixintMoeValidParams {
+            surrogate_builder: self.0.surrogate_builder.clone().kpls_dim(kpls_dim),
+            xtypes: self.0.xtypes.clone(),
+            work_in_folded_space: self.0.work_in_folded_space,
+        }
+    }
+
+    /// Sets the number of clusters used by the mixture of surrogate experts.
+    fn set_n_clusters(&mut self, n_clusters: usize) {
+        self.0 = MixintMoeValidParams {
+            surrogate_builder: self.0.surrogate_builder.clone().n_clusters(n_clusters),
+            xtypes: self.0.xtypes.clone(),
+            work_in_folded_space: self.0.work_in_folded_space,
+        }
+    }
+
     fn train(
         &self,
         xt: &ArrayView2<f64>,
         yt: &ArrayView2<f64>,
     ) -> Result<Box<dyn ClusteredSurrogate>> {
-        let mixmoe = self._train(xt, yt)?;
+        let mixmoe = self.check_ref()?._train(xt, yt)?;
         Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn ClusteredSurrogate>)
     }
 
@@ -357,7 +398,7 @@ impl SurrogateBuilder for MixintMoeValidParams {
         yt: &ArrayView2<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn ClusteredSurrogate>> {
-        let mixmoe = self._train_on_clusters(xt, yt, clustering)?;
+        let mixmoe = self.check_ref()?._train_on_clusters(xt, yt, clustering)?;
         Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn ClusteredSurrogate>)
     }
 }

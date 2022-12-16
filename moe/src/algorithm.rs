@@ -1035,11 +1035,9 @@ mod tests {
     }
 
     #[test]
-    fn test_moe_deriv_hard() {
+    fn test_moe_drv_hard() {
         let rng = Xoshiro256Plus::seed_from_u64(0);
-        let xt = Lhs::new(&array![[0., 1.]])
-            .with_rng(rng.clone())
-            .sample(100);
+        let xt = Lhs::new(&array![[0., 1.]]).sample(100);
         let yt = f_test_1d(&xt);
 
         let moe = Moe::params()

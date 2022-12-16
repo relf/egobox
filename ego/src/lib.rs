@@ -36,7 +36,7 @@
 //! allows to make basic mixed-integer optimization by decorating `Egor` class.  
 //!
 //! As a second example, we define an objective function `mixsinx` taking integer
-//! input values from the previous function `xsinx` defined above and we optimize with `MixintEgor`.
+//! input values from the previous function `xsinx` defined above.
 //!  
 //! ```no_run   
 //! use ndarray::{array, Array2, ArrayView2};
@@ -46,7 +46,7 @@
 //! #[cfg(not(feature = "blas"))]
 //! use linfa_linalg::norm::*;
 //! use egobox_moe::MoeParams;
-//! use egobox_ego::{MixintEgor,  MixintMoeParams, MixintPreProcessor, InfillStrategy, Xtype};
+//! use egobox_ego::{MixintMoeParams, InfillStrategy, Xtype};
 //!
 //! fn mixsinx(x: &ArrayView2<f64>) -> Array2<f64> {
 //!     if (x.mapv(|v| v.round()).norm_l2() - x.norm_l2()).abs() < 1e-6 {
@@ -62,19 +62,10 @@
 //! // We define input as being integer
 //! let xtypes = vec![Xtype::Int(0, 25)];
 //!
-//! // We create mixed-integer mixture of experts
-//! let surrogate_builder = MixintMoeParams::new(&xtypes, &MoeParams::default())
-//!                           .check()
-//!                           .expect("Mixint Moe params validation");
-//!
-//! // We use a mixint pre-processor which cast continuous values to discrete
-//! // and evaluate function under optimization
-//! let pre_proc = MixintPreProcessor::new(&xtypes);
-//!
-//! let mut mixintegor = MixintEgor::new(mixsinx, &surrogate_builder, &pre_proc);
-//! let res = mixintegor
-//!     .egor
-//!     .doe(Some(doe))   // we pass an initial doe
+//! let res = EgorBuilder::new(mixsinx)
+//!     .with_seed(42)
+//!     .build_mixint(&xtypes)   // We build mixed-integer optimizer
+//!     .doe(Some(doe))          // we pass an initial doe
 //!     .n_eval(n_eval)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .minimize().unwrap();
@@ -106,7 +97,6 @@ mod egor;
 mod errors;
 mod lhs_optimizer;
 mod mixint;
-mod mixintegor;
 mod sort_axis;
 mod types;
 mod utils;
@@ -114,5 +104,4 @@ mod utils;
 pub use crate::egor::*;
 pub use crate::errors::*;
 pub use crate::mixint::*;
-pub use crate::mixintegor::*;
 pub use crate::types::*;
