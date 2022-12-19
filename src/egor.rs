@@ -341,13 +341,13 @@ impl Egor {
         let interruptor = Arc::new(AtomicBool::new(false));
         // let mut mixintegor =
         //     egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &pre_proc, rng);
-        let mut mixintegor = egobox_ego::EgorBuilder::new(obj);
+        let mut mixintegor = egobox_ego::EgorBuilder::optimize(obj);
 
         if let Some(seed) = self.seed {
-            mixintegor = mixintegor.with_seed(seed);
+            mixintegor = mixintegor.random_seed(seed);
         };
 
-        let mut mixintegor = mixintegor.build_mixint(&xtypes);
+        let mut mixintegor = mixintegor.min_within_mixed_space(&xtypes);
         mixintegor
             .n_cstr(self.n_cstr)
             .n_eval(n_eval)
@@ -375,7 +375,7 @@ impl Egor {
             interruptor.store(true, Ordering::SeqCst)
         }) {
             Ok(_) | Err(ctrlc::Error::MultipleHandlers) => {
-                let res = mixintegor.minimize().expect("Minimization failed");
+                let res = mixintegor.run().expect("Minimization failed");
 
                 Ok(OptimResult {
                     x_opt: res.x_opt.to_vec(),

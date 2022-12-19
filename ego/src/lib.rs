@@ -14,7 +14,7 @@
 //!
 //! # Examples
 //!
-//! ```no_run
+//! ```
 //! use ndarray::{array, Array2, ArrayView2};
 //! use egobox_ego::Egor;
 //!
@@ -24,29 +24,30 @@
 //! }
 //!
 //! // We ask for 10 evaluations of the objective function to get the result
-//! let res = Egor::new(xsinx, &array![[0.0, 25.0]])
+//! let res = Egor::minimize(xsinx, &array![[0.0, 25.0]])
 //!             .n_eval(10)
-//!             .minimize()
+//!             .run()
 //!             .expect("xsinx minimized");
 //! println!("Minimum found f(x) = {:?} at x = {:?}", res.x_opt, res.y_opt);
 //! ```
 //!
 //! The implementation relies on [Mixture of Experts](egobox_moe).
-//! While [Egor] optimizer works with continuous data (i.e floats), the class [MixintEgor]
-//! allows to make basic mixed-integer optimization by decorating `Egor` class.  
+//!
+//! While [Egor] optimizer works with continuous data (i.e floats), the optimizer
+//! allows to make basic mixed-integer optimization. The configuration of the Optimizer
+//! as a mixed_integer optimizer is done though the `EgorBuilder`  
 //!
 //! As a second example, we define an objective function `mixsinx` taking integer
 //! input values from the previous function `xsinx` defined above.
 //!  
-//! ```no_run   
+//! ```
 //! use ndarray::{array, Array2, ArrayView2};
 //! use linfa::ParamGuard;
 //! #[cfg(feature = "blas")]
 //! use ndarray_linalg::Norm;
 //! #[cfg(not(feature = "blas"))]
 //! use linfa_linalg::norm::*;
-//! use egobox_moe::MoeParams;
-//! use egobox_ego::{MixintMoeParams, InfillStrategy, Xtype};
+//! use egobox_ego::{EgorBuilder,InfillStrategy, Xtype};
 //!
 //! fn mixsinx(x: &ArrayView2<f64>) -> Array2<f64> {
 //!     if (x.mapv(|v| v.round()).norm_l2() - x.norm_l2()).abs() < 1e-6 {
@@ -62,13 +63,14 @@
 //! // We define input as being integer
 //! let xtypes = vec![Xtype::Int(0, 25)];
 //!
-//! let res = EgorBuilder::new(mixsinx)
-//!     .with_seed(42)
-//!     .build_mixint(&xtypes)   // We build mixed-integer optimizer
+//! let res = EgorBuilder::optimize(mixsinx)
+//!     .random_seed(42)
+//!     .min_within_mixed_space(&xtypes)   // We build mixed-integer optimizer
 //!     .doe(Some(doe))          // we pass an initial doe
 //!     .n_eval(n_eval)
 //!     .infill_strategy(InfillStrategy::EI)
-//!     .minimize().unwrap();
+//!     .run()
+//!     .expect("Egor minimization");
 //! println!("min f(x)={} at x={}", res.y_opt, res.x_opt);
 //! ```  
 //!
