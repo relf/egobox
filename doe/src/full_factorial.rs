@@ -48,7 +48,7 @@ impl<F: Float> SamplingMethod<F> for FullFactorial<F> {
             num_list[ind] += 1;
         }
 
-        let nrows = num_list.fold(1, |acc, n| acc * n) as usize;
+        let nrows = num_list.fold(1, |acc, n| acc * n);
         let mut doe = Array2::<F>::zeros((nrows, nx));
 
         let mut level_repeat = nrows;
