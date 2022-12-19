@@ -119,19 +119,7 @@ use std::sync::Arc;
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
 
-fn extract_xlimits(xtypes: &[Xtype]) -> Array2<f64> {
-    let mut v: Vec<f64> = vec![];
-    xtypes
-        .iter()
-        .filter_map(|xtype| match xtype {
-            Xtype::Cont(lower, upper) => Some((lower, upper)),
-            _ => None,
-        })
-        .for_each(|(l, u)| v.extend_from_slice(&[*l, *u]));
-    Array::from_shape_vec((v.len() / 2, 2), v).unwrap()
-}
-
-fn to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<Xtype> {
+fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<Xtype> {
     let mut xtypes: Vec<Xtype> = vec![];
     Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(Xtype::Cont(limits[0], limits[1])));
     xtypes
@@ -226,57 +214,60 @@ pub struct Egor<O: GroupFunc, SB: SurrogateBuilder> {
     /// Number of function evaluations allocated to find the optimum (aka evaluation budget)
     /// Note 1: if the initial doe has to be evaluated, doe size is taken into account in the avaluation budget.
     /// Note 2: Number of iteration is deduced using the following formula (n_eval - initial doe to evaluate) / q_parallel  
-    pub n_eval: usize,
+    n_eval: usize,
     /// Number of starts for multistart approach used for hyperparameters optimization
-    pub n_start: usize,
+    n_start: usize,
     /// Number of parallel points evaluated for each "function evaluation"
-    pub q_parallel: usize,
+    q_parallel: usize,
     /// Number of initial doe drawn using Latin hypercube sampling
     /// Note: n_doe > 0; otherwise n_doe = max(xdim+1, 5)
-    pub n_doe: usize,
+    n_doe: usize,
     /// Number of Constraints
     /// Note: dim function ouput = 1 objective + n_cstr constraints
-    pub n_cstr: usize,
+    n_cstr: usize,
     /// Constraints violation tolerance meaning cstr < cstr_tol is considered valid
-    pub cstr_tol: f64,
+    cstr_tol: f64,
     /// Initial doe can be either \[x\] with x inputs only or an evaluated doe \[x, y\]
     /// Note: x dimension is determined using xlimits
-    pub doe: Option<Array2<f64>>,
+    doe: Option<Array2<f64>>,
     /// Parallel strategy used to define several points (q_parallel) evaluations at each iteration
-    pub q_ei: QEiStrategy,
+    q_ei: QEiStrategy,
     /// Criterium to select next point to evaluate
-    pub infill: InfillStrategy,
+    infill: InfillStrategy,
     /// The optimizer used to optimize infill criterium
-    pub infill_optimizer: InfillOptimizer,
+    infill_optimizer: InfillOptimizer,
     /// Regression specification for GP models used by mixture of experts (see [egobox_moe])
-    pub regression_spec: RegressionSpec,
+    regression_spec: RegressionSpec,
     /// Correlation specification for GP models used by mixture of experts (see [egobox_moe])
-    pub correlation_spec: CorrelationSpec,
+    correlation_spec: CorrelationSpec,
     /// Optional dimension reduction (see [egobox_moe])
-    pub kpls_dim: Option<usize>,
+    kpls_dim: Option<usize>,
     /// Number of clusters used by mixture of experts (see [egobox_moe])
     /// When set to 0 the clusters are computes automatically and refreshed
     /// every 10-points (tentative) additions
-    pub n_clusters: Option<usize>,
+    n_clusters: Option<usize>,
     /// Specification of an expected solution which is used to stop the algorithm once reached
-    pub expected: Option<ApproxValue>,
+    expected: Option<ApproxValue>,
     /// Directory to save intermediate results: inital doe + evalutions at each iteration
-    pub outdir: Option<String>,
+    outdir: Option<String>,
     /// If true use <outdir> to retrieve and start from previous results
-    pub hot_start: bool,
+    hot_start: bool,
     /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
-    pub xlimits: Array2<f64>,
-    pub xtypes: Option<Vec<Xtype>>,
-    pub no_discrete: bool,
+    /// Note: used for continuous variables handling, the optimizer base.
+    xlimits: Array2<f64>,
+    /// List of x types allowing the handling of discrete input variables
+    xtypes: Option<Vec<Xtype>>,
+    /// Flag for discrete handling, true if mixed-integer type present in xtypes, otherwise false
+    no_discrete: bool,
     /// An optional surrogate builder used to model objective and constraint
     /// functions, otherwise [mixture of expert](egobox_moe) is used
     /// Note: if specified takes precedence over individual settings
-    pub surrogate_builder: SB,
+    surrogate_builder: SB,
     /// The function under optimization f(x) = [objective, cstr1, ..., cstrn], (n_cstr+1 size)
-    pub obj: O,
+    obj: O,
     /// A random generator used to get reproductible results.
     /// For instance: Xoshiro256Plus::from_u64_seed(42) for reproducibility
-    pub rng: Xoshiro256Plus,
+    rng: Xoshiro256Plus,
     /// Shared atomic boolean to allow iteration loop interruption
     interruptor: Arc<std::sync::atomic::AtomicBool>,
 }
@@ -327,7 +318,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             xlimits: xlimits.to_owned(),
             xtypes: None,
             no_discrete: true,
-            surrogate_builder: SB::new_with_xtypes_rng(&to_xtypes(xlimits)),
+            surrogate_builder: SB::new_with_xtypes_rng(&continuous_xlimits_to_xtypes(xlimits)),
             obj: f,
             rng,
             interruptor: Arc::new(AtomicBool::new(false)),
@@ -340,8 +331,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
         let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();
         let v_xtypes = xtypes.to_vec();
-        let xlimits = extract_xlimits(xtypes);
-        let ndim = xlimits.nrows();
+        let xlimits = unfold_xtypes_as_continuous_limits(xtypes);
         Egor {
             n_eval: 20,
             n_start: 20,
@@ -363,7 +353,9 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             xlimits,
             xtypes: Some(v_xtypes),
             surrogate_builder: SB::new_with_xtypes_rng(xtypes),
-            no_discrete: ndim == xtypes.to_vec().len(),
+            no_discrete: !xtypes
+                .iter()
+                .any(|t| matches!(t, &Xtype::Int(_, _) | &Xtype::Ord(_) | &Xtype::Enum(_))),
             obj: f,
             rng,
             interruptor: Arc::new(AtomicBool::new(false)),
@@ -492,39 +484,6 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
         self.interruptor = interruptor;
         self
     }
-
-    /// Sets a random generator for reproducibility
-    // pub fn with_rng<R2: Rng + SeedableRng + Clone>(
-    //     self,
-    //     rng: R2,
-    // ) -> Egor<O, SurrogateBuilder<R2>, R2> {
-    //     Egor {
-    //         n_eval: self.n_eval,
-    //         n_start: self.n_start,
-    //         q_parallel: self.q_parallel,
-    //         n_doe: self.n_doe,
-    //         n_cstr: self.n_cstr,
-    //         cstr_tol: self.cstr_tol,
-    //         doe: self.doe,
-    //         q_ei: self.q_ei,
-    //         infill: self.infill,
-    //         infill_optimizer: self.infill_optimizer,
-    //         regression_spec: self.regression_spec,
-    //         correlation_spec: self.correlation_spec,
-    //         kpls_dim: self.kpls_dim,
-    //         n_clusters: self.n_clusters,
-    //         expected: self.expected,
-    //         outdir: self.outdir,
-    //         hot_start: self.hot_start,
-    //         xlimits: self.xlimits,
-    //         xtypes: self.xtypes,
-    //         no_discrete: self.no_discrete,
-    //         surrogate_builder: self.surrogate_builder.with_rng(rng.clone()),
-    //         obj: self.obj,
-    //         rng,
-    //         interruptor: self.interruptor,
-    //     }
-    // }
 
     /// Given an evaluated doe (x, y) data, return the next promising x point
     /// where optimum may occurs regarding the infill criterium.
@@ -741,12 +700,29 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             it_count += 1;
         }
         let best_index = self.find_best_result_index(&y_data);
-        info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
-        let res = OptimResult {
-            x_opt: x_data.row(best_index).to_owned(),
-            y_opt: y_data.row(best_index).to_owned(),
+
+        let res = if self.no_discrete {
+            info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
+            OptimResult {
+                x_opt: x_data.row(best_index).to_owned(),
+                y_opt: y_data.row(best_index).to_owned(),
+            }
+        } else {
+            let xtypes = self.xtypes.clone().unwrap();
+            let x_data = cast_to_discrete_values(&xtypes, &x_data);
+            let x_data = fold_with_enum_index(&xtypes, &x_data.view());
+            info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
+
+            let x_opt = x_data.row(best_index).to_owned().insert_axis(Axis(0));
+            let x_opt = cast_to_discrete_values(&xtypes, &x_opt);
+            let x_opt = fold_with_enum_index(&xtypes, &x_opt.view());
+            OptimResult {
+                x_opt: x_opt.row(0).to_owned(),
+                y_opt: y_data.row(best_index).to_owned(),
+            }
         };
-        info!("Optim Result: min f(x)={} at x= {}", res.y_opt, res.x_opt);
+        info!("Optim Result: min f(x)={} at x={}", res.y_opt, res.x_opt);
+
         Ok(res)
     }
 
@@ -978,8 +954,13 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
         let scale_obj = compute_obj_scale(&scaling_points.view(), obj_model);
         info!("Acquisition function scaling is updated to {}", scale_obj);
-        let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
-        info!("Feasibility criterion scaling is updated to {}", scale_cstr);
+        let scale_cstr = if cstr_models.is_empty() {
+            Array1::zeros((0,))
+        } else {
+            let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
+            info!("Feasibility criterion scaling is updated to {}", scale_cstr);
+            scale_cstr
+        };
         let scale_wb2 = if self.infill == InfillStrategy::WB2S {
             let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, *f_min);
             info!("WB2S scaling factor is updated to {}", scale);
@@ -1498,5 +1479,13 @@ mod tests {
             .minimize()
             .unwrap();
         assert_abs_diff_eq!(&array![18.], &res.x_opt, epsilon = 3.);
+    }
+
+    #[test]
+    fn test_unfold_xtypes_as_continuous_limits() {
+        let xtypes = vec![Xtype::Int(0, 25)];
+        let xlimits = unfold_xtypes_as_continuous_limits(&xtypes);
+        let expected = array![[0., 25.]];
+        assert_abs_diff_eq!(expected, xlimits);
     }
 }

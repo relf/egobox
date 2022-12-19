@@ -30,15 +30,33 @@ use std::io::Write;
 ///
 /// Each level of an enumerate gives a new continuous dimension in [0, 1].
 /// Each integer dimensions are relaxed continuously.
-pub fn unfold_xlimits_with_continuous_limits(xtypes: &[Xtype]) -> Array2<f64> {
-    let mut res = vec![];
-    xtypes.iter().for_each(|s| match s {
-        Xtype::Cont(lb, ub) => res.extend([*lb, *ub]),
-        Xtype::Int(lb, ub) => res.extend([*lb as f64, *ub as f64]),
-        Xtype::Ord(v) => res.extend([v[0] as f64, v[(v.len() - 1)] as f64]),
-        Xtype::Enum(v) => (0..v.len()).for_each(|_| res.extend([0., 1.])),
+pub fn unfold_xtypes_as_continuous_limits(xtypes: &[Xtype]) -> Array2<f64> {
+    let mut xlimits: Vec<f64> = vec![];
+    let mut dim = 0;
+    xtypes.iter().for_each(|xtype| match xtype {
+        Xtype::Cont(lower, upper) => {
+            dim += 1;
+            xlimits.extend([*lower, *upper]);
+        }
+        Xtype::Int(lower, upper) => {
+            dim += 1;
+            xlimits.extend([*lower as f64, *upper as f64]);
+        }
+        Xtype::Ord(v) => {
+            dim += 1;
+            xlimits.extend([
+                (*v.iter().min().unwrap()) as f64,
+                (*v.iter().max().unwrap()) as f64,
+            ]);
+        }
+        Xtype::Enum(v) => {
+            dim += v.len();
+            v.iter().for_each(|_| {
+                xlimits.extend([0., 1.]);
+            })
+        }
     });
-    Array::from_shape_vec((res.len() / 2, 2), res).unwrap()
+    Array::from_shape_vec((dim, 2), xlimits).unwrap()
 }
 
 /// Reduce categorical inputs from discrete unfolded space to
@@ -195,7 +213,7 @@ impl MixintSampling {
     /// Constructor using `xtypes` specifications
     pub fn new(xtypes: Vec<Xtype>) -> Self {
         MixintSampling {
-            lhs: Lhs::new(&unfold_xlimits_with_continuous_limits(&xtypes)),
+            lhs: Lhs::new(&unfold_xtypes_as_continuous_limits(&xtypes)),
             xtypes: xtypes.clone(),
             output_in_folded_space: false,
         }
@@ -595,10 +613,10 @@ impl MixintContext {
     /// Create a mixed integer LHS
     pub fn create_sampling(&self, seed: Option<u64>) -> MixintSampling {
         let lhs = seed.map_or(
-            Lhs::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)),
+            Lhs::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)),
             |seed| {
                 let rng = Xoshiro256Plus::seed_from_u64(seed);
-                Lhs::new(&unfold_xlimits_with_continuous_limits(&self.xtypes)).with_rng(rng)
+                Lhs::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)).with_rng(rng)
             },
         );
         MixintSampling {
