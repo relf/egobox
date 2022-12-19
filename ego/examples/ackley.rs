@@ -12,7 +12,7 @@ fn ackley(x: &ArrayView2<f64>) -> Array2<f64> {
 
 fn main() {
     let xlimits = array![[-32.768, 32.768], [-32.768, 32.768], [-32.768, 32.768]];
-    let res = Egor::new(ackley, &xlimits)
+    let res = Egor::minimize(ackley, &xlimits)
         .regression_spec(RegressionSpec::CONSTANT)
         .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
         .infill_strategy(InfillStrategy::WB2S)
@@ -21,7 +21,7 @@ fn main() {
             value: 0.0,
             tolerance: 5e-1,
         }))
-        .minimize()
+        .run()
         .expect("Minimize failure");
     println!("Ackley minimum y = {} at x = {}", res.y_opt, res.x_opt);
 }

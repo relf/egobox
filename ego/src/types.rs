@@ -1,7 +1,10 @@
 use crate::errors::Result;
 use egobox_moe::{ClusteredSurrogate, Clustering};
+use egobox_moe::{CorrelationSpec, RegressionSpec};
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
+#[cfg(feature = "persistent")]
+use serde::{Deserialize, Serialize};
 
 /// Optimization result
 #[derive(Clone, Debug)]
@@ -63,11 +66,40 @@ pub struct ApproxValue {
 pub trait GroupFunc: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
+/// An enumeration to define the type of an input variable component
+/// with its domain definition
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+pub enum Xtype {
+    /// Continuous variable in [lower bound, upper bound]
+    Cont(f64, f64),
+    /// Integer variable in lower bound .. upper bound
+    Int(i32, i32),
+    /// An Ordered variable in { int_1, int_2, ... int_n }
+    Ord(Vec<i32>),
+    /// An Enum variable in { str_1, str_2, ..., str_n }
+    Enum(Vec<String>),
+}
+
 /// A trait for surrogate training
 ///
 /// The output surrogate used by [crate::Egor] is expected to model either
 /// objective function or constraint functions
-pub trait SurrogateBuilder {
+pub trait SurrogateBuilder: Clone {
+    fn new_with_xtypes_rng(xtypes: &[Xtype]) -> Self;
+
+    /// Sets the allowed regression models used in gaussian processes.
+    fn set_regression_spec(&mut self, regression_spec: RegressionSpec);
+
+    /// Sets the allowed correlation models used in gaussian processes.
+    fn set_correlation_spec(&mut self, correlation_spec: CorrelationSpec);
+
+    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
+    fn set_kpls_dim(&mut self, kpls_dim: Option<usize>);
+
+    /// Sets the number of clusters used by the mixture of surrogate experts.
+    fn set_n_clusters(&mut self, n_clusters: usize);
+
     /// Train the surrogate with given training dataset (x, y)
     fn train(
         &self,
