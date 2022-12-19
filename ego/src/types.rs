@@ -3,7 +3,7 @@ use egobox_moe::{ClusteredSurrogate, Clustering};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 /// Optimization result
@@ -17,6 +17,7 @@ pub struct OptimResult<F: Float> {
 
 /// Infill criterion used to select next promising point
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum InfillStrategy {
     /// Expected Improvement
     EI,
@@ -28,6 +29,7 @@ pub enum InfillStrategy {
 
 /// Optimizer used to optimize the infill criteria
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum InfillOptimizer {
     /// SLSQP optimizer (gradient from finite differences)
     Slsqp,
@@ -39,6 +41,7 @@ pub enum InfillOptimizer {
 /// to benefit from parallel evaluation of the objective function
 /// (The Multi-points Expected Improvement (q-EI) Criterion)
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum QEiStrategy {
     /// Take the mean of the kriging predictor for q points
     KrigingBeliever,
@@ -52,6 +55,7 @@ pub enum QEiStrategy {
 
 /// A structure to specify an approximative value
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct ApproxValue {
     /// Nominal value
     pub value: f64,
@@ -114,15 +118,6 @@ pub trait SurrogateBuilder: Clone {
         yt: &ArrayView2<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn ClusteredSurrogate>>;
-}
-
-/// An interface for preprocessing continuous input init_values
-///
-/// Special use for [crate::MixintEgor] optimiseur where preprocessing consists in
-/// casting continuous values to discrete ones. See [crate::MixintPreProcessor]
-pub trait PreProcessor {
-    /// Execute the pre processing on given `x` values
-    fn run(&self, x: &Array2<f64>) -> Array2<f64>;
 }
 
 /// Data used by internal infill criteria to be optimized using NlOpt
