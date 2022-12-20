@@ -12,7 +12,8 @@ categories = ["algorithms", "mathematics", "science"]
 [features]
 default = []
 
-persistent = ["serde", "typetag", "egobox-gp/serializable", "serde_json"]
+persistent = ["serializable", "serde_json"]
+serializable = ["serde", "typetag", "egobox-gp/serializable"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-clustering/blas", "linfa-pls/blas"]
 
 [dependencies]

@@ -116,6 +116,9 @@ use rand_xoshiro::Xoshiro256Plus;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+#[cfg(feature = "serializable")]
+use serde::{Deserialize, Serialize};
+
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
 
@@ -210,6 +213,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
 }
 
 /// EGO optimization parameterization
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct Egor<O: GroupFunc, SB: SurrogateBuilder> {
     /// Number of function evaluations allocated to find the optimum (aka evaluation budget)
     /// Note 1: if the initial doe has to be evaluated, doe size is taken into account in the avaluation budget.

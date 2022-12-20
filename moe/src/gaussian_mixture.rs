@@ -13,7 +13,7 @@ use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix1, Ix2,
 use ndarray_linalg::{cholesky::*, triangular::*};
 use ndarray_stats::QuantileExt;
 
-#[cfg(feature = "persistent")]
+#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 /// Gaussian mixture is a set of n weigthed multivariate normal distributions of dimension nx
@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 /// Note: distribution means are handle in a (n, nx) matrix whie covariances
 /// are handled in a (n, nx, nx) ndarray
 
-#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct GaussianMixture<F: Float> {
     /// weights vector (n,) of each cluster
