@@ -94,6 +94,7 @@ bitflags! {
 
 /// Mixture of experts checked parameters
 #[derive(Clone)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     /// Number of clusters (i.e. number of experts)
     n_clusters: usize,
@@ -174,6 +175,7 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
 
 /// Mixture of experts parameters
 #[derive(Clone)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MoeParams<F: Float, R: Rng + Clone>(MoeValidParams<F, R>);
 
 impl<F: Float> Default for MoeParams<F, Xoshiro256Plus> {

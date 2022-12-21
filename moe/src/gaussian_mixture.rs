@@ -25,8 +25,8 @@ use serde::{Deserialize, Serialize};
 /// Note: distribution means are handle in a (n, nx) matrix whie covariances
 /// are handled in a (n, nx, nx) ndarray
 
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 #[derive(Debug)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct GaussianMixture<F: Float> {
     /// weights vector (n,) of each cluster
     weights: Array1<F>,
