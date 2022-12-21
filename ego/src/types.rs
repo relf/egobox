@@ -73,7 +73,7 @@ impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<
 /// An enumeration to define the type of an input variable component
 /// with its domain definition
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum Xtype {
     /// Continuous variable in [lower bound, upper bound]
     Cont(f64, f64),
