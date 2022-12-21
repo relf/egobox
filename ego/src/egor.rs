@@ -90,6 +90,7 @@
 //! println!("G24 min result = {:?}", res);
 //! ```
 //!
+use crate::egor_state::MAX_POINT_ADDITION_RETRY;
 use crate::errors::{EgoError, Result};
 use crate::lhs_optimizer::LhsOptimizer;
 use crate::mixint::*;
@@ -581,9 +582,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             write_npy(filepath, &doe).expect("Write initial doe");
         }
 
-        const MAX_RETRY: i32 = 3;
         let mut clusterings = vec![None; self.n_cstr + 1];
-        let mut no_point_added_retries = MAX_RETRY;
+        let mut no_point_added_retries = MAX_POINT_ADDITION_RETRY;
         if n_eval / self.q_parallel == 0 {
             warn!(
                 "Number of evaluations {} too low (initial doe size={} and q_parallel={})",
@@ -653,7 +653,10 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             if rejected_count == x_dat.nrows() {
                 no_point_added_retries -= 1;
                 if no_point_added_retries == 0 {
-                    info!("Max number of retries ({}) without adding point", MAX_RETRY);
+                    info!(
+                        "Max number of retries ({}) without adding point",
+                        MAX_POINT_ADDITION_RETRY
+                    );
                     info!("Use LHS optimization to hopefully ensure a point addition");
                 }
                 if no_point_added_retries < 0 {
@@ -679,7 +682,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             prev_added = added;
             added += add_count as usize;
             info!("+{} point(s), total: {} points", add_count, added);
-            no_point_added_retries = MAX_RETRY; // reset as a point is added
+            no_point_added_retries = MAX_POINT_ADDITION_RETRY; // reset as a point is added
 
             let y_actual = self.eval(&x_to_eval);
             Zip::from(y_data.slice_mut(s![-add_count.., ..]).columns_mut())

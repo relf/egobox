@@ -199,6 +199,7 @@ pub fn cast_to_discrete_values(
 
 /// A decorator of LHS sampling that takes into account Xtype specifications
 /// casting continuous LHS result from floats to discrete types.
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MixintSampling {
     /// The continuous LHS sampling method
     lhs: Lhs<f64, Xoshiro256Plus>,
@@ -250,6 +251,7 @@ impl SamplingMethod<f64> for MixintSampling {
 pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
 /// A decorator of Moe surrogate that takes into account Xtype specifications
 #[derive(Clone)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MixintMoeValidParams {
     /// The surrogate factory
     surrogate_builder: MoeParams<f64, Xoshiro256Plus>,
@@ -273,6 +275,7 @@ impl MixintMoeValidParams {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MixintMoeParams(MixintMoeValidParams);
 
 impl MixintMoeParams {

@@ -46,7 +46,7 @@ pub struct EgorState<F: Float> {
     /// Previous number of added points
     pub prev_added: usize,
     /// Current number of retry without adding point
-    pub no_point_added_retries: usize,
+    pub no_point_added_retries: i32,
     pub clusterings: Option<Vec<Option<Clustering>>>,
     pub data: Option<(Array2<F>, Array2<F>)>,
     pub sampling: Option<Lhs<F, Xoshiro256Plus>>,
@@ -150,7 +150,7 @@ where
     }
 }
 
-const MAX_RETRY: usize = 3;
+pub const MAX_POINT_ADDITION_RETRY: i32 = 3;
 
 impl<F> State for EgorState<F>
 where
@@ -209,7 +209,7 @@ where
 
             added: 0,
             prev_added: 0,
-            no_point_added_retries: MAX_RETRY,
+            no_point_added_retries: MAX_POINT_ADDITION_RETRY,
             clusterings: None,
             data: None,
             sampling: None,

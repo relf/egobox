@@ -1,4 +1,5 @@
 use crate::errors::Result;
+use argmin::core::CostFunction;
 use egobox_moe::{ClusteredSurrogate, Clustering};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use linfa::Float;
@@ -70,6 +71,21 @@ pub struct ApproxValue {
 pub trait GroupFunc: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
+#[derive(Clone)]
+pub struct ObjFun(pub fn(&ArrayView2<f64>) -> Array2<f64>);
+impl CostFunction for ObjFun {
+    /// Type of the parameter vector
+    type Param = Array2<f64>;
+    /// Type of the return value computed by the cost function
+    type Output = Array2<f64>;
+
+    /// Apply the cost function to a parameter `p`
+    fn cost(&self, p: &Self::Param) -> std::result::Result<Self::Output, argmin::core::Error> {
+        // Evaluate 2D Rosenbrock function
+        Ok((self.0)(&p.view()))
+    }
+}
+
 /// An enumeration to define the type of an input variable component
 /// with its domain definition
 #[derive(Debug, Clone)]
@@ -89,7 +105,7 @@ pub enum Xtype {
 ///
 /// The output surrogate used by [crate::Egor] is expected to model either
 /// objective function or constraint functions
-pub trait SurrogateBuilder: Clone {
+pub trait SurrogateBuilder: Clone + Serialize {
     fn new_with_xtypes_rng(xtypes: &[Xtype]) -> Self;
 
     /// Sets the allowed regression models used in gaussian processes.
