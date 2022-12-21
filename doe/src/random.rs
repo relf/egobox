@@ -4,7 +4,12 @@ use ndarray::{Array, Array2, ArrayBase, Data, Ix2};
 use ndarray_rand::{rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt};
 use rand_xoshiro::Xoshiro256Plus;
 
+#[cfg(feature = "serializable")]
+use serde::{Deserialize, Serialize};
+
 /// The Random design consists in drawing samples randomly.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct Random<F: Float, R: Rng + Clone> {
     /// Sampling space definition as a (nx, 2) matrix
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of x
