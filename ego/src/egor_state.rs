@@ -41,12 +41,16 @@ pub struct EgorState<F: Float> {
     pub time: Option<instant::Duration>,
     /// Reason of termination
     pub termination_reason: TerminationReason,
+
     /// Number of added points
     pub added: usize,
     /// Previous number of added points
     pub prev_added: usize,
     /// Current number of retry without adding point
     pub no_point_added_retries: i32,
+    /// run_lhs_optim
+    pub lhs_optim: bool,
+
     pub clusterings: Option<Vec<Option<Clustering>>>,
     pub data: Option<(Array2<F>, Array2<F>)>,
     pub sampling: Option<Lhs<F, Xoshiro256Plus>>,
@@ -210,6 +214,7 @@ where
             added: 0,
             prev_added: 0,
             no_point_added_retries: MAX_POINT_ADDITION_RETRY,
+            lhs_optim: false,
             clusterings: None,
             data: None,
             sampling: None,

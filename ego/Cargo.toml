@@ -31,8 +31,8 @@ ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
 
-argmin={ git = "https://github.com/argmin-rs/argmin" }
-instant="0.1"
+argmin = "0.7.0"
+instant = "0.1"
 nlopt = "0.6.0"
 rand_xoshiro = "0.6"
 libm = "0.2.6"

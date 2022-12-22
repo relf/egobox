@@ -72,8 +72,16 @@ pub trait GroupFunc: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Arr
 impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
 #[derive(Clone)]
-pub struct ObjFun(pub fn(&ArrayView2<f64>) -> Array2<f64>);
-impl CostFunction for ObjFun {
+pub struct ObjFun<O: GroupFunc> {
+    fobj: O,
+}
+impl<O: GroupFunc> ObjFun<O> {
+    pub fn new(fobj: O) -> Self {
+        ObjFun { fobj }
+    }
+}
+
+impl<O: GroupFunc> CostFunction for ObjFun<O> {
     /// Type of the parameter vector
     type Param = Array2<f64>;
     /// Type of the return value computed by the cost function
@@ -82,7 +90,7 @@ impl CostFunction for ObjFun {
     /// Apply the cost function to a parameter `p`
     fn cost(&self, p: &Self::Param) -> std::result::Result<Self::Output, argmin::core::Error> {
         // Evaluate 2D Rosenbrock function
-        Ok((self.0)(&p.view()))
+        Ok((self.fobj)(&p.view()))
     }
 }
 
