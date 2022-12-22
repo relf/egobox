@@ -1206,25 +1206,25 @@ impl<O: GroupFunc> EgorBuilder2<O> {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Egor2<O, MoeParams<f64, Xoshiro256Plus>> {
+    ) -> EgorOptimizer<O, MoeParams<f64, Xoshiro256Plus>> {
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        Egor2 {
+        EgorOptimizer {
             fobj: ObjFun::new(self.fobj),
             solver: EgorSolver::new_with_xlimits_rng(xlimits, rng),
         }
     }
 
-    pub fn min_within_mixed_space(self, xtypes: &[Xtype]) -> Egor2<O, MixintMoeParams> {
+    pub fn min_within_mixed_space(self, xtypes: &[Xtype]) -> EgorOptimizer<O, MixintMoeParams> {
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        Egor2 {
+        EgorOptimizer {
             fobj: ObjFun::new(self.fobj),
             solver: EgorSolver::new_with_xtypes_rng(xtypes, rng),
         }
@@ -1232,12 +1232,12 @@ impl<O: GroupFunc> EgorBuilder2<O> {
 }
 
 #[derive(Clone)]
-pub struct Egor2<O: GroupFunc, SB: SurrogateBuilder> {
+pub struct EgorOptimizer<O: GroupFunc, SB: SurrogateBuilder> {
     fobj: ObjFun<O>,
     solver: EgorSolver<SB>,
 }
 
-impl<O: GroupFunc, SB: SurrogateBuilder> Egor2<O, SB> {
+impl<O: GroupFunc, SB: SurrogateBuilder> EgorOptimizer<O, SB> {
     /// Sets allowed number of evaluation of the function under optimization
     pub fn n_eval(&mut self, n_eval: usize) -> &mut Self {
         self.solver.n_eval(n_eval);
