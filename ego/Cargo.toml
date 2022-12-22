@@ -31,7 +31,7 @@ ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
 
-argmin = "0.7.0"
+argmin = { version = "0.7.0", features = ["ctrlc"] }
 instant = "0.1"
 nlopt = "0.6.0"
 rand_xoshiro = "0.6"

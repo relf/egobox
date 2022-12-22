@@ -12,13 +12,10 @@
 
 use crate::types::*;
 use egobox_doe::SamplingMethod;
-use log::info;
 use ndarray::{Array2, ArrayView2};
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 /// Utility function converting `xlimits` float data list specifying bounds of x components
 /// to x specified as a list of Vtype.Float types [egobox.Vtype]
@@ -331,17 +328,7 @@ impl Egor {
             })
             .collect();
 
-        // let surrogate_builder = egobox_moe::MoeParams::default()
-        //     .n_clusters(self.n_clusters.unwrap_or(1))
-        //     .kpls_dim(self.kpls_dim)
-        //     .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-        //     .correlation_spec(
-        //         egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-        //     );
-        let interruptor = Arc::new(AtomicBool::new(false));
-        // let mut mixintegor =
-        //     egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &pre_proc, rng);
-        let mut mixintegor = egobox_ego::EgorBuilder::optimize(obj);
+        let mut mixintegor = egobox_ego::EgorBuilder2::optimize(obj);
 
         if let Some(seed) = self.seed {
             mixintegor = mixintegor.random_seed(seed);
@@ -367,25 +354,15 @@ impl Egor {
             .n_clusters(self.n_clusters)
             .expect(expected)
             .outdir(self.outdir.as_ref().cloned())
-            .hot_start(self.hot_start)
-            .interruptor(interruptor.clone());
+            .hot_start(self.hot_start);
 
-        match ctrlc::set_handler(move || {
-            info!("***** Keyboard interruption! ******************************");
-            interruptor.store(true, Ordering::SeqCst)
-        }) {
-            Ok(_) | Err(ctrlc::Error::MultipleHandlers) => {
-                let res = mixintegor.run().expect("Minimization failed");
+        let res = mixintegor
+            .run()
+            .expect("Egor should optimize the objective function");
 
-                Ok(OptimResult {
-                    x_opt: res.x_opt.to_vec(),
-                    y_opt: res.y_opt.to_vec(),
-                })
-            }
-            Err(err) => Err(PyRuntimeError::new_err(format!(
-                "Error in keyboard interruption setup: {:?}",
-                err
-            ))),
-        }
+        Ok(OptimResult {
+            x_opt: res.x_opt.to_vec(),
+            y_opt: res.y_opt.to_vec(),
+        })
     }
 }

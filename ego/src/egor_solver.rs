@@ -3,7 +3,7 @@
 //! ```no_run
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! # use egobox_doe::{Lhs, SamplingMethod};
-//! # use egobox_ego::{ApproxValue, Egor, InfillStrategy, InfillOptimizer};
+//! # use egobox_ego::{ApproxValue, EgorBuilder2, InfillStrategy, InfillOptimizer};
 //! # use rand_xoshiro::Xoshiro256Plus;
 //! # use ndarray_rand::rand::SeedableRng;
 //! use argmin_testfunctions::rosenbrock;
@@ -18,7 +18,8 @@
 //! }
 //!
 //! let xlimits = array![[-2., 2.], [-2., 2.]];
-//! let res = Egor::minimize(rosenb, &xlimits)
+//! let res = EgorBuilder2::optimize(rosenb)
+//!     .min_within(&xlimits)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .n_doe(10)
 //!     .expect(Some(ApproxValue {  // Known solution, the algo exits if reached
@@ -42,7 +43,7 @@
 //! ```no_run
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! # use egobox_doe::{Lhs, SamplingMethod};
-//! # use egobox_ego::{ApproxValue, Egor, InfillStrategy, InfillOptimizer};
+//! # use egobox_ego::{ApproxValue, EgorBuilder2, InfillStrategy, InfillOptimizer};
 //! # use rand_xoshiro::Xoshiro256Plus;
 //! # use ndarray_rand::rand::SeedableRng;
 //!
@@ -75,7 +76,8 @@
 //!
 //! let xlimits = array![[0., 3.], [0., 4.]];
 //! let doe = Lhs::new(&xlimits).sample(10);
-//! let res = Egor::minimize(f_g24, &xlimits)
+//! let res = EgorBuilder2::optimize(f_g24)
+//!            .min_within(&xlimits)
 //!            .n_cstr(2)
 //!            .infill_strategy(InfillStrategy::EI)
 //!            .infill_optimizer(InfillOptimizer::Cobyla)
@@ -104,8 +106,11 @@ use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, MoeParams, RegressionSpec};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
+use linfa::ParamGuard;
 use log::{debug, info, warn};
-use ndarray::{concatenate, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{
+    concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
+};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -185,6 +190,53 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// A random generator used to get reproductible results.
     /// For instance: Xoshiro256Plus::from_u64_seed(42) for reproducibility
     rng: Xoshiro256Plus,
+}
+
+impl SurrogateBuilder for MoeParams<f64, Xoshiro256Plus> {
+    fn new_with_xtypes_rng(_xtypes: &[Xtype]) -> Self {
+        MoeParams::new()
+    }
+
+    /// Sets the allowed regression models used in gaussian processes.
+    fn set_regression_spec(&mut self, regression_spec: RegressionSpec) {
+        *self = self.clone().regression_spec(regression_spec);
+    }
+
+    /// Sets the allowed correlation models used in gaussian processes.
+    fn set_correlation_spec(&mut self, correlation_spec: CorrelationSpec) {
+        *self = self.clone().correlation_spec(correlation_spec);
+    }
+
+    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
+    fn set_kpls_dim(&mut self, kpls_dim: Option<usize>) {
+        *self = self.clone().kpls_dim(kpls_dim);
+    }
+
+    /// Sets the number of clusters used by the mixture of surrogate experts.
+    fn set_n_clusters(&mut self, n_clusters: usize) {
+        *self = self.clone().n_clusters(n_clusters);
+    }
+
+    fn train(
+        &self,
+        xt: &ArrayView2<f64>,
+        yt: &ArrayView2<f64>,
+    ) -> Result<Box<dyn ClusteredSurrogate>> {
+        let checked = self.check_ref()?;
+        let moe = checked.train(xt, yt)?;
+        Ok(moe).map(|moe| Box::new(moe) as Box<dyn ClusteredSurrogate>)
+    }
+
+    fn train_on_clusters(
+        &self,
+        xt: &ArrayView2<f64>,
+        yt: &ArrayView2<f64>,
+        clustering: &Clustering,
+    ) -> Result<Box<dyn ClusteredSurrogate>> {
+        let checked = self.check_ref()?;
+        let moe = checked.train_on_clusters(xt, yt, clustering)?;
+        Ok(moe).map(|moe| Box::new(moe) as Box<dyn ClusteredSurrogate>)
+    }
 }
 
 impl<SB: SurrogateBuilder> EgorSolver<SB> {
@@ -607,7 +659,10 @@ where
                 if new_state.no_point_added_retries < 0 {
                     // no luck with LHS optimization
                     warn!("Fail to add another point to improve the surrogate models. Abort!");
-                    return Ok((state.terminate_with(TerminationReason::Aborted), None));
+                    return Ok((
+                        state.terminate_with(TerminationReason::NoChangeInCost),
+                        None,
+                    ));
                 }
             } else {
                 // ok point added we can go on, just output number of rejected point
@@ -665,6 +720,15 @@ where
         }
         println!("{:?}", new_state);
         Ok((new_state, None))
+    }
+
+    fn terminate(&mut self, state: &EgorState<f64>) -> TerminationReason {
+        debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> TERMINATE");
+        if state.get_termination_reason() == TerminationReason::Aborted {
+            info!("*********************************************************** Keyboard interruption ******");
+            return TerminationReason::Aborted;
+        }
+        TerminationReason::NotTerminated
     }
 }
 
