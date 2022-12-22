@@ -271,10 +271,11 @@ where
                 && self.best_cost.is_infinite()
                 && self.cost.is_sign_positive() == self.best_cost.is_sign_positive())
         {
-            let param = (*self.param.as_ref().unwrap()).clone();
+            if let Some(param) = self.param.as_ref().cloned() {
+                std::mem::swap(&mut self.prev_best_param, &mut self.best_param);
+                self.best_param = Some(param);
+            }
             let cost = self.cost;
-            std::mem::swap(&mut self.prev_best_param, &mut self.best_param);
-            self.best_param = Some(param);
             std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
             self.best_cost = cost;
             self.last_best_iter = self.iter;

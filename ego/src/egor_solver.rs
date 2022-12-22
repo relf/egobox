@@ -594,10 +594,10 @@ where
             .data((x_data, y_data))
             .clusterings(clusterings)
             .sampling(sampling);
-        initial_state.iter = n_iter as u64;
+        initial_state.max_iters = n_iter as u64;
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
-
+        info!("INITIAL STATE = {:?}", initial_state);
         Ok((initial_state, None))
     }
 
@@ -630,7 +630,7 @@ where
 
         let rejected_count = loop {
             let recluster = self.have_to_recluster(state.added, state.prev_added);
-            let init = state.get_iter() == 1;
+            let init = state.get_iter() == 0;
             debug!(
                 "LHSOPTIM = {} {}",
                 state.no_point_added_retries,
@@ -708,7 +708,7 @@ where
         );
         new_state.prev_added = new_state.added;
         new_state.added += add_count as usize;
-        info!("+{} point(s), total: {} points", add_count, state.added);
+        info!("+{} point(s), total: {} points", add_count, new_state.added);
         new_state.no_point_added_retries = MAX_RETRY; // reset as a point is added
 
         let y_actual = self.eval(fobj, &x_to_eval);
@@ -731,7 +731,7 @@ where
             y_data.row(best_index),
             x_data.row(best_index)
         );
-
+        new_state = new_state.data((x_data, y_data.clone()));
         if let Some(sol) = self.expected {
             if (y_data[[best_index, 0]] - sol.value).abs() < sol.tolerance {
                 info!("Expected optimum : {:?}", sol);
@@ -742,6 +742,7 @@ where
                 ));
             }
         }
+        println!("{:?}", new_state);
         Ok((new_state, None))
     }
 }
@@ -1376,21 +1377,7 @@ impl<SB: SurrogateBuilder> Egor2<SB> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        let rng = self.solver.rng.clone();
-        let sampling = Lhs::new(&self.solver.xlimits)
-            .with_rng(rng)
-            .kind(LhsKind::Maximin);
-        let mut clusterings = vec![None; 1 + self.solver.n_cstr];
-        let (x_dat, _) = self.solver.next_points(
-            true,
-            false, // done anyway
-            &mut clusterings,
-            x_data,
-            y_data,
-            &sampling,
-            None,
-        );
-        x_dat
+        self.solver.suggest(x_data, y_data)
     }
 
     pub fn run(&self) -> Result<OptimResult<f64>> {
