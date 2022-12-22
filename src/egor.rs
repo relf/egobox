@@ -328,7 +328,7 @@ impl Egor {
             })
             .collect();
 
-        let mut mixintegor = egobox_ego::EgorBuilder2::optimize(obj);
+        let mut mixintegor = egobox_ego::EgorBuilder::optimize(obj);
 
         if let Some(seed) = self.seed {
             mixintegor = mixintegor.random_seed(seed);

@@ -16,7 +16,7 @@
 //!
 //! ```
 //! use ndarray::{array, Array2, ArrayView2};
-//! use egobox_ego::EgorBuilder2;
+//! use egobox_ego::EgorBuilder;
 //!
 //! // A one-dimensional test function, x in [0., 25.] and min xsinx(x) ~ -15.1 at x ~ 18.9
 //! fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
@@ -24,7 +24,7 @@
 //! }
 //!
 //! // We ask for 10 evaluations of the objective function to get the result
-//! let res = EgorBuilder2::optimize(xsinx)
+//! let res = EgorBuilder::optimize(xsinx)
 //!             .min_within(&array![[0.0, 25.0]])
 //!             .n_eval(10)
 //!             .run()
@@ -48,7 +48,7 @@
 //! use ndarray_linalg::Norm;
 //! #[cfg(not(feature = "blas"))]
 //! use linfa_linalg::norm::*;
-//! use egobox_ego::{EgorBuilder2, InfillStrategy, Xtype};
+//! use egobox_ego::{EgorBuilder, InfillStrategy, Xtype};
 //!
 //! fn mixsinx(x: &ArrayView2<f64>) -> Array2<f64> {
 //!     if (x.mapv(|v| v.round()).norm_l2() - x.norm_l2()).abs() < 1e-6 {
@@ -64,7 +64,7 @@
 //! // We define input as being integer
 //! let xtypes = vec![Xtype::Int(0, 25)];
 //!
-//! let res = EgorBuilder2::optimize(mixsinx)
+//! let res = EgorBuilder::optimize(mixsinx)
 //!     .random_seed(42)
 //!     .min_within_mixed_space(&xtypes)   // We build mixed-integer optimizer
 //!     .doe(Some(doe))          // we pass an initial doe

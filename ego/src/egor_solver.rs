@@ -3,7 +3,7 @@
 //! ```no_run
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! # use egobox_doe::{Lhs, SamplingMethod};
-//! # use egobox_ego::{ApproxValue, EgorBuilder2, InfillStrategy, InfillOptimizer};
+//! # use egobox_ego::{ApproxValue, EgorBuilder, InfillStrategy, InfillOptimizer};
 //! # use rand_xoshiro::Xoshiro256Plus;
 //! # use ndarray_rand::rand::SeedableRng;
 //! use argmin_testfunctions::rosenbrock;
@@ -18,7 +18,7 @@
 //! }
 //!
 //! let xlimits = array![[-2., 2.], [-2., 2.]];
-//! let res = EgorBuilder2::optimize(rosenb)
+//! let res = EgorBuilder::optimize(rosenb)
 //!     .min_within(&xlimits)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .n_doe(10)
@@ -43,7 +43,7 @@
 //! ```no_run
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! # use egobox_doe::{Lhs, SamplingMethod};
-//! # use egobox_ego::{ApproxValue, EgorBuilder2, InfillStrategy, InfillOptimizer};
+//! # use egobox_ego::{ApproxValue, EgorBuilder, InfillStrategy, InfillOptimizer};
 //! # use rand_xoshiro::Xoshiro256Plus;
 //! # use ndarray_rand::rand::SeedableRng;
 //!
@@ -76,7 +76,7 @@
 //!
 //! let xlimits = array![[0., 3.], [0., 4.]];
 //! let doe = Lhs::new(&xlimits).sample(10);
-//! let res = EgorBuilder2::optimize(f_g24)
+//! let res = EgorBuilder::optimize(f_g24)
 //!            .min_within(&xlimits)
 //!            .n_cstr(2)
 //!            .infill_strategy(InfillStrategy::EI)
@@ -1188,14 +1188,14 @@ fn find_best_result_index(
 }
 
 /// EGO optimization parameterization
-pub struct EgorBuilder2<O: GroupFunc> {
+pub struct EgorBuilder<O: GroupFunc> {
     fobj: O,
     seed: Option<u64>,
 }
 
-impl<O: GroupFunc> EgorBuilder2<O> {
+impl<O: GroupFunc> EgorBuilder<O> {
     pub fn optimize(fobj: O) -> Self {
-        EgorBuilder2 { fobj, seed: None }
+        EgorBuilder { fobj, seed: None }
     }
 
     pub fn random_seed(mut self, seed: u64) -> Self {
@@ -1425,7 +1425,7 @@ mod tests {
     #[serial]
     fn test_xsinx_ei_quadratic_egor_solver() {
         let initial_doe = array![[0.], [7.], [25.]];
-        let res = EgorBuilder2::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .min_within(&array![[0.0, 25.0]])
             .infill_strategy(InfillStrategy::EI)
             .regression_spec(RegressionSpec::QUADRATIC)
@@ -1449,7 +1449,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_wb2_egor_solver() {
-        let res = EgorBuilder2::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .min_within(&array![[0.0, 25.0]])
             .n_eval(20)
             .regression_spec(RegressionSpec::ALL)
@@ -1463,7 +1463,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_auto_clustering_egor_solver() {
-        let res = EgorBuilder2::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .min_within(&array![[0.0, 25.0]])
             .n_clusters(Some(0))
             .n_eval(20)
@@ -1478,7 +1478,7 @@ mod tests {
     fn test_xsinx_with_hotstart_egor_solver() {
         let xlimits = array![[0.0, 25.0]];
         let doe = Lhs::new(&xlimits).sample(10);
-        let res = EgorBuilder2::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .random_seed(42)
             .min_within(&xlimits)
             .n_eval(15)
@@ -1489,7 +1489,7 @@ mod tests {
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
 
-        let res = EgorBuilder2::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .random_seed(42)
             .min_within(&xlimits)
             .n_eval(5)
@@ -1504,7 +1504,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_suggestions_egor_solver() {
-        let mut ego = EgorBuilder2::optimize(xsinx)
+        let mut ego = EgorBuilder::optimize(xsinx)
             .random_seed(42)
             .min_within(&array![[0., 25.]]);
         let ego = ego
@@ -1542,7 +1542,7 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
-        let res = EgorBuilder2::optimize(rosenb)
+        let res = EgorBuilder::optimize(rosenb)
             .random_seed(42)
             .min_within(&xlimits)
             .doe(Some(doe))
@@ -1594,7 +1594,7 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(3);
-        let res = EgorBuilder2::optimize(f_g24)
+        let res = EgorBuilder::optimize(f_g24)
             .random_seed(42)
             .min_within(&xlimits)
             .n_cstr(2)
@@ -1613,7 +1613,7 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
-        let res = EgorBuilder2::optimize(f_g24)
+        let res = EgorBuilder::optimize(f_g24)
             .random_seed(42)
             .min_within(&xlimits)
             .regression_spec(RegressionSpec::ALL)
@@ -1647,7 +1647,7 @@ mod tests {
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![Xtype::Int(0, 25)];
 
-        let res = EgorBuilder2::optimize(mixsinx)
+        let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
             .min_within_mixed_space(&xtypes)
             .doe(Some(doe))
@@ -1668,7 +1668,7 @@ mod tests {
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![Xtype::Int(0, 25)];
 
-        let res = EgorBuilder2::optimize(mixsinx)
+        let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
             .min_within_mixed_space(&xtypes)
             .doe(Some(doe))
@@ -1689,7 +1689,7 @@ mod tests {
         let n_eval = 30;
         let xtypes = vec![Xtype::Int(0, 25)];
 
-        let res = EgorBuilder2::optimize(mixsinx)
+        let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
             .min_within_mixed_space(&xtypes)
             .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
