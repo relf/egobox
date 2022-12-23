@@ -10,6 +10,8 @@ use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Find best (eg minimal) cost value (y_data[0]) with valid constraints (y_data[1..] < cstr_tol).
+/// y_data containing ns samples [objective, cstr_1, ... cstr_nc] is given as a matrix (ns, nc + 1)  
 pub fn find_best_result_index<F: Float>(
     y_data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     cstr_tol: F,
@@ -53,7 +55,7 @@ pub struct EgorState<F: Float> {
     /// Previous best cost function value
     pub prev_best_cost: Option<Array1<F>>,
     /// Target cost function value
-    pub target_cost: Option<Array1<F>>,
+    pub target_cost: F,
 
     /// Current iteration
     pub iter: u64,
@@ -77,9 +79,14 @@ pub struct EgorState<F: Float> {
     /// run_lhs_optim
     pub lhs_optim: bool,
 
+    /// Current clusterings for objective and constraints mixture surrogate models
     pub clusterings: Option<Vec<Option<Clustering>>>,
+    /// Historic data (params, objective and constraints)
     pub data: Option<(Array2<F>, Array2<F>)>,
+    /// Sampling method used to generate space filling samples
     pub sampling: Option<Lhs<F, Xoshiro256Plus>>,
+    /// Constraint tolerance cstr < cstr_tol.
+    /// It used to assess the validity of the param point and hence the corresponding cost
     pub cstr_tol: F,
 }
 
@@ -103,15 +110,16 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego    ::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let state: EgorState<f64> = EgorState::new();
     /// # assert_eq!(state.target_cost.to_ne_bytes(), f64::NEG_INFINITY.to_ne_bytes());
     /// let state = state.target_cost(0.0);
     /// # assert_eq!(state.target_cost.to_ne_bytes(), 0.0f64.to_ne_bytes());
     /// ```
     #[must_use]
-    pub fn target_cost(mut self, target_cost: Array1<F>) -> Self {
-        self.target_cost = Some(target_cost);
+    pub fn target_cost(mut self, target_cost: F) -> Self {
+        self.target_cost = target_cost;
         self
     }
 
@@ -120,8 +128,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let state: EgorState<f64> = EgorState::new();
     /// # assert_eq!(state.max_iters, std::u64::MAX);
     /// let state = state.max_iters(1000);
     /// # assert_eq!(state.max_iters, 1000);
@@ -138,16 +147,18 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State};
-    /// # let state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use ndarray::array;
+    /// # use argmin::core::State;
+    /// # use egobox_ego::EgorState;
+    /// # let state: EgorState<f64> = EgorState::new();
     /// # let cost_old = 1.0f64;
-    /// # let state = state.cost(cost_old);
-    /// # assert_eq!(state.prev_cost.to_ne_bytes(), f64::INFINITY.to_ne_bytes());
-    /// # assert_eq!(state.cost.to_ne_bytes(), 1.0f64.to_ne_bytes());
+    /// # let state = state.cost(array![cost_old]);
+    /// # assert!(state.prev_cost.is_none());
+    /// # assert_eq!(state.cost.as_ref().unwrap()[0].to_ne_bytes(), 1.0f64.to_ne_bytes());
     /// # let cost = 0.0f64;
-    /// let state = state.cost(cost);
-    /// # assert_eq!(state.prev_cost.to_ne_bytes(), 1.0f64.to_ne_bytes());
-    /// # assert_eq!(state.cost.to_ne_bytes(), 0.0f64.to_ne_bytes());
+    /// let state = state.cost(array![cost]);
+    /// # assert_eq!(state.prev_cost.as_ref().unwrap()[0].to_ne_bytes(), 1.0f64.to_ne_bytes());
+    /// # assert_eq!(state.cost.as_ref().unwrap()[0].to_ne_bytes(), 0.0f64.to_ne_bytes());
     /// ```
     #[must_use]
     pub fn cost(mut self, cost: Array1<F>) -> Self {
@@ -192,7 +203,7 @@ where
     /// Floating point precision
     type Float = F;
 
-    /// Create new `LinearProgramState` instance
+    /// Create new `EgorState` instance
     ///
     /// # Example
     ///
@@ -200,19 +211,19 @@ where
     /// # extern crate instant;
     /// # use instant;
     /// # use std::collections::HashMap;
-    /// # use argmin::core::TerminationReason;
-    /// use argmin::core::{LinearProgramState, State};
-    /// let state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use argmin::core::{State, TerminationReason};
+    /// use egobox_ego::EgorState;
+    /// let state: EgorState<f64> = EgorState::new();
     ///
     /// # assert!(state.param.is_none());
     /// # assert!(state.prev_param.is_none());
     /// # assert!(state.best_param.is_none());
     /// # assert!(state.prev_best_param.is_none());
-    /// # assert_eq!(state.cost.to_ne_bytes(), f64::INFINITY.to_ne_bytes());
-    /// # assert_eq!(state.prev_cost.to_ne_bytes(), f64::INFINITY.to_ne_bytes());
-    /// # assert_eq!(state.best_cost.to_ne_bytes(), f64::INFINITY.to_ne_bytes());
-    /// # assert_eq!(state.prev_best_cost.to_ne_bytes(), f64::INFINITY.to_ne_bytes());
-    /// # assert_eq!(state.target_cost.to_ne_bytes(), f64::NEG_INFINITY.to_ne_bytes());
+    /// # assert!(state.cost.is_none());
+    /// # assert!(state.prev_cost.is_none());
+    /// # assert!(state.best_cost.is_none());
+    /// # assert!(state.prev_best_cost.is_none());
+    /// # assert_eq!(state.target_cost, f64::NEG_INFINITY);
     /// # assert_eq!(state.iter, 0);
     /// # assert_eq!(state.last_best_iter, 0);
     /// # assert_eq!(state.max_iters, std::u64::MAX);
@@ -231,7 +242,7 @@ where
             prev_cost: None,
             best_cost: None,
             prev_best_cost: None,
-            target_cost: None,
+            target_cost: F::neg_infinity(),
 
             iter: 0,
             last_best_iter: 0,
@@ -257,41 +268,23 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # use ndarray::array;
+    /// # use egobox_ego::EgorState;
+    ///
+    /// let mut state: EgorState<f64> = EgorState::new();
     ///
     /// // Simulating a new, better parameter vector
-    /// state.best_param = Some(vec![1.0f64]);
-    /// state.best_cost = 10.0;
-    /// state.param = Some(vec![2.0f64]);
-    /// state.cost = 5.0;
+    /// let mut state = state.data((array![[1.0f64]], array![[10.0]]));
+    /// state.param = Some(array![2.0f64]);
+    /// state.cost = Some(array![5.0]);
     ///
     /// // Calling update
     /// state.update();
     ///
     /// // Check if update was successful
     /// assert_eq!(state.best_param.as_ref().unwrap()[0], 2.0f64);
-    /// assert_eq!(state.best_cost.to_ne_bytes(), state.best_cost.to_ne_bytes());
-    /// assert!(state.is_best());
-    /// ```
-    ///
-    /// For algorithms which do not compute the cost function, every new parameter vector will be
-    /// the new best:
-    ///
-    /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
-    ///
-    /// // Simulating a new, better parameter vector
-    /// state.best_param = Some(vec![1.0f64]);
-    /// state.param = Some(vec![2.0f64]);
-    ///
-    /// // Calling update
-    /// state.update();
-    ///
-    /// // Check if update was successful
-    /// assert_eq!(state.best_param.as_ref().unwrap()[0], 2.0f64);
-    /// assert_eq!(state.best_cost.to_ne_bytes(), state.best_cost.to_ne_bytes());
+    /// assert_eq!(state.best_cost.as_ref().unwrap()[0], 5.0);
     /// assert!(state.is_best());
     /// ```
     fn update(&mut self) {
@@ -323,10 +316,12 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use ndarray::array;
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # assert!(state.param.is_none());
-    /// # state.param = Some(vec![1.0, 2.0]);
+    /// # state.param = Some(array![1.0, 2.0]);
     /// # assert_eq!(state.param.as_ref().unwrap()[0].to_ne_bytes(), 1.0f64.to_ne_bytes());
     /// # assert_eq!(state.param.as_ref().unwrap()[1].to_ne_bytes(), 2.0f64.to_ne_bytes());
     /// let param = state.get_param();  // Option<&P>
@@ -342,10 +337,14 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use ndarray::array;
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    ///
+    /// # let mut state: EgorState<f64> = EgorState::new();
+
     /// # assert!(state.best_param.is_none());
-    /// # state.best_param = Some(vec![1.0, 2.0]);
+    /// # state.best_param = Some(array![1.0, 2.0]);
     /// # assert_eq!(state.best_param.as_ref().unwrap()[0].to_ne_bytes(), 1.0f64.to_ne_bytes());
     /// # assert_eq!(state.best_param.as_ref().unwrap()[1].to_ne_bytes(), 2.0f64.to_ne_bytes());
     /// let best_param = state.get_best_param();  // Option<&P>
@@ -361,8 +360,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat, TerminationReason};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat, TerminationReason};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # assert_eq!(state.termination_reason, TerminationReason::NotTerminated);
     /// let state = state.terminate_with(TerminationReason::MaxItersReached);
     /// # assert_eq!(state.termination_reason, TerminationReason::MaxItersReached);
@@ -379,8 +379,9 @@ where
     /// ```
     /// # extern crate instant;
     /// # use instant;
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat, TerminationReason};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat, TerminationReason};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// let state = state.time(Some(instant::Duration::new(0, 12)));
     /// # assert_eq!(state.time.unwrap(), instant::Duration::new(0, 12));
     /// ```
@@ -394,9 +395,11 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
-    /// # state.cost = 12.0;
+    /// # use ndarray::array;
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
+    /// # state.cost = Some(array![12.0]);
     /// let cost = state.get_cost();
     /// # assert_eq!(cost.to_ne_bytes(), 12.0f64.to_ne_bytes());
     /// ```
@@ -412,9 +415,11 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
-    /// # state.best_cost = 12.0;
+    /// # use ndarray::array;
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
+    /// # state.best_cost = Some(array![12.0]);
     /// let best_cost = state.get_best_cost();
     /// # assert_eq!(best_cost.to_ne_bytes(), 12.0f64.to_ne_bytes());
     /// ```
@@ -430,17 +435,16 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use ndarray::array;
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # state.target_cost = 12.0;
     /// let target_cost = state.get_target_cost();
     /// # assert_eq!(target_cost.to_ne_bytes(), 12.0f64.to_ne_bytes());
     /// ```
     fn get_target_cost(&self) -> Self::Float {
-        match self.target_cost.as_ref() {
-            Some(c) => *(c.get(0).unwrap_or(&Self::Float::neg_infinity())),
-            None => Self::Float::neg_infinity(),
-        }
+        self.target_cost
     }
 
     /// Returns current number of iterations.
@@ -448,8 +452,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # state.iter = 12;
     /// let iter = state.get_iter();
     /// # assert_eq!(iter, 12);
@@ -463,8 +468,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # state.last_best_iter = 12;
     /// let last_best_iter = state.get_last_best_iter();
     /// # assert_eq!(last_best_iter, 12);
@@ -478,8 +484,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # state.max_iters = 12;
     /// let max_iters = state.get_max_iters();
     /// # assert_eq!(max_iters, 12);
@@ -493,8 +500,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat, TerminationReason};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat, TerminationReason};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// let termination_reason = state.get_termination_reason();
     /// # assert_eq!(termination_reason, TerminationReason::NotTerminated);
     /// ```
@@ -509,8 +517,9 @@ where
     /// ```
     /// # extern crate instant;
     /// # use instant;
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// let time = state.get_time();
     /// # assert_eq!(time.unwrap(), instant::Duration::new(0, 0));
     /// ```
@@ -523,8 +532,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # assert_eq!(state.iter, 0);
     /// state.increment_iter();
     /// # assert_eq!(state.iter, 1);
@@ -537,8 +547,9 @@ where
     ///
     /// ```
     /// # use std::collections::HashMap;
-    /// # use argmin::core::{Problem, LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{Problem, State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # assert_eq!(state.counts, HashMap::new());
     /// # state.counts.insert("test2".to_string(), 10u64);
     /// #
@@ -567,8 +578,9 @@ where
     ///
     /// ```
     /// # use std::collections::HashMap;
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # assert_eq!(state.counts, HashMap::new());
     /// # state.counts.insert("test2".to_string(), 10u64);
     /// let counts = state.get_func_counts();
@@ -586,8 +598,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{LinearProgramState, State, ArgminFloat};
-    /// # let mut state: LinearProgramState<Vec<f64>, f64> = LinearProgramState::new();
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # state.last_best_iter = 12;
     /// # state.iter = 12;
     /// let is_best = state.is_best();

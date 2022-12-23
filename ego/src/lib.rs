@@ -106,6 +106,7 @@ mod types;
 mod utils;
 
 pub use crate::egor_solver::*;
+pub use crate::egor_state::*;
 pub use crate::errors::*;
 pub use crate::mixint::*;
 pub use crate::types::*;
