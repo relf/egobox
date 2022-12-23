@@ -92,11 +92,10 @@
 //! println!("G24 min result = {:?}", res);
 //! ```
 //!
-use crate::egor_state::{EgorState, MAX_POINT_ADDITION_RETRY};
+use crate::egor_state::{find_best_result_index, EgorState, MAX_POINT_ADDITION_RETRY};
 use crate::errors::{EgoError, Result};
 use crate::lhs_optimizer::LhsOptimizer;
 use crate::mixint::*;
-use crate::sort_axis::*;
 use crate::types::*;
 use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale, grad_wbs2};
 use crate::utils::{ei, wb2s};
@@ -565,6 +564,7 @@ where
         initial_state.max_iters = n_iter as u64;
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
+        initial_state.cstr_tol = self.cstr_tol;
         info!("INITIAL STATE = {:?}", initial_state);
         Ok((initial_state, None))
     }
@@ -724,6 +724,7 @@ where
 
     fn terminate(&mut self, state: &EgorState<f64>) -> TerminationReason {
         debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> TERMINATE");
+        debug!("{:?}", state);
         if state.get_termination_reason() == TerminationReason::Aborted {
             info!("*********************************************************** Keyboard interruption ******");
             return TerminationReason::Aborted;
@@ -1053,21 +1054,7 @@ where
     }
 
     fn find_best_result_index(&self, y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> usize {
-        find_best_result_index(y_data, self.n_cstr, self.cstr_tol)
-        // if self.n_cstr > 0 {
-        //     let mut index = 0;
-        //     let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
-        //     let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
-        //     for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
-        //         if !row.slice(s![1..]).iter().any(|v| *v > self.cstr_tol) {
-        //             index = i;
-        //             break;
-        //         }
-        //     }
-        //     perm.indices[index]
-        // } else {
-        //     y_data.column(0).argmin().unwrap()
-        // }
+        find_best_result_index(y_data, self.cstr_tol)
     }
 
     fn get_virtual_point(
@@ -1163,27 +1150,6 @@ where
             .expect("Objective evaluation");
         println!("cost={}", cost);
         cost
-    }
-}
-
-fn find_best_result_index(
-    y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    n_cstr: usize,
-    cstr_tol: f64,
-) -> usize {
-    if n_cstr > 0 {
-        let mut index = 0;
-        let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
-        let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
-        for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
-            if !row.slice(s![1..]).iter().any(|v| *v > cstr_tol) {
-                index = i;
-                break;
-            }
-        }
-        perm.indices[index]
-    } else {
-        y_data.column(0).argmin().unwrap()
     }
 }
 
@@ -1368,13 +1334,12 @@ impl<O: GroupFunc, SB: SurrogateBuilder> EgorOptimizer<O, SB> {
     pub fn run(&self) -> Result<OptimResult<f64>> {
         let no_discrete = self.solver.no_discrete;
         let xtypes = self.solver.xtypes.clone();
-        let n_cstr = self.solver.n_cstr;
         let cstr_tol = self.solver.cstr_tol;
 
         let result = Executor::new(self.fobj.clone(), self.solver.clone()).run()?;
 
         let (x_data, y_data) = result.state().clone().take_data().unwrap();
-        let best_index = find_best_result_index(&y_data, n_cstr, cstr_tol);
+        let best_index = find_best_result_index(&y_data, cstr_tol);
 
         let res = if no_discrete {
             info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);

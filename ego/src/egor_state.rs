@@ -1,12 +1,36 @@
+use crate::sort_axis::*;
 use argmin::core::{ArgminFloat, Problem, State, TerminationReason};
 use egobox_doe::Lhs;
 use egobox_moe::Clustering;
 use linfa::Float;
-use ndarray::{Array1, Array2};
+use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
+use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+pub fn find_best_result_index<F: Float>(
+    y_data: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    cstr_tol: F,
+) -> usize {
+    if y_data.ncols() > 1 {
+        // constraint optimization
+        let mut index = 0;
+        let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
+        let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
+        for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
+            if !row.slice(s![1..]).iter().any(|v| *v > cstr_tol) {
+                index = i;
+                break;
+            }
+        }
+        perm.indices[index]
+    } else {
+        // unconstrained optimization
+        y_data.column(0).argmin().unwrap()
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
@@ -19,16 +43,18 @@ pub struct EgorState<F: Float> {
     pub best_param: Option<Array1<F>>,
     /// Previous best parameter vector
     pub prev_best_param: Option<Array1<F>>,
+
     /// Current cost function value
-    pub cost: F,
+    pub cost: Option<Array1<F>>,
     /// Previous cost function value
-    pub prev_cost: F,
+    pub prev_cost: Option<Array1<F>>,
     /// Current best cost function value
-    pub best_cost: F,
+    pub best_cost: Option<Array1<F>>,
     /// Previous best cost function value
-    pub prev_best_cost: F,
+    pub prev_best_cost: Option<Array1<F>>,
     /// Target cost function value
-    pub target_cost: F,
+    pub target_cost: Option<Array1<F>>,
+
     /// Current iteration
     pub iter: u64,
     /// Iteration number of last best cost
@@ -54,12 +80,13 @@ pub struct EgorState<F: Float> {
     pub clusterings: Option<Vec<Option<Clustering>>>,
     pub data: Option<(Array2<F>, Array2<F>)>,
     pub sampling: Option<Lhs<F, Xoshiro256Plus>>,
+    pub cstr_tol: F,
 }
 
 impl<F> EgorState<F>
 where
     Self: State<Float = F>,
-    F: Float + ArgminFloat,
+    F: Float,
 {
     #[must_use]
     pub fn param(mut self, param: Array1<F>) -> Self {
@@ -83,8 +110,8 @@ where
     /// # assert_eq!(state.target_cost.to_ne_bytes(), 0.0f64.to_ne_bytes());
     /// ```
     #[must_use]
-    pub fn target_cost(mut self, target_cost: F) -> Self {
-        self.target_cost = target_cost;
+    pub fn target_cost(mut self, target_cost: Array1<F>) -> Self {
+        self.target_cost = Some(target_cost);
         self
     }
 
@@ -123,9 +150,9 @@ where
     /// # assert_eq!(state.cost.to_ne_bytes(), 0.0f64.to_ne_bytes());
     /// ```
     #[must_use]
-    pub fn cost(mut self, cost: F) -> Self {
+    pub fn cost(mut self, cost: Array1<F>) -> Self {
         std::mem::swap(&mut self.prev_cost, &mut self.cost);
-        self.cost = cost;
+        self.cost = Some(cost);
         self
     }
 
@@ -199,11 +226,13 @@ where
             prev_param: None,
             best_param: None,
             prev_best_param: None,
-            cost: Self::Float::infinity(),
-            prev_cost: Self::Float::infinity(),
-            best_cost: Self::Float::infinity(),
-            prev_best_cost: Self::Float::infinity(),
-            target_cost: Self::Float::neg_infinity(),
+
+            cost: None,
+            prev_cost: None,
+            best_cost: None,
+            prev_best_cost: None,
+            target_cost: None,
+
             iter: 0,
             last_best_iter: 0,
             max_iters: std::u64::MAX,
@@ -218,6 +247,7 @@ where
             clusterings: None,
             data: None,
             sampling: None,
+            cstr_tol: F::cast(1e-6),
         }
     }
 
@@ -265,26 +295,27 @@ where
     /// assert!(state.is_best());
     /// ```
     fn update(&mut self) {
-        // check if parameters are the best so far
-        // Comparison is done using `<` to avoid new solutions with the same cost function value as
-        // the current best to be accepted. However, some solvers to not compute the cost function
-        // value (such as the Newton method). Those will always have `Inf` cost. Therefore if both
-        // the new value and the previous best value are `Inf`, the solution is also accepted. Care
-        // is taken that both `Inf` also have the same sign.
-        if self.cost < self.best_cost
-            || (self.cost.is_infinite()
-                && self.best_cost.is_infinite()
-                && self.cost.is_sign_positive() == self.best_cost.is_sign_positive())
-        {
-            if let Some(param) = self.param.as_ref().cloned() {
+        // TODO: better implementation should track only track
+        // current and best index in data and compare just them
+        let data = self.data.as_ref();
+        match data {
+            None => {
+                // should not occur data should be some
+                println!("Warning: update should occur after data initialization");
+            }
+            Some((x_data, y_data)) => {
+                let best_index = find_best_result_index(y_data, self.cstr_tol);
+
+                let param = x_data.row(best_index).to_owned();
                 std::mem::swap(&mut self.prev_best_param, &mut self.best_param);
                 self.best_param = Some(param);
+
+                let cost = y_data.row(best_index).to_owned();
+                std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
+                self.best_cost = Some(cost);
+                self.last_best_iter = self.iter;
             }
-            let cost = self.cost;
-            std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
-            self.best_cost = cost;
-            self.last_best_iter = self.iter;
-        }
+        };
     }
 
     /// Returns a reference to the current parameter vector
@@ -370,7 +401,10 @@ where
     /// # assert_eq!(cost.to_ne_bytes(), 12.0f64.to_ne_bytes());
     /// ```
     fn get_cost(&self) -> Self::Float {
-        self.cost
+        match self.cost.as_ref() {
+            Some(c) => *(c.get(0).unwrap_or(&Self::Float::infinity())),
+            None => Self::Float::infinity(),
+        }
     }
 
     /// Returns current best cost function value.
@@ -385,7 +419,10 @@ where
     /// # assert_eq!(best_cost.to_ne_bytes(), 12.0f64.to_ne_bytes());
     /// ```
     fn get_best_cost(&self) -> Self::Float {
-        self.best_cost
+        match self.best_cost.as_ref() {
+            Some(c) => *(c.get(0).unwrap_or(&Self::Float::infinity())),
+            None => Self::Float::infinity(),
+        }
     }
 
     /// Returns target cost function value.
@@ -400,7 +437,10 @@ where
     /// # assert_eq!(target_cost.to_ne_bytes(), 12.0f64.to_ne_bytes());
     /// ```
     fn get_target_cost(&self) -> Self::Float {
-        self.target_cost
+        match self.target_cost.as_ref() {
+            Some(c) => *(c.get(0).unwrap_or(&Self::Float::neg_infinity())),
+            None => Self::Float::neg_infinity(),
+        }
     }
 
     /// Returns current number of iterations.
