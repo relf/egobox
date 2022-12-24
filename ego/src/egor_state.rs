@@ -190,6 +190,42 @@ where
     pub fn take_sampling(mut self) -> Option<Lhs<F, Xoshiro256Plus>> {
         self.sampling.take()
     }
+
+    /// Returns current cost (ie objective) function and constraint values.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use ndarray::array;
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
+    /// # state.cost = Some(array![12.0, 0.1]);
+    /// let cost = state.get_full_cost();
+    /// # assert_eq!(cost.unwrap()[0].to_ne_bytes(), 12.0f64.to_ne_bytes());
+    /// # assert_eq!(cost.unwrap()[1].to_ne_bytes(), 0.1f64.to_ne_bytes());
+    /// ```
+    pub fn get_full_cost(&self) -> Option<&Array1<F>> {
+        self.cost.as_ref()
+    }
+
+    /// Returns current cost (ie objective) function and constraint values.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use ndarray::array;
+    /// # use egobox_ego::EgorState;
+    /// # use argmin::core::{State, ArgminFloat};
+    /// # let mut state: EgorState<f64> = EgorState::new();
+    /// # state.best_cost = Some(array![12.0, 0.1]);
+    /// let cost = state.get_full_best_cost();
+    /// # assert_eq!(cost.unwrap()[0].to_ne_bytes(), 12.0f64.to_ne_bytes());
+    /// # assert_eq!(cost.unwrap()[1].to_ne_bytes(), 0.1f64.to_ne_bytes());
+    /// ```
+    pub fn get_full_best_cost(&self) -> Option<&Array1<F>> {
+        self.best_cost.as_ref()
+    }
 }
 
 pub const MAX_POINT_ADDITION_RETRY: i32 = 3;
@@ -275,7 +311,7 @@ where
     /// let mut state: EgorState<f64> = EgorState::new();
     ///
     /// // Simulating a new, better parameter vector
-    /// let mut state = state.data((array![[1.0f64]], array![[10.0]]));
+    /// let mut state = state.data((array![[1.0f64], [2.0f64]], array![[10.0],[5.0]]));
     /// state.param = Some(array![2.0f64]);
     /// state.cost = Some(array![5.0]);
     ///
@@ -290,6 +326,7 @@ where
     fn update(&mut self) {
         // TODO: better implementation should track only track
         // current and best index in data and compare just them
+        // without finding best in data each time
         let data = self.data.as_ref();
         match data {
             None => {

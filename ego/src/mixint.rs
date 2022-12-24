@@ -152,8 +152,6 @@ fn cast_to_discrete_values_mut(xtypes: &[Xtype], x: &mut ArrayBase<impl DataMut<
     xtypes.iter().for_each(|s| match s {
         Xtype::Cont(_, _) => xcol += 1,
         Xtype::Int(_, _) => {
-            println!("xtypes={:?}", xtypes);
-            println!("x={}", x);
             let xround = x.column(xcol).mapv(|v| v.round()).to_owned();
             x.column_mut(xcol).assign(&xround);
             xcol += 1;

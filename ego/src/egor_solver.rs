@@ -574,9 +574,9 @@ where
         fobj: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
-        info!(
+        debug!(
             "********* Start iteration {}/{}",
-            state.get_iter(),
+            state.get_iter() + 1,
             state.get_max_iters()
         );
         // Retrieve Egor internal state
@@ -632,7 +632,9 @@ where
             new_state = new_state
                 .clusterings(clusterings.clone())
                 .data((x_data.clone(), y_data.clone()))
-                .sampling(sampling.clone());
+                .sampling(sampling.clone())
+                .param(x_dat.row(0).to_owned())
+                .cost(y_dat.row(0).to_owned());
 
             let rejected_count = x_dat.nrows() - added_indices.len();
             for i in 0..x_dat.nrows() {
@@ -702,7 +704,7 @@ where
         let best_index = self.find_best_result_index(&y_data);
         info!(
             "********* End iteration {}/{}: Best fun(x)={} at x={}",
-            new_state.get_iter(),
+            new_state.get_iter() + 1,
             new_state.get_max_iters(),
             y_data.row(best_index),
             x_data.row(best_index)
@@ -718,7 +720,6 @@ where
                 ));
             }
         }
-        println!("{:?}", new_state);
         Ok((new_state, None))
     }
 
@@ -982,7 +983,6 @@ where
         };
         while !success && n_optim <= n_max_optim {
             if let Some(seed) = lhs_optim_seed {
-                info!("LHS optimization");
                 let obj_data = ObjData {
                     scale_obj,
                     scale_wb2,
@@ -1334,18 +1334,16 @@ impl<O: GroupFunc, SB: SurrogateBuilder> EgorOptimizer<O, SB> {
     pub fn run(&self) -> Result<OptimResult<f64>> {
         let no_discrete = self.solver.no_discrete;
         let xtypes = self.solver.xtypes.clone();
-        let cstr_tol = self.solver.cstr_tol;
 
         let result = Executor::new(self.fobj.clone(), self.solver.clone()).run()?;
 
         let (x_data, y_data) = result.state().clone().take_data().unwrap();
-        let best_index = find_best_result_index(&y_data, cstr_tol);
 
         let res = if no_discrete {
             info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
             OptimResult {
-                x_opt: x_data.row(best_index).to_owned(),
-                y_opt: y_data.row(best_index).to_owned(),
+                x_opt: result.state.get_best_param().unwrap().to_owned(),
+                y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
             }
         } else {
             let xtypes = xtypes.unwrap(); // !no_discrete
@@ -1353,12 +1351,17 @@ impl<O: GroupFunc, SB: SurrogateBuilder> EgorOptimizer<O, SB> {
             let x_data = fold_with_enum_index(&xtypes, &x_data.view());
             info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
 
-            let x_opt = x_data.row(best_index).to_owned().insert_axis(Axis(0));
+            let x_opt = result
+                .state
+                .get_best_param()
+                .unwrap()
+                .to_owned()
+                .insert_axis(Axis(0));
             let x_opt = cast_to_discrete_values(&xtypes, &x_opt);
             let x_opt = fold_with_enum_index(&xtypes, &x_opt.view());
             OptimResult {
                 x_opt: x_opt.row(0).to_owned(),
-                y_opt: y_data.row(best_index).to_owned(),
+                y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
             }
         };
         info!("Optim Result: min f(x)={} at x={}", res.y_opt, res.x_opt);
