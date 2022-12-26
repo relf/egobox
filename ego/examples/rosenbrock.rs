@@ -1,4 +1,4 @@
-use egobox_ego::{ApproxValue, Egor};
+use egobox_ego::EgorBuilder;
 use ndarray::{array, Array2, ArrayView2, Zip};
 
 fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
@@ -17,12 +17,10 @@ fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
 
 fn main() {
     let xlimits = array![[-2., 2.], [-2., 2.]];
-    let res = Egor::minimize(rosenbrock, &xlimits)
+    let res = EgorBuilder::optimize(rosenbrock)
+        .min_within(&xlimits)
         .n_eval(100)
-        .expect(Some(ApproxValue {
-            value: 0.0,
-            tolerance: 1e-2,
-        }))
+        .target(1e-2)
         .run()
         .expect("Minimize failure");
     println!("Rosenbrock minimum y = {} at x = {}", res.y_opt, res.x_opt);

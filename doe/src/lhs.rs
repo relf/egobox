@@ -9,7 +9,12 @@ use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 use std::cmp;
 
+#[cfg(feature = "serializable")]
+use serde::{Deserialize, Serialize};
+
 /// Kinds of Latin Hypercube Design
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum LhsKind {
     /// sample is choosen randomly within its latin hypercube intervals
     Classic,
@@ -28,6 +33,8 @@ pub enum LhsKind {
 /// The LHS design is built as follows: each dimension space is divided into ns sections
 /// where ns is the number of sampling points, and one point in selected in each section.
 /// The selection method gives different kind of LHS (see [LhsKind])
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct Lhs<F: Float, R: Rng + Clone> {
     /// Sampling space definition as a (nx, 2) matrix
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of x

@@ -1,4 +1,5 @@
 use crate::errors::Result;
+use argmin::core::CostFunction;
 use egobox_moe::{ClusteredSurrogate, Clustering};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use linfa::Float;
@@ -53,16 +54,6 @@ pub enum QEiStrategy {
     ConstantLiarMinimum,
 }
 
-/// A structure to specify an approximative value
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct ApproxValue {
-    /// Nominal value
-    pub value: f64,
-    /// Allowed tolerance for approximation such that (y - value) < tolerance
-    pub tolerance: f64,
-}
-
 /// An interface for objective function to be optimized
 ///
 /// The function is expected to return a matrix allowing nrows evaluations at once.
@@ -70,10 +61,33 @@ pub struct ApproxValue {
 pub trait GroupFunc: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
+#[derive(Clone)]
+pub struct ObjFun<O: GroupFunc> {
+    fobj: O,
+}
+impl<O: GroupFunc> ObjFun<O> {
+    pub fn new(fobj: O) -> Self {
+        ObjFun { fobj }
+    }
+}
+
+impl<O: GroupFunc> CostFunction for ObjFun<O> {
+    /// Type of the parameter vector
+    type Param = Array2<f64>;
+    /// Type of the return value computed by the cost function
+    type Output = Array2<f64>;
+
+    /// Apply the cost function to a parameter `p`
+    fn cost(&self, p: &Self::Param) -> std::result::Result<Self::Output, argmin::core::Error> {
+        // Evaluate 2D Rosenbrock function
+        Ok((self.fobj)(&p.view()))
+    }
+}
+
 /// An enumeration to define the type of an input variable component
 /// with its domain definition
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum Xtype {
     /// Continuous variable in [lower bound, upper bound]
     Cont(f64, f64),
@@ -89,7 +103,7 @@ pub enum Xtype {
 ///
 /// The output surrogate used by [crate::Egor] is expected to model either
 /// objective function or constraint functions
-pub trait SurrogateBuilder: Clone {
+pub trait SurrogateBuilder: Clone + Serialize {
     fn new_with_xtypes_rng(xtypes: &[Xtype]) -> Self;
 
     /// Sets the allowed regression models used in gaussian processes.

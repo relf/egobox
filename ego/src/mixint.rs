@@ -152,8 +152,6 @@ fn cast_to_discrete_values_mut(xtypes: &[Xtype], x: &mut ArrayBase<impl DataMut<
     xtypes.iter().for_each(|s| match s {
         Xtype::Cont(_, _) => xcol += 1,
         Xtype::Int(_, _) => {
-            println!("xtypes={:?}", xtypes);
-            println!("x={}", x);
             let xround = x.column(xcol).mapv(|v| v.round()).to_owned();
             x.column_mut(xcol).assign(&xround);
             xcol += 1;
@@ -199,6 +197,7 @@ pub fn cast_to_discrete_values(
 
 /// A decorator of LHS sampling that takes into account Xtype specifications
 /// casting continuous LHS result from floats to discrete types.
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MixintSampling {
     /// The continuous LHS sampling method
     lhs: Lhs<f64, Xoshiro256Plus>,
@@ -250,6 +249,7 @@ impl SamplingMethod<f64> for MixintSampling {
 pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
 /// A decorator of Moe surrogate that takes into account Xtype specifications
 #[derive(Clone)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MixintMoeValidParams {
     /// The surrogate factory
     surrogate_builder: MoeParams<f64, Xoshiro256Plus>,
@@ -273,6 +273,7 @@ impl MixintMoeValidParams {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MixintMoeParams(MixintMoeValidParams);
 
 impl MixintMoeParams {

@@ -11,6 +11,9 @@ use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::Rng;
 use std::ops::Sub;
 
+#[cfg(feature = "serializable")]
+use serde::{Deserialize, Serialize};
+
 pub trait Clustered {
     fn n_clusters(&self) -> usize;
     fn recombination(&self) -> Recombination<f64>;
@@ -18,7 +21,8 @@ pub trait Clustered {
     fn to_clustering(&self) -> Clustering;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct Clustering {
     pub(crate) recombination: Recombination<f64>,
     pub(crate) gmx: GaussianMixture<f64>,

@@ -13,7 +13,7 @@ categories = ["algorithms", "mathematics", "science"]
 default = ["serializable"]
 
 persistent = ["serializable", "serde_json"]
-serializable = ["serde", "serde/rc", "typetag", "egobox-moe/serializable", "rand_xoshiro/serde1"]
+serializable = ["serde", "serde/rc", "typetag", "egobox-moe/serializable", "egobox-doe/serializable", "rand_xoshiro/serde1"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
@@ -31,6 +31,8 @@ ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
 
+argmin = { version = "0.7.0", features = ["ctrlc"] }
+instant = "0.1"
 nlopt = "0.6.0"
 rand_xoshiro = "0.6"
 libm = "0.2.6"

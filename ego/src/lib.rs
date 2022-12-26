@@ -16,7 +16,7 @@
 //!
 //! ```
 //! use ndarray::{array, Array2, ArrayView2};
-//! use egobox_ego::Egor;
+//! use egobox_ego::EgorBuilder;
 //!
 //! // A one-dimensional test function, x in [0., 25.] and min xsinx(x) ~ -15.1 at x ~ 18.9
 //! fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
@@ -24,7 +24,8 @@
 //! }
 //!
 //! // We ask for 10 evaluations of the objective function to get the result
-//! let res = Egor::minimize(xsinx, &array![[0.0, 25.0]])
+//! let res = EgorBuilder::optimize(xsinx)
+//!             .min_within(&array![[0.0, 25.0]])
 //!             .n_eval(10)
 //!             .run()
 //!             .expect("xsinx minimized");
@@ -47,7 +48,7 @@
 //! use ndarray_linalg::Norm;
 //! #[cfg(not(feature = "blas"))]
 //! use linfa_linalg::norm::*;
-//! use egobox_ego::{EgorBuilder,InfillStrategy, Xtype};
+//! use egobox_ego::{EgorBuilder, InfillStrategy, Xtype};
 //!
 //! fn mixsinx(x: &ArrayView2<f64>) -> Array2<f64> {
 //!     if (x.mapv(|v| v.round()).norm_l2() - x.norm_l2()).abs() < 1e-6 {
@@ -95,7 +96,8 @@
 //! integer-valued variables in Bayesian Optimization with Gaussian processes.
 //!
 //!
-mod egor;
+mod egor_solver;
+mod egor_state;
 mod errors;
 mod lhs_optimizer;
 mod mixint;
@@ -103,7 +105,8 @@ mod sort_axis;
 mod types;
 mod utils;
 
-pub use crate::egor::*;
+pub use crate::egor_solver::*;
+pub use crate::egor_state::*;
 pub use crate::errors::*;
 pub use crate::mixint::*;
 pub use crate::types::*;

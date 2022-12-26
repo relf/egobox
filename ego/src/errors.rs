@@ -34,6 +34,9 @@ pub enum EgoError {
     /// When a linfa error occurs
     #[error(transparent)]
     LinfaError(#[from] linfa::error::Error),
+    /// When an Argmin framework is raised
+    #[error(transparent)]
+    ArgminError(#[from] argmin::core::Error),
 }
 
 impl From<FailState> for EgoError {

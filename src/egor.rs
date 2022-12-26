@@ -12,13 +12,10 @@
 
 use crate::types::*;
 use egobox_doe::SamplingMethod;
-use log::info;
 use ndarray::{Array2, ArrayView2};
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 /// Utility function converting `xlimits` float data list specifying bounds of x components
 /// to x specified as a list of Vtype.Float types [egobox.Vtype]
@@ -144,7 +141,7 @@ pub(crate) fn lhs(
 ///         10-points addition (should say 'tentative addition' because addition may fail for some points
 ///         but it is counted anyway).
 ///   
-///     expected (ExpectedOptimum)
+///     target (float)
 ///         Known optimum used as stopping criterion.
 ///
 ///     outdir (String)
@@ -176,7 +173,7 @@ pub(crate) struct Egor {
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
-    pub expected: Option<ExpectedOptimum>,
+    pub target: f64,
     pub outdir: Option<String>,
     pub hot_start: bool,
     pub seed: Option<u64>,
@@ -209,7 +206,7 @@ impl Egor {
         infill_optimizer = "InfillOptimizer::COBYLA",
         kpls_dim = "None",
         n_clusters = "1",
-        expected = "None",
+        target = "f64::NEG_INFINITY",
         outdir = "None",
         hot_start = "false",
         seed = "None"
@@ -232,7 +229,7 @@ impl Egor {
         infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
         n_clusters: Option<usize>,
-        expected: Option<ExpectedOptimum>,
+        target: f64,
         outdir: Option<String>,
         hot_start: bool,
         seed: Option<u64>,
@@ -254,7 +251,7 @@ impl Egor {
             infill_optimizer,
             kpls_dim,
             n_clusters,
-            expected,
+            target,
             outdir,
             hot_start,
             seed,
@@ -303,11 +300,6 @@ impl Egor {
             InfillOptimizer::SLSQP => egobox_ego::InfillOptimizer::Slsqp,
         };
 
-        let expected = self.expected.map(|opt| egobox_ego::ApproxValue {
-            value: opt.val,
-            tolerance: opt.tol,
-        });
-
         let doe = self.doe.as_ref().map(|v| v.to_owned());
 
         let xspecs: Vec<Vspec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
@@ -331,16 +323,6 @@ impl Egor {
             })
             .collect();
 
-        // let surrogate_builder = egobox_moe::MoeParams::default()
-        //     .n_clusters(self.n_clusters.unwrap_or(1))
-        //     .kpls_dim(self.kpls_dim)
-        //     .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-        //     .correlation_spec(
-        //         egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-        //     );
-        let interruptor = Arc::new(AtomicBool::new(false));
-        // let mut mixintegor =
-        //     egobox_ego::MixintEgor::new_with_rng(obj, &surrogate_builder, &pre_proc, rng);
         let mut mixintegor = egobox_ego::EgorBuilder::optimize(obj);
 
         if let Some(seed) = self.seed {
@@ -365,27 +347,17 @@ impl Egor {
             .infill_optimizer(infill_optimizer)
             .kpls_dim(self.kpls_dim)
             .n_clusters(self.n_clusters)
-            .expect(expected)
+            .target(self.target)
             .outdir(self.outdir.as_ref().cloned())
-            .hot_start(self.hot_start)
-            .interruptor(interruptor.clone());
+            .hot_start(self.hot_start);
 
-        match ctrlc::set_handler(move || {
-            info!("***** Keyboard interruption! ******************************");
-            interruptor.store(true, Ordering::SeqCst)
-        }) {
-            Ok(_) | Err(ctrlc::Error::MultipleHandlers) => {
-                let res = mixintegor.run().expect("Minimization failed");
+        let res = mixintegor
+            .run()
+            .expect("Egor should optimize the objective function");
 
-                Ok(OptimResult {
-                    x_opt: res.x_opt.to_vec(),
-                    y_opt: res.y_opt.to_vec(),
-                })
-            }
-            Err(err) => Err(PyRuntimeError::new_err(format!(
-                "Error in keyboard interruption setup: {:?}",
-                err
-            ))),
-        }
+        Ok(OptimResult {
+            x_opt: res.x_opt.to_vec(),
+            y_opt: res.y_opt.to_vec(),
+        })
     }
 }
