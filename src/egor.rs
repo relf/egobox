@@ -141,7 +141,7 @@ pub(crate) fn lhs(
 ///         10-points addition (should say 'tentative addition' because addition may fail for some points
 ///         but it is counted anyway).
 ///   
-///     expected (ExpectedOptimum)
+///     target (float)
 ///         Known optimum used as stopping criterion.
 ///
 ///     outdir (String)
@@ -173,7 +173,7 @@ pub(crate) struct Egor {
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
-    pub expected: Option<ExpectedOptimum>,
+    pub target: f64,
     pub outdir: Option<String>,
     pub hot_start: bool,
     pub seed: Option<u64>,
@@ -206,7 +206,7 @@ impl Egor {
         infill_optimizer = "InfillOptimizer::COBYLA",
         kpls_dim = "None",
         n_clusters = "1",
-        expected = "None",
+        target = "f64::NEG_INFINITY",
         outdir = "None",
         hot_start = "false",
         seed = "None"
@@ -229,7 +229,7 @@ impl Egor {
         infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
         n_clusters: Option<usize>,
-        expected: Option<ExpectedOptimum>,
+        target: f64,
         outdir: Option<String>,
         hot_start: bool,
         seed: Option<u64>,
@@ -251,7 +251,7 @@ impl Egor {
             infill_optimizer,
             kpls_dim,
             n_clusters,
-            expected,
+            target,
             outdir,
             hot_start,
             seed,
@@ -300,11 +300,6 @@ impl Egor {
             InfillOptimizer::SLSQP => egobox_ego::InfillOptimizer::Slsqp,
         };
 
-        let expected = self.expected.map(|opt| egobox_ego::ApproxValue {
-            value: opt.val,
-            tolerance: opt.tol,
-        });
-
         let doe = self.doe.as_ref().map(|v| v.to_owned());
 
         let xspecs: Vec<Vspec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
@@ -352,7 +347,7 @@ impl Egor {
             .infill_optimizer(infill_optimizer)
             .kpls_dim(self.kpls_dim)
             .n_clusters(self.n_clusters)
-            .expect(expected)
+            .target(self.target)
             .outdir(self.outdir.as_ref().cloned())
             .hot_start(self.hot_start);
 

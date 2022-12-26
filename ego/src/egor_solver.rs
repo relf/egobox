@@ -3,7 +3,7 @@
 //! ```no_run
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! # use egobox_doe::{Lhs, SamplingMethod};
-//! # use egobox_ego::{ApproxValue, EgorBuilder, InfillStrategy, InfillOptimizer};
+//! # use egobox_ego::{EgorBuilder, InfillStrategy, InfillOptimizer};
 //! # use rand_xoshiro::Xoshiro256Plus;
 //! # use ndarray_rand::rand::SeedableRng;
 //! use argmin_testfunctions::rosenbrock;
@@ -22,10 +22,7 @@
 //!     .min_within(&xlimits)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .n_doe(10)
-//!     .expect(Some(ApproxValue {  // Known solution, the algo exits if reached
-//!         value: 0.0,
-//!         tolerance: 1e-1,
-//!     }))
+//!     .target(1e-1)
 //!     .n_eval(30)
 //!     .run()
 //!     .expect("Rosenbrock minimization");
@@ -43,7 +40,7 @@
 //! ```no_run
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! # use egobox_doe::{Lhs, SamplingMethod};
-//! # use egobox_ego::{ApproxValue, EgorBuilder, InfillStrategy, InfillOptimizer};
+//! # use egobox_ego::{EgorBuilder, InfillStrategy, InfillOptimizer};
 //! # use rand_xoshiro::Xoshiro256Plus;
 //! # use ndarray_rand::rand::SeedableRng;
 //!
@@ -83,10 +80,7 @@
 //!            .infill_optimizer(InfillOptimizer::Cobyla)
 //!            .doe(Some(doe))
 //!            .n_eval(40)
-//!            .expect(Some(ApproxValue {  
-//!               value: -5.5080,
-//!               tolerance: 1e-3,
-//!            }))
+//!            .target(-5.5080)
 //!            .run()
 //!            .expect("g24 minimized");
 //! println!("G24 min result = {:?}", res);
@@ -169,8 +163,8 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// When set to 0 the clusters are computes automatically and refreshed
     /// every 10-points (tentative) additions
     n_clusters: Option<usize>,
-    /// Specification of an expected solution which is used to stop the algorithm once reached
-    expected: Option<ApproxValue>,
+    /// Specification of a target objective value which is used to stop the algorithm once reached
+    target: f64,
     /// Directory to save intermediate results: inital doe + evalutions at each iteration
     outdir: Option<String>,
     /// If true use <outdir> to retrieve and start from previous results
@@ -268,7 +262,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
             n_clusters: Some(1),
-            expected: None,
+            target: f64::NEG_INFINITY,
             outdir: None,
             hot_start: false,
             xlimits: xlimits.to_owned(),
@@ -306,7 +300,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
             n_clusters: Some(1),
-            expected: None,
+            target: f64::NEG_INFINITY,
             outdir: None,
             hot_start: false,
             xlimits,
@@ -416,9 +410,9 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         self
     }
 
-    /// Sets a known minimum to be used as a stopping criterion.
-    pub fn expect(&mut self, expected: Option<ApproxValue>) -> &mut Self {
-        self.expected = expected;
+    /// Sets a known target minimum to be used as a stopping criterion.
+    pub fn target(&mut self, target: f64) -> &mut Self {
+        self.target = target;
         self
     }
 
@@ -565,6 +559,7 @@ where
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
         initial_state.cstr_tol = self.cstr_tol;
+        initial_state.target_cost = self.target;
         info!("INITIAL STATE = {:?}", initial_state);
         Ok((initial_state, None))
     }
@@ -710,25 +705,47 @@ where
             x_data.row(best_index)
         );
         new_state = new_state.data((x_data, y_data.clone()));
-        if let Some(sol) = self.expected {
-            if (y_data[[best_index, 0]] - sol.value).abs() < sol.tolerance {
-                info!("Expected optimum : {:?}", sol);
-                info!("Expected optimum reached!");
-                return Ok((
-                    new_state.terminate_with(TerminationReason::TargetCostReached),
-                    None,
-                ));
-            }
-        }
         Ok((new_state, None))
     }
 
     fn terminate(&mut self, state: &EgorState<f64>) -> TerminationReason {
         debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> TERMINATE");
-        debug!("{:?}", state);
+        debug!("Current Cost {:?}", state.get_cost());
+        debug!("Best cost {:?}", state.get_best_cost());
+        debug!("Target cost {:?}", state.get_target_cost());
+        if state.get_best_cost() <= state.get_target_cost() {
+            info!("Target optimum : {}", self.target);
+            info!("Expected optimum reached!");
+            return TerminationReason::TargetCostReached;
+        }
         if state.get_termination_reason() == TerminationReason::Aborted {
             info!("*********************************************************** Keyboard interruption ******");
             return TerminationReason::Aborted;
+        }
+        TerminationReason::NotTerminated
+    }
+
+    /// Checks whether basic termination reasons apply.
+    ///
+    /// Terminate if
+    ///
+    /// 1) algorithm was terminated somewhere else in the Executor
+    /// 2) iteration count exceeds maximum number of iterations
+    /// 3) cost is lower than or equal to the target cost
+    ///
+    /// This can be overwritten; however it is not advised. It is recommended to implement other
+    /// stopping criteria via ([`terminate`](`Solver::terminate`).
+    fn terminate_internal(&mut self, state: &EgorState<f64>) -> TerminationReason {
+        let solver_terminate =
+            <EgorSolver<SB> as Solver<O, EgorState<f64>>>::terminate(self, state);
+        if solver_terminate.terminated() {
+            return solver_terminate;
+        }
+        if state.get_iter() >= state.get_max_iters() {
+            return TerminationReason::MaxItersReached;
+        }
+        if state.get_best_cost() <= state.get_target_cost() {
+            return TerminationReason::TargetCostReached;
         }
         TerminationReason::NotTerminated
     }
@@ -1301,9 +1318,9 @@ impl<O: GroupFunc, SB: SurrogateBuilder> EgorOptimizer<O, SB> {
         self
     }
 
-    /// Sets a known minimum to be used as a stopping criterion.
-    pub fn expect(&mut self, expected: Option<ApproxValue>) -> &mut Self {
-        self.solver.expect(expected);
+    /// Sets a known target minimum to be used as a stopping criterion.
+    pub fn target(&mut self, target: f64) -> &mut Self {
+        self.solver.target(target);
         self
     }
 
@@ -1336,7 +1353,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> EgorOptimizer<O, SB> {
         let xtypes = self.solver.xtypes.clone();
 
         let result = Executor::new(self.fobj.clone(), self.solver.clone()).run()?;
-
+        debug!("ARGMIN result = {}", result);
         let (x_data, y_data) = result.state().clone().take_data().unwrap();
 
         let res = if no_discrete {
@@ -1398,15 +1415,12 @@ mod tests {
             .infill_strategy(InfillStrategy::EI)
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
-            .n_eval(20)
+            .n_eval(30)
             .doe(Some(initial_doe.to_owned()))
-            .expect(Some(ApproxValue {
-                value: -15.1,
-                tolerance: 1e-1,
-            }))
+            .target(-15.1)
             .outdir(Some("target/tests".to_string()))
             .run()
-            .expect("Egor should minimize");
+            .expect("Egor should minimize xsinx");
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
         let saved_doe: Array2<f64> =
@@ -1436,7 +1450,7 @@ mod tests {
             .n_clusters(Some(0))
             .n_eval(20)
             .run()
-            .expect("Minimize failure");
+            .expect("Egor with auto clustering should minimize xsinx");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
@@ -1464,7 +1478,7 @@ mod tests {
             .outdir(Some("target/tests".to_string()))
             .hot_start(true)
             .run()
-            .expect("Minimize failure");
+            .expect("Egor should minimize xsinx");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
@@ -1517,10 +1531,7 @@ mod tests {
             .n_eval(100)
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
-            .expect(Some(ApproxValue {
-                value: 0.0,
-                tolerance: 1e-2,
-            }))
+            .target(1e-2)
             .run()
             .expect("Minimize failure");
         println!("Rosenbrock optim result = {:?}", res);
@@ -1590,9 +1601,10 @@ mod tests {
             .q_parallel(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
             .doe(Some(doe))
+            .target(-5.508013)
             .n_eval(30)
             .run()
-            .expect("Minimize failure");
+            .expect("Egor minimization");
         println!("G24 optim result = {:?}", res);
         let expected = array![2.3295, 3.1785];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
@@ -1620,10 +1632,7 @@ mod tests {
             .min_within_mixed_space(&xtypes)
             .doe(Some(doe))
             .n_eval(n_eval)
-            .expect(Some(ApproxValue {
-                value: -15.1,
-                tolerance: 1e-1,
-            }))
+            .target(-15.1)
             .infill_strategy(InfillStrategy::EI)
             .run()
             .unwrap();
@@ -1641,10 +1650,7 @@ mod tests {
             .min_within_mixed_space(&xtypes)
             .doe(Some(doe))
             .n_eval(n_eval)
-            .expect(Some(ApproxValue {
-                value: -15.1,
-                tolerance: 1e-1,
-            }))
+            .target(-15.1)
             .infill_strategy(InfillStrategy::EI)
             .run()
             .unwrap();

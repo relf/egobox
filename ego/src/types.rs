@@ -54,16 +54,6 @@ pub enum QEiStrategy {
     ConstantLiarMinimum,
 }
 
-/// A structure to specify an approximative value
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct ApproxValue {
-    /// Nominal value
-    pub value: f64,
-    /// Allowed tolerance for approximation such that (y - value) < tolerance
-    pub tolerance: f64,
-}
-
 /// An interface for objective function to be optimized
 ///
 /// The function is expected to return a matrix allowing nrows evaluations at once.

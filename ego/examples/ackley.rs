@@ -1,4 +1,4 @@
-use egobox_ego::{ApproxValue, EgorBuilder, InfillStrategy};
+use egobox_ego::{EgorBuilder, InfillStrategy};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{array, Array2, ArrayView2, Zip};
 
@@ -18,10 +18,7 @@ fn main() {
         .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
         .infill_strategy(InfillStrategy::WB2S)
         .n_eval(200)
-        .expect(Some(ApproxValue {
-            value: 0.0,
-            tolerance: 5e-1,
-        }))
+        .target(5e-1)
         .run()
         .expect("Minimize failure");
     println!("Ackley minimum y = {} at x = {}", res.y_opt, res.x_opt);
