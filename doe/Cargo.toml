@@ -1,6 +1,6 @@
 [package]
 name = "egobox-doe"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A library for design of experiments"
