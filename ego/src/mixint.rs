@@ -17,10 +17,11 @@ use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 
+#[cfg(feature = "serializable")]
+use serde::{Deserialize, Serialize};
+
 #[cfg(feature = "persistent")]
 use egobox_moe::MoeError;
-#[cfg(feature = "persistent")]
-use serde::{Deserialize, Serialize};
 #[cfg(feature = "persistent")]
 use std::fs;
 #[cfg(feature = "persistent")]
@@ -458,7 +459,7 @@ impl From<MixintMoeValidParams> for MixintMoeParams {
 }
 
 /// The Moe model that takes into account Xtype specifications
-#[cfg_attr(feature = "persistent", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MixintMoe {
     /// the decorated Moe
     moe: Moe,
@@ -490,7 +491,7 @@ impl Clustered for MixintMoe {
     }
 }
 
-#[cfg_attr(feature = "persistent", typetag::serde)]
+#[cfg_attr(feature = "serializable", typetag::serde)]
 impl Surrogate for MixintMoe {
     fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
