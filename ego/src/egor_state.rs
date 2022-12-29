@@ -16,7 +16,7 @@ use std::collections::HashMap;
 /// to train surrogate models modeling objective and constrints functions.
 pub const MAX_POINT_ADDITION_RETRY: i32 = 3;
 
-/// Find best (eg minimal) cost value (y_data[0]) with valid constraints (y_data[1..] < cstr_tol).
+/// Find best (eg minimal) cost value (y_data\[0\]) with valid constraints (y_data\[1..\] < cstr_tol).
 /// y_data containing ns samples [objective, cstr_1, ... cstr_nc] is given as a matrix (ns, nc + 1)  
 pub fn find_best_result_index<F: Float>(
     y_data: &ArrayBase<impl Data<Elem = F>, Ix2>,

@@ -1190,13 +1190,13 @@ impl<O: GroupFunc> EgorBuilder<O> {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> EgorOptimizer<O, MoeParams<f64, Xoshiro256Plus>> {
+    ) -> Egor<O, MoeParams<f64, Xoshiro256Plus>> {
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        EgorOptimizer {
+        Egor {
             fobj: ObjFunc::new(self.fobj),
             solver: EgorSolver::new(xlimits, rng),
         }
@@ -1205,13 +1205,13 @@ impl<O: GroupFunc> EgorBuilder<O> {
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
-    pub fn min_within_mixed_space(self, xtypes: &[Xtype]) -> EgorOptimizer<O, MixintMoeParams> {
+    pub fn min_within_mixed_space(self, xtypes: &[Xtype]) -> Egor<O, MixintMoeParams> {
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        EgorOptimizer {
+        Egor {
             fobj: ObjFunc::new(self.fobj),
             solver: EgorSolver::new_with_xtypes(xtypes, rng),
         }
@@ -1221,12 +1221,12 @@ impl<O: GroupFunc> EgorBuilder<O> {
 /// Egor optimizer structure used to parameterize the underlying `argmin::Solver`
 /// and trigger the optimization using `argmin::Executor`.
 #[derive(Clone)]
-pub struct EgorOptimizer<O: GroupFunc, SB: SurrogateBuilder> {
+pub struct Egor<O: GroupFunc, SB: SurrogateBuilder> {
     fobj: ObjFunc<O>,
     solver: EgorSolver<SB>,
 }
 
-impl<O: GroupFunc, SB: SurrogateBuilder> EgorOptimizer<O, SB> {
+impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Sets allowed number of evaluation of the function under optimization
     pub fn n_eval(&mut self, n_eval: usize) -> &mut Self {
         self.solver.n_eval(n_eval);
