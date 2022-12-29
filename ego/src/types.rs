@@ -61,17 +61,20 @@ pub enum QEiStrategy {
 pub trait GroupFunc: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
+/// As structure to handle the objective and constraints functions for implementing
+/// `argmin::CostFunction` to be used with argmin framework.
 #[derive(Clone)]
-pub struct ObjFun<O: GroupFunc> {
+pub struct ObjFunc<O: GroupFunc> {
     fobj: O,
 }
-impl<O: GroupFunc> ObjFun<O> {
+
+impl<O: GroupFunc> ObjFunc<O> {
     pub fn new(fobj: O) -> Self {
-        ObjFun { fobj }
+        ObjFunc { fobj }
     }
 }
 
-impl<O: GroupFunc> CostFunction for ObjFun<O> {
+impl<O: GroupFunc> CostFunction for ObjFunc<O> {
     /// Type of the parameter vector
     type Param = Array2<f64>;
     /// Type of the return value computed by the cost function
