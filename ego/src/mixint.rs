@@ -137,6 +137,7 @@ fn unfold_with_enum_mask(
     xunfold
 }
 
+/// Find closest value to `val` in given slice `v`.
 fn take_closest(v: &[i32], val: f64) -> i32 {
     let idx = Array::from_vec(v.to_vec())
         .map(|refval| (val - *refval as f64).abs())
@@ -246,9 +247,11 @@ impl SamplingMethod<f64> for MixintSampling {
     }
 }
 
-/// Moe type for MixintEgor optimizer
+/// Moe type builder for mixed-integer Egor optimizer
 pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
-/// A decorator of Moe surrogate that takes into account Xtype specifications
+/// A decorator of Moe surrogate builder that takes into account Xtype specifications
+///
+/// It allows to implement continuous relaxation over continuous Moe builder.
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MixintMoeValidParams {
@@ -273,6 +276,7 @@ impl MixintMoeValidParams {
     }
 }
 
+/// Parameters for mixture of experts surrogate model
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct MixintMoeParams(MixintMoeValidParams);

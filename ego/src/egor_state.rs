@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 /// Max number of retry when adding a new point. Point addition may fail
 /// if new point is too close to a previous point in the growing doe used
-/// to train surrogate models modeling objective and constrints functions.
+/// to train surrogate models modeling objective and constraints functions.
 pub const MAX_POINT_ADDITION_RETRY: i32 = 3;
 
 /// Find best (eg minimal) cost value (y_data\[0\]) with valid constraints (y_data\[1..\] < cstr_tol).
@@ -40,7 +40,7 @@ pub fn find_best_result_index<F: Float>(
     }
 }
 
-/// Maintains the state from iteration to iteration of a solver
+/// Maintains the state from iteration to iteration of the [crate::EgorSolver].
 ///
 /// This struct is passed from one iteration of an algorithm to the next.
 ///

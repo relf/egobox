@@ -119,8 +119,8 @@ use serde::{Deserialize, Serialize};
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
 
-/// Implementation of `argmin::Solver` for Egor optimizer.
-/// Therefore this structure can be used with `argmin::Executor` and benefit
+/// Implementation of `argmin::core::Solver` for Egor optimizer.
+/// Therefore this structure can be used with `argmin::core::Executor` and benefit
 /// from observers and checkpointing features.
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
@@ -528,9 +528,8 @@ where
             write_npy(filepath, &doe).expect("Write initial doe");
         }
 
-        const MAX_RETRY: i32 = 3;
         let clusterings = vec![None; self.n_cstr + 1];
-        let no_point_added_retries = MAX_RETRY;
+        let no_point_added_retries = MAX_POINT_ADDITION_RETRY;
         if n_eval / self.q_parallel == 0 {
             warn!(
                 "Number of evaluations {} too low (initial doe size={} and q_parallel={})",
