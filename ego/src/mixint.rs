@@ -309,13 +309,11 @@ impl MixintMoeValidParams {
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<MixintMoe> {
-        println!("xt = {}", xt);
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, &xt.view())
         } else {
             xt.to_owned()
         };
-        println!("xcast = {}", xcast);
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
         let mixmoe = MixintMoe {
             moe: self

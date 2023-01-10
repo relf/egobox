@@ -561,7 +561,7 @@ where
         initial_state.no_point_added_retries = no_point_added_retries;
         initial_state.cstr_tol = self.cstr_tol;
         initial_state.target_cost = self.target;
-        info!("INITIAL STATE = {:?}", initial_state);
+        debug!("INITIAL STATE = {:?}", initial_state);
         Ok((initial_state, None))
     }
 
