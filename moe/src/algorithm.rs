@@ -32,9 +32,9 @@ use rand_xoshiro::Xoshiro256Plus;
 
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "serializable")]
+#[cfg(feature = "persistent")]
 use std::fs;
-#[cfg(feature = "serializable")]
+#[cfg(feature = "persistent")]
 use std::io::Write;
 
 macro_rules! check_allowed {
