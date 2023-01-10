@@ -3,8 +3,7 @@
 
 #![allow(dead_code)]
 use crate::errors::{EgoError, Result};
-use crate::types::SurrogateBuilder;
-use crate::types::Xtype;
+use crate::types::{SurrogateBuilder, Xtype};
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{
     Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec,

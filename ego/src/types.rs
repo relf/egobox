@@ -1,5 +1,5 @@
 use crate::errors::Result;
-use argmin::core::CostFunction;
+use argmin::core::{CostFunction, SerializeAlias};
 use egobox_moe::{ClusteredSurrogate, Clustering};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use linfa::Float;
@@ -106,7 +106,7 @@ pub enum Xtype {
 ///
 /// The output surrogate used by [crate::Egor] is expected to model either
 /// objective function or constraint functions
-pub trait SurrogateBuilder: Clone + Serialize {
+pub trait SurrogateBuilder: Clone + SerializeAlias {
     fn new_with_xtypes_rng(xtypes: &[Xtype]) -> Self;
 
     /// Sets the allowed regression models used in gaussian processes.

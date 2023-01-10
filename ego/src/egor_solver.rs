@@ -460,7 +460,7 @@ fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>)
 impl<O, SB> Solver<O, EgorState<f64>> for EgorSolver<SB>
 where
     O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>,
-    SB: SurrogateBuilder + Serialize,
+    SB: SurrogateBuilder,
 {
     const NAME: &'static str = "Egor";
 
