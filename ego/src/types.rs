@@ -1,10 +1,9 @@
 use crate::errors::Result;
-use argmin::core::{CostFunction, SerializeAlias};
+use argmin::core::CostFunction;
 use egobox_moe::{ClusteredSurrogate, Clustering};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
-#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 /// Optimization result
@@ -17,8 +16,7 @@ pub struct OptimResult<F: Float> {
 }
 
 /// Infill criterion used to select next promising point
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InfillStrategy {
     /// Expected Improvement
     EI,
@@ -29,8 +27,7 @@ pub enum InfillStrategy {
 }
 
 /// Optimizer used to optimize the infill criteria
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InfillOptimizer {
     /// SLSQP optimizer (gradient from finite differences)
     Slsqp,
@@ -41,8 +38,7 @@ pub enum InfillOptimizer {
 /// Strategy to choose several points at each iteration
 /// to benefit from parallel evaluation of the objective function
 /// (The Multi-points Expected Improvement (q-EI) Criterion)
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QEiStrategy {
     /// Take the mean of the kriging predictor for q points
     KrigingBeliever,
@@ -89,8 +85,7 @@ impl<O: GroupFunc> CostFunction for ObjFunc<O> {
 
 /// An enumeration to define the type of an input variable component
 /// with its domain definition
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Xtype {
     /// Continuous variable in [lower bound, upper bound]
     Cont(f64, f64),
@@ -106,7 +101,7 @@ pub enum Xtype {
 ///
 /// The output surrogate used by [crate::Egor] is expected to model either
 /// objective function or constraint functions
-pub trait SurrogateBuilder: Clone + SerializeAlias {
+pub trait SurrogateBuilder: Clone + Serialize {
     fn new_with_xtypes_rng(xtypes: &[Xtype]) -> Self;
 
     /// Sets the allowed regression models used in gaussian processes.

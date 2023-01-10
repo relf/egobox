@@ -7,7 +7,6 @@ use linfa::Float;
 use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
-#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -57,8 +56,7 @@ pub fn find_best_result_index<F: Float>(
 /// * problem function evaluation counts ()
 /// * elapsed time
 /// * termination reason (set to [`TerminationReason::NotTerminated`] if not terminated yet)
-#[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EgorState<F: Float> {
     /// Current parameter vector
     pub param: Option<Array1<F>>,

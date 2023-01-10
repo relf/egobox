@@ -16,7 +16,6 @@ use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 
-#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "persistent")]
@@ -198,7 +197,7 @@ pub fn cast_to_discrete_values(
 
 /// A decorator of LHS sampling that takes into account Xtype specifications
 /// casting continuous LHS result from floats to discrete types.
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct MixintSampling {
     /// The continuous LHS sampling method
     lhs: Lhs<f64, Xoshiro256Plus>,
@@ -251,8 +250,7 @@ pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
 /// A decorator of Moe surrogate builder that takes into account Xtype specifications
 ///
 /// It allows to implement continuous relaxation over continuous Moe builder.
-#[derive(Clone)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct MixintMoeValidParams {
     /// The surrogate factory
     surrogate_builder: MoeParams<f64, Xoshiro256Plus>,
@@ -276,8 +274,7 @@ impl MixintMoeValidParams {
 }
 
 /// Parameters for mixture of experts surrogate model
-#[derive(Clone)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct MixintMoeParams(MixintMoeValidParams);
 
 impl MixintMoeParams {
@@ -460,7 +457,7 @@ impl From<MixintMoeValidParams> for MixintMoeParams {
 }
 
 /// The Moe model that takes into account Xtype specifications
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct MixintMoe {
     /// the decorated Moe
     moe: Moe,
@@ -492,7 +489,7 @@ impl Clustered for MixintMoe {
     }
 }
 
-#[cfg_attr(feature = "serializable", typetag::serde)]
+#[typetag::serde]
 impl Surrogate for MixintMoe {
     fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {

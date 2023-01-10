@@ -113,7 +113,6 @@ use rand_xoshiro::Xoshiro256Plus;
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Executor, Problem, Solver, State, TerminationReason, KV};
 
-#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
@@ -122,8 +121,7 @@ const DOE_FILE: &str = "egor_doe.npy";
 /// Implementation of `argmin::core::Solver` for Egor optimizer.
 /// Therefore this structure can be used with `argmin::core::Executor` and benefit
 /// from observers and checkpointing features.
-#[derive(Clone)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct EgorSolver<SB: SurrogateBuilder> {
     /// Number of function evaluations allocated to find the optimum (aka evaluation budget)
     /// Note 1: if the initial doe has to be evaluated, doe size is taken into account in the avaluation budget.
