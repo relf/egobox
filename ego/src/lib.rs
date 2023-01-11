@@ -80,7 +80,7 @@
 //! * Mixture of experts and PLS dimension reduction is explained in \[[Bartoli2019](#Bartoli2019)\]
 //! * Parallel optimization is available through the selection of a qei strategy.
 //! More information in \[[Ginsbourger2010](#Ginsbourger2010)\]
-//! * Mixed integer approach is imlemented in [MixintEgor].
+//! * Mixed integer approach is implemented using continuous relaxation.
 //! More information in \[[Garrido2018](#Garrido2018)\]
 //!
 //! # References

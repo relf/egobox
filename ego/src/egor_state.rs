@@ -1,3 +1,4 @@
+/// Implementation of `argmin::IterState` for Egor optimizer
 use crate::sort_axis::*;
 use argmin::core::{ArgminFloat, Problem, State, TerminationReason};
 use egobox_doe::Lhs;
@@ -6,11 +7,15 @@ use linfa::Float;
 use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
-#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Find best (eg minimal) cost value (y_data[0]) with valid constraints (y_data[1..] < cstr_tol).
+/// Max number of retry when adding a new point. Point addition may fail
+/// if new point is too close to a previous point in the growing doe used
+/// to train surrogate models modeling objective and constraints functions.
+pub const MAX_POINT_ADDITION_RETRY: i32 = 3;
+
+/// Find best (eg minimal) cost value (y_data\[0\]) with valid constraints (y_data\[1..\] < cstr_tol).
 /// y_data containing ns samples [objective, cstr_1, ... cstr_nc] is given as a matrix (ns, nc + 1)  
 pub fn find_best_result_index<F: Float>(
     y_data: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -34,8 +39,24 @@ pub fn find_best_result_index<F: Float>(
     }
 }
 
-#[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+/// Maintains the state from iteration to iteration of the [crate::EgorSolver].
+///
+/// This struct is passed from one iteration of an algorithm to the next.
+///
+/// Keeps track of
+///
+/// * parameter vector of current and previous iteration
+/// * best parameter vector of current and previous iteration
+/// * cost function value (objective and constraint functions values) of current and previous iteration
+/// * current and previous best cost function value
+/// * target cost function value
+/// * current iteration number
+/// * iteration number where the last best parameter vector was found
+/// * maximum number of iterations that will be executed
+/// * problem function evaluation counts ()
+/// * elapsed time
+/// * termination reason (set to [`TerminationReason::NotTerminated`] if not terminated yet)
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EgorState<F: Float> {
     /// Current parameter vector
     pub param: Option<Array1<F>>,
@@ -95,6 +116,26 @@ where
     Self: State<Float = F>,
     F: Float,
 {
+    /// Set parameter vector. This shifts the stored parameter vector to the previous parameter
+    /// vector.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use argmin::core::{IterState, State};
+    /// # let state: IterState<Vec<f64>, (), (), (), f64> = IterState::new();
+    /// # let param_old = vec![1.0f64, 2.0f64];
+    /// # let state = state.param(param_old);
+    /// # assert!(state.prev_param.is_none());
+    /// # assert_eq!(state.param.as_ref().unwrap()[0].to_ne_bytes(), 1.0f64.to_ne_bytes());
+    /// # assert_eq!(state.param.as_ref().unwrap()[1].to_ne_bytes(), 2.0f64.to_ne_bytes());
+    /// # let param = vec![0.0f64, 3.0f64];
+    /// let state = state.param(param);
+    /// # assert_eq!(state.prev_param.as_ref().unwrap()[0].to_ne_bytes(), 1.0f64.to_ne_bytes());
+    /// # assert_eq!(state.prev_param.as_ref().unwrap()[1].to_ne_bytes(), 2.0f64.to_ne_bytes());
+    /// # assert_eq!(state.param.as_ref().unwrap()[0].to_ne_bytes(), 0.0f64.to_ne_bytes());
+    /// # assert_eq!(state.param.as_ref().unwrap()[1].to_ne_bytes(), 3.0f64.to_ne_bytes());
+    /// ```
     #[must_use]
     pub fn param(mut self, param: Array1<F>) -> Self {
         std::mem::swap(&mut self.prev_param, &mut self.param);
@@ -167,26 +208,40 @@ where
         self
     }
 
+    /// Set the current clusterings used by surrogate models
     pub fn clusterings(mut self, clustering: Vec<Option<Clustering>>) -> Self {
         self.clusterings = Some(clustering);
         self
     }
+
+    /// Moves the current clusterings out and replaces it internally with `None`.
     pub fn take_clusterings(&mut self) -> Option<Vec<Option<Clustering>>> {
         self.clusterings.take()
     }
 
+    /// Set the current data points as training points for the surrogate models
+    /// These points are gradually selected by the EGO algorithm regarding an infill criterion.
+    /// Data is expressed as a couple (xdata, ydata) where xdata is a (p, nx matrix)
+    /// and ydata is a (p, 1 + nb of cstr) matrix and ydata_i = fcost(xdata_i) for i in [1, p].  
     pub fn data(mut self, data: (Array2<F>, Array2<F>)) -> Self {
         self.data = Some(data);
         self
     }
+
+    /// Moves the current data out and replaces it internally with `None`.
     pub fn take_data(mut self) -> Option<(Array2<F>, Array2<F>)> {
         self.data.take()
     }
 
+    /// Set the sampling method used to draw random points
+    /// The sampling method is saved as part of the state to allow reproducible
+    /// optimization.   
     pub fn sampling(mut self, sampling: Lhs<F, Xoshiro256Plus>) -> Self {
         self.sampling = Some(sampling);
         self
     }
+
+    /// Moves the current sampling out and replaces it internally with `None`.
     pub fn take_sampling(mut self) -> Option<Lhs<F, Xoshiro256Plus>> {
         self.sampling.take()
     }
@@ -227,8 +282,6 @@ where
         self.best_cost.as_ref()
     }
 }
-
-pub const MAX_POINT_ADDITION_RETRY: i32 = 3;
 
 impl<F> State for EgorState<F>
 where

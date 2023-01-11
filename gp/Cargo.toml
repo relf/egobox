@@ -1,6 +1,6 @@
 [package]
 name = "egobox-gp"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A library for gaussian process modeling"
@@ -16,7 +16,7 @@ serializable = ["serde", "linfa/serde"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.6.0", path="../doe" }
+egobox-doe = { version = "0.7.0", path="../doe" }
 
 linfa = { version = "0.6.1", default-features = false }
 linfa-pls = { version = "0.6.1", default-features = false }
@@ -29,7 +29,6 @@ ndarray_einsum_beta = "0.7"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
 nlopt = "0.6.0"
-cobyla = "0.1.2"
 rand_xoshiro = "0.6"
 paste = "1.0"
 num-traits = "0.2"

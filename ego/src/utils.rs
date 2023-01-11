@@ -10,6 +10,8 @@ use ndarray_stats::{DeviationExt, QuantileExt};
 
 const SQRT_2PI: f64 = 2.5066282746310007;
 
+/// Compute EI infill criterion at given `x` point using the surrogate model `obj_model`
+/// and the current minimum of the objective function.
 pub fn ei(x: &[f64], obj_model: &dyn ClusteredSurrogate, f_min: f64) -> f64 {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     if let Ok(p) = obj_model.predict_values(&pt) {
@@ -28,6 +30,8 @@ pub fn ei(x: &[f64], obj_model: &dyn ClusteredSurrogate, f_min: f64) -> f64 {
     }
 }
 
+/// Computes derivatives of EI infill criterion wrt to x components at given `x` point
+/// using the surrogate model `obj_model` and the current minimum of the objective function.
 pub fn grad_ei(x: &[f64], obj_model: &dyn ClusteredSurrogate, f_min: f64) -> Array1<f64> {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     if let Ok(p) = obj_model.predict_values(&pt) {
@@ -63,12 +67,16 @@ pub fn grad_ei(x: &[f64], obj_model: &dyn ClusteredSurrogate, f_min: f64) -> Arr
     }
 }
 
+/// Compute WBS2 infill criterion at given `x` point using the surrogate model `obj_model`
+/// and the current minimum of the objective function.
 pub fn wb2s(x: &[f64], obj_model: &dyn ClusteredSurrogate, f_min: f64, scale: f64) -> f64 {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     let ei = ei(x, obj_model, f_min);
     scale * ei - obj_model.predict_values(&pt).unwrap()[[0, 0]]
 }
 
+/// Computes derivatives of WS2 infill criterion wrt to x components at given `x` point
+/// using the surrogate model `obj_model` and the current minimum of the objective function.
 pub fn grad_wbs2(
     x: &[f64],
     obj_model: &dyn ClusteredSurrogate,
@@ -80,6 +88,7 @@ pub fn grad_wbs2(
     grad_ei - obj_model.predict_derivatives(&pt).unwrap().row(0)
 }
 
+/// Computes the scaling factor used to scale WB2 infill criteria.
 pub fn compute_wb2s_scale(
     x: &ArrayView2<f64>,
     obj_model: &dyn ClusteredSurrogate,
@@ -102,11 +111,13 @@ pub fn compute_wb2s_scale(
     }
 }
 
+/// Computes the scaling factor used to scale objective function value.
 pub fn compute_obj_scale(x: &ArrayView2<f64>, obj_model: &dyn ClusteredSurrogate) -> f64 {
     let preds = obj_model.predict_values(x).unwrap().mapv(f64::abs);
     *preds.max().unwrap_or(&1.0)
 }
 
+/// Computes scaling factors used to scale constraint functions values.
 pub fn compute_cstr_scales(
     x: &ArrayView2<f64>,
     cstr_models: &[Box<dyn ClusteredSurrogate>],

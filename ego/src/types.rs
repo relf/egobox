@@ -4,7 +4,6 @@ use egobox_moe::{ClusteredSurrogate, Clustering};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
-#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 /// Optimization result
@@ -17,8 +16,7 @@ pub struct OptimResult<F: Float> {
 }
 
 /// Infill criterion used to select next promising point
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InfillStrategy {
     /// Expected Improvement
     EI,
@@ -29,8 +27,7 @@ pub enum InfillStrategy {
 }
 
 /// Optimizer used to optimize the infill criteria
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InfillOptimizer {
     /// SLSQP optimizer (gradient from finite differences)
     Slsqp,
@@ -41,8 +38,7 @@ pub enum InfillOptimizer {
 /// Strategy to choose several points at each iteration
 /// to benefit from parallel evaluation of the objective function
 /// (The Multi-points Expected Improvement (q-EI) Criterion)
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QEiStrategy {
     /// Take the mean of the kriging predictor for q points
     KrigingBeliever,
@@ -61,17 +57,20 @@ pub enum QEiStrategy {
 pub trait GroupFunc: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
+/// As structure to handle the objective and constraints functions for implementing
+/// `argmin::CostFunction` to be used with argmin framework.
 #[derive(Clone)]
-pub struct ObjFun<O: GroupFunc> {
+pub struct ObjFunc<O: GroupFunc> {
     fobj: O,
 }
-impl<O: GroupFunc> ObjFun<O> {
+
+impl<O: GroupFunc> ObjFunc<O> {
     pub fn new(fobj: O) -> Self {
-        ObjFun { fobj }
+        ObjFunc { fobj }
     }
 }
 
-impl<O: GroupFunc> CostFunction for ObjFun<O> {
+impl<O: GroupFunc> CostFunction for ObjFunc<O> {
     /// Type of the parameter vector
     type Param = Array2<f64>;
     /// Type of the return value computed by the cost function
@@ -86,8 +85,7 @@ impl<O: GroupFunc> CostFunction for ObjFun<O> {
 
 /// An enumeration to define the type of an input variable component
 /// with its domain definition
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Xtype {
     /// Continuous variable in [lower bound, upper bound]
     Cont(f64, f64),

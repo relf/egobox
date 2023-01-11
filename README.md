@@ -26,12 +26,12 @@ Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](ht
 
 Depending on the sub-packages you want to use, you have to add following declarations to your `Cargo.toml`
 
-```
+```text
 [dependencies]
-egobox-doe = { version = "0.6.0" }
-egobox-gp  = { version = "0.6.0" }
-egobox-moe = { version = "0.6.0" }
-egobox-ego = { version = "0.6.0" }
+egobox-doe = { version = "0.7.0" }
+egobox-gp  = { version = "0.7.0" }
+egobox-moe = { version = "0.7.0" }
+egobox-ego = { version = "0.7.0" }
 ```
 
 ### Features
@@ -72,9 +72,9 @@ As for `linfa`, the linear algebra routines used in `gp`, `moe` ad `ego` are pro
 Otherwise, you can choose an external BLAS/LAPACK backend available through the [ndarray-linalg](https://github.com/rust-ndarray/ndarray-linalg) crate. In this case, you have to specify the `blas` feature and a `linfa` [BLAS/LAPACK backend feature](https://github.com/rust-ml/linfa#blaslapack-backend) (more information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)).
 
 Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you could specify in your `Cargo.toml` the following features:
-```
+```text
 [dependencies]
-egobox-gp = { version = "0.6.0", features = ["blas", "linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.7.0", features = ["blas", "linfa/intel-mkl-static"] }
 ```
 or you could run the `gp` example as follows:
 ``` bash
@@ -99,7 +99,7 @@ and mixture of Gaussian processes surrogate model.
 
 If you find this project useful for your research, you may cite it as follows: 
 
-```
+```text
 @article{
   Lafage2022, 
   author = {Rémi Lafage}, 

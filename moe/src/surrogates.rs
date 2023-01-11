@@ -5,12 +5,13 @@ use ndarray::{Array2, ArrayView2};
 use paste::paste;
 
 #[cfg(feature = "serializable")]
-use crate::MoeError;
-#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "serializable")]
+
+#[cfg(feature = "persistent")]
+use crate::MoeError;
+#[cfg(feature = "persistent")]
 use std::fs;
-#[cfg(feature = "serializable")]
+#[cfg(feature = "persistent")]
 use std::io::Write;
 /// A trait for surrogate parameters to build surrogate once fitted.
 pub trait SurrogateParams {
@@ -38,7 +39,7 @@ pub trait Surrogate: std::fmt::Display + Send {
     /// where each column is the partial derivatives wrt the ith component
     fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Save model in given file.
-    #[cfg(feature = "serializable")]
+    #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> Result<()>;
 }
 
@@ -109,7 +110,7 @@ macro_rules! declare_surrogate {
                     Ok(self.0.predict_variance_derivatives(x))
                 }
 
-                #[cfg(feature = "serializable")]
+                #[cfg(feature = "persistent")]
                 fn save(&self, path: &str) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
                     let bytes = match serde_json::to_string(self as &dyn Surrogate) {
@@ -163,7 +164,7 @@ macro_rules! make_surrogate_params {
     };
 }
 
-#[cfg(feature = "serializable")]
+#[cfg(feature = "persistent")]
 /// Load GP surrogate from given json file.
 pub fn load(path: &str) -> Result<Box<dyn Surrogate>> {
     let data = fs::read_to_string(path)?;
@@ -173,7 +174,7 @@ pub fn load(path: &str) -> Result<Box<dyn Surrogate>> {
 
 pub(crate) use make_surrogate_params;
 
-#[cfg(feature = "serializable")]
+#[cfg(feature = "persistent")]
 #[cfg(test)]
 mod tests {
     use super::*;

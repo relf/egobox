@@ -113,20 +113,15 @@ use rand_xoshiro::Xoshiro256Plus;
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Executor, Problem, Solver, State, TerminationReason, KV};
 
-#[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 const DOE_FILE: &str = "egor_doe.npy";
 
-fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<Xtype> {
-    let mut xtypes: Vec<Xtype> = vec![];
-    Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(Xtype::Cont(limits[0], limits[1])));
-    xtypes
-}
-
-#[derive(Clone)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+/// Implementation of `argmin::core::Solver` for Egor optimizer.
+/// Therefore this structure can be used with `argmin::core::Executor` and benefit
+/// from observers and checkpointing features.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct EgorSolver<SB: SurrogateBuilder> {
     /// Number of function evaluations allocated to find the optimum (aka evaluation budget)
     /// Note 1: if the initial doe has to be evaluated, doe size is taken into account in the avaluation budget.
@@ -236,13 +231,10 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     /// Constructor of the optimization of the function `f` with specified random generator
     /// to get reproducibility.
     ///
-    /// The function `f` shoud return an objective but also constraint values if any.
-    /// Design space is specified by the 2D array `xlimits` which is `[nx, 2]`-shaped and
-    /// constains lower and upper bounds of `x` components.
-    pub fn new_with_xlimits_rng(
-        xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        rng: Xoshiro256Plus,
-    ) -> Self {
+    /// The function `f` should return an objective value but also constraint values if any.
+    /// Design space is specified by the matrix `xlimits` which is `[nx, 2]`-shaped
+    /// the ith row contains lower and upper bounds of the ith component of `x`.
+    pub fn new(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>, rng: Xoshiro256Plus) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
@@ -266,7 +258,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             outdir: None,
             hot_start: false,
             xlimits: xlimits.to_owned(),
-            xtypes: None,
+            xtypes: Some(continuous_xlimits_to_xtypes(xlimits)),
             no_discrete: true,
             surrogate_builder: SB::new_with_xtypes_rng(&continuous_xlimits_to_xtypes(xlimits)),
             rng,
@@ -274,11 +266,12 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 
     /// Constructor of the optimization of the function `f` with specified random generator
-    /// to get reproducibility.
+    /// to get reproducibility. This constructor is used  for mixed-integer optimization
+    /// when `f` has discrete inputs to be specified with list of xtypes.
     ///
-    /// The function `f` shoud return an objective but also constraint values if any.
-    /// Design space is specified by a list of types for x input. See [Xtype]
-    pub fn new_with_xtypes_rng(xtypes: &[Xtype], rng: Xoshiro256Plus) -> Self {
+    /// The function `f` should return an objective but also constraint values if any.
+    /// Design space is specified by a list of types for input variables `x` of `f` (see [Xtype]).
+    pub fn new_with_xtypes(xtypes: &[Xtype], rng: Xoshiro256Plus) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
@@ -453,12 +446,19 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 }
 
-const MAX_RETRY: i32 = 3;
+/// Build ``xtypes` from simple float bounds of `x` input components when x belongs to R^n.
+/// xlimits are bounds of the x components expressed a matrix (dim, 2) where dim is the dimension of x
+/// the ith row is the bounds interval [lower, upper] of the ith comonent of `x`.  
+fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<Xtype> {
+    let mut xtypes: Vec<Xtype> = vec![];
+    Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(Xtype::Cont(limits[0], limits[1])));
+    xtypes
+}
 
 impl<O, SB> Solver<O, EgorState<f64>> for EgorSolver<SB>
 where
     O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>,
-    SB: SurrogateBuilder + Serialize,
+    SB: SurrogateBuilder,
 {
     const NAME: &'static str = "Egor";
 
@@ -526,9 +526,8 @@ where
             write_npy(filepath, &doe).expect("Write initial doe");
         }
 
-        const MAX_RETRY: i32 = 3;
         let clusterings = vec![None; self.n_cstr + 1];
-        let no_point_added_retries = MAX_RETRY;
+        let no_point_added_retries = MAX_POINT_ADDITION_RETRY;
         if n_eval / self.q_parallel == 0 {
             warn!(
                 "Number of evaluations {} too low (initial doe size={} and q_parallel={})",
@@ -560,7 +559,7 @@ where
         initial_state.no_point_added_retries = no_point_added_retries;
         initial_state.cstr_tol = self.cstr_tol;
         initial_state.target_cost = self.target;
-        info!("INITIAL STATE = {:?}", initial_state);
+        debug!("INITIAL STATE = {:?}", initial_state);
         Ok((initial_state, None))
     }
 
@@ -673,7 +672,7 @@ where
             "Eval {} point{} {}",
             add_count,
             if add_count > 1 { "s" } else { "" },
-            if state.no_point_added_retries == 0 {
+            if new_state.no_point_added_retries == 0 {
                 " from sampling"
             } else {
                 ""
@@ -682,7 +681,7 @@ where
         new_state.prev_added = new_state.added;
         new_state.added += add_count as usize;
         info!("+{} point(s), total: {} points", add_count, new_state.added);
-        new_state.no_point_added_retries = MAX_RETRY; // reset as a point is added
+        new_state.no_point_added_retries = MAX_POINT_ADDITION_RETRY; // reset as a point is added
 
         let y_actual = self.eval(fobj, &x_to_eval);
         Zip::from(y_data.slice_mut(s![-add_count.., ..]).columns_mut())
@@ -1146,81 +1145,85 @@ where
         pb: &mut Problem<O>,
         x: &Array2<f64>,
     ) -> Array2<f64> {
-        //let mut res = Array2::zeros((x.nrows(), x.ncols()));
         let params = if let Some(xtypes) = &self.xtypes {
             let fold = fold_with_enum_index(xtypes, &x.view());
             cast_to_discrete_values(xtypes, &fold)
         } else {
             x.to_owned()
         };
-        // let mut v = Vec::with_capacity(x.nrows());
-        // Zip::from(params.rows()).for_each(|row| v.push(row.to_owned()));
-        // let cost = pb
-        //     .problem("cost_count", |problem| problem.bulk_cost(&v))
-        //     .expect("Objective evaluation");
-        // Zip::from(res.rows_mut())
-        //     .and(&cost)
-        //     .for_each(|mut r, c| r.assign(c));
-        // res
-        let cost = pb
-            .problem("cost_count", |problem| problem.cost(&params))
-            .expect("Objective evaluation");
-        println!("cost={}", cost);
-        cost
+        pb.problem("cost_count", |problem| problem.cost(&params))
+            .expect("Objective evaluation")
     }
 }
 
-/// EGO optimization parameterization
+/// EGO optimizer builder allowing to specify function to be minimized
+/// subject to constraints intended to be negative.
+///
 pub struct EgorBuilder<O: GroupFunc> {
     fobj: O,
     seed: Option<u64>,
 }
 
 impl<O: GroupFunc> EgorBuilder<O> {
+    /// Function to be minimized domain should be basically R^nx -> R^ny
+    /// where nx is the dimension of input x and ny the output dimension
+    /// equal to 1 (obj) + n (cstrs).
+    /// But function has to be able to evaluate several points in one go
+    /// hence take an (p, nx) matrix and return an (p, ny) matrix
     pub fn optimize(fobj: O) -> Self {
         EgorBuilder { fobj, seed: None }
     }
 
+    /// Allow to specify a seed for random number generator to allow
+    /// reproducible runs.
     pub fn random_seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
     }
 
+    /// Build an Egor optimizer to minimize the function within
+    /// the continuous xlimits specified as [[lower, upper], ...]
+    /// number of rows gives the dimension of the inputs (continuous optimization).
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> EgorOptimizer<O, MoeParams<f64, Xoshiro256Plus>> {
+    ) -> Egor<O, MoeParams<f64, Xoshiro256Plus>> {
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        EgorOptimizer {
-            fobj: ObjFun::new(self.fobj),
-            solver: EgorSolver::new_with_xlimits_rng(xlimits, rng),
+        Egor {
+            fobj: ObjFunc::new(self.fobj),
+            solver: EgorSolver::new(xlimits, rng),
         }
     }
 
-    pub fn min_within_mixed_space(self, xtypes: &[Xtype]) -> EgorOptimizer<O, MixintMoeParams> {
+    /// Build an Egor optimizer to minimize the function R^n -> R^p taking
+    /// inputs specified with given xtypes where some of components may be
+    /// discrete variables (mixed-integer optimization).
+    pub fn min_within_mixed_space(self, xtypes: &[Xtype]) -> Egor<O, MixintMoeParams> {
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        EgorOptimizer {
-            fobj: ObjFun::new(self.fobj),
-            solver: EgorSolver::new_with_xtypes_rng(xtypes, rng),
+        Egor {
+            fobj: ObjFunc::new(self.fobj),
+            solver: EgorSolver::new_with_xtypes(xtypes, rng),
         }
     }
 }
 
+/// Egor optimizer structure used to parameterize the underlying `argmin::Solver`
+/// and trigger the optimization using `argmin::Executor`.
 #[derive(Clone)]
-pub struct EgorOptimizer<O: GroupFunc, SB: SurrogateBuilder> {
-    fobj: ObjFun<O>,
+pub struct Egor<O: GroupFunc, SB: SurrogateBuilder> {
+    fobj: ObjFunc<O>,
     solver: EgorSolver<SB>,
 }
 
-impl<O: GroupFunc, SB: SurrogateBuilder> EgorOptimizer<O, SB> {
+impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Sets allowed number of evaluation of the function under optimization
     pub fn n_eval(&mut self, n_eval: usize) -> &mut Self {
         self.solver.n_eval(n_eval);
@@ -1348,6 +1351,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> EgorOptimizer<O, SB> {
         self.solver.suggest(x_data, y_data)
     }
 
+    /// Runs the (constrained) optimization of the objective function.
     pub fn run(&self) -> Result<OptimResult<f64>> {
         let no_discrete = self.solver.no_discrete;
         let xtypes = self.solver.xtypes.clone();
