@@ -34,7 +34,7 @@ impl<F: Float> Display for Recombination<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let recomb = match self {
             Recombination::Hard => "Hard".to_string(),
-            Recombination::Smooth(Some(f)) => format!("Smooth({})", f),
+            Recombination::Smooth(Some(f)) => format!("Smooth({f})"),
             Recombination::Smooth(None) => "Smooth".to_string(),
         };
         write!(f, "Mixture[{}]", &recomb)

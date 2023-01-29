@@ -205,7 +205,7 @@ mod tests {
     fn test_save_load() {
         let data = r#""ConstantMean""#;
         let v: serde_json::Value = serde_json::from_str(data).unwrap();
-        println!("{}", v);
+        println!("{v}");
     }
 
     #[test]

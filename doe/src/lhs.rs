@@ -321,7 +321,7 @@ mod tests {
         let n = 10;
         let _actual = Lhs::new(&xlimits).sample(n);
         let duration = start.elapsed();
-        println!("Time elapsed in optimized LHS is: {:?}", duration);
+        println!("Time elapsed in optimized LHS is: {duration:?}");
     }
 
     #[test]

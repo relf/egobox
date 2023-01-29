@@ -401,8 +401,8 @@ mod tests {
 
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
-        write_npy(format!("{}/best_obs.npy", test_dir), &obs).expect("obs save");
-        write_npy(format!("{}/best_preds.npy", test_dir), &preds).expect("preds save");
+        write_npy(format!("{test_dir}/best_obs.npy"), &obs).expect("obs save");
+        write_npy(format!("{test_dir}/best_preds.npy"), &preds).expect("preds save");
         assert_eq!(3, nb_clusters);
     }
 

@@ -24,7 +24,7 @@ fn criterion_gp(c: &mut Criterion) {
                 + 1.0
         };
         let prefix = "gp";
-        let xfilename = format!("{}_xt_{}x{}.npy", prefix, nt, dim);
+        let xfilename = format!("{prefix}_xt_{nt}x{dim}.npy");
         let yfilename = format!("{}_yt_{}x{}.npy", prefix, nt, 1);
         let xt = match read_npy(&xfilename) {
             Ok(xt) => xt,

@@ -371,7 +371,7 @@ impl std::fmt::Display for Moe {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let recomb = match self.recombination() {
             Recombination::Hard => "Hard".to_string(),
-            Recombination::Smooth(Some(f)) => format!("Smooth({})", f),
+            Recombination::Smooth(Some(f)) => format!("Smooth({f})"),
             Recombination::Smooth(None) => "Smooth".to_string(),
         };
         let experts = self
@@ -871,12 +871,12 @@ mod tests {
         let x = Array1::linspace(0., 1., 30).insert_axis(Axis(1));
         let preds = moe.predict_values(&x).expect("MOE prediction");
         let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
-        println!("dpred = {}", dpreds);
+        println!("dpred = {dpreds}");
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
-        write_npy(format!("{}/x_hard.npy", test_dir), &x).expect("x saved");
-        write_npy(format!("{}/preds_hard.npy", test_dir), &preds).expect("preds saved");
-        write_npy(format!("{}/dpreds_hard.npy", test_dir), &dpreds).expect("dpreds saved");
+        write_npy(format!("{test_dir}/x_hard.npy"), &x).expect("x saved");
+        write_npy(format!("{test_dir}/preds_hard.npy"), &preds).expect("preds saved");
+        write_npy(format!("{test_dir}/dpreds_hard.npy"), &dpreds).expect("dpreds saved");
         assert_abs_diff_eq!(
             0.39 * 0.39,
             moe.predict_values(&array![[0.39]]).unwrap()[[0, 0]],
@@ -904,13 +904,13 @@ mod tests {
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&x).expect("MOE prediction");
-        write_npy(format!("{}/xt.npy", test_dir), &xt).expect("x saved");
-        write_npy(format!("{}/yt.npy", test_dir), &yt).expect("preds saved");
-        write_npy(format!("{}/x_smooth.npy", test_dir), &x).expect("x saved");
-        write_npy(format!("{}/preds_smooth.npy", test_dir), &preds).expect("preds saved");
+        write_npy(format!("{test_dir}/xt.npy"), &xt).expect("x saved");
+        write_npy(format!("{test_dir}/yt.npy"), &yt).expect("preds saved");
+        write_npy(format!("{test_dir}/x_smooth.npy"), &x).expect("x saved");
+        write_npy(format!("{test_dir}/preds_smooth.npy"), &preds).expect("preds saved");
 
         // Predict with smooth 0.5 which is not good
-        println!("Smooth moe {}", moe);
+        println!("Smooth moe {moe}");
         assert_abs_diff_eq!(
             0.2623, // test we are not good as the true value = 0.37*0.37 = 0.1369
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
@@ -924,13 +924,13 @@ mod tests {
             .with_rng(rng.clone())
             .fit(&ds)
             .expect("MOE fitted");
-        println!("Smooth moe {}", moe);
+        println!("Smooth moe {moe}");
 
         std::fs::create_dir_all(test_dir).ok();
         let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict_values(&x).expect("MOE prediction");
-        write_npy(format!("{}/x_smooth2.npy", test_dir), &x).expect("x saved");
-        write_npy(format!("{}/preds_smooth2.npy", test_dir), &preds).expect("preds saved");
+        write_npy(format!("{test_dir}/x_smooth2.npy"), &x).expect("x saved");
+        write_npy(format!("{test_dir}/preds_smooth2.npy"), &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
             moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
@@ -992,7 +992,7 @@ mod tests {
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
         let moe = Moe::params().with_rng(rng).check_unwrap();
         let best_expert = &moe.find_best_expert(1, &data).unwrap();
-        println!("Best expert {}", best_expert);
+        println!("Best expert {best_expert}");
     }
 
     #[test]
@@ -1024,7 +1024,7 @@ mod tests {
             .expect("MOE fitted");
         let xtest = array![[0.6]];
         let y_expected = moe.predict_values(&xtest).unwrap();
-        let filename = format!("{}/saved_moe.json", test_dir);
+        let filename = format!("{test_dir}/saved_moe.json");
         moe.save(&filename).expect("MoE saving");
         let new_moe = Moe::load(&filename).expect("MoE loading");
         assert_abs_diff_eq!(
@@ -1051,13 +1051,13 @@ mod tests {
         let x = Array1::linspace(0., 1., 50).insert_axis(Axis(1));
         let preds = moe.predict_values(&x).expect("MOE prediction");
         let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
-        println!("dpred = {}", dpreds);
+        println!("dpred = {dpreds}");
 
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
-        write_npy(format!("{}/x_hard.npy", test_dir), &x).expect("x saved");
-        write_npy(format!("{}/preds_hard.npy", test_dir), &preds).expect("preds saved");
-        write_npy(format!("{}/dpreds_hard.npy", test_dir), &dpreds).expect("dpreds saved");
+        write_npy(format!("{test_dir}/x_hard.npy"), &x).expect("x saved");
+        write_npy(format!("{test_dir}/preds_hard.npy"), &preds).expect("preds saved");
+        write_npy(format!("{test_dir}/dpreds_hard.npy"), &dpreds).expect("dpreds saved");
 
         let mut rng = Xoshiro256Plus::seed_from_u64(42);
         for _ in 0..20 {
@@ -1083,8 +1083,7 @@ mod tests {
                     (drv[[0, 0]] - fdiff).abs() / drv[[0, 0]]
                 };
                 println!(
-                    "Test predicted derivatives at {}: drv {}, true df {}, fdiff {}",
-                    xtest, drv, df, fdiff
+                    "Test predicted derivatives at {xtest}: drv {drv}, true df {df}, fdiff {fdiff}"
                 );
                 assert_abs_diff_eq!(err, 0.0, epsilon = 2e-1);
             }
@@ -1128,7 +1127,7 @@ mod tests {
             let xb: f64 = x[1];
             let e = 1e-4;
 
-            println!("Test derivatives at [{}, {}]", xa, xb);
+            println!("Test derivatives at [{xa}, {xb}]");
 
             let x = array![
                 [xa, xb],
@@ -1158,7 +1157,7 @@ mod tests {
     }
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
-        println!("analytic deriv = {}, fdiff = {}", y_deriv, fdiff);
+        println!("analytic deriv = {y_deriv}, fdiff = {fdiff}");
         if fdiff.abs() < 1e-2 {
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = 1e-1); // check absolute when close to zero
         } else {

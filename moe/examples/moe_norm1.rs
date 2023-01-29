@@ -35,9 +35,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let example_dir = "target/examples";
     std::fs::create_dir_all(example_dir).ok();
 
-    write_npy(format!("{}/moe_x_norm1.npy", example_dir), &xtest).expect("x not saved!");
-    write_npy(format!("{}/moe_ypred_norm1.npy", example_dir), &ytest).expect("ypred not saved!");
-    write_npy(format!("{}/moe_ytrue_norm1.npy", example_dir), &ytrue).expect("ytrue not saved!");
+    write_npy(format!("{example_dir}/moe_x_norm1.npy"), &xtest).expect("x not saved!");
+    write_npy(format!("{example_dir}/moe_ypred_norm1.npy"), &ytest).expect("ypred not saved!");
+    write_npy(format!("{example_dir}/moe_ytrue_norm1.npy"), &ytrue).expect("ytrue not saved!");
 
     Ok(())
 }
