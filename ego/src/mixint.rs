@@ -700,13 +700,13 @@ mod tests {
         let yvar = mixi_moe
             .predict_variances(&xtest.view())
             .expect("Predict var fail");
-        println!("{:?}", ytest);
+        println!("{ytest:?}");
         assert_abs_diff_eq!(
             array![[0.], [0.8297580023632912], [1.5], [0.9], [1.]],
             ytest,
             epsilon = 1e-3
         );
-        println!("{:?}", yvar);
+        println!("{yvar:?}");
         assert_abs_diff_eq!(
             array![[0.], [0.35302771336218247], [0.], [0.], [0.]],
             yvar,

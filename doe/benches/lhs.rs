@@ -7,7 +7,7 @@ fn criterion_lhs(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("doe");
     for size in sizes {
-        group.bench_function(format!("lhs {}", size), |b| {
+        group.bench_function(format!("lhs {size}"), |b| {
             let xlimits = arr2(&[[0., 1.], [0., 1.]]);
             b.iter(|| black_box(Lhs::new(&xlimits).sample(size)));
         });

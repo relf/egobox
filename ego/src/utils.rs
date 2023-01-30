@@ -243,7 +243,7 @@ mod tests {
         let fdiff2 = (wb2s(&xtest21, bgp.as_ref(), 0.1, 0.5)
             - wb2s(&xtest22, bgp.as_ref(), 0.1, 0.5))
             / (2. * h);
-        println!("fdiff({:?}) = [{}, {}]", xtest, fdiff1, fdiff2);
+        println!("fdiff({xtest:?}) = [{fdiff1}, {fdiff2}]");
         println!(
             "grad_wbs2({:?}) = {:?}",
             xtest,

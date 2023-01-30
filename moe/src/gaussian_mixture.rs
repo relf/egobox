@@ -322,9 +322,9 @@ mod tests {
             .and(&Array::linspace(0., 4., 11))
             .for_each(|mut o, &v| o.assign(&array![v, v]));
         let _preds = gmix.predict(&obs);
-        println!("preds =  {:?}", _preds);
+        println!("preds =  {_preds:?}");
         let probas = gmix.predict_probas(&obs);
-        println!("probas =  {:?}", probas);
+        println!("probas =  {probas:?}");
     }
 
     fn test_case(

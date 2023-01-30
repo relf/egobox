@@ -847,7 +847,7 @@ where
                     init && i == 0,
                     recluster,
                     &clusterings[k],
-                    &format!("Constraint[{}] reclustering...", k),
+                    &format!("Constraint[{k}] reclustering..."),
                 );
                 cstr_models.push(cstr_model);
                 clusterings[k] = Some(cstr_models[k - 1].to_clustering());
@@ -1427,8 +1427,7 @@ mod tests {
             .expect("Egor should minimize xsinx");
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
-        let saved_doe: Array2<f64> =
-            read_npy(format!("target/tests/{}", DOE_INITIAL_FILE)).unwrap();
+        let saved_doe: Array2<f64> = read_npy(format!("target/tests/{DOE_INITIAL_FILE}")).unwrap();
         assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
     }
 
@@ -1538,7 +1537,7 @@ mod tests {
             .target(1e-2)
             .run()
             .expect("Minimize failure");
-        println!("Rosenbrock optim result = {:?}", res);
+        println!("Rosenbrock optim result = {res:?}");
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
@@ -1585,7 +1584,7 @@ mod tests {
             .n_eval(20)
             .run()
             .expect("Minimize failure");
-        println!("G24 optim result = {:?}", res);
+        println!("G24 optim result = {res:?}");
         let expected = array![2.3295, 3.1785];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
     }
@@ -1609,7 +1608,7 @@ mod tests {
             .n_eval(30)
             .run()
             .expect("Egor minimization");
-        println!("G24 optim result = {:?}", res);
+        println!("G24 optim result = {res:?}");
         let expected = array![2.3295, 3.1785];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
     }
