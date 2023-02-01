@@ -113,7 +113,13 @@ pub fn compute_wb2s_scale(
 
 /// Computes the scaling factor used to scale objective function value.
 pub fn compute_obj_scale(x: &ArrayView2<f64>, obj_model: &dyn ClusteredSurrogate) -> f64 {
-    let preds = obj_model.predict_values(x).unwrap().mapv(f64::abs);
+    let preds: Array1<f64> = obj_model
+        .predict_values(x)
+        .unwrap()
+        .into_iter()
+        .filter(|v| !v.is_infinite()) // filter out infinite values
+        .map(|v| v.abs())
+        .collect();
     *preds.max().unwrap_or(&1.0)
 }
 
@@ -125,7 +131,13 @@ pub fn compute_cstr_scales(
     let scales: Vec<f64> = cstr_models
         .iter()
         .map(|cstr_model| {
-            let preds = cstr_model.predict_values(x).unwrap().mapv(f64::abs);
+            let preds: Array1<f64> = cstr_model
+                .predict_values(x)
+                .unwrap()
+                .into_iter()
+                .filter(|v| !v.is_infinite()) // filter out infinite values
+                .map(|v| v.abs())
+                .collect();
             *preds.max().unwrap_or(&1.0)
         })
         .collect();
