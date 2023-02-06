@@ -23,7 +23,8 @@ python/egobox/egobox.pyd
 *.npy
 input.txt
 output.txt
-mopta08*
+mopta08.exe
+mopta08_elf64.bin
 
 # JOSS
 joss/paper.jats

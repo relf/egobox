@@ -1,6 +1,7 @@
 use egobox_ego::EgorBuilder;
 use ndarray::{array, Array2, ArrayView2, Zip};
 
+/// Rosenbrock test function: min f(x)=0 at x=(1, 1)
 fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
     let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
     Zip::from(y.rows_mut())

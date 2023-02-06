@@ -310,7 +310,7 @@ fn check_number_of_points<F>(
     dim: usize,
 ) -> Result<()> {
     if clusters.len() > 1 {
-        let min_number_point = factorial(dim + 2) / (factorial(dim) * factorial(2));
+        let min_number_point = (dim + 1) * (dim + 2) / 2;
         for cluster in clusters {
             if cluster.len() < min_number_point {
                 return Err(MoeError::ClusteringError(format!(
@@ -322,10 +322,6 @@ fn check_number_of_points<F>(
         }
     }
     Ok(())
-}
-
-fn factorial(n: usize) -> usize {
-    (1..=n).product()
 }
 
 /// Predict outputs at given points with `experts` and gaussian mixture `gmx`.
@@ -636,7 +632,7 @@ impl Moe {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(x);
-        debug!("Clustering {:?}", clustering);
+        trace!("Clustering {:?}", clustering);
         let mut preds = Array2::zeros((x.nrows(), 1));
         Zip::from(preds.rows_mut())
             .and(x.rows())
@@ -661,7 +657,7 @@ impl Moe {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(x);
-        debug!("Clustering {:?}", clustering);
+        trace!("Clustering {:?}", clustering);
         let mut variances = Array2::zeros((x.nrows(), 1));
         Zip::from(variances.rows_mut())
             .and(x.rows())

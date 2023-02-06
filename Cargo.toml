@@ -36,6 +36,7 @@ ndarray = { version = "0.15", features = ["rayon", "approx"]}
 ndarray-rand = "0.14"
 numpy = "0.17"
 anyhow = "1"
+rayon = "1"
 
 rand_xoshiro = "0.6"
 libm = "0.2"
