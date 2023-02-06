@@ -9,6 +9,7 @@ use std::process::Command;
 const DIM_X: usize = 124;
 const DIM_Y: usize = 69;
 
+/// Mopta08 reference solution
 const REFSOL: [f64; DIM_X] = [
     0.424901536845442,
     0.000000000000000,
@@ -164,6 +165,7 @@ fn get_output() -> anyhow::Result<Array1<f64>> {
     Ok(output)
 }
 
+/// Mopta08 test case: min f(x)=~222.74 at x=REFSOL
 fn mopta(x: &ArrayView2<f64>, indices: Option<&[usize]>) -> Array2<f64> {
     let n = x.nrows();
     let mut y = Array2::zeros((n, DIM_Y));

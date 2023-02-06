@@ -2,6 +2,7 @@ use egobox_ego::{EgorBuilder, InfillStrategy};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{array, Array2, ArrayView2, Zip};
 
+/// Ackley test function: min f(x)=0 at x=(0, 0, 0)
 fn ackley(x: &ArrayView2<f64>) -> Array2<f64> {
     let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
     Zip::from(y.rows_mut())
