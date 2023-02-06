@@ -101,7 +101,7 @@ pub enum Xtype {
 ///
 /// The output surrogate used by [crate::Egor] is expected to model either
 /// objective function or constraint functions
-pub trait SurrogateBuilder: Clone + Serialize {
+pub trait SurrogateBuilder: Clone + Serialize + Sync {
     fn new_with_xtypes_rng(xtypes: &[Xtype]) -> Self;
 
     /// Sets the allowed regression models used in gaussian processes.

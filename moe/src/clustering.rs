@@ -48,7 +48,7 @@ fn mean(list: &[f64]) -> f64 {
 
 fn median(v: &[f64]) -> f64 {
     let mut list = v.to_vec();
-    list.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    list.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
     let len = list.len();
     let mid = len / 2;
     if len % 2 == 0 {
@@ -126,7 +126,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 
     info!(
         "Find best nb of clusters (max={}, dataset size={}x{})",
-        max_nb_clusters,
+        max_nb_clusters - 1,
         x.nrows(),
         x.ncols()
     );
@@ -175,8 +175,19 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                     let actual = valid.targets();
                     let mixture = mixture.set_recombination(Recombination::Hard);
                     let h_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
-                        pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                            / actual.mapv(|x| x * x).sum().sqrt()
+                        if pred.iter().any(|v| f64::is_infinite(*v)) {
+                            1.0 // max bad value
+                        } else if pred.iter().any(|v| f64::is_nan(*v)) {
+                            ok = false; // something wrong => early exit
+                            1.0
+                        } else {
+                            let denom = actual.mapv(|x| x * x).sum().sqrt();
+                            if denom > 100. * f64::EPSILON {
+                                pred.sub(actual).mapv(|x| x * x).sum().sqrt() / denom
+                            } else {
+                                pred.sub(actual).mapv(|x| x * x).sum().sqrt()
+                            }
+                        }
                     } else {
                         ok = false;
                         1.0
@@ -184,8 +195,19 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                     h_errors.push(h_error);
                     let mixture = mixture.set_recombination(Recombination::Smooth(None));
                     let s_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
-                        pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                            / actual.mapv(|x| x * x).sum().sqrt()
+                        if pred.iter().any(|v| f64::is_infinite(*v)) {
+                            1.0 // max bad value
+                        } else if pred.iter().any(|v| f64::is_nan(*v)) {
+                            ok = false; // something wrong => early exit
+                            1.0
+                        } else {
+                            let denom = actual.mapv(|x| x * x).sum().sqrt();
+                            if denom > 100. * f64::EPSILON {
+                                pred.sub(actual).mapv(|x| x * x).sum().sqrt() / denom
+                            } else {
+                                pred.sub(actual).mapv(|x| x * x).sum().sqrt()
+                            }
+                        }
                     } else {
                         ok = false;
                         1.0
@@ -226,6 +248,10 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
         // Stock possible numbers of cluster
         if ok {
             nb_clusters_ok.push(i);
+        } else {
+            // Assume that if it fails for n clusters it will fail for m > n clusters
+            // early exit
+            break;
         }
 
         if i > 3 {
@@ -261,6 +287,14 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 
         i += 1;
     }
+    // Early exit
+    if nb_clusters_ok.is_empty() {
+        // Selection fails even with one cluster
+        // possibly because some predicitions give inf or nan values
+        info!("Selection of best number of clusters fails. Default to 1 cluster with Smooth(None) recombination");
+        return (1, Recombination::Smooth(None));
+    }
+
     // Find The best number of cluster
     let mut cluster_mse = 1;
     let mut cluster_mses = 1;

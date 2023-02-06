@@ -29,8 +29,9 @@ ndarray-linalg = { version = "0.15", optional = true }
 ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
+rayon="1"
 
-argmin = { version = "0.7.0", features = ["serde1", "ctrlc"] }
+argmin = { version = "0.7.0", features = ["serde1"] }
 instant = "0.1"
 nlopt = "0.6.0"
 rand_xoshiro = { version = "0.6", features = ["serde1"] }
@@ -41,6 +42,8 @@ rawpointer = { version = "0.2" }
 log = "0.4"
 env_logger = "0.10.0"
 thiserror = "1"
+anyhow = "1"
+clap = { version = "4", features=["derive"] }
 
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", optional = true }
