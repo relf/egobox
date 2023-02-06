@@ -113,6 +113,7 @@ use rand_xoshiro::Xoshiro256Plus;
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Executor, Problem, Solver, State, TerminationReason, KV};
 
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
@@ -162,7 +163,7 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     target: f64,
     /// Directory to save intermediate results: inital doe + evalutions at each iteration
     outdir: Option<String>,
-    /// If true use <outdir> to retrieve and start from previous results
+    /// If true use `outdir` to retrieve and start from previous results
     hot_start: bool,
     /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
     /// Note: used for continuous variables handling, the optimizer base.
@@ -522,7 +523,7 @@ where
             let path = self.outdir.as_ref().unwrap();
             std::fs::create_dir_all(path)?;
             let filepath = std::path::Path::new(path).join(DOE_INITIAL_FILE);
-            info!("Save initial doe in {:?}", filepath);
+            info!("Save initial doe {:?} in {:?}", doe.shape(), filepath);
             write_npy(filepath, &doe).expect("Write initial doe");
         }
 
@@ -650,7 +651,7 @@ where
                 new_state.no_point_added_retries -= 1;
                 if new_state.no_point_added_retries == 0 {
                     info!("Max number of retries ({}) without adding point", 3);
-                    info!("Use LHS optimization to hopefully ensure a point addition");
+                    info!("Use LHS optimization to ensure a point addition");
                 }
                 if new_state.no_point_added_retries < 0 {
                     // no luck with LHS optimization
@@ -776,9 +777,7 @@ where
         builder.set_regression_spec(self.regression_spec);
         builder.set_correlation_spec(self.correlation_spec);
         if let Some(nc) = self.n_clusters {
-            if nc > 0 {
-                builder.set_n_clusters(nc);
-            }
+            builder.set_n_clusters(nc);
         };
 
         if init || recluster {
@@ -839,19 +838,25 @@ where
             );
             clusterings[0] = Some(obj_model.to_clustering());
 
-            let mut cstr_models: Vec<Box<dyn ClusteredSurrogate>> = Vec::with_capacity(self.n_cstr);
-            for k in 1..=self.n_cstr {
-                let cstr_model = self.make_clustered_surrogate(
-                    &xt,
-                    &yt.slice(s![.., k..k + 1]).to_owned(),
-                    init && i == 0,
-                    recluster,
-                    &clusterings[k],
-                    &format!("Constraint[{k}] reclustering..."),
-                );
-                cstr_models.push(cstr_model);
-                clusterings[k] = Some(cstr_models[k - 1].to_clustering());
-            }
+            //let mut cstr_models: Vec<Box<dyn ClusteredSurrogate>> = Vec::with_capacity(self.n_cstr);
+            let cstr_models: Vec<std::boxed::Box<dyn egobox_moe::ClusteredSurrogate>> = (1..=self
+                .n_cstr)
+                .into_par_iter()
+                //.into_iter()
+                .map(|k| {
+                    self.make_clustered_surrogate(
+                        &xt,
+                        &yt.slice(s![.., k..k + 1]).to_owned(),
+                        init && i == 0,
+                        recluster,
+                        &clusterings[k],
+                        &format!("Constraint[{k}]"),
+                    )
+                })
+                .collect();
+            (1..=self.n_cstr)
+                .into_iter()
+                .for_each(|k| clusterings[k] = Some(cstr_models[k - 1].to_clustering()));
 
             match self.find_best_point(
                 x_data,
@@ -1056,6 +1061,9 @@ where
                                 let res = x_opt.to_vec();
                                 best_x = Some(Array::from(res));
                                 success = true;
+                            } else {
+                                // optimization fails with NAN values
+                                // debug!("Optimizaion multistart {} > {}", opt, best_opt);
                             }
                         }
                         Err((err, code)) => {
@@ -1063,6 +1071,21 @@ where
                         }
                     }
                 }
+            }
+            if n_optim == n_max_optim && best_x.is_none() {
+                info!("All optimizations fails => Trigger LHS optimization");
+                let obj_data = ObjData {
+                    scale_obj,
+                    scale_wb2,
+                    scale_cstr: scale_cstr.to_owned(),
+                };
+                let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
+                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
+                    .with_rng(Xoshiro256Plus::from_entropy())
+                    .minimize();
+                info!("LHS optimization best_x {}", x_opt);
+                best_x = Some(x_opt);
+                success = true;
             }
             n_optim += 1;
         }
