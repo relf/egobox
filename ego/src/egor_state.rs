@@ -1,6 +1,6 @@
 /// Implementation of `argmin::IterState` for Egor optimizer
 use crate::sort_axis::*;
-use argmin::core::{ArgminFloat, Problem, State, TerminationReason};
+use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationStatus};
 use egobox_doe::Lhs;
 use egobox_moe::Clustering;
 use linfa::Float;
@@ -88,8 +88,8 @@ pub struct EgorState<F: Float> {
     pub counts: HashMap<String, u64>,
     /// Time required so far
     pub time: Option<instant::Duration>,
-    /// Reason of termination
-    pub termination_reason: TerminationReason,
+    /// Optimization status
+    pub termination_status: TerminationStatus,
 
     /// Number of added points
     pub added: usize,
@@ -300,7 +300,7 @@ where
     /// # extern crate instant;
     /// # use instant;
     /// # use std::collections::HashMap;
-    /// # use argmin::core::{State, TerminationReason};
+    /// # use argmin::core::{State, TerminationStatus};
     /// use egobox_ego::EgorState;
     /// let state: EgorState<f64> = EgorState::new();
     ///
@@ -318,7 +318,7 @@ where
     /// # assert_eq!(state.max_iters, std::u64::MAX);
     /// # assert_eq!(state.counts, HashMap::new());
     /// # assert_eq!(state.time.unwrap(), instant::Duration::new(0, 0));
-    /// # assert_eq!(state.termination_reason, TerminationReason::NotTerminated);
+    /// # assert_eq!(state.termination_status, TerminationStatus::NotTerminated);
     /// ```
     fn new() -> Self {
         EgorState {
@@ -338,7 +338,7 @@ where
             max_iters: std::u64::MAX,
             counts: HashMap::new(),
             time: Some(instant::Duration::new(0, 0)),
-            termination_reason: TerminationReason::NotTerminated,
+            termination_status: TerminationStatus::NotTerminated,
 
             added: 0,
             prev_added: 0,
@@ -445,20 +445,19 @@ where
         self.best_param.as_ref()
     }
 
-    /// Sets the termination reason (default: [`TerminationReason::NotTerminated`])
+    /// Sets the termination status to [`Terminated`](`TerminationStatus::Terminated`) with the given reason
     ///
     /// # Example
     ///
     /// ```
-    /// # use egobox_ego::EgorState;
-    /// # use argmin::core::{State, ArgminFloat, TerminationReason};
-    /// # let mut state: EgorState<f64> = EgorState::new();
-    /// # assert_eq!(state.termination_reason, TerminationReason::NotTerminated);
+    /// # use argmin::core::{IterState, State, ArgminFloat, TerminationReason, TerminationStatus};
+    /// # let mut state: IterState<Vec<f64>, (), (), (), f64> = IterState::new();
+    /// # assert_eq!(state.termination_status, TerminationStatus::NotTerminated);
     /// let state = state.terminate_with(TerminationReason::MaxItersReached);
-    /// # assert_eq!(state.termination_reason, TerminationReason::MaxItersReached);
+    /// # assert_eq!(state.termination_status, TerminationStatus::Terminated(TerminationReason::MaxItersReached));
     /// ```
     fn terminate_with(mut self, reason: TerminationReason) -> Self {
-        self.termination_reason = reason;
+        self.termination_status = TerminationStatus::Terminated(reason);
         self
     }
 
@@ -585,19 +584,35 @@ where
         self.max_iters
     }
 
-    /// Returns the termination reason.
+    /// Returns the termination status.
     ///
     /// # Example
     ///
     /// ```
-    /// # use egobox_ego::EgorState;
-    /// # use argmin::core::{State, ArgminFloat, TerminationReason};
-    /// # let mut state: EgorState<f64> = EgorState::new();
-    /// let termination_reason = state.get_termination_reason();
-    /// # assert_eq!(termination_reason, TerminationReason::NotTerminated);
+    /// # use argmin::core::{IterState, State, ArgminFloat, TerminationStatus};
+    /// # let mut state: IterState<Vec<f64>, (), (), (), f64> = IterState::new();
+    /// let termination_status = state.get_termination_status();
+    /// # assert_eq!(*termination_status, TerminationStatus::NotTerminated);
     /// ```
-    fn get_termination_reason(&self) -> TerminationReason {
-        self.termination_reason
+    fn get_termination_status(&self) -> &TerminationStatus {
+        &self.termination_status
+    }
+
+    /// Returns the termination reason if terminated, otherwise None.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use argmin::core::{IterState, State, ArgminFloat, TerminationReason};
+    /// # let mut state: IterState<Vec<f64>, (), (), (), f64> = IterState::new();
+    /// let termination_reason = state.get_termination_reason();
+    /// # assert_eq!(termination_reason, None);
+    /// ```
+    fn get_termination_reason(&self) -> Option<&TerminationReason> {
+        match &self.termination_status {
+            TerminationStatus::Terminated(reason) => Some(reason),
+            TerminationStatus::NotTerminated => None,
+        }
     }
 
     /// Returns the time elapsed since the start of the optimization.
