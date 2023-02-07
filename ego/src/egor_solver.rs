@@ -111,7 +111,9 @@ use nlopt::*;
 use rand_xoshiro::Xoshiro256Plus;
 
 use argmin::argmin_error_closure;
-use argmin::core::{CostFunction, Executor, Problem, Solver, State, TerminationReason, KV};
+use argmin::core::{
+    CostFunction, Executor, Problem, Solver, State, TerminationReason, TerminationStatus, KV,
+};
 
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -657,7 +659,9 @@ where
                     // no luck with LHS optimization
                     warn!("Fail to add another point to improve the surrogate models. Abort!");
                     return Ok((
-                        state.terminate_with(TerminationReason::NoChangeInCost),
+                        state.terminate_with(TerminationReason::SolverExit(
+                            "Even LHS optimization failed to add a new point".to_string(),
+                        )),
                         None,
                     ));
                 }
@@ -708,46 +712,18 @@ where
         Ok((new_state, None))
     }
 
-    fn terminate(&mut self, state: &EgorState<f64>) -> TerminationReason {
+    fn terminate(&mut self, state: &EgorState<f64>) -> TerminationStatus {
         debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> TERMINATE");
         debug!("Current Cost {:?}", state.get_cost());
         debug!("Best cost {:?}", state.get_best_cost());
         debug!("Target cost {:?}", state.get_target_cost());
-        if state.get_best_cost() <= state.get_target_cost() {
-            info!("Target optimum : {}", self.target);
-            info!("Expected optimum reached!");
-            return TerminationReason::TargetCostReached;
-        }
-        if state.get_termination_reason() == TerminationReason::Aborted {
-            info!("*********************************************************** Keyboard interruption ******");
-            return TerminationReason::Aborted;
-        }
-        TerminationReason::NotTerminated
-    }
-
-    /// Checks whether basic termination reasons apply.
-    ///
-    /// Terminate if
-    ///
-    /// 1) algorithm was terminated somewhere else in the Executor
-    /// 2) iteration count exceeds maximum number of iterations
-    /// 3) cost is lower than or equal to the target cost
-    ///
-    /// This can be overwritten; however it is not advised. It is recommended to implement other
-    /// stopping criteria via ([`terminate`](`Solver::terminate`).
-    fn terminate_internal(&mut self, state: &EgorState<f64>) -> TerminationReason {
-        let solver_terminate =
-            <EgorSolver<SB> as Solver<O, EgorState<f64>>>::terminate(self, state);
-        if solver_terminate.terminated() {
-            return solver_terminate;
-        }
-        if state.get_iter() >= state.get_max_iters() {
-            return TerminationReason::MaxItersReached;
-        }
-        if state.get_best_cost() <= state.get_target_cost() {
-            return TerminationReason::TargetCostReached;
-        }
-        TerminationReason::NotTerminated
+        // XXX: Should check target cost
+        // if state.get_best_cost() <= state.get_target_cost() {
+        //     info!("Target optimum : {}", self.target);
+        //     info!("Expected optimum reached!");
+        //     return TerminationReason::TargetCostReached;
+        // }
+        TerminationStatus::NotTerminated
     }
 }
 
