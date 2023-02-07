@@ -40,7 +40,7 @@ rayon = "1"
 
 rand_xoshiro = "0.6"
 libm = "0.2"
-finitediff = { version="0.1", features = ["ndarray"] }
+finitediff = { version="0.1.4", features = ["ndarray"] }
 env_logger = "0.10.0"
 log = "0.4"
 pyo3 = { version = "0.17", features = ["extension-module"] }
