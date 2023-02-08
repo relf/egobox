@@ -4,6 +4,7 @@ use ndarray::{
     concatenate, Array1, Array2, ArrayBase, ArrayView, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
 };
 use ndarray_stats::{DeviationExt, QuantileExt};
+use rayon::prelude::*;
 
 // Infill strategy related function
 ////////////////////////////////////////////////////////////////////////////
@@ -129,7 +130,7 @@ pub fn compute_cstr_scales(
     cstr_models: &[Box<dyn ClusteredSurrogate>],
 ) -> Array1<f64> {
     let scales: Vec<f64> = cstr_models
-        .iter()
+        .par_iter()
         .map(|cstr_model| {
             let preds: Array1<f64> = cstr_model
                 .predict_values(x)

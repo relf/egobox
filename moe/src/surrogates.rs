@@ -27,7 +27,7 @@ pub trait SurrogateParams {
 
 /// A trait for a surrogate used as expert in the mixture.
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
-pub trait Surrogate: std::fmt::Display + Send {
+pub trait Surrogate: std::fmt::Display + Sync + Send {
     /// Predict output values at n points given as (n, xdim) matrix.
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
