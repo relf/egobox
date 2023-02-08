@@ -100,7 +100,6 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     } else {
         max_nb_clusters
     };
-    let nx = x.ncols();
     let dataset: DatasetView<f64, f64> = DatasetView::new(x.view(), y.view());
 
     // Stock
@@ -120,7 +119,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     let mut ok1 = true;
     let mut ok2;
     let mut i = 0;
-    let mut exit_ = false;
+    let mut stop = false;
 
     let use_median = true;
 
@@ -132,10 +131,8 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     );
 
     // Find error for each cluster
-    while i < max_nb_clusters && !exit_ {
+    while i < max_nb_clusters && !stop {
         debug!("Try {} cluster(s)", i + 1);
-
-        let _kpls = nx > 9;
 
         let mut h_errors: Vec<f64> = Vec::new();
         let mut s_errors: Vec<f64> = Vec::new();
@@ -143,82 +140,97 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 
         let n_clusters = i + 1;
 
-        let xydata = Dataset::from(concatenate(Axis(1), &[x.view(), y.view()]).unwrap());
-        let gmm = Box::new(
-            GaussianMixtureModel::params(n_clusters)
+        if ok {
+            let xydata = Dataset::from(concatenate(Axis(1), &[x.view(), y.view()]).unwrap());
+            let maybe_gmm = GaussianMixtureModel::params(n_clusters)
                 .n_runs(20)
                 .with_rng(rng.clone())
                 .fit(&xydata)
-                .expect("Training data clustering"),
-        );
+                .ok();
 
-        // Cross Validation
-        if ok {
-            for (train, valid) in dataset.fold(5).into_iter() {
-                if let Ok(mixture) = MoeParams::default()
-                    .n_clusters(n_clusters)
-                    .regression_spec(regression_spec)
-                    .correlation_spec(correlation_spec)
-                    .kpls_dim(kpls_dim)
-                    .gmm(Some(gmm.clone()))
-                    .fit(&train)
-                {
-                    let xytrain =
-                        concatenate(Axis(1), &[train.records().view(), train.targets.view()])
-                            .unwrap();
-                    let data_clustering = gmm.predict(&xytrain);
-                    let clusters = sort_by_cluster(n_clusters, &xytrain, &data_clustering);
-                    for cluster in clusters.iter().take(i + 1) {
-                        // If there is at least 3 points
-                        ok = ok && cluster.len() > 3
+            if let Some(gmm) = maybe_gmm {
+                let gmm = Box::new(gmm);
+                // Cross Validation
+                for (train, valid) in dataset.fold(5).into_iter() {
+                    if let Ok(mixture) = MoeParams::default()
+                        .n_clusters(n_clusters)
+                        .regression_spec(regression_spec)
+                        .correlation_spec(correlation_spec)
+                        .kpls_dim(kpls_dim)
+                        .gmm(Some(gmm.clone()))
+                        .fit(&train)
+                    {
+                        let xytrain =
+                            concatenate(Axis(1), &[train.records().view(), train.targets.view()])
+                                .unwrap();
+                        let data_clustering = gmm.predict(&xytrain);
+                        let clusters = sort_by_cluster(n_clusters, &xytrain, &data_clustering);
+                        for cluster in clusters.iter().take(i + 1) {
+                            // If there is at least 3 points
+                            ok = ok && cluster.len() > 3
+                        }
+                        let actual = valid.targets();
+                        let mixture = mixture.set_recombination(Recombination::Hard);
+                        let h_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
+                            if pred.iter().any(|v| f64::is_infinite(*v)) {
+                                1.0 // max bad value
+                            } else if pred.iter().any(|v| f64::is_nan(*v)) {
+                                ok = false; // something wrong => early exit
+                                1.0
+                            } else {
+                                let denom = actual.mapv(|x| x * x).sum().sqrt();
+                                if denom > 100. * f64::EPSILON {
+                                    pred.sub(actual).mapv(|x| x * x).sum().sqrt() / denom
+                                } else {
+                                    pred.sub(actual).mapv(|x| x * x).sum().sqrt()
+                                }
+                            }
+                        } else {
+                            ok = false;
+                            1.0
+                        };
+                        h_errors.push(h_error);
+                        let mixture = mixture.set_recombination(Recombination::Smooth(None));
+                        let s_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
+                            if pred.iter().any(|v| f64::is_infinite(*v)) {
+                                1.0 // max bad value
+                            } else if pred.iter().any(|v| f64::is_nan(*v)) {
+                                ok = false; // something wrong => early exit
+                                1.0
+                            } else {
+                                let denom = actual.mapv(|x| x * x).sum().sqrt();
+                                if denom > 100. * f64::EPSILON {
+                                    pred.sub(actual).mapv(|x| x * x).sum().sqrt() / denom
+                                } else {
+                                    pred.sub(actual).mapv(|x| x * x).sum().sqrt()
+                                }
+                            }
+                        } else {
+                            ok = false;
+                            1.0
+                        };
+                        s_errors.push(s_error);
+                    } else {
+                        ok = false;
+                        s_errors.push(1.0);
+                        h_errors.push(1.0);
                     }
-                    let actual = valid.targets();
-                    let mixture = mixture.set_recombination(Recombination::Hard);
-                    let h_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
-                        if pred.iter().any(|v| f64::is_infinite(*v)) {
-                            1.0 // max bad value
-                        } else if pred.iter().any(|v| f64::is_nan(*v)) {
-                            ok = false; // something wrong => early exit
-                            1.0
-                        } else {
-                            let denom = actual.mapv(|x| x * x).sum().sqrt();
-                            if denom > 100. * f64::EPSILON {
-                                pred.sub(actual).mapv(|x| x * x).sum().sqrt() / denom
-                            } else {
-                                pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                            }
-                        }
-                    } else {
-                        ok = false;
-                        1.0
-                    };
-                    h_errors.push(h_error);
-                    let mixture = mixture.set_recombination(Recombination::Smooth(None));
-                    let s_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
-                        if pred.iter().any(|v| f64::is_infinite(*v)) {
-                            1.0 // max bad value
-                        } else if pred.iter().any(|v| f64::is_nan(*v)) {
-                            ok = false; // something wrong => early exit
-                            1.0
-                        } else {
-                            let denom = actual.mapv(|x| x * x).sum().sqrt();
-                            if denom > 100. * f64::EPSILON {
-                                pred.sub(actual).mapv(|x| x * x).sum().sqrt() / denom
-                            } else {
-                                pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                            }
-                        }
-                    } else {
-                        ok = false;
-                        1.0
-                    };
-                    s_errors.push(s_error);
-                } else {
-                    ok = false;
-                    s_errors.push(1.0);
-                    h_errors.push(1.0);
                 }
             }
+        } else {
+            // GMM Clustering with n_clusters fails
+            debug!("GMM Clustering with {} clusters fails", n_clusters);
+            ok = false;
+        }
+
+        // Stock possible numbers of cluster
+        if ok {
+            nb_clusters_ok.push(i);
+        } else {
+            // Assume that if it fails for n clusters it will fail for m > n clusters
+            // early exit
+            debug!("Prediction with {} clusters fails", n_clusters);
+            break;
         }
 
         // Stock median errors
@@ -245,20 +257,11 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
         );
         debug!("#######");
 
-        // Stock possible numbers of cluster
-        if ok {
-            nb_clusters_ok.push(i);
-        } else {
-            // Assume that if it fails for n clusters it will fail for m > n clusters
-            // early exit
-            break;
-        }
-
         if i > 3 {
             // Stop the search if the clustering can not be performed three times
             ok2 = ok1;
             ok1 = ok;
-            exit_ = !ok && !ok1 && !ok2;
+            stop = !ok && !ok1 && !ok2;
         }
         if use_median {
             // Stop the search if the median increases three times
@@ -270,8 +273,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                 auxkps = median_err_s[i - 1];
                 auxkpps = median_err_s[i];
 
-                exit_ =
-                    auxkph >= auxkh && auxkps >= auxks && auxkpph >= auxkph && auxkpps >= auxkps;
+                stop = auxkph >= auxkh && auxkps >= auxks && auxkpph >= auxkph && auxkpps >= auxkps;
             }
         } else if i > 3 {
             // Stop the search if the means of errors increase three times
@@ -282,7 +284,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
             auxkps = mean_err_s[i - 1];
             auxkpps = mean_err_s[i];
 
-            exit_ = auxkph >= auxkh && auxkps >= auxks && auxkpph >= auxkph && auxkpps >= auxkps;
+            stop = auxkph >= auxkh && auxkps >= auxks && auxkpph >= auxkph && auxkpps >= auxkps;
         }
 
         i += 1;
