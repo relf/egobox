@@ -1,6 +1,6 @@
 use clap::Parser;
 use egobox_ego::{EgorBuilder, GroupFunc, InfillOptimizer};
-use egobox_moe::{RegressionSpec, CorrelationSpec};
+use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use std::fs::File;
 use std::io::prelude::*;
