@@ -1,5 +1,6 @@
 use clap::Parser;
 use egobox_ego::{EgorBuilder, GroupFunc, InfillOptimizer};
+use egobox_moe::{RegressionSpec, CorrelationSpec};
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use std::fs::File;
 use std::io::prelude::*;
@@ -247,7 +248,10 @@ fn main() -> anyhow::Result<()> {
         .n_cstr(68)
         .cstr_tol(cstr_tol)
         .n_clusters(Some(0))
+        .n_doe(250)
         .n_eval(100)
+        .regression_spec(RegressionSpec::CONSTANT)
+        .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
         .infill_optimizer(InfillOptimizer::Cobyla)
         .kpls_dim(Some(3))
         .outdir(Some("./history".to_string()))
