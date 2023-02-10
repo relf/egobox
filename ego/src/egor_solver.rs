@@ -400,7 +400,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 
     /// Sets the number of clusters used by the mixture of surrogate experts.
     ///
-    /// When set to 0, the number of clusters is determined automatically
+    /// When set to Some(0), the number of clusters is determined automatically
+    /// When set None, default to 1
     pub fn n_clusters(&mut self, n_clusters: Option<usize>) -> &mut Self {
         self.n_clusters = n_clusters;
         self
@@ -449,7 +450,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 }
 
-/// Build ``xtypes` from simple float bounds of `x` input components when x belongs to R^n.
+/// Build `xtypes` from simple float bounds of `x` input components when x belongs to R^n.
 /// xlimits are bounds of the x components expressed a matrix (dim, 2) where dim is the dimension of x
 /// the ith row is the bounds interval [lower, upper] of the ith comonent of `x`.  
 fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<Xtype> {
@@ -752,9 +753,7 @@ where
         builder.set_kpls_dim(self.kpls_dim);
         builder.set_regression_spec(self.regression_spec);
         builder.set_correlation_spec(self.correlation_spec);
-        if let Some(nc) = self.n_clusters {
-            builder.set_n_clusters(nc);
-        };
+        builder.set_n_clusters(self.n_clusters.unwrap_or(1));
 
         if init || recluster {
             if recluster {
