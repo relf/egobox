@@ -40,4 +40,7 @@ pub enum MoeError {
     /// When a linfa error occurs
     #[error(transparent)]
     LinfaError(#[from] linfa::error::Error),
+    /// When a linfa GMM clustering error occurs
+    #[error(transparent)]
+    LinfaClusteringrror(#[from] linfa_clustering::GmmError),
 }

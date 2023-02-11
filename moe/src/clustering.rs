@@ -223,8 +223,8 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
             ok = false;
         }
 
-        // Stock possible numbers of cluster
-        if ok {
+        // Stock possible numbers of cluster when ok and when errors have been actually computed
+        if ok && !s_errors.is_empty() && !h_errors.is_empty() {
             nb_clusters_ok.push(i);
         } else {
             // Assume that if it fails for n clusters it will fail for m > n clusters

@@ -114,8 +114,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             let gmm = GaussianMixtureModel::params(n_clusters)
                 .n_runs(20)
                 .with_rng(self.rng())
-                .fit(&dataset)
-                .expect("Training data clustering");
+                .fit(&dataset)?;
 
             // GMX for prediction
             let weights = gmm.weights().to_owned();
