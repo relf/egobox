@@ -911,6 +911,19 @@ where
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
+        let mut success = false;
+        let mut n_optim = 1;
+        let n_max_optim = 20;
+        let mut best_x = None;
+
+        let (scale_obj, scale_cstr, scale_wb2) =
+            self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
+
+        let algorithm = match self.infill_optimizer {
+            InfillOptimizer::Slsqp => Algorithm::Slsqp,
+            InfillOptimizer::Cobyla => Algorithm::Cobyla,
+        };
+
         let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
             let ObjData {
                 scale_obj,
@@ -977,19 +990,9 @@ where
             cstrs.push(Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>>>);
         }
 
-        let mut success = false;
-        let mut n_optim = 1;
-        let n_max_optim = 20;
-        let mut best_x = None;
-
-        let (scale_obj, scale_cstr, scale_wb2) =
-            self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
-
-        let algorithm = match self.infill_optimizer {
-            InfillOptimizer::Slsqp => Algorithm::Slsqp,
-            InfillOptimizer::Cobyla => Algorithm::Cobyla,
-        };
         while !success && n_optim <= n_max_optim {
+            let x_start = sampling.sample(self.n_start);
+
             if let Some(seed) = lhs_optim_seed {
                 let obj_data = ObjData {
                     scale_obj,
@@ -1004,61 +1007,151 @@ where
                 best_x = Some(x_opt);
                 success = true;
             } else {
-                let mut optimizer = Nlopt::new(
-                    algorithm,
-                    x_data.ncols(),
-                    obj,
-                    Target::Minimize,
-                    ObjData {
-                        scale_obj,
-                        scale_wb2,
-                        scale_cstr: scale_cstr.to_owned(),
-                    },
-                );
-                let lower = self.xlimits.column(0).to_owned();
-                optimizer.set_lower_bounds(lower.as_slice().unwrap())?;
-                let upper = self.xlimits.column(1).to_owned();
-                optimizer.set_upper_bounds(upper.as_slice().unwrap())?;
-                optimizer.set_maxeval(200)?;
-                optimizer.set_ftol_rel(1e-4)?;
-                optimizer.set_ftol_abs(1e-4)?;
-                cstrs.iter().enumerate().for_each(|(i, cstr)| {
-                    optimizer
-                        .add_inequality_constraint(
-                            cstr,
+                let dim = x_data.ncols();
+                let optims: Vec<(f64, Vec<f64>)> = (0..self.n_start)
+                    .into_iter()
+                    .map(|i| {
+                        let obj = |x: &[f64],
+                                   gradient: Option<&mut [f64]>,
+                                   params: &mut ObjData<f64>|
+                         -> f64 {
+                            let ObjData {
+                                scale_obj,
+                                scale_wb2,
+                                ..
+                            } = params;
+                            if let Some(grad) = gradient {
+                                if self.is_grad_impl_available() {
+                                    let grd = self
+                                        .grad_infill_eval(
+                                            x, obj_model, *f_min, *scale_obj, *scale_wb2,
+                                        )
+                                        .to_vec();
+                                    grad[..].copy_from_slice(&grd);
+                                } else {
+                                    let f = |x: &Vec<f64>| -> f64 {
+                                        self.infill_eval(
+                                            x, obj_model, *f_min, *scale_obj, *scale_wb2,
+                                        )
+                                    };
+                                    grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+                                }
+                            }
+                            self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                        };
+
+                        let cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>>>> = (0..self.n_cstr)
+                            .map(|i| {
+                                let index = i;
+                                let cstr = move |x: &[f64],
+                                                 gradient: Option<&mut [f64]>,
+                                                 params: &mut ObjData<f64>|
+                                      -> f64 {
+                                    if let Some(grad) = gradient {
+                                        if self.is_grad_impl_available() {
+                                            let grd = cstr_models[i]
+                                                .predict_derivatives(
+                                                    &Array::from_shape_vec(
+                                                        (1, x.len()),
+                                                        x.to_vec(),
+                                                    )
+                                                    .unwrap()
+                                                    .view(),
+                                                )
+                                                .unwrap()
+                                                .row(0)
+                                                .mapv(|v| v / params.scale_cstr[index])
+                                                .to_vec();
+                                            grad[..].copy_from_slice(&grd);
+                                        } else {
+                                            let f = |x: &Vec<f64>| -> f64 {
+                                                cstr_models[i]
+                                                    .predict_values(
+                                                        &Array::from_shape_vec(
+                                                            (1, x.len()),
+                                                            x.to_vec(),
+                                                        )
+                                                        .unwrap()
+                                                        .view(),
+                                                    )
+                                                    .unwrap()[[0, 0]]
+                                                    / params.scale_cstr[index]
+                                            };
+                                            grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+                                        }
+                                    }
+                                    cstr_models[index]
+                                        .predict_values(
+                                            &Array::from_shape_vec((1, x.len()), x.to_vec())
+                                                .unwrap()
+                                                .view(),
+                                        )
+                                        .unwrap()[[0, 0]]
+                                        / params.scale_cstr[index]
+                                };
+                                Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>>>
+                            })
+                            .collect();
+
+                        let mut optimizer = Nlopt::new(
+                            algorithm,
+                            dim,
+                            obj,
+                            Target::Minimize,
                             ObjData {
                                 scale_obj,
                                 scale_wb2,
                                 scale_cstr: scale_cstr.to_owned(),
                             },
-                            self.cstr_tol / scale_cstr[i],
-                        )
-                        .unwrap();
-                });
+                        );
+                        let lower = self.xlimits.column(0).to_owned();
+                        optimizer
+                            .set_lower_bounds(lower.as_slice().unwrap())
+                            .unwrap();
+                        let upper = self.xlimits.column(1).to_owned();
+                        optimizer
+                            .set_upper_bounds(upper.as_slice().unwrap())
+                            .unwrap();
+                        optimizer.set_maxeval(200).unwrap();
+                        optimizer.set_ftol_rel(1e-4).unwrap();
+                        optimizer.set_ftol_abs(1e-4).unwrap();
+                        cstrs.iter().enumerate().for_each(|(i, cstr)| {
+                            optimizer
+                                .add_inequality_constraint(
+                                    cstr,
+                                    ObjData {
+                                        scale_obj,
+                                        scale_wb2,
+                                        scale_cstr: scale_cstr.to_owned(),
+                                    },
+                                    self.cstr_tol / scale_cstr[i],
+                                )
+                                .unwrap();
+                        });
 
-                let mut best_opt = f64::INFINITY;
-                let x_start = sampling.sample(self.n_start);
-
-                for i in 0..self.n_start {
-                    let mut x_opt = x_start.row(i).to_vec();
-                    match optimizer.optimize(&mut x_opt) {
-                        Ok((_, opt)) => {
-                            if opt < best_opt {
-                                best_opt = opt;
-                                let res = x_opt.to_vec();
-                                best_x = Some(Array::from(res));
-                                success = true;
-                            } else {
-                                // optimization fails with NAN values
-                                // debug!("Optimizaion multistart {} > {}", opt, best_opt);
+                        let mut x_opt = x_start.row(i).to_vec();
+                        match optimizer.optimize(&mut x_opt) {
+                            Ok((_, opt)) => (opt, x_opt),
+                            Err((err, code)) => {
+                                debug!("Nlopt Err: {:?} (y_opt={})", err, code);
+                                (f64::INFINITY, x_opt)
                             }
                         }
-                        Err((err, code)) => {
-                            debug!("Nlopt Err: {:?} (y_opt={})", err, code);
-                        }
+                    })
+                    .collect();
+
+                let res = optims.iter().reduce(|a, b| if b.0 > a.0 { b } else { a });
+                if let Some(res) = res {
+                    if res.0.is_nan() || res.0.is_infinite() {
+                        success = false;
+                    } else {
+                        best_x = Some(Array::from(res.1.clone()));
                     }
+                } else {
+                    success = false;
                 }
             }
+
             if n_optim == n_max_optim && best_x.is_none() {
                 info!("All optimizations fails => Trigger LHS optimization");
                 let obj_data = ObjData {
