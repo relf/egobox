@@ -873,6 +873,33 @@ where
         true
     }
 
+    fn compute_scaling(
+        &self,
+        sampling: &Lhs<f64, Xoshiro256Plus>,
+        obj_model: &dyn ClusteredSurrogate,
+        cstr_models: &[Box<dyn ClusteredSurrogate>],
+        f_min: f64,
+    ) -> (f64, Array1<f64>, f64) {
+        let scaling_points = sampling.sample(100 * self.xlimits.nrows());
+        let scale_obj = compute_obj_scale(&scaling_points.view(), obj_model);
+        info!("Acquisition function scaling is updated to {}", scale_obj);
+        let scale_cstr = if cstr_models.is_empty() {
+            Array1::zeros((0,))
+        } else {
+            let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
+            info!("Feasibility criterion scaling is updated to {}", scale_cstr);
+            scale_cstr
+        };
+        let scale_wb2 = if self.infill == InfillStrategy::WB2S {
+            let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, f_min);
+            info!("WB2S scaling factor is updated to {}", scale);
+            scale
+        } else {
+            1.
+        };
+        (scale_obj, scale_cstr, scale_wb2)
+    }
+
     fn find_best_point(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -955,23 +982,8 @@ where
         let n_max_optim = 20;
         let mut best_x = None;
 
-        let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-        let scale_obj = compute_obj_scale(&scaling_points.view(), obj_model);
-        info!("Acquisition function scaling is updated to {}", scale_obj);
-        let scale_cstr = if cstr_models.is_empty() {
-            Array1::zeros((0,))
-        } else {
-            let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
-            info!("Feasibility criterion scaling is updated to {}", scale_cstr);
-            scale_cstr
-        };
-        let scale_wb2 = if self.infill == InfillStrategy::WB2S {
-            let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, *f_min);
-            info!("WB2S scaling factor is updated to {}", scale);
-            scale
-        } else {
-            1.
-        };
+        let (scale_obj, scale_cstr, scale_wb2) =
+            self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
 
         let algorithm = match self.infill_optimizer {
             InfillOptimizer::Slsqp => Algorithm::Slsqp,
