@@ -1019,7 +1019,7 @@ where
                                 scale_wb2,
                                 scale_cstr: scale_cstr.to_owned(),
                             },
-                            1e-6 / scale_cstr[i],
+                            self.cstr_tol / scale_cstr[i],
                         )
                         .unwrap();
                 });
