@@ -1,4 +1,4 @@
-use crate::types::ObjData;
+use crate::types::{CstrFn, ObjData};
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
@@ -18,7 +18,7 @@ pub(crate) struct LhsOptimizer<'a, R: Rng + Clone> {
     n_points: usize,
     cstr_tol: f64,
     obj: &'a dyn ObjFn<ObjData<f64>>,
-    cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
+    cstrs: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
     obj_data: ObjData<f64>,
     rng: R,
 }
@@ -27,7 +27,7 @@ impl<'a> LhsOptimizer<'a, Xoshiro256Plus> {
     pub fn new(
         xlimits: &Array2<f64>,
         obj: &'a dyn ObjFn<ObjData<f64>>,
-        cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
+        cstrs: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
         obj_data: &ObjData<f64>,
     ) -> LhsOptimizer<'a, Xoshiro256Plus> {
         Self::new_with_rng(
@@ -44,7 +44,7 @@ impl<'a, R: Rng + Clone> LhsOptimizer<'a, R> {
     pub fn new_with_rng(
         xlimits: &Array2<f64>,
         obj: &'a dyn ObjFn<ObjData<f64>>,
-        cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
+        cstrs: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
         obj_data: &ObjData<f64>,
         rng: R,
     ) -> LhsOptimizer<'a, R> {

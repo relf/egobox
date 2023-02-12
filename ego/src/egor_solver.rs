@@ -946,11 +946,13 @@ where
             self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
         };
 
-        let mut cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>>>> = Vec::with_capacity(self.n_cstr);
-        for i in 0..self.n_cstr {
-            let index = i;
-            let cstr =
-                move |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
+        let cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>> = (0..self.n_cstr)
+            .map(|i| {
+                let index = i;
+                let cstr = move |x: &[f64],
+                                 gradient: Option<&mut [f64]>,
+                                 params: &mut ObjData<f64>|
+                      -> f64 {
                     if let Some(grad) = gradient {
                         if self.is_grad_impl_available() {
                             let grd = cstr_models[i]
@@ -987,8 +989,9 @@ where
                         .unwrap()[[0, 0]]
                         / params.scale_cstr[index]
                 };
-            cstrs.push(Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>>>);
-        }
+                Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>
+            })
+            .collect();
 
         while !success && n_optim <= n_max_optim {
             let x_start = sampling.sample(self.n_start);
@@ -1010,90 +1013,8 @@ where
                 let dim = x_data.ncols();
 
                 let res = (0..self.n_start)
-                    .into_iter()
+                    .into_par_iter()
                     .map(|i| {
-                        let obj = |x: &[f64],
-                                   gradient: Option<&mut [f64]>,
-                                   params: &mut ObjData<f64>|
-                         -> f64 {
-                            let ObjData {
-                                scale_obj,
-                                scale_wb2,
-                                ..
-                            } = params;
-                            if let Some(grad) = gradient {
-                                if self.is_grad_impl_available() {
-                                    let grd = self
-                                        .grad_infill_eval(
-                                            x, obj_model, *f_min, *scale_obj, *scale_wb2,
-                                        )
-                                        .to_vec();
-                                    grad[..].copy_from_slice(&grd);
-                                } else {
-                                    let f = |x: &Vec<f64>| -> f64 {
-                                        self.infill_eval(
-                                            x, obj_model, *f_min, *scale_obj, *scale_wb2,
-                                        )
-                                    };
-                                    grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-                                }
-                            }
-                            self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
-                        };
-
-                        let cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>>>> = (0..self.n_cstr)
-                            .map(|i| {
-                                let index = i;
-                                let cstr = move |x: &[f64],
-                                                 gradient: Option<&mut [f64]>,
-                                                 params: &mut ObjData<f64>|
-                                      -> f64 {
-                                    if let Some(grad) = gradient {
-                                        if self.is_grad_impl_available() {
-                                            let grd = cstr_models[i]
-                                                .predict_derivatives(
-                                                    &Array::from_shape_vec(
-                                                        (1, x.len()),
-                                                        x.to_vec(),
-                                                    )
-                                                    .unwrap()
-                                                    .view(),
-                                                )
-                                                .unwrap()
-                                                .row(0)
-                                                .mapv(|v| v / params.scale_cstr[index])
-                                                .to_vec();
-                                            grad[..].copy_from_slice(&grd);
-                                        } else {
-                                            let f = |x: &Vec<f64>| -> f64 {
-                                                cstr_models[i]
-                                                    .predict_values(
-                                                        &Array::from_shape_vec(
-                                                            (1, x.len()),
-                                                            x.to_vec(),
-                                                        )
-                                                        .unwrap()
-                                                        .view(),
-                                                    )
-                                                    .unwrap()[[0, 0]]
-                                                    / params.scale_cstr[index]
-                                            };
-                                            grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-                                        }
-                                    }
-                                    cstr_models[index]
-                                        .predict_values(
-                                            &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                                .unwrap()
-                                                .view(),
-                                        )
-                                        .unwrap()[[0, 0]]
-                                        / params.scale_cstr[index]
-                                };
-                                Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>>>
-                            })
-                            .collect();
-
                         let mut optimizer = Nlopt::new(
                             algorithm,
                             dim,
@@ -1139,16 +1060,15 @@ where
                             }
                         }
                     })
-                    .reduce(|a, b| if b.0 < a.0 { b } else { a });
+                    .reduce(
+                        || (f64::INFINITY, vec![1.0; dim]),
+                        |a, b| if b.0 < a.0 { b } else { a },
+                    );
 
-                if let Some(res) = res {
-                    if res.0.is_nan() || res.0.is_infinite() {
-                        success = false;
-                    } else {
-                        best_x = Some(Array::from(res.1.clone()));
-                    }
-                } else {
+                if res.0.is_nan() || res.0.is_infinite() {
                     success = false;
+                } else {
+                    best_x = Some(Array::from(res.1.clone()));
                 }
             }
 
