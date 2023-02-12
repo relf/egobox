@@ -1008,7 +1008,8 @@ where
                 success = true;
             } else {
                 let dim = x_data.ncols();
-                let optims: Vec<(f64, Vec<f64>)> = (0..self.n_start)
+
+                let res = (0..self.n_start)
                     .into_iter()
                     .map(|i| {
                         let obj = |x: &[f64],
@@ -1138,9 +1139,8 @@ where
                             }
                         }
                     })
-                    .collect();
+                    .reduce(|a, b| if b.0 < a.0 { b } else { a });
 
-                let res = optims.iter().reduce(|a, b| if b.0 > a.0 { b } else { a });
                 if let Some(res) = res {
                     if res.0.is_nan() || res.0.is_infinite() {
                         success = false;
