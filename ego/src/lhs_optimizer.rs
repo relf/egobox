@@ -1,4 +1,4 @@
-use crate::types::{CstrFn, ObjData};
+use crate::types::ObjData;
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
