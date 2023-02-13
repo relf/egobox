@@ -240,15 +240,17 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let dim = args.dim;
+    let n_doe = 3 * dim;
     let cstr_tol = 1e-4;
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
+    
     let res = EgorBuilder::optimize(mopta_func(dim))
         .min_within(&xlimits)
         .n_cstr(68)
         .cstr_tol(cstr_tol)
-        .n_clusters(Some(0))
-        .n_doe(250)
+        .n_clusters(Some(1))
+        .n_doe(n_doe)
         .n_eval(100)
         .regression_spec(RegressionSpec::CONSTANT)
         .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
