@@ -8,6 +8,7 @@ use ndarray_rand::{
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 use std::cmp;
+use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,8 @@ pub enum LhsKind {
     Optimized,
 }
 
+type RngRef<R> = Arc<RwLock<R>>;
+
 /// The LHS design is built as follows: each dimension space is divided into ns sections
 /// where ns is the number of sampling points, and one point in selected in each section.
 /// The selection method gives different kind of LHS (see [LhsKind])
@@ -42,7 +45,7 @@ pub struct Lhs<F: Float, R: Rng + Clone> {
     /// The requested kind of LHS
     kind: LhsKind,
     /// Random generator used for reproducibility (not used in case of Centered LHS)
-    rng: R,
+    rng: RngRef<R>,
 }
 
 /// LHS with default random generator
@@ -66,18 +69,17 @@ impl<F: Float, R: Rng + Clone> SamplingMethod<F> for Lhs<F, R> {
     }
 
     fn normalized_sample(&self, ns: usize) -> Array2<F> {
-        let mut rng = self.rng.clone();
         match &self.kind {
-            LhsKind::Classic => self._classic_lhs(ns, &mut rng),
-            LhsKind::Centered => self._centered_lhs(ns, &mut rng),
-            LhsKind::Maximin => self._maximin_lhs(ns, &mut rng, false, 5),
-            LhsKind::CenteredMaximin => self._maximin_lhs(ns, &mut rng, true, 5),
+            LhsKind::Classic => self._classic_lhs(ns),
+            LhsKind::Centered => self._centered_lhs(ns),
+            LhsKind::Maximin => self._maximin_lhs(ns, false, 5),
+            LhsKind::CenteredMaximin => self._maximin_lhs(ns, true, 5),
             LhsKind::Optimized => {
-                let doe = self._classic_lhs(ns, &mut rng);
+                let doe = self._classic_lhs(ns);
                 let nx = self.xlimits.nrows();
                 let outer_loop = cmp::min((1.5 * nx as f64) as usize, 30);
                 let inner_loop = cmp::min(20 * nx, 100);
-                self._maximin_ese(&doe, outer_loop, inner_loop, &mut rng)
+                self._maximin_ese(&doe, outer_loop, inner_loop)
             }
         }
     }
@@ -95,7 +97,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         Lhs {
             xlimits: xlimits.to_owned(),
             kind: LhsKind::Optimized,
-            rng,
+            rng: Arc::new(RwLock::new(rng)),
         }
     }
 
@@ -110,7 +112,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         Lhs {
             xlimits: self.xlimits,
             kind: self.kind,
-            rng,
+            rng: Arc::new(RwLock::new(rng)),
         }
     }
 
@@ -118,8 +120,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         &self,
         lhs: &Array2<F>,
         outer_loop: usize,
-        inner_loop: usize,
-        rng: &mut R,
+        inner_loop: usize
     ) -> Array2<F> {
         // hard-coded params
         let j_range = 20;
@@ -146,9 +147,10 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
 
                 // Build j different plans with a single swap procedure
                 // See description of phip_swap procedure
+                let mut rng = self.rng.write().unwrap();
                 for j in 0..j_range {
                     l_x.push(Box::new(lhs_own.to_owned()));
-                    let php = self._phip_swap(&mut l_x[j], modulo, phip, p, rng);
+                    let php = self._phip_swap(&mut l_x[j], modulo, phip, p, &mut *rng);
                     l_phip.push(php);
                 }
                 let lphip = Array::from_shape_vec(l_phip.len(), l_phip).unwrap();
@@ -233,11 +235,12 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         res
     }
 
-    fn _classic_lhs(&self, ns: usize, rng: &mut R) -> Array2<F> {
+    fn _classic_lhs(&self, ns: usize) -> Array2<F> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
-        let rnd = Array::random_using((ns, nx), Uniform::new(0., 1.), rng);
+        let mut rng = self.rng.write().unwrap();
+        let rnd = Array::random_using((ns, nx), Uniform::new(0., 1.), &mut *rng);
         let a = cut.slice(s![..ns]).to_owned();
         let b = cut.slice(s![1..(ns + 1)]);
         let c = &b - &a;
@@ -249,13 +252,13 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let mut lhs = Array::zeros((ns, nx));
         for j in 0..nx {
             let mut colj = rdpoints.slice(s![.., j]).to_owned();
-            colj.as_slice_mut().unwrap().shuffle(rng);
+            colj.as_slice_mut().unwrap().shuffle(&mut *rng);
             lhs.column_mut(j).assign(&colj);
         }
         lhs.mapv(F::cast)
     }
 
-    fn _centered_lhs(&self, ns: usize, rng: &mut R) -> Array2<F> {
+    fn _centered_lhs(&self, ns: usize) -> Array2<F> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
@@ -265,21 +268,22 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let mut c = (a + b) / 2.;
         let mut lhs = Array::zeros(u.raw_dim());
 
+        let mut rng = self.rng.write().unwrap();
         for j in 0..nx {
-            c.as_slice_mut().unwrap().shuffle(rng);
+            c.as_slice_mut().unwrap().shuffle(&mut *rng);
             lhs.column_mut(j).assign(&c);
         }
         lhs.mapv(F::cast)
     }
 
-    fn _maximin_lhs(&self, ns: usize, rng: &mut R, centered: bool, n_iter: usize) -> Array2<F> {
+    fn _maximin_lhs(&self, ns: usize, centered: bool, n_iter: usize) -> Array2<F> {
         let mut max_dist = F::zero();
-        let mut lhs = self._classic_lhs(ns, rng);
+        let mut lhs = self._classic_lhs(ns);
         for _ in 0..n_iter {
             if centered {
-                lhs = self._centered_lhs(ns, rng);
+                lhs = self._centered_lhs(ns);
             } else {
-                lhs = self._classic_lhs(ns, rng);
+                lhs = self._classic_lhs(ns);
             }
             let d = pdist(&lhs);
             let d_min = F::cast(*d.min().unwrap());
@@ -294,7 +298,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_ne, assert_abs_diff_eq};
     use ndarray::{arr2, array};
     use std::time::Instant;
 
@@ -383,5 +387,16 @@ mod tests {
         let p = 10.;
         let mut rng = Xoshiro256Plus::seed_from_u64(42);
         let _res = Lhs::new(&xlimits)._phip_swap(&mut p0, k, phip, p, &mut rng);
+    }
+
+    #[test]
+    fn test_no_duplicate() {
+        let xlimits = arr2(&[[5., 10.], [0., 1.]]);
+        let lhs = Lhs::new(&xlimits)
+            .with_rng(Xoshiro256Plus::seed_from_u64(42));
+
+        let sample1 = lhs.sample(5);
+        let sample2 = lhs.sample(5);
+        assert_abs_diff_ne!(sample1, sample2);
     }
 }
