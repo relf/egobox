@@ -244,7 +244,7 @@ fn main() -> anyhow::Result<()> {
     let cstr_tol = 1e-4;
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
-    
+
     let res = EgorBuilder::optimize(mopta_func(dim))
         .min_within(&xlimits)
         .n_cstr(68)

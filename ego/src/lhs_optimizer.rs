@@ -80,9 +80,10 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
             .with_rng(self.rng.clone());
 
         // Make n_start optim
-        let x_optims = (0..self.n_start).into_par_iter().map(|_| {
-            self.find_lhs_min(lhs.clone())
-        }).collect::<Vec<_>>();
+        let x_optims = (0..self.n_start)
+            .into_par_iter()
+            .map(|_| self.find_lhs_min(lhs.clone()))
+            .collect::<Vec<_>>();
 
         // Pick best
         if x_optims.iter().any(|opt| opt.0) {

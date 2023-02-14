@@ -881,8 +881,12 @@ where
         f_min: f64,
     ) -> (f64, Array1<f64>, f64) {
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-        let scale_infill_obj = self.compute_infill_obj_scale(&scaling_points.view(), obj_model, f_min);
-        info!("Infill criterion scaling is updated to {}", scale_infill_obj);
+        let scale_infill_obj =
+            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, f_min);
+        info!(
+            "Infill criterion scaling is updated to {}",
+            scale_infill_obj
+        );
         let scale_cstr = if cstr_models.is_empty() {
             Array1::zeros((0,))
         } else {
@@ -1133,15 +1137,16 @@ where
         }
     }
 
-    fn compute_infill_obj_scale(&self, x: &ArrayView2<f64>, obj_model: &dyn ClusteredSurrogate, f_min: f64) -> f64 {
+    fn compute_infill_obj_scale(
+        &self,
+        x: &ArrayView2<f64>,
+        obj_model: &dyn ClusteredSurrogate,
+        f_min: f64,
+    ) -> f64 {
         let mut crit_vals = Array1::zeros(x.nrows());
         Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
             let val = self.eval_infill_obj(&x.to_vec(), obj_model, f_min, 1.0, 1.0);
-            *c = if val.is_infinite() {
-                1.0
-            } else {
-                val.abs()
-            }; 
+            *c = if val.is_infinite() { 1.0 } else { val.abs() };
         });
         let scale = *crit_vals.max().unwrap_or(&1.0);
         if scale < f64::EPSILON {

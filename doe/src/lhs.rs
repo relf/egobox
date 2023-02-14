@@ -116,12 +116,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         }
     }
 
-    fn _maximin_ese(
-        &self,
-        lhs: &Array2<F>,
-        outer_loop: usize,
-        inner_loop: usize
-    ) -> Array2<F> {
+    fn _maximin_ese(&self, lhs: &Array2<F>, outer_loop: usize, inner_loop: usize) -> Array2<F> {
         // hard-coded params
         let j_range = 20;
         let p = F::cast(10.);
@@ -298,7 +293,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::{assert_abs_diff_ne, assert_abs_diff_eq};
+    use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
     use ndarray::{arr2, array};
     use std::time::Instant;
 
@@ -392,8 +387,7 @@ mod tests {
     #[test]
     fn test_no_duplicate() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
-        let lhs = Lhs::new(&xlimits)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42));
+        let lhs = Lhs::new(&xlimits).with_rng(Xoshiro256Plus::seed_from_u64(42));
 
         let sample1 = lhs.sample(5);
         let sample2 = lhs.sample(5);
