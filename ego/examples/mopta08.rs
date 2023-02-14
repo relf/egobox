@@ -240,7 +240,7 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let dim = args.dim;
-    let n_doe = 3 * dim;
+    let n_doe = 2 * dim;
     let cstr_tol = 1e-4;
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
