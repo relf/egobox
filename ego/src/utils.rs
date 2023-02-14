@@ -105,7 +105,7 @@ pub fn compute_wb2s_scale(
         .predict_values(&x.row(i_max).insert_axis(Axis(0)))
         .unwrap()[[0, 0]];
     let ei_max = ei_x[i_max];
-    if ei_max.abs() > 100.*f64::EPSILON {
+    if ei_max.abs() > 100. * f64::EPSILON {
         ratio * pred_max / ei_max
     } else {
         1.
