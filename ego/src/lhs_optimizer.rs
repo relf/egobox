@@ -175,7 +175,7 @@ mod tests {
 
         let xlimits = array![[-1., 1.]];
         let obj_data = ObjData {
-            scale_obj: 1.,
+            scale_infill_obj: 1.,
             scale_cstr: array![],
             scale_wb2: 1.,
         };
