@@ -614,7 +614,6 @@ where
                 None
             };
 
-            info!("Find optimum location best candidates...");
             let (x_dat, y_dat) = self.next_points(
                 init,
                 recluster,
@@ -715,11 +714,10 @@ where
     }
 
     fn terminate(&mut self, state: &EgorState<f64>) -> TerminationStatus {
-        debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> TERMINATE");
+        debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> end iteration");
         debug!("Current Cost {:?}", state.get_cost());
         debug!("Best cost {:?}", state.get_best_cost());
-        debug!("Target cost {:?}", state.get_target_cost());
-        // XXX: Should check target cost
+        // XXX: Should check target cost taking into account constraints
         // if state.get_best_cost() <= state.get_target_cost() {
         //     info!("Target optimum : {}", self.target);
         //     info!("Expected optimum reached!");
@@ -805,7 +803,7 @@ where
                 )
             };
 
-            info!("Train surrogates with {} points...", x_dat.nrows());
+            info!("Train surrogates with {} points...", xt.nrows());
             let obj_model = self.make_clustered_surrogate(
                 &xt,
                 &yt.slice(s![.., 0..1]).to_owned(),
@@ -995,6 +993,7 @@ where
             })
             .collect();
 
+        info!("Optimize infill criterion...");
         while !success && n_optim <= n_max_optim {
             let x_start = sampling.sample(self.n_start);
 
@@ -1090,6 +1089,9 @@ where
                 success = true;
             }
             n_optim += 1;
+        }
+        if best_x.is_some() {
+            debug!("... infill criterion optimum found");
         }
         best_x.ok_or_else(|| EgoError::EgoError(String::from("Can not find best point")))
     }
