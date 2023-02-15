@@ -105,23 +105,11 @@ pub fn compute_wb2s_scale(
         .predict_values(&x.row(i_max).insert_axis(Axis(0)))
         .unwrap()[[0, 0]];
     let ei_max = ei_x[i_max];
-    if ei_max > 0. {
+    if ei_max.abs() > 100. * f64::EPSILON {
         ratio * pred_max / ei_max
     } else {
         1.
     }
-}
-
-/// Computes the scaling factor used to scale objective function value.
-pub fn compute_obj_scale(x: &ArrayView2<f64>, obj_model: &dyn ClusteredSurrogate) -> f64 {
-    let preds: Array1<f64> = obj_model
-        .predict_values(x)
-        .unwrap()
-        .into_iter()
-        .filter(|v| !v.is_infinite()) // filter out infinite values
-        .map(|v| v.abs())
-        .collect();
-    *preds.max().unwrap_or(&1.0)
 }
 
 /// Computes scaling factors used to scale constraint functions values.

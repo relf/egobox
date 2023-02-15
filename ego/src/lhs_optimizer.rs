@@ -3,6 +3,7 @@ use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
+use rayon::prelude::*;
 
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
@@ -12,13 +13,13 @@ use ndarray_linalg::Norm;
 use ndarray_stats::QuantileExt;
 use nlopt::ObjFn;
 
-pub(crate) struct LhsOptimizer<'a, R: Rng + Clone> {
+pub(crate) struct LhsOptimizer<'a, R: Rng + Clone + Sync + Send> {
     xlimits: Array2<f64>,
     n_start: usize,
     n_points: usize,
     cstr_tol: f64,
-    obj: &'a dyn ObjFn<ObjData<f64>>,
-    cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
+    obj: &'a (dyn ObjFn<ObjData<f64>> + Sync),
+    cstrs: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
     obj_data: ObjData<f64>,
     rng: R,
 }
@@ -26,8 +27,8 @@ pub(crate) struct LhsOptimizer<'a, R: Rng + Clone> {
 impl<'a> LhsOptimizer<'a, Xoshiro256Plus> {
     pub fn new(
         xlimits: &Array2<f64>,
-        obj: &'a dyn ObjFn<ObjData<f64>>,
-        cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
+        obj: &'a (dyn ObjFn<ObjData<f64>> + Sync),
+        cstrs: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
         obj_data: &ObjData<f64>,
     ) -> LhsOptimizer<'a, Xoshiro256Plus> {
         Self::new_with_rng(
@@ -40,11 +41,11 @@ impl<'a> LhsOptimizer<'a, Xoshiro256Plus> {
     }
 }
 
-impl<'a, R: Rng + Clone> LhsOptimizer<'a, R> {
+impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
     pub fn new_with_rng(
         xlimits: &Array2<f64>,
-        obj: &'a dyn ObjFn<ObjData<f64>>,
-        cstrs: Vec<&'a dyn ObjFn<ObjData<f64>>>,
+        obj: &'a (dyn ObjFn<ObjData<f64>> + Sync),
+        cstrs: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
         obj_data: &ObjData<f64>,
         rng: R,
     ) -> LhsOptimizer<'a, R> {
@@ -60,7 +61,7 @@ impl<'a, R: Rng + Clone> LhsOptimizer<'a, R> {
         }
     }
 
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> LhsOptimizer<'a, R2> {
+    pub fn with_rng<R2: Rng + Clone + Sync + Send>(self, rng: R2) -> LhsOptimizer<'a, R2> {
         LhsOptimizer {
             xlimits: self.xlimits,
             n_start: self.n_start,
@@ -74,16 +75,19 @@ impl<'a, R: Rng + Clone> LhsOptimizer<'a, R> {
     }
 
     pub fn minimize(&self) -> Array1<f64> {
-        let mut x_optim = vec![];
+        let lhs = Lhs::new(&self.xlimits)
+            .kind(LhsKind::Classic)
+            .with_rng(self.rng.clone());
 
         // Make n_start optim
-        for _ in 0..self.n_start {
-            x_optim.push(self.find_lhs_min());
-        }
+        let x_optims = (0..self.n_start)
+            .into_par_iter()
+            .map(|_| self.find_lhs_min(lhs.clone()))
+            .collect::<Vec<_>>();
 
         // Pick best
-        if x_optim.iter().any(|opt| opt.0) {
-            let values: Array1<_> = x_optim
+        if x_optims.iter().any(|opt| opt.0) {
+            let values: Array1<_> = x_optims
                 .iter()
                 .filter(|opt| opt.0)
                 .map(|opt| (opt.1.to_owned(), opt.2))
@@ -92,18 +96,15 @@ impl<'a, R: Rng + Clone> LhsOptimizer<'a, R> {
             let index_min = yvals.argmin().unwrap();
             values[index_min].0.to_owned()
         } else {
-            let l1_norms: Array1<_> = x_optim.iter().map(|opt| opt.3.norm_l1()).collect();
+            let l1_norms: Array1<_> = x_optims.iter().map(|opt| opt.3.norm_l1()).collect();
             let index_min = l1_norms.argmin().unwrap();
-            x_optim[index_min].1.to_owned()
+            x_optims[index_min].1.to_owned()
         }
     }
 
-    fn find_lhs_min(&self) -> (bool, Array1<f64>, f64, Array1<f64>) {
+    fn find_lhs_min(&self, lhs: Lhs<f64, R>) -> (bool, Array1<f64>, f64, Array1<f64>) {
         let n = self.n_points * self.xlimits.nrows();
-        let doe = Lhs::new(&self.xlimits)
-            .kind(LhsKind::Classic)
-            .with_rng(self.rng.clone())
-            .sample(n);
+        let doe = lhs.sample(n);
 
         let y: Array1<f64> = doe.map_axis(Axis(1), |x| {
             (self.obj)(&x.to_vec(), None, &mut self.obj_data.clone())
@@ -175,7 +176,7 @@ mod tests {
 
         let xlimits = array![[-1., 1.]];
         let obj_data = ObjData {
-            scale_obj: 1.,
+            scale_infill_obj: 1.,
             scale_cstr: array![],
             scale_wb2: 1.,
         };

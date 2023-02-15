@@ -135,7 +135,7 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
 /// Data used by internal infill criteria to be optimized using NlOpt
 #[derive(Clone)]
 pub(crate) struct ObjData<F> {
-    pub scale_obj: F,
+    pub scale_infill_obj: F,
     pub scale_cstr: Array1<F>,
     pub scale_wb2: F,
 }

@@ -91,7 +91,7 @@ use crate::errors::{EgoError, Result};
 use crate::lhs_optimizer::LhsOptimizer;
 use crate::mixint::*;
 use crate::types::*;
-use crate::utils::{compute_cstr_scales, compute_obj_scale, compute_wb2s_scale, grad_wbs2};
+use crate::utils::{compute_cstr_scales, compute_wb2s_scale, grad_wbs2};
 use crate::utils::{ei, wb2s};
 use crate::utils::{grad_ei, update_data};
 
@@ -359,7 +359,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 
     /// Sets the parallel infill strategy
     ///
-    /// Parallel infill criteria to get virtual next promising points in order to allow
+    /// Parallel infill criterion to get virtual next promising points in order to allow
     /// n parallel evaluations of the function under optimization.
     pub fn qei_strategy(&mut self, q_ei: QEiStrategy) -> &mut Self {
         self.q_ei = q_ei;
@@ -498,7 +498,7 @@ where
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
                 (
-                    self.eval(problem, doe),
+                    self.eval_obj(problem, doe),
                     doe.to_owned(),
                     self.n_eval.saturating_sub(doe.nrows()),
                 )
@@ -519,7 +519,7 @@ where
             };
             info!("Compute initial LHS with {} points", n_doe);
             let x = sampling.sample(n_doe);
-            (self.eval(problem, &x), x, self.n_eval - n_doe)
+            (self.eval_obj(problem, &x), x, self.n_eval)
         };
         let doe = concatenate![Axis(1), x_data, y_data];
         if self.outdir.is_some() {
@@ -689,7 +689,7 @@ where
         info!("+{} point(s), total: {} points", add_count, new_state.added);
         new_state.no_point_added_retries = MAX_POINT_ADDITION_RETRY; // reset as a point is added
 
-        let y_actual = self.eval(fobj, &x_to_eval);
+        let y_actual = self.eval_obj(fobj, &x_to_eval);
         Zip::from(y_data.slice_mut(s![-add_count.., ..]).columns_mut())
             .and(y_actual.columns())
             .for_each(|mut y, val| y.assign(&val));
@@ -714,11 +714,10 @@ where
     }
 
     fn terminate(&mut self, state: &EgorState<f64>) -> TerminationStatus {
-        debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> TERMINATE");
+        debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> end iteration");
         debug!("Current Cost {:?}", state.get_cost());
         debug!("Best cost {:?}", state.get_best_cost());
-        debug!("Target cost {:?}", state.get_target_cost());
-        // XXX: Should check target cost
+        // XXX: Should check target cost taking into account constraints
         // if state.get_best_cost() <= state.get_target_cost() {
         //     info!("Target optimum : {}", self.target);
         //     info!("Expected optimum reached!");
@@ -757,15 +756,15 @@ where
 
         if init || recluster {
             if recluster {
-                info!("{} reclustering...", model_name);
+                info!("{} reclustering and training...", model_name);
             } else {
-                info!("{} initial clustering...", model_name);
+                info!("{} initial clustering and training...", model_name);
             }
             let model = builder
                 .train(&xt.view(), &yt.view())
                 .expect("GP training failure");
             info!(
-                "... Best nb of clusters / mixture for {}: {} / {}",
+                "... {} trained ({} / {})",
                 model_name,
                 model.n_clusters(),
                 model.recombination()
@@ -773,9 +772,10 @@ where
             model
         } else {
             let clustering = clustering.as_ref().unwrap().clone();
-            builder
+            let model = builder
                 .train_on_clusters(&xt.view(), &yt.view(), &clustering)
-                .expect("GP training failure")
+                .expect("GP training failure");
+            model
         }
     }
 
@@ -803,6 +803,7 @@ where
                 )
             };
 
+            info!("Train surrogates with {} points...", xt.nrows());
             let obj_model = self.make_clustered_surrogate(
                 &xt,
                 &yt.slice(s![.., 0..1]).to_owned(),
@@ -813,11 +814,9 @@ where
             );
             clusterings[0] = Some(obj_model.to_clustering());
 
-            //let mut cstr_models: Vec<Box<dyn ClusteredSurrogate>> = Vec::with_capacity(self.n_cstr);
             let cstr_models: Vec<std::boxed::Box<dyn egobox_moe::ClusteredSurrogate>> = (1..=self
                 .n_cstr)
                 .into_par_iter()
-                //.into_iter()
                 .map(|k| {
                     self.make_clustered_surrogate(
                         &xt,
@@ -832,6 +831,7 @@ where
             (1..=self.n_cstr)
                 .into_iter()
                 .for_each(|k| clusterings[k] = Some(cstr_models[k - 1].to_clustering()));
+            debug!("... surrogates trained");
 
             match self.find_best_point(
                 x_data,
@@ -873,6 +873,37 @@ where
         true
     }
 
+    fn compute_scaling(
+        &self,
+        sampling: &Lhs<f64, Xoshiro256Plus>,
+        obj_model: &dyn ClusteredSurrogate,
+        cstr_models: &[Box<dyn ClusteredSurrogate>],
+        f_min: f64,
+    ) -> (f64, Array1<f64>, f64) {
+        let scaling_points = sampling.sample(100 * self.xlimits.nrows());
+        let scale_infill_obj =
+            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, f_min);
+        info!(
+            "Infill criterion scaling is updated to {}",
+            scale_infill_obj
+        );
+        let scale_cstr = if cstr_models.is_empty() {
+            Array1::zeros((0,))
+        } else {
+            let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
+            info!("Constraints scaling is updated to {}", scale_cstr);
+            scale_cstr
+        };
+        let scale_wb2 = if self.infill == InfillStrategy::WB2S {
+            let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, f_min);
+            info!("WB2S scaling factor is updated to {}", scale);
+            scale
+        } else {
+            1.
+        };
+        (scale_infill_obj, scale_cstr, scale_wb2)
+    }
+
     fn find_best_point(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -884,33 +915,48 @@ where
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
 
+        let mut success = false;
+        let mut n_optim = 1;
+        let n_max_optim = 20;
+        let mut best_x = None;
+
+        let (scale_infill_obj, scale_cstr, scale_wb2) =
+            self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
+
+        let algorithm = match self.infill_optimizer {
+            InfillOptimizer::Slsqp => Algorithm::Slsqp,
+            InfillOptimizer::Cobyla => Algorithm::Cobyla,
+        };
+
         let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
             let ObjData {
-                scale_obj,
+                scale_infill_obj,
                 scale_wb2,
                 ..
             } = params;
             if let Some(grad) = gradient {
                 if self.is_grad_impl_available() {
                     let grd = self
-                        .grad_infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                        .eval_grad_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
                         .to_vec();
                     grad[..].copy_from_slice(&grd);
                 } else {
                     let f = |x: &Vec<f64>| -> f64 {
-                        self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+                        self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
                     };
                     grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
                 }
             }
-            self.infill_eval(x, obj_model, *f_min, *scale_obj, *scale_wb2)
+            self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
         };
 
-        let mut cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>>>> = Vec::with_capacity(self.n_cstr);
-        for i in 0..self.n_cstr {
-            let index = i;
-            let cstr =
-                move |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
+        let cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>> = (0..self.n_cstr)
+            .map(|i| {
+                let index = i;
+                let cstr = move |x: &[f64],
+                                 gradient: Option<&mut [f64]>,
+                                 params: &mut ObjData<f64>|
+                      -> f64 {
                     if let Some(grad) = gradient {
                         if self.is_grad_impl_available() {
                             let grd = cstr_models[i]
@@ -947,42 +993,19 @@ where
                         .unwrap()[[0, 0]]
                         / params.scale_cstr[index]
                 };
-            cstrs.push(Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>>>);
-        }
+                Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>
+            })
+            .collect();
 
-        let mut success = false;
-        let mut n_optim = 1;
-        let n_max_optim = 20;
-        let mut best_x = None;
-
-        let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-        let scale_obj = compute_obj_scale(&scaling_points.view(), obj_model);
-        info!("Acquisition function scaling is updated to {}", scale_obj);
-        let scale_cstr = if cstr_models.is_empty() {
-            Array1::zeros((0,))
-        } else {
-            let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
-            info!("Feasibility criterion scaling is updated to {}", scale_cstr);
-            scale_cstr
-        };
-        let scale_wb2 = if self.infill == InfillStrategy::WB2S {
-            let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, *f_min);
-            info!("WB2S scaling factor is updated to {}", scale);
-            scale
-        } else {
-            1.
-        };
-
-        let algorithm = match self.infill_optimizer {
-            InfillOptimizer::Slsqp => Algorithm::Slsqp,
-            InfillOptimizer::Cobyla => Algorithm::Cobyla,
-        };
+        info!("Optimize infill criterion...");
         while !success && n_optim <= n_max_optim {
+            let x_start = sampling.sample(self.n_start);
+
             if let Some(seed) = lhs_optim_seed {
                 let obj_data = ObjData {
-                    scale_obj,
-                    scale_wb2,
+                    scale_infill_obj,
                     scale_cstr: scale_cstr.to_owned(),
+                    scale_wb2,
                 };
                 let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
                 let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
@@ -992,67 +1015,74 @@ where
                 best_x = Some(x_opt);
                 success = true;
             } else {
-                let mut optimizer = Nlopt::new(
-                    algorithm,
-                    x_data.ncols(),
-                    obj,
-                    Target::Minimize,
-                    ObjData {
-                        scale_obj,
-                        scale_wb2,
-                        scale_cstr: scale_cstr.to_owned(),
-                    },
-                );
-                let lower = self.xlimits.column(0).to_owned();
-                optimizer.set_lower_bounds(lower.as_slice().unwrap())?;
-                let upper = self.xlimits.column(1).to_owned();
-                optimizer.set_upper_bounds(upper.as_slice().unwrap())?;
-                optimizer.set_maxeval(200)?;
-                optimizer.set_ftol_rel(1e-4)?;
-                optimizer.set_ftol_abs(1e-4)?;
-                cstrs.iter().enumerate().for_each(|(i, cstr)| {
-                    optimizer
-                        .add_inequality_constraint(
-                            cstr,
+                let dim = x_data.ncols();
+
+                let res = (0..self.n_start)
+                    .into_par_iter()
+                    .map(|i| {
+                        let mut optimizer = Nlopt::new(
+                            algorithm,
+                            dim,
+                            obj,
+                            Target::Minimize,
                             ObjData {
-                                scale_obj,
-                                scale_wb2,
+                                scale_infill_obj,
                                 scale_cstr: scale_cstr.to_owned(),
+                                scale_wb2,
                             },
-                            1e-6 / scale_cstr[i],
-                        )
-                        .unwrap();
-                });
+                        );
+                        let lower = self.xlimits.column(0).to_owned();
+                        optimizer
+                            .set_lower_bounds(lower.as_slice().unwrap())
+                            .unwrap();
+                        let upper = self.xlimits.column(1).to_owned();
+                        optimizer
+                            .set_upper_bounds(upper.as_slice().unwrap())
+                            .unwrap();
+                        optimizer.set_maxeval(200).unwrap();
+                        optimizer.set_ftol_rel(1e-4).unwrap();
+                        optimizer.set_ftol_abs(1e-4).unwrap();
+                        cstrs.iter().enumerate().for_each(|(i, cstr)| {
+                            optimizer
+                                .add_inequality_constraint(
+                                    cstr,
+                                    ObjData {
+                                        scale_infill_obj,
+                                        scale_wb2,
+                                        scale_cstr: scale_cstr.to_owned(),
+                                    },
+                                    self.cstr_tol / scale_cstr[i],
+                                )
+                                .unwrap();
+                        });
 
-                let mut best_opt = f64::INFINITY;
-                let x_start = sampling.sample(self.n_start);
-
-                for i in 0..self.n_start {
-                    let mut x_opt = x_start.row(i).to_vec();
-                    match optimizer.optimize(&mut x_opt) {
-                        Ok((_, opt)) => {
-                            if opt < best_opt {
-                                best_opt = opt;
-                                let res = x_opt.to_vec();
-                                best_x = Some(Array::from(res));
-                                success = true;
-                            } else {
-                                // optimization fails with NAN values
-                                // debug!("Optimizaion multistart {} > {}", opt, best_opt);
+                        let mut x_opt = x_start.row(i).to_vec();
+                        match optimizer.optimize(&mut x_opt) {
+                            Ok((_, opt)) => (opt, x_opt),
+                            Err((err, code)) => {
+                                debug!("Nlopt Err: {:?} (y_opt={})", err, code);
+                                (f64::INFINITY, x_opt)
                             }
                         }
-                        Err((err, code)) => {
-                            debug!("Nlopt Err: {:?} (y_opt={})", err, code);
-                        }
-                    }
+                    })
+                    .reduce(
+                        || (f64::INFINITY, vec![1.0; dim]),
+                        |a, b| if b.0 < a.0 { b } else { a },
+                    );
+
+                if res.0.is_nan() || res.0.is_infinite() {
+                    success = false;
+                } else {
+                    best_x = Some(Array::from(res.1.clone()));
                 }
             }
+
             if n_optim == n_max_optim && best_x.is_none() {
-                info!("All optimizations fails => Trigger LHS optimization");
+                info!("All optimizations fail => Trigger LHS optimization");
                 let obj_data = ObjData {
-                    scale_obj,
-                    scale_wb2,
+                    scale_infill_obj,
                     scale_cstr: scale_cstr.to_owned(),
+                    scale_wb2,
                 };
                 let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
                 let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
@@ -1063,6 +1093,9 @@ where
                 success = true;
             }
             n_optim += 1;
+        }
+        if best_x.is_some() {
+            debug!("... infill criterion optimum found");
         }
         best_x.ok_or_else(|| EgoError::EgoError(String::from("Can not find best point")))
     }
@@ -1104,7 +1137,26 @@ where
         }
     }
 
-    fn infill_eval(
+    fn compute_infill_obj_scale(
+        &self,
+        x: &ArrayView2<f64>,
+        obj_model: &dyn ClusteredSurrogate,
+        f_min: f64,
+    ) -> f64 {
+        let mut crit_vals = Array1::zeros(x.nrows());
+        Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
+            let val = self.eval_infill_obj(&x.to_vec(), obj_model, f_min, 1.0, 1.0);
+            *c = if val.is_infinite() { 1.0 } else { val.abs() };
+        });
+        let scale = *crit_vals.max().unwrap_or(&1.0);
+        if scale < f64::EPSILON {
+            1.0
+        } else {
+            scale
+        }
+    }
+
+    fn eval_infill_obj(
         &self,
         x: &[f64],
         obj_model: &dyn ClusteredSurrogate,
@@ -1121,7 +1173,7 @@ where
         obj / scale
     }
 
-    pub fn grad_infill_eval(
+    pub fn eval_grad_infill_obj(
         &self,
         x: &[f64],
         obj_model: &dyn ClusteredSurrogate,
@@ -1138,7 +1190,7 @@ where
         (grad / scale).to_vec()
     }
 
-    fn eval<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+    fn eval_obj<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &self,
         pb: &mut Problem<O>,
         x: &Array2<f64>,
