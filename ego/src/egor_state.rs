@@ -4,7 +4,7 @@ use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationSt
 use egobox_doe::Lhs;
 use egobox_moe::Clustering;
 use linfa::Float;
-use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix2};
+use ndarray::{array, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
@@ -22,20 +22,93 @@ pub fn find_best_result_index<F: Float>(
     cstr_tol: F,
 ) -> usize {
     if y_data.ncols() > 1 {
-        // constraint optimization
-        let mut index = 0;
-        let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
-        let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
-        for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
-            if !row.slice(s![1..]).iter().any(|v| *v > cstr_tol) {
-                index = i;
-                break;
+        // Compute sum of violated constraints
+        let cstrs = y_data.slice(s![.., 1..]);
+        let mut c_obj = Array2::zeros((y_data.nrows(), 2));
+
+        Zip::from(c_obj.rows_mut())
+            .and(cstrs.rows())
+            .and(y_data.slice(s![.., 0]))
+            .for_each(|mut c_obj_row, c_row, obj| {
+                let c_sum = c_row
+                    .to_owned()
+                    .into_iter()
+                    .filter(|c| *c > cstr_tol)
+                    .fold(F::zero(), |acc, c| acc + (c - cstr_tol).abs());
+                c_obj_row.assign(&array![c_sum, *obj]);
+            });
+        let min_csum_index = c_obj.slice(s![.., 0]).argmin().ok();
+
+        if let Some(min_index) = min_csum_index {
+            if c_obj[[min_index, 0]] > F::zero() {
+                // There is no feasible point take minimal cstr sum as the best one
+                min_index
+            } else {
+                // There is at least one or several point feasible, take the minimal objective among them
+                let mut index = 0;
+                let mut y_best = F::infinity();
+                Zip::indexed(c_obj.rows()).for_each(|i, c_o| {
+                    if c_o[0] == F::zero() && c_o[1] < y_best {
+                        y_best = c_o[1];
+                        index = i;
+                    }
+                });
+                index
             }
+        } else {
+            // Take min obj without looking at constraints
+            let mut index = 0;
+
+            // sort regardoing minimal objective
+            let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
+            let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
+
+            // Take the first one which do not violate constraints
+            for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
+                if !row.slice(s![1..]).iter().any(|v| *v > cstr_tol) {
+                    index = i;
+                    break;
+                }
+            }
+            perm.indices[index]
         }
-        perm.indices[index]
     } else {
         // unconstrained optimization
         y_data.column(0).argmin().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn test_find_best_obj() {
+        // respect constraint (0, 1, 2) and minimize obj (1)
+        let ydata = array![[1.0, -0.15], [-1.0, -0.01], [2.0, -0.2], [-3.0, 2.0]];
+        let cstr_tol = 0.1;
+        assert_abs_diff_eq!(1, find_best_result_index(&ydata, cstr_tol));
+
+        // respect constraint (0, 1, 2) and minimize obj (2)
+        let ydata = array![[1.0, -0.15], [-1.0, -0.01], [-2.0, -0.2], [-3.0, 2.0]];
+        let cstr_tol = 0.1;
+        assert_abs_diff_eq!(2, find_best_result_index(&ydata, cstr_tol));
+
+        // all out of tolerance => minimize constraint overshoot sum (0)
+        let ydata = array![[1.0, 0.15], [-1.0, 0.3], [2.0, 0.2], [-3.0, 2.0]];
+        let cstr_tol = 0.1;
+        assert_abs_diff_eq!(0, find_best_result_index(&ydata, cstr_tol));
+
+        // all in tolerance => min obj
+        let ydata = array![[1.0, 0.15], [-1.0, 0.3], [2.0, 0.2], [-3.0, 2.0]];
+        let cstr_tol = 3.0;
+        assert_abs_diff_eq!(3, find_best_result_index(&ydata, cstr_tol));
+
+        // unconstrained => min obj
+        let ydata = array![[1.0], [-1.0], [2.0], [-3.0]];
+        let cstr_tol = 0.1;
+        assert_abs_diff_eq!(3, find_best_result_index(&ydata, cstr_tol));
     }
 }
 
