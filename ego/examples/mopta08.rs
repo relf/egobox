@@ -240,8 +240,9 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let dim = args.dim;
-    let n_doe = 2 * dim;
+    let n_doe = if dim == 124 { 150 } else { dim + 1 };
     let cstr_tol = 1e-4;
+
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
 
@@ -252,10 +253,10 @@ fn main() -> anyhow::Result<()> {
         .n_clusters(Some(1))
         .n_doe(n_doe)
         .n_start(50)
-        .n_eval(200)
+        .n_eval(350)
         .regression_spec(RegressionSpec::CONSTANT)
         .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
-        .infill_optimizer(InfillOptimizer::Cobyla)
+        .infill_optimizer(InfillOptimizer::Slsqp)
         .kpls_dim(Some(3))
         .outdir(Some("./history".to_string()))
         .hot_start(true)
