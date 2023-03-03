@@ -1144,12 +1144,27 @@ where
         f_min: f64,
     ) -> f64 {
         let mut crit_vals = Array1::zeros(x.nrows());
+        let (mut nan_count, mut inf_count) = (0, 0);
         Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
             let val = self.eval_infill_obj(&x.to_vec(), obj_model, f_min, 1.0, 1.0);
-            *c = if val.is_infinite() { 1.0 } else { val.abs() };
+            *c = if val.is_nan() {
+                nan_count += 1;
+                1.0
+            } else if val.is_infinite() {
+                inf_count += 1;
+                1.0
+            } else {
+                val.abs()
+            };
         });
+        if inf_count > 0 || nan_count > 0 {
+            warn!(
+                "Criterion scale computation warning: ({nan_count} NaN + {inf_count} Inf) / {} points",
+                x.nrows()
+            );
+        }
         let scale = *crit_vals.max().unwrap_or(&1.0);
-        if scale < f64::EPSILON {
+        if scale < 100.0 * f64::EPSILON {
             1.0
         } else {
             scale
