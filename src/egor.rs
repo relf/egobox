@@ -117,7 +117,7 @@ pub(crate) fn lhs(
 ///         Infill criteria to decide best next promising point.
 ///         Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S.
 ///
-///     q_parallel (int > 0):
+///     q_points (int > 0):
 ///         Number of parallel evaluations of the function under optimization.
 ///
 ///     par_infill_strategy (ParInfillStrategy enum)
@@ -155,7 +155,7 @@ pub(crate) fn lhs(
 ///      
 #[pyclass]
 #[pyo3(
-    text_signature = "(fun, n_cstr=0, cstr_tol=1e-6, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, q_parallel=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
+    text_signature = "(fun, n_cstr=0, cstr_tol=1e-6, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, q_points=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
 )]
 pub(crate) struct Egor {
     pub fun: PyObject,
@@ -168,7 +168,7 @@ pub(crate) struct Egor {
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub infill_strategy: InfillStrategy,
-    pub q_parallel: usize,
+    pub q_points: usize,
     pub par_infill_strategy: ParInfillStrategy,
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
@@ -201,7 +201,7 @@ impl Egor {
         regr_spec = "RegressionSpec::CONSTANT",
         corr_spec = "CorrelationSpec::SQUARED_EXPONENTIAL",
         infill_strategy = "InfillStrategy::WB2",
-        q_parallel = "1",
+        q_points = "1",
         par_infill_strategy = "ParInfillStrategy::KB",
         infill_optimizer = "InfillOptimizer::COBYLA",
         kpls_dim = "None",
@@ -224,7 +224,7 @@ impl Egor {
         regr_spec: u8,
         corr_spec: u8,
         infill_strategy: InfillStrategy,
-        q_parallel: usize,
+        q_points: usize,
         par_infill_strategy: ParInfillStrategy,
         infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
@@ -246,7 +246,7 @@ impl Egor {
             regression_spec: RegressionSpec(regr_spec),
             correlation_spec: CorrelationSpec(corr_spec),
             infill_strategy,
-            q_parallel,
+            q_points,
             par_infill_strategy,
             infill_optimizer,
             kpls_dim,
@@ -261,7 +261,7 @@ impl Egor {
     /// This function finds the minimum of a given function `fun`
     ///
     /// # Parameters
-    ///     n_eval:
+    ///     n_iter:
     ///         the function evaluation budget, number of fun calls.
     ///
     /// # Returns
@@ -269,9 +269,9 @@ impl Egor {
     ///         x_opt (array[1, nx]): x value  where fun is at its minimum subject to constraint
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
-    #[args(n_eval = "20")]
-    #[pyo3(text_signature = "(n_eval=20)")]
-    fn minimize(&self, py: Python, n_eval: usize) -> PyResult<OptimResult> {
+    #[args(n_iter = "20")]
+    #[pyo3(text_signature = "(n_iter=20)")]
+    fn minimize(&self, py: Python, n_iter: usize) -> PyResult<OptimResult> {
         let fun = self.fun.to_object(py);
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
             Python::with_gil(|py| {
@@ -332,7 +332,7 @@ impl Egor {
         let mut mixintegor = mixintegor.min_within_mixed_space(&xtypes);
         mixintegor
             .n_cstr(self.n_cstr)
-            .n_eval(n_eval)
+            .n_iter(n_iter)
             .n_start(self.n_start)
             .n_doe(self.n_doe)
             .cstr_tol(self.cstr_tol)
@@ -342,7 +342,7 @@ impl Egor {
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             )
             .infill_strategy(infill_strategy)
-            .q_parallel(self.q_parallel)
+            .q_points(self.q_points)
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
             .kpls_dim(self.kpls_dim)
