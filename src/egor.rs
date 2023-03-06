@@ -118,7 +118,7 @@ pub(crate) fn lhs(
 ///         Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S.
 ///
 ///     q_points (int > 0):
-///         Number of parallel evaluations of the function under optimization.
+///         Number of points to be evaluated to allow parallel evaluation of the function under optimization.
 ///
 ///     par_infill_strategy (ParInfillStrategy enum)
 ///         Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
@@ -262,7 +262,7 @@ impl Egor {
     ///
     /// # Parameters
     ///     n_iter:
-    ///         the function evaluation budget, number of fun calls.
+    ///         the iteration budget, number of fun calls is n_doe + q_points * n_iter.
     ///
     /// # Returns
     ///     optimization result
