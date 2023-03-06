@@ -59,7 +59,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParam
 
 #[derive(Clone, Debug)]
 /// The set of hyperparameters that can be specified for the execution of
-/// the [GMM algorithm](struct.GaussianMixtureModel.html).
+/// the [GP algorithm](struct.GaussianProcess.html).
 pub struct GpParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>(
     GpValidParams<F, Mean, Corr>,
 );

@@ -115,20 +115,6 @@ mod tests {
 /// Maintains the state from iteration to iteration of the [crate::EgorSolver].
 ///
 /// This struct is passed from one iteration of an algorithm to the next.
-///
-/// Keeps track of
-///
-/// * parameter vector of current and previous iteration
-/// * best parameter vector of current and previous iteration
-/// * cost function value (objective and constraint functions values) of current and previous iteration
-/// * current and previous best cost function value
-/// * target cost function value
-/// * current iteration number
-/// * iteration number where the last best parameter vector was found
-/// * maximum number of iterations that will be executed
-/// * problem function evaluation counts ()
-/// * elapsed time
-/// * termination reason (set to [`TerminationReason::NotTerminated`] if not terminated yet)
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EgorState<F: Float> {
     /// Current parameter vector
@@ -141,6 +127,8 @@ pub struct EgorState<F: Float> {
     pub prev_best_param: Option<Array1<F>>,
 
     /// Current cost function value
+    /// The first component is the actual cost value
+    /// while the remaining ones are the constraints values
     pub cost: Option<Array1<F>>,
     /// Previous cost function value
     pub prev_cost: Option<Array1<F>>,

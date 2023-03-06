@@ -62,7 +62,7 @@ impl<F: Float> Clone for GpInnerParams<F> {
     }
 }
 
-/// Gaussian Process
+/// Structure for trained Gaussian Process model
 #[derive(Debug)]
 #[cfg_attr(
     feature = "serializable",

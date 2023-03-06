@@ -240,7 +240,8 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let dim = args.dim;
-    let n_doe = if dim == 124 { 150 } else { dim + 1 };
+    let n_doe = 2 * dim;
+    let n_iter = 3 * dim;
     let cstr_tol = 1e-4;
 
     let mut xlimits = Array2::zeros((dim, 2));
@@ -253,7 +254,7 @@ fn main() -> anyhow::Result<()> {
         .n_clusters(Some(1))
         .n_doe(n_doe)
         .n_start(50)
-        .n_eval(350)
+        .n_iter(n_iter)
         .regression_spec(RegressionSpec::CONSTANT)
         .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
         .infill_optimizer(InfillOptimizer::Slsqp)

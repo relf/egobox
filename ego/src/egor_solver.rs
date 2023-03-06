@@ -23,7 +23,7 @@
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .n_doe(10)
 //!     .target(1e-1)
-//!     .n_eval(30)
+//!     .n_iter(30)
 //!     .run()
 //!     .expect("Rosenbrock minimization");
 //! println!("Rosenbrock min result = {:?}", res);
@@ -79,7 +79,7 @@
 //!            .infill_strategy(InfillStrategy::EI)
 //!            .infill_optimizer(InfillOptimizer::Cobyla)
 //!            .doe(Some(doe))
-//!            .n_eval(40)
+//!            .n_iter(40)
 //!            .target(-5.5080)
 //!            .run()
 //!            .expect("g24 minimized");
@@ -126,16 +126,18 @@ const DOE_FILE: &str = "egor_doe.npy";
 /// from observers and checkpointing features.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EgorSolver<SB: SurrogateBuilder> {
-    /// Number of function evaluations allocated to find the optimum (aka evaluation budget)
-    /// Note 1: if the initial doe has to be evaluated, doe size is taken into account in the avaluation budget.
-    /// Note 2: Number of iteration is deduced using the following formula (n_eval - initial doe to evaluate) / q_parallel  
-    n_eval: usize,
+    /// Number of function iterations allocated to find the optimum (aka iteration budget)
+    /// Note 1 : The number of cost function evaluations is deduced using the following formula (n_doe + n_iter)
+    /// Note 2 : When q_points > 1, the number of cost function evaluations is (n_doe + n_iter * q_points)
+    /// is is an upper bounds as some points may be rejected as being to close to previous ones.   
+    n_iter: usize,
     /// Number of starts for multistart approach used for hyperparameters optimization
     n_start: usize,
-    /// Number of parallel points evaluated for each "function evaluation"
-    q_parallel: usize,
+    /// Number of points returned by EGO iteration (aka qEI Multipoint strategy)
+    /// Actually as some point determination may fail (at most q_points are returned)
+    q_points: usize,
     /// Number of initial doe drawn using Latin hypercube sampling
-    /// Note: n_doe > 0; otherwise n_doe = max(xdim+1, 5)
+    /// Note: n_doe > 0; otherwise n_doe = max(xdim + 1, 5)
     n_doe: usize,
     /// Number of Constraints
     /// Note: dim function ouput = 1 objective + n_cstr constraints
@@ -145,7 +147,7 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// Initial doe can be either \[x\] with x inputs only or an evaluated doe \[x, y\]
     /// Note: x dimension is determined using xlimits
     doe: Option<Array2<f64>>,
-    /// Parallel strategy used to define several points (q_parallel) evaluations at each iteration
+    /// Multipoint strategy used to get several points to be evaluated at each iteration
     q_ei: QEiStrategy,
     /// Criterium to select next point to evaluate
     infill: InfillStrategy,
@@ -243,9 +245,9 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();
         EgorSolver {
-            n_eval: 20,
+            n_iter: 20,
             n_start: 20,
-            q_parallel: 1,
+            q_points: 1,
             n_doe: 0,
             n_cstr: 0,
             cstr_tol: 1e-6,
@@ -282,9 +284,9 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let v_xtypes = xtypes.to_vec();
         let xlimits = unfold_xtypes_as_continuous_limits(xtypes);
         EgorSolver {
-            n_eval: 20,
+            n_iter: 20,
             n_start: 20,
-            q_parallel: 1,
+            q_points: 1,
             n_doe: 0,
             n_cstr: 0,
             cstr_tol: 1e-6,
@@ -310,8 +312,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 
     /// Sets allowed number of evaluation of the function under optimization
-    pub fn n_eval(&mut self, n_eval: usize) -> &mut Self {
-        self.n_eval = n_eval;
+    pub fn n_iter(&mut self, n_iter: usize) -> &mut Self {
+        self.n_iter = n_iter;
         self
     }
 
@@ -322,8 +324,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 
     /// Sets Number of parallel evaluations of the function under optimization
-    pub fn q_parallel(&mut self, q_parallel: usize) -> &mut Self {
-        self.q_parallel = q_parallel;
+    pub fn q_points(&mut self, q_points: usize) -> &mut Self {
+        self.q_points = q_points;
         self
     }
 
@@ -493,22 +495,17 @@ where
 
         let doe = hstart_doe.as_ref().or(self.doe.as_ref());
 
-        let (y_data, x_data, n_eval) = if let Some(doe) = doe {
+        let (y_data, x_data) = if let Some(doe) = doe {
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
-                (
-                    self.eval_obj(problem, doe),
-                    doe.to_owned(),
-                    self.n_eval.saturating_sub(doe.nrows()),
-                )
+                (self.eval_obj(problem, doe), doe.to_owned())
             } else {
                 // split doe in x and y
                 info!("Use specified DOE {} samples", doe.nrows());
                 (
                     doe.slice(s![.., self.xlimits.nrows()..]).to_owned(),
                     doe.slice(s![.., ..self.xlimits.nrows()]).to_owned(),
-                    self.n_eval,
                 )
             }
         } else {
@@ -519,7 +516,7 @@ where
             };
             info!("Compute initial LHS with {} points", n_doe);
             let x = sampling.sample(n_doe);
-            (self.eval_obj(problem, &x), x, self.n_eval)
+            (self.eval_obj(problem, &x), x)
         };
         let doe = concatenate![Axis(1), x_data, y_data];
         if self.outdir.is_some() {
@@ -532,33 +529,12 @@ where
 
         let clusterings = vec![None; self.n_cstr + 1];
         let no_point_added_retries = MAX_POINT_ADDITION_RETRY;
-        if n_eval / self.q_parallel == 0 {
-            warn!(
-                "Number of evaluations {} too low (initial doe size={} and q_parallel={})",
-                self.n_eval,
-                doe.nrows(),
-                self.q_parallel
-            );
-        }
-        let n_eval = if n_eval % self.q_parallel != 0 {
-            let new_n_eval = (n_eval / self.q_parallel) * self.q_parallel;
-            warn!(
-                "Number of evaluations out of initial doe {} readjusted to {} to get a multiple of q_parallel={}",
-                n_eval,
-                new_n_eval,
-                self.q_parallel
-            );
-            new_n_eval
-        } else {
-            n_eval
-        };
-        let n_iter = n_eval / self.q_parallel;
 
         let mut initial_state = state
             .data((x_data, y_data))
             .clusterings(clusterings)
             .sampling(sampling);
-        initial_state.max_iters = n_iter as u64;
+        initial_state.max_iters = self.n_iter as u64;
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
         initial_state.cstr_tol = self.cstr_tol;
@@ -672,7 +648,7 @@ where
             }
         };
 
-        let add_count = (self.q_parallel - rejected_count) as i32;
+        let add_count = (self.q_points - rejected_count) as i32;
         let x_to_eval = x_data.slice(s![-add_count.., ..]).to_owned();
         debug!(
             "Eval {} point{} {}",
@@ -793,7 +769,7 @@ where
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
-        for i in 0..self.q_parallel {
+        for i in 0..self.q_points {
             let (xt, yt) = if i == 0 {
                 (x_data.to_owned(), y_data.to_owned())
             } else {
@@ -1290,8 +1266,8 @@ pub struct Egor<O: GroupFunc, SB: SurrogateBuilder> {
 
 impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Sets allowed number of evaluation of the function under optimization
-    pub fn n_eval(&mut self, n_eval: usize) -> &mut Self {
-        self.solver.n_eval(n_eval);
+    pub fn n_iter(&mut self, n_iter: usize) -> &mut Self {
+        self.solver.n_iter(n_iter);
         self
     }
 
@@ -1302,8 +1278,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     }
 
     /// Sets Number of parallel evaluations of the function under optimization
-    pub fn q_parallel(&mut self, q_parallel: usize) -> &mut Self {
-        self.solver.q_parallel(q_parallel);
+    pub fn q_points(&mut self, q_points: usize) -> &mut Self {
+        self.solver.q_points(q_points);
         self
     }
 
@@ -1484,7 +1460,7 @@ mod tests {
             .infill_strategy(InfillStrategy::EI)
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
-            .n_eval(30)
+            .n_iter(30)
             .doe(Some(initial_doe.to_owned()))
             .target(-15.1)
             .outdir(Some("target/tests".to_string()))
@@ -1501,7 +1477,7 @@ mod tests {
     fn test_xsinx_wb2_egor_solver() {
         let res = EgorBuilder::optimize(xsinx)
             .min_within(&array![[0.0, 25.0]])
-            .n_eval(20)
+            .n_iter(20)
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
             .run()
@@ -1516,7 +1492,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .min_within(&array![[0.0, 25.0]])
             .n_clusters(Some(0))
-            .n_eval(20)
+            .n_iter(20)
             .run()
             .expect("Egor with auto clustering should minimize xsinx");
         let expected = array![18.9];
@@ -1531,7 +1507,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .random_seed(42)
             .min_within(&xlimits)
-            .n_eval(15)
+            .n_iter(15)
             .doe(Some(doe))
             .outdir(Some("target/tests".to_string()))
             .run()
@@ -1542,7 +1518,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .random_seed(42)
             .min_within(&xlimits)
-            .n_eval(5)
+            .n_iter(5)
             .outdir(Some("target/tests".to_string()))
             .hot_start(true)
             .run()
@@ -1596,7 +1572,7 @@ mod tests {
             .random_seed(42)
             .min_within(&xlimits)
             .doe(Some(doe))
-            .n_eval(100)
+            .n_iter(100)
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
             .target(1e-2)
@@ -1646,7 +1622,7 @@ mod tests {
             .min_within(&xlimits)
             .n_cstr(2)
             .doe(Some(doe))
-            .n_eval(20)
+            .n_iter(20)
             .run()
             .expect("Minimize failure");
         println!("G24 optim result = {res:?}");
@@ -1666,11 +1642,11 @@ mod tests {
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
             .n_cstr(2)
-            .q_parallel(2)
+            .q_points(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
             .doe(Some(doe))
             .target(-5.508013)
-            .n_eval(30)
+            .n_iter(30)
             .run()
             .expect("Egor minimization");
         println!("G24 optim result = {res:?}");
@@ -1691,7 +1667,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixsinx_ei_mixint_egor_solver() {
-        let n_eval = 30;
+        let n_iter = 30;
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![Xtype::Int(0, 25)];
 
@@ -1699,7 +1675,7 @@ mod tests {
             .random_seed(42)
             .min_within_mixed_space(&xtypes)
             .doe(Some(doe))
-            .n_eval(n_eval)
+            .n_iter(n_iter)
             .target(-15.1)
             .infill_strategy(InfillStrategy::EI)
             .run()
@@ -1709,7 +1685,7 @@ mod tests {
 
     #[test]
     fn test_mixsinx_reclustering_mixint_egor_solver() {
-        let n_eval = 30;
+        let n_iter = 30;
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![Xtype::Int(0, 25)];
 
@@ -1717,7 +1693,7 @@ mod tests {
             .random_seed(42)
             .min_within_mixed_space(&xtypes)
             .doe(Some(doe))
-            .n_eval(n_eval)
+            .n_iter(n_iter)
             .target(-15.1)
             .infill_strategy(InfillStrategy::EI)
             .run()
@@ -1728,7 +1704,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixsinx_wb2_mixint_egor_solver() {
-        let n_eval = 30;
+        let n_iter = 30;
         let xtypes = vec![Xtype::Int(0, 25)];
 
         let res = EgorBuilder::optimize(mixsinx)
@@ -1736,7 +1712,7 @@ mod tests {
             .min_within_mixed_space(&xtypes)
             .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
             .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
-            .n_eval(n_eval)
+            .n_iter(n_iter)
             .infill_strategy(InfillStrategy::WB2)
             .run()
             .unwrap();

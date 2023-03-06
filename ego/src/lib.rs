@@ -26,7 +26,7 @@
 //! // We ask for 10 evaluations of the objective function to get the result
 //! let res = EgorBuilder::optimize(xsinx)
 //!             .min_within(&array![[0.0, 25.0]])
-//!             .n_eval(10)
+//!             .n_iter(10)
 //!             .run()
 //!             .expect("xsinx minimized");
 //! println!("Minimum found f(x) = {:?} at x = {:?}", res.x_opt, res.y_opt);
@@ -58,7 +58,7 @@
 //!     }
 //! }
 //!
-//! let n_eval = 10;
+//! let n_iter = 10;
 //! let doe = array![[0.], [7.], [25.]];
 //!
 //! // We define input as being integer
@@ -68,7 +68,7 @@
 //!     .random_seed(42)
 //!     .min_within_mixed_space(&xtypes)   // We build mixed-integer optimizer
 //!     .doe(Some(doe))          // we pass an initial doe
-//!     .n_eval(n_eval)
+//!     .n_iter(n_iter)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .run()
 //!     .expect("Egor minimization");

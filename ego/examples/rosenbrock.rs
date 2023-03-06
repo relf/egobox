@@ -20,7 +20,7 @@ fn main() {
     let xlimits = array![[-2., 2.], [-2., 2.]];
     let res = EgorBuilder::optimize(rosenbrock)
         .min_within(&xlimits)
-        .n_eval(100)
+        .n_iter(100)
         .target(1e-2)
         .run()
         .expect("Minimize failure");
