@@ -351,13 +351,15 @@ impl Egor {
             .outdir(self.outdir.as_ref().cloned())
             .hot_start(self.hot_start);
 
-        let res = mixintegor
-            .run()
-            .expect("Egor should optimize the objective function");
+        py.allow_threads(|| {
+            let res = mixintegor
+                .run()
+                .expect("Egor should optimize the objective function");
 
-        Ok(OptimResult {
-            x_opt: res.x_opt.to_vec(),
-            y_opt: res.y_opt.to_vec(),
+            Ok(OptimResult {
+                x_opt: res.x_opt.to_vec(),
+                y_opt: res.y_opt.to_vec(),
+            })
         })
     }
 }
