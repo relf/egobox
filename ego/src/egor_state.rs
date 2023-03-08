@@ -153,23 +153,23 @@ pub struct EgorState<F: Float> {
     pub termination_status: TerminationStatus,
 
     /// Number of added points
-    pub added: usize,
+    pub(crate) added: usize,
     /// Previous number of added points
-    pub prev_added: usize,
+    pub(crate) prev_added: usize,
     /// Current number of retry without adding point
-    pub no_point_added_retries: i32,
+    pub(crate) no_point_added_retries: i32,
     /// run_lhs_optim
-    pub lhs_optim: bool,
+    pub(crate) lhs_optim: bool,
 
     /// Current clusterings for objective and constraints mixture surrogate models
-    pub clusterings: Option<Vec<Option<Clustering>>>,
+    pub(crate) clusterings: Option<Vec<Option<Clustering>>>,
     /// Historic data (params, objective and constraints)
-    pub data: Option<(Array2<F>, Array2<F>)>,
+    pub(crate) data: Option<(Array2<F>, Array2<F>)>,
     /// Sampling method used to generate space filling samples
-    pub sampling: Option<Lhs<F, Xoshiro256Plus>>,
+    pub(crate) sampling: Option<Lhs<F, Xoshiro256Plus>>,
     /// Constraint tolerance cstr < cstr_tol.
     /// It used to assess the validity of the param point and hence the corresponding cost
-    pub cstr_tol: F,
+    pub(crate) cstr_tol: F,
 }
 
 impl<F> EgorState<F>

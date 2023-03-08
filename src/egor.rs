@@ -333,8 +333,8 @@ impl Egor {
             mixintegor = mixintegor.random_seed(seed);
         };
 
-        let mut mixintegor = mixintegor.min_within_mixed_space(&xtypes);
-        mixintegor
+        let mixintegor = mixintegor
+            .min_within_mixed_space(&xtypes)
             .n_cstr(self.n_cstr)
             .n_iter(n_iter)
             .n_start(self.n_start)
