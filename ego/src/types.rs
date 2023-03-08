@@ -11,8 +11,12 @@ use serde::{Deserialize, Serialize};
 pub struct OptimResult<F: Float> {
     /// Optimum x value
     pub x_opt: Array1<F>,
-    /// Optimum y value (e.g. f(x))
+    /// Optimum y value (e.g. f(x_opt))
     pub y_opt: Array1<F>,
+    /// History of successive x values
+    pub x_hist: Array2<F>,
+    /// History of successive y values (e.g f(x_hist))
+    pub y_hist: Array2<F>,
 }
 
 /// Infill criterion used to select next promising point

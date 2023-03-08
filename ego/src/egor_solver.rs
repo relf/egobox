@@ -1406,6 +1406,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             OptimResult {
                 x_opt: result.state.get_best_param().unwrap().to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
+                x_hist: x_data,
+                y_hist: y_data,
             }
         } else {
             let xtypes = xtypes.unwrap(); // !no_discrete
@@ -1424,6 +1426,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             OptimResult {
                 x_opt: x_opt.row(0).to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
+                x_hist: x_data,
+                y_hist: y_data,
             }
         };
         info!("Optim Result: min f(x)={} at x={}", res.y_opt, res.x_opt);
