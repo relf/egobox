@@ -234,12 +234,15 @@ fn mopta_func(dim: usize) -> impl Fn(&ArrayView2<f64>) -> Array2<f64> + GroupFun
 struct Args {
     #[arg(short, long, default_value_t = 12)]
     dim: usize,
+    #[arg(short, long, default_value = "./history")]
+    outdir: String,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let dim = args.dim;
+    let outdir = args.outdir;
     let n_doe = 2 * dim;
     let n_iter = 3 * dim;
     let cstr_tol = 1e-4;
@@ -259,7 +262,7 @@ fn main() -> anyhow::Result<()> {
         .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
         .infill_optimizer(InfillOptimizer::Slsqp)
         .kpls_dim(Some(3))
-        .outdir(Some("./history".to_string()))
+        .outdir(Some(outdir))
         .hot_start(true)
         .run()
         .expect("Minimize failure");
