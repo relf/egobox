@@ -146,7 +146,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
-    pub fn min_within_mixed_space(self, xtypes: &[Xtype]) -> Egor<O, MixintMoeParams> {
+    pub fn min_within_mixed_space(self, xtypes: &[XType]) -> Egor<O, MixintMoeParams> {
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
@@ -579,7 +579,7 @@ mod tests {
     fn test_mixsinx_ei_mixint_egor_builder() {
         let n_iter = 30;
         let doe = array![[0.], [7.], [25.]];
-        let xtypes = vec![Xtype::Int(0, 25)];
+        let xtypes = vec![XType::Int(0, 25)];
 
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
@@ -597,7 +597,7 @@ mod tests {
     fn test_mixsinx_reclustering_mixint_egor_builder() {
         let n_iter = 30;
         let doe = array![[0.], [7.], [25.]];
-        let xtypes = vec![Xtype::Int(0, 25)];
+        let xtypes = vec![XType::Int(0, 25)];
 
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
@@ -615,7 +615,7 @@ mod tests {
     #[serial]
     fn test_mixsinx_wb2_mixint_egor_builder() {
         let n_iter = 30;
-        let xtypes = vec![Xtype::Int(0, 25)];
+        let xtypes = vec![XType::Int(0, 25)];
 
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)

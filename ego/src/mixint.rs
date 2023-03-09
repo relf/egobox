@@ -3,7 +3,7 @@
 
 #![allow(dead_code)]
 use crate::errors::{EgoError, Result};
-use crate::types::{SurrogateBuilder, Xtype};
+use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{
     Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec,
@@ -29,26 +29,26 @@ use std::io::Write;
 ///
 /// Each level of an enumerate gives a new continuous dimension in [0, 1].
 /// Each integer dimensions are relaxed continuously.
-pub fn unfold_xtypes_as_continuous_limits(xtypes: &[Xtype]) -> Array2<f64> {
+pub fn unfold_xtypes_as_continuous_limits(xtypes: &[XType]) -> Array2<f64> {
     let mut xlimits: Vec<f64> = vec![];
     let mut dim = 0;
     xtypes.iter().for_each(|xtype| match xtype {
-        Xtype::Cont(lower, upper) => {
+        XType::Cont(lower, upper) => {
             dim += 1;
             xlimits.extend([*lower, *upper]);
         }
-        Xtype::Int(lower, upper) => {
+        XType::Int(lower, upper) => {
             dim += 1;
             xlimits.extend([*lower as f64, *upper as f64]);
         }
-        Xtype::Ord(v) => {
+        XType::Ord(v) => {
             dim += 1;
             xlimits.extend([
                 (*v.iter().min().unwrap()) as f64,
                 (*v.iter().max().unwrap()) as f64,
             ]);
         }
-        Xtype::Enum(v) => {
+        XType::Enum(v) => {
             dim += v.len();
             v.iter().for_each(|_| {
                 xlimits.extend([0., 1.]);
@@ -67,17 +67,17 @@ pub fn unfold_xtypes_as_continuous_limits(xtypes: &[Xtype]) -> Array2<f64> {
 /// meaning the "green" value.
 /// This function is the opposite of unfold_with_enum_mask().
 pub fn fold_with_enum_index(
-    xtypes: &[Xtype],
+    xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Array2<f64> {
     let mut xfold = Array::zeros((x.nrows(), xtypes.len()));
     let mut unfold_index = 0;
     Zip::indexed(xfold.columns_mut()).for_each(|j, mut col| match &xtypes[j] {
-        Xtype::Cont(_, _) | Xtype::Int(_, _) | Xtype::Ord(_) => {
+        XType::Cont(_, _) | XType::Int(_, _) | XType::Ord(_) => {
             col.assign(&x.column(unfold_index));
             unfold_index += 1;
         }
-        Xtype::Enum(v) => {
+        XType::Enum(v) => {
             let xenum = x.slice(s![.., j..j + v.len()]);
             let argmaxx = xenum.map_axis(Axis(1), |row| row.argmax().unwrap() as f64);
             col.assign(&argmaxx);
@@ -88,11 +88,11 @@ pub fn fold_with_enum_index(
 }
 
 /// Compute dimension when all variables are continuously relaxed
-fn compute_unfolded_dimension(xtypes: &[Xtype]) -> usize {
+fn compute_unfolded_dimension(xtypes: &[XType]) -> usize {
     xtypes
         .iter()
         .map(|s| match s {
-            Xtype::Enum(v) => v.len(),
+            XType::Enum(v) => v.len(),
             _ => 1,
         })
         .reduce(|acc, l| -> usize { acc + l })
@@ -106,19 +106,19 @@ fn compute_unfolded_dimension(xtypes: &[Xtype]) -> usize {
 /// the input x may contain [..., 2, ...] which will be expanded in [..., 0, 0, 1, ...].
 /// This function is the opposite of fold_with_enum_index().
 fn unfold_with_enum_mask(
-    xtypes: &[Xtype],
+    xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Array2<f64> {
     let mut xunfold = Array::zeros((x.nrows(), compute_unfolded_dimension(xtypes)));
     let mut unfold_index = 0;
     xtypes.iter().for_each(|s| match s {
-        Xtype::Cont(_, _) | Xtype::Int(_, _) | Xtype::Ord(_) => {
+        XType::Cont(_, _) | XType::Int(_, _) | XType::Ord(_) => {
             xunfold
                 .column_mut(unfold_index)
                 .assign(&x.column(unfold_index));
             unfold_index += 1;
         }
-        Xtype::Enum(v) => {
+        XType::Enum(v) => {
             let mut unfold = Array::zeros((x.nrows(), v.len()));
             Zip::from(unfold.rows_mut())
                 .and(x.rows())
@@ -147,16 +147,16 @@ fn take_closest(v: &[i32], val: f64) -> i32 {
 /// Project continuously relaxed values to their closer assessable values.
 ///
 /// See cast_to_discrete_values
-fn cast_to_discrete_values_mut(xtypes: &[Xtype], x: &mut ArrayBase<impl DataMut<Elem = f64>, Ix2>) {
+fn cast_to_discrete_values_mut(xtypes: &[XType], x: &mut ArrayBase<impl DataMut<Elem = f64>, Ix2>) {
     let mut xcol = 0;
     xtypes.iter().for_each(|s| match s {
-        Xtype::Cont(_, _) => xcol += 1,
-        Xtype::Int(_, _) => {
+        XType::Cont(_, _) => xcol += 1,
+        XType::Int(_, _) => {
             let xround = x.column(xcol).mapv(|v| v.round()).to_owned();
             x.column_mut(xcol).assign(&xround);
             xcol += 1;
         }
-        Xtype::Ord(v) => {
+        XType::Ord(v) => {
             let xround = x
                 .column(xcol)
                 .mapv(|val| take_closest(v, val) as f64)
@@ -164,7 +164,7 @@ fn cast_to_discrete_values_mut(xtypes: &[Xtype], x: &mut ArrayBase<impl DataMut<
             x.column_mut(xcol).assign(&xround);
             xcol += 1;
         }
-        Xtype::Enum(v) => {
+        XType::Enum(v) => {
             let mut xenum = x.slice_mut(s![.., xcol..xcol + v.len()]);
             let argmaxx = xenum.map_axis(Axis(1), |row| row.argmax().unwrap());
             Zip::from(xenum.rows_mut())
@@ -187,7 +187,7 @@ fn cast_to_discrete_values_mut(xtypes: &[Xtype], x: &mut ArrayBase<impl DataMut<
 /// the input x may contain the values (or mask) [..., 0, 0, 1, ...] to specify "green" for
 /// this original dimension.
 pub fn cast_to_discrete_values(
-    xtypes: &[Xtype],
+    xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Array2<f64> {
     let mut xcast = x.to_owned();
@@ -195,14 +195,14 @@ pub fn cast_to_discrete_values(
     xcast
 }
 
-/// A decorator of LHS sampling that takes into account Xtype specifications
+/// A decorator of LHS sampling that takes into account XType specifications
 /// casting continuous LHS result from floats to discrete types.
 #[derive(Serialize, Deserialize)]
 pub struct MixintSampling {
     /// The continuous LHS sampling method
     lhs: Lhs<f64, Xoshiro256Plus>,
     /// The input specifications
-    xtypes: Vec<Xtype>,
+    xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
     output_in_folded_space: bool,
@@ -210,7 +210,7 @@ pub struct MixintSampling {
 
 impl MixintSampling {
     /// Constructor using `xtypes` specifications
-    pub fn new(xtypes: Vec<Xtype>) -> Self {
+    pub fn new(xtypes: Vec<XType>) -> Self {
         MixintSampling {
             lhs: Lhs::new(&unfold_xtypes_as_continuous_limits(&xtypes)),
             xtypes: xtypes.clone(),
@@ -247,7 +247,7 @@ impl SamplingMethod<f64> for MixintSampling {
 
 /// Moe type builder for mixed-integer Egor optimizer
 pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
-/// A decorator of Moe surrogate builder that takes into account Xtype specifications
+/// A decorator of Moe surrogate builder that takes into account XType specifications
 ///
 /// It allows to implement continuous relaxation over continuous Moe builder.
 #[derive(Clone, Serialize, Deserialize)]
@@ -255,7 +255,7 @@ pub struct MixintMoeValidParams {
     /// The surrogate factory
     surrogate_builder: MoeParams<f64, Xoshiro256Plus>,
     /// The input specifications
-    xtypes: Vec<Xtype>,
+    xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
     work_in_folded_space: bool,
@@ -268,7 +268,7 @@ impl MixintMoeValidParams {
     }
 
     /// Sets the specification
-    pub fn xtypes(&self) -> &[Xtype] {
+    pub fn xtypes(&self) -> &[XType] {
         &self.xtypes
     }
 }
@@ -279,7 +279,7 @@ pub struct MixintMoeParams(MixintMoeValidParams);
 
 impl MixintMoeParams {
     /// Constructor given  `xtypes` specifications and given surrogate builder
-    pub fn new(xtypes: &[Xtype], surrogate_builder: &MoeBuilder) -> Self {
+    pub fn new(xtypes: &[XType], surrogate_builder: &MoeBuilder) -> Self {
         MixintMoeParams(MixintMoeValidParams {
             surrogate_builder: surrogate_builder.clone(),
             xtypes: xtypes.to_vec(),
@@ -294,7 +294,7 @@ impl MixintMoeParams {
     }
 
     /// Sets the specification
-    pub fn xtypes(&self) -> &[Xtype] {
+    pub fn xtypes(&self) -> &[XType] {
         &self.0.xtypes
     }
 }
@@ -353,7 +353,7 @@ impl MixintMoeValidParams {
 }
 
 impl SurrogateBuilder for MixintMoeParams {
-    fn new_with_xtypes_rng(xtypes: &[Xtype]) -> Self {
+    fn new_with_xtypes_rng(xtypes: &[XType]) -> Self {
         MixintMoeParams::new(xtypes, &MoeParams::new())
     }
 
@@ -456,13 +456,13 @@ impl From<MixintMoeValidParams> for MixintMoeParams {
     }
 }
 
-/// The Moe model that takes into account Xtype specifications
+/// The Moe model that takes into account XType specifications
 #[derive(Serialize, Deserialize)]
 pub struct MixintMoe {
     /// the decorated Moe
     moe: Moe,
     /// The input specifications
-    xtypes: Vec<Xtype>,
+    xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
     work_in_folded_space: bool,
@@ -587,10 +587,10 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
 }
 
 /// A factory to build consistent sampling method and surrogate regarding
-/// Xtype specifications
+/// XType specifications
 pub struct MixintContext {
     /// The input specifications
-    xtypes: Vec<Xtype>,
+    xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
     work_in_folded_space: bool,
@@ -598,7 +598,7 @@ pub struct MixintContext {
 
 impl MixintContext {
     /// Constructor with given `xtypes` specification
-    pub fn new(xtypes: &[Xtype]) -> Self {
+    pub fn new(xtypes: &[XType]) -> Self {
         MixintContext {
             xtypes: xtypes.to_vec(),
             work_in_folded_space: true,
@@ -649,14 +649,14 @@ mod tests {
     #[test]
     fn test_mixint_lhs() {
         let xtypes = vec![
-            Xtype::Cont(-10.0, 10.0),
-            Xtype::Enum(vec![
+            XType::Cont(-10.0, 10.0),
+            XType::Enum(vec![
                 "blue".to_string(),
                 "red".to_string(),
                 "green".to_string(),
             ]),
-            Xtype::Int(-10, 10),
-            Xtype::Ord(vec![1, 3, 5, 8]),
+            XType::Int(-10, 10),
+            XType::Ord(vec![1, 3, 5, 8]),
         ];
 
         let mixi = MixintContext::new(&xtypes);
@@ -680,7 +680,7 @@ mod tests {
 
     #[test]
     fn test_mixint_moe_1d() {
-        let xtypes = vec![Xtype::Int(0, 4)];
+        let xtypes = vec![XType::Int(0, 4)];
 
         let mixi = MixintContext::new(&xtypes);
 
@@ -724,9 +724,9 @@ mod tests {
     #[test]
     fn test_mixint_moe_3d() {
         let xtypes = vec![
-            Xtype::Int(0, 5),
-            Xtype::Cont(0., 4.),
-            Xtype::Enum(vec![
+            XType::Int(0, 5),
+            XType::Cont(0., 4.),
+            XType::Enum(vec![
                 "blue".to_string(),
                 "red".to_string(),
                 "green".to_string(),

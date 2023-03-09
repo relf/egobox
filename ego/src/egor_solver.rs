@@ -186,7 +186,7 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// Note: used for continuous variables handling, the optimizer base.
     pub(crate) xlimits: Array2<f64>,
     /// List of x types allowing the handling of discrete input variables
-    pub(crate) xtypes: Option<Vec<Xtype>>,
+    pub(crate) xtypes: Option<Vec<XType>>,
     /// Flag for discrete handling, true if mixed-integer type present in xtypes, otherwise false
     pub(crate) no_discrete: bool,
     /// An optional surrogate builder used to model objective and constraint
@@ -199,7 +199,7 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
 }
 
 impl SurrogateBuilder for MoeParams<f64, Xoshiro256Plus> {
-    fn new_with_xtypes_rng(_xtypes: &[Xtype]) -> Self {
+    fn new_with_xtypes_rng(_xtypes: &[XType]) -> Self {
         MoeParams::new()
     }
 
@@ -288,8 +288,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     /// when `f` has discrete inputs to be specified with list of xtypes.
     ///
     /// The function `f` should return an objective but also constraint values if any.
-    /// Design space is specified by a list of types for input variables `x` of `f` (see [Xtype]).
-    pub fn new_with_xtypes(xtypes: &[Xtype], rng: Xoshiro256Plus) -> Self {
+    /// Design space is specified by a list of types for input variables `x` of `f` (see [XType]).
+    pub fn new_with_xtypes(xtypes: &[XType], rng: Xoshiro256Plus) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
@@ -319,7 +319,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             surrogate_builder: SB::new_with_xtypes_rng(xtypes),
             no_discrete: !xtypes
                 .iter()
-                .any(|t| matches!(t, &Xtype::Int(_, _) | &Xtype::Ord(_) | &Xtype::Enum(_))),
+                .any(|t| matches!(t, &XType::Int(_, _) | &XType::Ord(_) | &XType::Enum(_))),
             rng,
         }
     }
@@ -468,9 +468,9 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 /// Build `xtypes` from simple float bounds of `x` input components when x belongs to R^n.
 /// xlimits are bounds of the x components expressed a matrix (dim, 2) where dim is the dimension of x
 /// the ith row is the bounds interval [lower, upper] of the ith comonent of `x`.  
-fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<Xtype> {
-    let mut xtypes: Vec<Xtype> = vec![];
-    Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(Xtype::Cont(limits[0], limits[1])));
+fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> {
+    let mut xtypes: Vec<XType> = vec![];
+    Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(XType::Cont(limits[0], limits[1])));
     xtypes
 }
 
@@ -818,7 +818,6 @@ where
                 })
                 .collect();
             (1..=self.n_cstr)
-                .into_iter()
                 .for_each(|k| clusterings[k] = Some(cstr_models[k - 1].to_clustering()));
             debug!("... surrogates trained");
 
@@ -1220,7 +1219,7 @@ mod tests {
 
     #[test]
     fn test_unfold_xtypes_as_continuous_limits() {
-        let xtypes = vec![Xtype::Int(0, 25)];
+        let xtypes = vec![XType::Int(0, 25)];
         let xlimits = unfold_xtypes_as_continuous_limits(&xtypes);
         let expected = array![[0., 25.]];
         assert_abs_diff_eq!(expected, xlimits);
