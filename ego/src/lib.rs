@@ -48,7 +48,7 @@
 //! use ndarray_linalg::Norm;
 //! #[cfg(not(feature = "blas"))]
 //! use linfa_linalg::norm::*;
-//! use egobox_ego::{EgorBuilder, InfillStrategy, Xtype};
+//! use egobox_ego::{EgorBuilder, InfillStrategy, XType};
 //!
 //! fn mixsinx(x: &ArrayView2<f64>) -> Array2<f64> {
 //!     if (x.mapv(|v| v.round()).norm_l2() - x.norm_l2()).abs() < 1e-6 {
@@ -62,7 +62,7 @@
 //! let doe = array![[0.], [7.], [25.]];
 //!
 //! // We define input as being integer
-//! let xtypes = vec![Xtype::Int(0, 25)];
+//! let xtypes = vec![XType::Int(0, 25)];
 //!
 //! let res = EgorBuilder::optimize(mixsinx)
 //!     .random_seed(42)

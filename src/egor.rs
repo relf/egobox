@@ -49,12 +49,12 @@ pub(crate) fn lhs(
     if specs.is_empty() {
         panic!("Error: xspecs argument cannot be empty")
     }
-    let xtypes: Vec<egobox_ego::Xtype> = specs
+    let xtypes: Vec<egobox_ego::XType> = specs
         .iter()
         .map(|spec| match spec.vtype {
-            Vtype(Vtype::FLOAT) => egobox_ego::Xtype::Cont(spec.vlimits[0], spec.vlimits[1]),
+            Vtype(Vtype::FLOAT) => egobox_ego::XType::Cont(spec.vlimits[0], spec.vlimits[1]),
             Vtype(Vtype::INT) => {
-                egobox_ego::Xtype::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
+                egobox_ego::XType::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
             }
             Vtype(i) => panic!(
                 "Bad variable type: should be either Vtype.FLOAT {} or Vtype.INT {}, got {}",
@@ -311,12 +311,12 @@ impl Egor {
             panic!("Error: xspecs argument cannot be empty")
         }
 
-        let xtypes: Vec<egobox_ego::Xtype> = xspecs
+        let xtypes: Vec<egobox_ego::XType> = xspecs
             .iter()
             .map(|spec| match spec.vtype {
-                Vtype(Vtype::FLOAT) => egobox_ego::Xtype::Cont(spec.vlimits[0], spec.vlimits[1]),
+                Vtype(Vtype::FLOAT) => egobox_ego::XType::Cont(spec.vlimits[0], spec.vlimits[1]),
                 Vtype(Vtype::INT) => {
-                    egobox_ego::Xtype::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
+                    egobox_ego::XType::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
                 }
                 Vtype(i) => panic!(
                     "Bad variable type: should be either Vtype.FLOAT {} or Vtype.INT {}, got {}",
