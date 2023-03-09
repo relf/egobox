@@ -818,7 +818,6 @@ where
                 })
                 .collect();
             (1..=self.n_cstr)
-                .into_iter()
                 .for_each(|k| clusterings[k] = Some(cstr_models[k - 1].to_clustering()));
             debug!("... surrogates trained");
 
