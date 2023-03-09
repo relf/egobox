@@ -12,8 +12,8 @@
 
 use crate::types::*;
 use egobox_doe::SamplingMethod;
-use ndarray::{Array2, ArrayView2};
-use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
+use numpy::ndarray::{Array2, ArrayView2};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -182,9 +182,13 @@ pub(crate) struct Egor {
 #[pyclass]
 pub(crate) struct OptimResult {
     #[pyo3(get)]
-    x_opt: Vec<f64>,
+    x_opt: Py<PyArray1<f64>>,
     #[pyo3(get)]
-    y_opt: Vec<f64>,
+    y_opt: Py<PyArray1<f64>>,
+    #[pyo3(get)]
+    x_hist: Py<PyArray2<f64>>,
+    #[pyo3(get)]
+    y_hist: Py<PyArray2<f64>>,
 }
 
 #[pymethods]
@@ -329,8 +333,8 @@ impl Egor {
             mixintegor = mixintegor.random_seed(seed);
         };
 
-        let mut mixintegor = mixintegor.min_within_mixed_space(&xtypes);
-        mixintegor
+        let mixintegor = mixintegor
+            .min_within_mixed_space(&xtypes)
             .n_cstr(self.n_cstr)
             .n_iter(n_iter)
             .n_start(self.n_start)
@@ -351,15 +355,20 @@ impl Egor {
             .outdir(self.outdir.as_ref().cloned())
             .hot_start(self.hot_start);
 
-        py.allow_threads(|| {
-            let res = mixintegor
+        let res = py.allow_threads(|| {
+            mixintegor
                 .run()
-                .expect("Egor should optimize the objective function");
-
-            Ok(OptimResult {
-                x_opt: res.x_opt.to_vec(),
-                y_opt: res.y_opt.to_vec(),
-            })
+                .expect("Egor should optimize the objective function")
+        });
+        let x_opt = res.x_opt.into_pyarray(py).to_owned();
+        let y_opt = res.y_opt.into_pyarray(py).to_owned();
+        let x_hist = res.x_hist.into_pyarray(py).to_owned();
+        let y_hist = res.y_hist.into_pyarray(py).to_owned();
+        Ok(OptimResult {
+            x_opt,
+            y_opt,
+            x_hist,
+            y_hist,
         })
     }
 }

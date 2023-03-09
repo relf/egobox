@@ -118,20 +118,26 @@ class TestOptimizer(unittest.TestCase):
         os.remove("./test_dir/egor_doe.npy")
 
     def test_g24(self):
+        n_doe = 5
+        n_iter = 20
+        n_cstr = 2
         egor = egx.Egor(
             g24,
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             cstr_tol=1e-3,
-            n_cstr=2,
+            n_cstr=n_cstr,
             seed=42,
+            n_doe=n_doe,
         )
         start = time.process_time()
-        res = egor.minimize(n_iter=20)
+        res = egor.minimize(n_iter=n_iter)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(2.3295, res.x_opt[0], delta=1e-2)
         self.assertAlmostEqual(3.1785, res.x_opt[1], delta=1e-2)
+        self.assertEqual((n_doe + n_iter, 2), res.x_hist.shape)
+        self.assertEqual((n_doe + n_iter, 1 + n_cstr), res.y_hist.shape)
 
     def test_g24_kpls(self):
         egor = egx.Egor(

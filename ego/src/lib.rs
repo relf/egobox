@@ -96,6 +96,7 @@
 //! integer-valued variables in Bayesian Optimization with Gaussian processes.
 //!
 //!
+mod egor;
 mod egor_solver;
 mod egor_state;
 mod errors;
@@ -105,6 +106,7 @@ mod sort_axis;
 mod types;
 mod utils;
 
+pub use crate::egor::*;
 pub use crate::egor_solver::*;
 pub use crate::egor_state::*;
 pub use crate::errors::*;
