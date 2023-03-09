@@ -96,17 +96,17 @@ impl ExpectedOptimum {
 
 #[pyclass]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Vtype(pub(crate) u8);
+pub(crate) struct XType(pub(crate) u8);
 
 #[pymethods]
-impl Vtype {
+impl XType {
     #[classattr]
     pub(crate) const FLOAT: u8 = 1;
     #[classattr]
     pub(crate) const INT: u8 = 2;
     #[new]
-    pub(crate) fn new(vtype: u8) -> Self {
-        Vtype(vtype)
+    pub(crate) fn new(xtype: u8) -> Self {
+        XType(xtype)
     }
     pub(crate) fn id(&self) -> u8 {
         self.0
@@ -115,17 +115,17 @@ impl Vtype {
 
 #[pyclass]
 #[derive(FromPyObject, Debug)]
-pub(crate) struct Vspec {
+pub(crate) struct XSpec {
     #[pyo3(get)]
-    pub(crate) vtype: Vtype,
+    pub(crate) xtype: XType,
     #[pyo3(get)]
-    pub(crate) vlimits: Vec<f64>,
+    pub(crate) xlimits: Vec<f64>,
 }
 
 #[pymethods]
-impl Vspec {
+impl XSpec {
     #[new]
-    pub(crate) fn new(vtype: Vtype, vlimits: Vec<f64>) -> Self {
-        Vspec { vtype, vlimits }
+    pub(crate) fn new(xtype: XType, xlimits: Vec<f64>) -> Self {
+        XSpec { xtype, xlimits }
     }
 }

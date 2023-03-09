@@ -25,8 +25,8 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<InfillStrategy>()?;
     m.add_class::<ParInfillStrategy>()?;
     m.add_class::<InfillOptimizer>()?;
-    m.add_class::<Vtype>()?;
-    m.add_class::<Vspec>()?;
+    m.add_class::<XType>()?;
+    m.add_class::<XSpec>()?;
     m.add_class::<OptimResult>()?;
     m.add_class::<ExpectedOptimum>()?;
     m.add_class::<Recombination>()?;

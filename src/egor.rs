@@ -18,13 +18,13 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 /// Utility function converting `xlimits` float data list specifying bounds of x components
-/// to x specified as a list of Vtype.Float types [egobox.Vtype]
+/// to x specified as a list of XType.Float types [egobox.XType]
 ///
 /// # Parameters
 ///     xlimits : nx-size list of [lower_bound, upper_bound] where `nx` is the dimension of x
 ///
 /// # Returns
-///     xtypes: nx-size list of Vspec(Vtype(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
+///     xtypes: nx-size list of XSpec(XType(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
 #[pyfunction]
 pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject> {
     if xlimits.is_empty() || xlimits[0].is_empty() {
@@ -33,8 +33,8 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
     }
     Ok(xlimits
         .iter()
-        .map(|xlimit| Vspec::new(Vtype(Vtype::FLOAT), xlimit.clone()))
-        .collect::<Vec<Vspec>>()
+        .map(|xlimit| XSpec::new(XType(XType::FLOAT), xlimit.clone()))
+        .collect::<Vec<XSpec>>()
         .into_py(py))
 }
 
@@ -45,21 +45,21 @@ pub(crate) fn lhs(
     n_samples: usize,
     seed: Option<u64>,
 ) -> &PyArray2<f64> {
-    let specs: Vec<Vspec> = xspecs.extract(py).expect("Error in xspecs conversion");
+    let specs: Vec<XSpec> = xspecs.extract(py).expect("Error in xspecs conversion");
     if specs.is_empty() {
         panic!("Error: xspecs argument cannot be empty")
     }
     let xtypes: Vec<egobox_ego::XType> = specs
         .iter()
-        .map(|spec| match spec.vtype {
-            Vtype(Vtype::FLOAT) => egobox_ego::XType::Cont(spec.vlimits[0], spec.vlimits[1]),
-            Vtype(Vtype::INT) => {
-                egobox_ego::XType::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
+        .map(|spec| match spec.xtype {
+            XType(XType::FLOAT) => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
+            XType(XType::INT) => {
+                egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
             }
-            Vtype(i) => panic!(
-                "Bad variable type: should be either Vtype.FLOAT {} or Vtype.INT {}, got {}",
-                Vtype::FLOAT,
-                Vtype::INT,
+            XType(i) => panic!(
+                "Bad variable type: should be either XType.FLOAT {} or XType.INT {}, got {}",
+                XType::FLOAT,
+                XType::INT,
                 i
             ),
         })
@@ -86,7 +86,7 @@ pub(crate) fn lhs(
 ///     cstr_tol (float):
 ///         tolerance on constraints violation (cstr < tol).
 ///
-///     xspecs (list(Vspec)) where Vspec(vtype=FLOAT|INT, vlimits=[lower bound, upper bound]):
+///     xspecs (list(XSpec)) where XSpec(xtype=FLOAT|INT, xlimits=[lower bound, upper bound]):
 ///         Bounds of the nx components of the input x (eg. len(xspecs) == nx)
 ///
 ///     n_start (int > 0):
@@ -306,22 +306,22 @@ impl Egor {
 
         let doe = self.doe.as_ref().map(|v| v.to_owned());
 
-        let xspecs: Vec<Vspec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
+        let xspecs: Vec<XSpec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
         if xspecs.is_empty() {
             panic!("Error: xspecs argument cannot be empty")
         }
 
         let xtypes: Vec<egobox_ego::XType> = xspecs
             .iter()
-            .map(|spec| match spec.vtype {
-                Vtype(Vtype::FLOAT) => egobox_ego::XType::Cont(spec.vlimits[0], spec.vlimits[1]),
-                Vtype(Vtype::INT) => {
-                    egobox_ego::XType::Int(spec.vlimits[0] as i32, spec.vlimits[1] as i32)
+            .map(|spec| match spec.xtype {
+                XType(XType::FLOAT) => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
+                XType(XType::INT) => {
+                    egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
                 }
-                Vtype(i) => panic!(
-                    "Bad variable type: should be either Vtype.FLOAT {} or Vtype.INT {}, got {}",
-                    Vtype::FLOAT,
-                    Vtype::INT,
+                XType(i) => panic!(
+                    "Bad variable type: should be either XType.FLOAT {} or XType.INT {}, got {}",
+                    XType::FLOAT,
+                    XType::INT,
                     i
                 ),
             })
