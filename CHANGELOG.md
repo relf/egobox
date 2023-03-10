@@ -1,9 +1,41 @@
 Changes
 -------
 
-Version 0.7.0 - unreleased
+Version 0.9.0 - unreleased
 ==========================
 
+Version 0.8.0 - 10/03/2023
+==========================
+
+* `ego`:
+  * Renaming `XType`, `XSpec` for consistency (#82)
+  * Export history in optimization result (#81)
+  * Use nb iter instead of nb eval, rename q_parallel as q_points (#79)
+  * Warn when inf or nan detected during obj scaling computation (#78)
+  * Parallelize constraint scales computations (#73)
+  * Parallelize multistart optimizations (#76)
+  * Handle GMM errors during MOE training (#75)
+  * Handle possible errors from GMM clustering (#74)
+  * Upgrade argmin 0.8.0 (#72)
+  * Add mopta08 test case as example (#71)
+  * Fix scaling check for infinity (#70)
+  * Use kriging surrogate by default (#69)
+
+Version 0.7.0 - 11/01/2023
+==========================
+
+* `gp`: 
+  * Add analytic derivatives computations (#54, #55, #56, #58, #60). All derivatives available for all mean/correlation models are implemented.
+  * Refactor `MeanModel` and `CorrelationModel` methods:
+    * `apply()` renamed to `value()`
+    * `jac()` renamed to `jacobian()`
+  * Fix prediction computation when using linear regression (#52)
+* `ego`:
+  * Refactor `Egor` using [`argmin 0.7.0` solver framework](http://argmin-rs.org) `EgorSolver` can be used with `argmin::Executor` and benefit from observers and checkpointing features (#67) 
+  * `Egor` use kriging setting by default (i.e. one cluster with constant mean and squared exponential correlation model) 
+* Add [notebook on Manuau Loa CO2 example](https://github.com/relf/egobox/blob/master/doc/Gpx_MaunaLoaCO2.ipynb) to show `GpMix`/`Gpx` surrogate model usage (#62)
+* Use xoshiro instead of isaac random generator (#63)
+* Upgrade `ndarray 0.15`, `linfa 0.6.1`, `PyO3 0.17` (#57, #64)
 
 Version 0.6.0 - 2022-11-14
 ==========================
