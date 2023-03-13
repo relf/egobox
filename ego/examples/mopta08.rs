@@ -2,9 +2,10 @@ use clap::Parser;
 use egobox_ego::{EgorBuilder, GroupFunc, InfillOptimizer};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
-use std::fs::File;
+use std::fs::{remove_file, File};
 use std::io::prelude::*;
 use std::io::{BufRead, BufReader};
+use std::path::Path;
 use std::process::Command;
 
 const DIM_X: usize = 124;
@@ -171,7 +172,13 @@ fn mopta(x: &ArrayView2<f64>, indices: Option<&[usize]>) -> Array2<f64> {
     let n = x.nrows();
     let mut y = Array2::zeros((n, DIM_Y));
 
+    let lockfile = Path::new("mopta08.lock");
+    while lockfile.exists() {
+        println!("Mopta execution is locked! Waiting...");
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+    }
     for i in 0..n {
+        File::create(lockfile).unwrap();
         set_input(&x.row(i), indices);
 
         let mut path_exe = std::env::current_dir().unwrap();
@@ -189,6 +196,7 @@ fn mopta(x: &ArrayView2<f64>, indices: Option<&[usize]>) -> Array2<f64> {
 
         std::thread::sleep(std::time::Duration::from_secs(1));
         let y_i = get_output().unwrap();
+        remove_file(lockfile).unwrap();
         y.row_mut(i).assign(&y_i);
     }
     y
@@ -243,8 +251,8 @@ fn main() -> anyhow::Result<()> {
 
     let dim = args.dim;
     let outdir = args.outdir;
-    let n_doe = 2 * dim;
-    let n_iter = 3 * dim;
+    let n_doe = if dim == 124 { 275 } else { 2 * dim };
+    let n_iter = if dim == 124 { 400 } else { 3 * dim };
     let cstr_tol = 1e-4;
 
     let mut xlimits = Array2::zeros((dim, 2));
@@ -255,8 +263,8 @@ fn main() -> anyhow::Result<()> {
         .n_cstr(68)
         .cstr_tol(cstr_tol)
         .n_clusters(Some(1))
-        .n_doe(n_doe)
         .n_start(50)
+        .n_doe(n_doe)
         .n_iter(n_iter)
         .regression_spec(RegressionSpec::CONSTANT)
         .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
