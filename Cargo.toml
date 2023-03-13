@@ -59,6 +59,3 @@ members = [
   "moe",
   "ego"
 ]
-
-[package.metadata.maturin]
-python-source = "python"
