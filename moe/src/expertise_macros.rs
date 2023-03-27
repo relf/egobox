@@ -13,7 +13,7 @@ macro_rules! make_gp_params {
 
 macro_rules! compute_error {
     ($self:ident, $regr:ident, $corr:ident, $dataset:ident) => {{
-        trace!(
+        debug!(
             "Surrogate {}_{} on dataset size = {}",
             stringify!($regr),
             stringify!($corr),
@@ -22,21 +22,25 @@ macro_rules! compute_error {
         let params = make_gp_params!($regr, $corr).kpls_dim($self.kpls_dim());
         let mut errors = Vec::new();
         let input_dim = $dataset.records().shape()[1];
-        let n_fold = std::cmp::min($dataset.nsamples(), 5 * input_dim);
+        let n_fold = std::cmp::min($dataset.nsamples(), 5);
+        trace!("Cross validation N fold = {n_fold}");
         if (n_fold < 4 * input_dim && stringify!($regr) == "Quadratic") {
             f64::INFINITY // not enough points => huge error
         } else if (n_fold < 3 * input_dim && stringify!($regr) == "Linear") {
             f64::INFINITY // not enough points => huge error
         } else {
             for (gp, valid) in $dataset.iter_fold(n_fold, |train| {
-                params
+                let gp = params
                     .clone()
                     .kpls_dim($self.kpls_dim())
                     .fit(&train)
-                    .unwrap()
+                    .unwrap();
+                trace!("GP trained");
+                gp
             }) {
                 let pred = gp.predict_values(valid.records()).unwrap();
                 let error = (valid.targets() - pred).norm_l2();
+                trace!("Prediction error = {error}");
                 errors.push(error);
             }
             let mean_err = errors.iter().fold(0.0, |acc, &item| acc + item) / errors.len() as f64;

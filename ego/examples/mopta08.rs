@@ -251,9 +251,10 @@ fn main() -> anyhow::Result<()> {
 
     let dim = args.dim;
     let outdir = args.outdir;
-    let n_doe = if dim == 124 { 275 } else { 2 * dim };
-    let n_iter = if dim == 124 { 400 } else { 3 * dim };
+    let n_doe = 2 * dim;
+    let n_iter = 2 * dim;
     let cstr_tol = 1e-4;
+    let kpls_dim = 3;
 
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
@@ -269,7 +270,7 @@ fn main() -> anyhow::Result<()> {
         .regression_spec(RegressionSpec::CONSTANT)
         .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
         .infill_optimizer(InfillOptimizer::Slsqp)
-        .kpls_dim(Some(3))
+        .kpls_dim(Some(kpls_dim))
         .outdir(Some(outdir))
         .hot_start(true)
         .run()

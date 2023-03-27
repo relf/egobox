@@ -75,6 +75,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Moe> {
+        trace!("Moe training...");
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
@@ -111,6 +112,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         let gmx = if self.gmx().is_some() {
             *self.gmx().as_ref().unwrap().clone()
         } else {
+            trace!("GMM training...");
             let gmm = GaussianMixtureModel::params(n_clusters)
                 .n_runs(20)
                 .with_rng(self.rng())
@@ -128,6 +130,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             GaussianMixture::new(weights, means, covariances)?.heaviside_factor(factor)
         };
 
+        trace!("Train on clusters...");
         let clustering = Clustering::new(gmx, recomb);
         self.train_on_clusters(&xt.view(), &yt.view(), &clustering)
     }
@@ -222,6 +225,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         check_allowed!(correlation_spec, Correlation, Matern32, allowed_corrs);
         check_allowed!(correlation_spec, Correlation, Matern52, allowed_corrs);
 
+        debug!("Find best expert");
         let best = if allowed_means.len() == 1 && allowed_corrs.len() == 1 {
             (format!("{}_{}", allowed_means[0], allowed_corrs[0]), None) // shortcut
         } else {
@@ -237,6 +241,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
                 .unwrap();
             (map_error[argmin].0.clone(), Some(map_error[argmin].1))
         };
+        debug!("after Find best expert");
         let best_expert_params: std::result::Result<Box<dyn SurrogateParams>, MoeError> = match best
             .0
             .as_str()
