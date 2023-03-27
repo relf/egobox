@@ -251,7 +251,7 @@ fn main() -> anyhow::Result<()> {
 
     let dim = args.dim;
     let outdir = args.outdir;
-    let n_doe = dim + 1;
+    let n_doe = 2 * dim;
     let n_iter = 2 * dim;
     let cstr_tol = 1e-4;
     let kpls_dim = 3;
@@ -267,8 +267,8 @@ fn main() -> anyhow::Result<()> {
         .n_start(50)
         .n_doe(n_doe)
         .n_iter(n_iter)
-        .regression_spec(RegressionSpec::CONSTANT | RegressionSpec::LINEAR)
-        .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL | CorrelationSpec::MATERN52)
+        .regression_spec(RegressionSpec::CONSTANT)
+        .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
         .infill_optimizer(InfillOptimizer::Slsqp)
         .kpls_dim(Some(kpls_dim))
         .outdir(Some(outdir))
