@@ -793,32 +793,28 @@ where
             };
 
             info!("Train surrogates with {} points...", xt.nrows());
-            let obj_model = self.make_clustered_surrogate(
-                &xt,
-                &yt.slice(s![.., 0..1]).to_owned(),
-                init && i == 0,
-                recluster,
-                &clusterings[0],
-                "Objective",
-            );
-            clusterings[0] = Some(obj_model.to_clustering());
-
-            let cstr_models: Vec<std::boxed::Box<dyn egobox_moe::ClusteredSurrogate>> = (1..=self
+            let models: Vec<std::boxed::Box<dyn egobox_moe::ClusteredSurrogate>> = (0..=self
                 .n_cstr)
                 .into_par_iter()
                 .map(|k| {
+                    let name = if k == 0 {
+                        "Objective".to_string()
+                    } else {
+                        format!("Constraint[{k}]")
+                    };
                     self.make_clustered_surrogate(
                         &xt,
                         &yt.slice(s![.., k..k + 1]).to_owned(),
                         init && i == 0,
                         recluster,
                         &clusterings[k],
-                        &format!("Constraint[{k}]"),
+                        &name,
                     )
                 })
                 .collect();
-            (1..=self.n_cstr)
-                .for_each(|k| clusterings[k] = Some(cstr_models[k - 1].to_clustering()));
+            (0..=self.n_cstr).for_each(|k| clusterings[k] = Some(models[k].to_clustering()));
+
+            let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
 
             match self.find_best_point(
@@ -826,11 +822,11 @@ where
                 y_data,
                 sampling,
                 obj_model.as_ref(),
-                &cstr_models,
+                cstr_models,
                 lhs_optim,
             ) {
                 Ok(xk) => {
-                    match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), &cstr_models) {
+                    match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
                         Ok(yk) => {
                             y_dat = concatenate![
                                 Axis(0),
