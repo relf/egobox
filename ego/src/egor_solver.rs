@@ -798,9 +798,9 @@ where
                 .into_par_iter()
                 .map(|k| {
                     let name = if k == 0 {
-                        "Objective"
+                        "Objective".to_string()
                     } else {
-                        "Constraint[{k}]"
+                        format!("Constraint[{k}]")
                     };
                     self.make_clustered_surrogate(
                         &xt,
@@ -808,7 +808,7 @@ where
                         init && i == 0,
                         recluster,
                         &clusterings[k],
-                        name,
+                        &name,
                     )
                 })
                 .collect();
