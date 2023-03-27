@@ -868,7 +868,9 @@ where
         cstr_models: &[Box<dyn ClusteredSurrogate>],
         f_min: f64,
     ) -> (f64, Array1<f64>, f64) {
+        let npts = 100 * self.xlimits.nrows();
         let scaling_points = sampling.sample(100 * self.xlimits.nrows());
+        debug!("LHS of {npts} for scaling");
         let scale_infill_obj =
             self.compute_infill_obj_scale(&scaling_points.view(), obj_model, f_min);
         info!(
