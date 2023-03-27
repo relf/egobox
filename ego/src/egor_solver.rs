@@ -812,7 +812,7 @@ where
                     )
                 })
                 .collect();
-            (0..=self.n_cstr).for_each(|k| clusterings[k] = Some(models[k - 1].to_clustering()));
+            (0..=self.n_cstr).for_each(|k| clusterings[k] = Some(models[k].to_clustering()));
 
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
