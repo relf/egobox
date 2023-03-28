@@ -152,6 +152,8 @@ pub struct EgorState<F: Float> {
     /// Optimization status
     pub termination_status: TerminationStatus,
 
+    /// Initial doe size
+    pub(crate) doe_size: usize,
     /// Number of added points
     pub(crate) added: usize,
     /// Previous number of added points
@@ -401,6 +403,7 @@ where
             time: Some(instant::Duration::new(0, 0)),
             termination_status: TerminationStatus::NotTerminated,
 
+            doe_size: 0,
             added: 0,
             prev_added: 0,
             no_point_added_retries: MAX_POINT_ADDITION_RETRY,
@@ -438,7 +441,7 @@ where
     /// assert!(state.is_best());
     /// ```
     fn update(&mut self) {
-        // TODO: better implementation should track only track
+        // TODO: better implementation should only track
         // current and best index in data and compare just them
         // without finding best in data each time
         let data = self.data.as_ref();
@@ -449,15 +452,18 @@ where
             }
             Some((x_data, y_data)) => {
                 let best_index = find_best_result_index(y_data, self.cstr_tol);
+                let best_iter = best_index.saturating_sub(self.doe_size) as u64 + 1;
 
-                let param = x_data.row(best_index).to_owned();
-                std::mem::swap(&mut self.prev_best_param, &mut self.best_param);
-                self.best_param = Some(param);
+                if best_iter > self.last_best_iter {
+                    let param = x_data.row(best_index).to_owned();
+                    std::mem::swap(&mut self.prev_best_param, &mut self.best_param);
+                    self.best_param = Some(param);
 
-                let cost = y_data.row(best_index).to_owned();
-                std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
-                self.best_cost = Some(cost);
-                self.last_best_iter = self.iter;
+                    let cost = y_data.row(best_index).to_owned();
+                    std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
+                    self.best_cost = Some(cost);
+                    self.last_best_iter = best_iter;
+                }
             }
         };
     }

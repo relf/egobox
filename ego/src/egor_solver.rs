@@ -547,6 +547,7 @@ where
             .data((x_data, y_data))
             .clusterings(clusterings)
             .sampling(sampling);
+        initial_state.doe_size = doe.nrows();
         initial_state.max_iters = self.n_iter as u64;
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
