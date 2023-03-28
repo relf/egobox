@@ -4,6 +4,16 @@ Changes
 Version 0.9.0 - unreleased
 ==========================
 
+Version 0.8.1 - 28/03/2023
+==========================
+
+* `ego`:
+  * Make objective and constraints training in parallel (#86)
+  * Lock mopta execution to allow concurrent computations (#84)
+  * Fix and adjust infill criterion optimmization retries strategy (#87)
+* `moe`:
+  * Fix k-fold cross-validation (#85)  
+
 Version 0.8.0 - 10/03/2023
 ==========================
 

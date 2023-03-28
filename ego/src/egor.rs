@@ -93,7 +93,7 @@ use crate::mixint::*;
 use crate::types::*;
 
 use egobox_moe::{CorrelationSpec, MoeParams, RegressionSpec};
-use log::{debug, info};
+use log::info;
 use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
@@ -301,7 +301,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
         let xtypes = self.solver.xtypes.clone();
 
         let result = Executor::new(self.fobj.clone(), self.solver.clone()).run()?;
-        debug!("ARGMIN result = {}", result);
+        info!("{}", result);
         let (x_data, y_data) = result.state().clone().take_data().unwrap();
 
         let res = if no_discrete {
