@@ -429,6 +429,7 @@ where
     ///
     /// // Simulating a new, better parameter vector
     /// let mut state = state.data((array![[1.0f64], [2.0f64]], array![[10.0],[5.0]]));
+    /// state.iter = 2;
     /// state.param = Some(array![2.0f64]);
     /// state.cost = Some(array![5.0]);
     ///
