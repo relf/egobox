@@ -903,7 +903,7 @@ where
 
         let mut success = false;
         let mut n_optim = 1;
-        let n_max_optim = 20;
+        let n_max_optim = 3;
         let mut best_x = None;
 
         let (scale_infill_obj, scale_cstr, scale_wb2) =
@@ -1060,6 +1060,7 @@ where
                     success = false;
                 } else {
                     best_x = Some(Array::from(res.1.clone()));
+                    success = true;
                 }
             }
 
