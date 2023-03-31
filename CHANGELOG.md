@@ -4,6 +4,12 @@ Changes
 Version 0.9.0 - unreleased
 ==========================
 
+Version 0.8.2 - 31/03/2023
+==========================
+
+* `ego`:
+   * Fix Egor solver best iter computation (#89)
+
 Version 0.8.1 - 28/03/2023
 ==========================
 
