@@ -34,7 +34,7 @@ linfa = { version = "0.6.1", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx"]}
 ndarray-rand = "0.14"
-numpy = "0.17"
+numpy = "0.18"
 anyhow = "1"
 rayon = "1"
 
@@ -43,8 +43,8 @@ libm = "0.2"
 finitediff = { version="0.1.4", features = ["ndarray"] }
 env_logger = "0.10.0"
 log = "0.4"
-pyo3 = { version = "0.17", features = ["extension-module"] }
-pyo3-log = "0.7.0"
+pyo3 = { version = "0.18.0", features = ["extension-module"] }
+pyo3-log = "0.8"
 
 [dev-dependencies]
 criterion = "0.4"

@@ -54,14 +54,14 @@ pub(crate) struct GpMix {
 #[pymethods]
 impl GpMix {
     #[new]
-    #[args(
-        n_clusters = "1",
-        regr_spec = "RegressionSpec::CONSTANT",
-        corr_spec = "CorrelationSpec::SQUARED_EXPONENTIAL",
-        recombination = "Recombination::Smooth",
-        kpls_dim = "None",
-        seed = "None"
-    )]
+    #[pyo3(signature = (
+        n_clusters = 1,
+        regr_spec = RegressionSpec::CONSTANT,
+        corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
+        recombination = Recombination::Smooth,
+        kpls_dim = None,
+        seed = None
+    ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         n_clusters: usize,
@@ -136,14 +136,14 @@ impl Gpx {
     ///
     /// See `GpMix` constructor
     #[staticmethod]
-    #[args(
-        n_clusters = "1",
-        regr_spec = "RegressionSpec::CONSTANT",
-        corr_spec = "CorrelationSpec::SQUARED_EXPONENTIAL",
-        recombination = "Recombination::Smooth",
-        kpls_dim = "None",
-        seed = "None"
-    )]
+    #[pyo3(signature = (
+        n_clusters = 1,
+        regr_spec = RegressionSpec::CONSTANT,
+        corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
+        recombination = Recombination::Smooth,
+        kpls_dim = None,
+        seed = None
+    ))]
     fn builder(
         n_clusters: usize,
         regr_spec: u8,
