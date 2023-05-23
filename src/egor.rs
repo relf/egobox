@@ -194,27 +194,27 @@ pub(crate) struct OptimResult {
 #[pymethods]
 impl Egor {
     #[new]
-    #[args(
+    #[pyo3(signature = (
         fun,
         xspecs,
-        n_cstr = "0",
-        cstr_tol = "1e-6",
-        n_start = "20",
-        n_doe = "0",
-        doe = "None",
-        regr_spec = "RegressionSpec::CONSTANT",
-        corr_spec = "CorrelationSpec::SQUARED_EXPONENTIAL",
-        infill_strategy = "InfillStrategy::WB2",
-        q_points = "1",
-        par_infill_strategy = "ParInfillStrategy::KB",
-        infill_optimizer = "InfillOptimizer::COBYLA",
-        kpls_dim = "None",
-        n_clusters = "1",
-        target = "f64::NEG_INFINITY",
-        outdir = "None",
-        hot_start = "false",
-        seed = "None"
-    )]
+        n_cstr = 0,
+        cstr_tol = 1e-6,
+        n_start = 20,
+        n_doe = 0,
+        doe = None,
+        regr_spec = RegressionSpec::CONSTANT,
+        corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
+        infill_strategy = InfillStrategy::WB2,
+        q_points = 1,
+        par_infill_strategy = ParInfillStrategy::KB,
+        infill_optimizer = InfillOptimizer::COBYLA,
+        kpls_dim = None,
+        n_clusters = 1,
+        target = f64::NEG_INFINITY,
+        outdir = None,
+        hot_start = false,
+        seed = None
+    ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python,
@@ -273,8 +273,7 @@ impl Egor {
     ///         x_opt (array[1, nx]): x value  where fun is at its minimum subject to constraint
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
-    #[args(n_iter = "20")]
-    #[pyo3(text_signature = "(n_iter=20)")]
+    #[pyo3(signature = (n_iter = 20))]
     fn minimize(&self, py: Python, n_iter: usize) -> PyResult<OptimResult> {
         let fun = self.fun.to_object(py);
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {

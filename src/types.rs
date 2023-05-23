@@ -88,9 +88,12 @@ pub(crate) struct ExpectedOptimum {
 #[pymethods]
 impl ExpectedOptimum {
     #[new]
-    #[args(value, tolerance = "1e-6")]
-    fn new(val: f64, tol: f64) -> Self {
-        ExpectedOptimum { val, tol }
+    #[pyo3(signature = (value, tolerance = 1e-6))]
+    fn new(value: f64, tolerance: f64) -> Self {
+        ExpectedOptimum {
+            val: value,
+            tol: tolerance,
+        }
     }
 }
 
