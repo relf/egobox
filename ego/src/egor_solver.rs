@@ -99,14 +99,14 @@
 //! println!("G24 min result = {:?}", res.state);
 //! ```
 //!
+use crate::criteria::*;
 use crate::egor_state::{find_best_result_index, EgorState, MAX_POINT_ADDITION_RETRY};
 use crate::errors::{EgoError, Result};
 use crate::lhs_optimizer::LhsOptimizer;
 use crate::mixint::*;
 use crate::types::*;
-use crate::utils::{compute_cstr_scales, compute_wb2s_scale, grad_wbs2};
-use crate::utils::{ei, wb2s};
-use crate::utils::{grad_ei, update_data};
+use crate::utils::compute_cstr_scales;
+use crate::utils::update_data;
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, MoeParams, RegressionSpec};
@@ -162,8 +162,8 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     pub(crate) doe: Option<Array2<f64>>,
     /// Multipoint strategy used to get several points to be evaluated at each iteration
     pub(crate) q_ei: QEiStrategy,
-    /// Criterium to select next point to evaluate
-    pub(crate) infill: InfillStrategy,
+    /// Criterion to select next point to evaluate
+    pub(crate) infill_criterion: Box<dyn InfillCriterion>,
     /// The optimizer used to optimize infill criterium
     pub(crate) infill_optimizer: InfillOptimizer,
     /// Regression specification for GP models used by mixture of experts (see [egobox_moe])
@@ -266,7 +266,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             cstr_tol: 1e-6,
             doe: None,
             q_ei: QEiStrategy::KrigingBeliever,
-            infill: InfillStrategy::WB2,
+            infill_criterion: Box::new(WB2),
             infill_optimizer: InfillOptimizer::Slsqp,
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
@@ -305,7 +305,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             cstr_tol: 1e-6,
             doe: None,
             q_ei: QEiStrategy::KrigingBeliever,
-            infill: InfillStrategy::WB2,
+            infill_criterion: Box::new(WB2),
             infill_optimizer: InfillOptimizer::Slsqp,
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
@@ -322,6 +322,11 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                 .any(|t| matches!(t, &XType::Int(_, _) | &XType::Ord(_) | &XType::Enum(_))),
             rng,
         }
+    }
+
+    pub fn infill_criterion(mut self, infill_criterion: Box<dyn InfillCriterion>) -> Self {
+        self.infill_criterion = infill_criterion;
+        self
     }
 
     /// Sets allowed number of evaluation of the function under optimization
@@ -381,9 +386,13 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         self
     }
 
-    /// Sets the nfill criteria
+    /// Sets the infill strategy
     pub fn infill_strategy(mut self, infill: InfillStrategy) -> Self {
-        self.infill = infill;
+        self.infill_criterion = match infill {
+            InfillStrategy::EI => Box::new(EI),
+            InfillStrategy::WB2 => Box::new(WB2),
+            InfillStrategy::WB2S => Box::new(WB2S),
+        };
         self
     }
 
@@ -881,14 +890,17 @@ where
             info!("Constraints scaling is updated to {}", scale_cstr);
             scale_cstr
         };
-        let scale_wb2 = if self.infill == InfillStrategy::WB2S {
-            let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, f_min);
-            info!("WB2S scaling factor is updated to {}", scale);
-            scale
-        } else {
-            1.
-        };
-        (scale_infill_obj, scale_cstr, scale_wb2)
+        let scale_ic = self
+            .infill_criterion
+            .scaling(&scaling_points.view(), obj_model, f_min);
+        // let scale_wb2 = if self.infill == InfillStrategy::WB2S {
+        //     let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, f_min);
+        //     info!("WB2S scaling factor is updated to {}", scale);
+        //     scale
+        // } else {
+        //     1.
+        // };
+        (scale_infill_obj, scale_cstr, scale_ic)
     }
 
     fn find_best_point(
@@ -1165,14 +1177,17 @@ where
         obj_model: &dyn ClusteredSurrogate,
         f_min: f64,
         scale: f64,
-        scale_wb2: f64,
+        scale_ic: f64,
     ) -> f64 {
         let x_f = x.to_vec();
-        let obj = match self.infill {
-            InfillStrategy::EI => -ei(&x_f, obj_model, f_min),
-            InfillStrategy::WB2 => -wb2s(&x_f, obj_model, f_min, 1.),
-            InfillStrategy::WB2S => -wb2s(&x_f, obj_model, f_min, scale_wb2),
-        };
+        // let obj = match self.infill {
+        //     InfillStrategy::EI => -ei(&x_f, obj_model, f_min),
+        //     InfillStrategy::WB2 => -wb2s(&x_f, obj_model, f_min, 1.),
+        //     InfillStrategy::WB2S => -wb2s(&x_f, obj_model, f_min, scale_wb2),
+        // };
+        let obj = -(self
+            .infill_criterion
+            .value(&x_f, obj_model, f_min, Some(scale_ic)));
         obj / scale
     }
 
@@ -1182,14 +1197,17 @@ where
         obj_model: &dyn ClusteredSurrogate,
         f_min: f64,
         scale: f64,
-        scale_wb2: f64,
+        scale_ic: f64,
     ) -> Vec<f64> {
         let x_f = x.to_vec();
-        let grad = match self.infill {
-            InfillStrategy::EI => -grad_ei(&x_f, obj_model, f_min),
-            InfillStrategy::WB2 => -grad_wbs2(&x_f, obj_model, f_min, 1.),
-            InfillStrategy::WB2S => -grad_wbs2(&x_f, obj_model, f_min, scale_wb2),
-        };
+        // let grad = match self.infill {
+        //     InfillStrategy::EI => -grad_ei(&x_f, obj_model, f_min),
+        //     InfillStrategy::WB2 => -grad_wbs2(&x_f, obj_model, f_min, 1.),
+        //     InfillStrategy::WB2S => -grad_wbs2(&x_f, obj_model, f_min, scale_wb2),
+        // };
+        let grad = -(self
+            .infill_criterion
+            .grad(&x_f, obj_model, f_min, Some(scale_ic)));
         (grad / scale).to_vec()
     }
 
