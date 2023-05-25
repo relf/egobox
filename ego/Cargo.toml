@@ -48,6 +48,7 @@ clap = { version = "4", features=["derive"] }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", optional = true }
 typetag = { version = "0.1" }
+dyn-clonable = { version = "0.9" }
 
 [dev-dependencies]
 criterion = "0.4.0"

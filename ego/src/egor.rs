@@ -218,14 +218,14 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
 
     /// Sets the parallel infill strategy
     ///
-    /// Parallel infill criteria to get virtual next promising points in order to allow
+    /// Parallel infill criterion to get virtual next promising points in order to allow
     /// n parallel evaluations of the function under optimization.
     pub fn qei_strategy(mut self, q_ei: QEiStrategy) -> Self {
         self.solver = self.solver.qei_strategy(q_ei);
         self
     }
 
-    /// Sets the nfill criteria
+    /// Sets the infill strategy
     pub fn infill_strategy(mut self, infill: InfillStrategy) -> Self {
         self.solver = self.solver.infill_strategy(infill);
         self
@@ -623,7 +623,6 @@ mod tests {
             .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
             .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
             .n_iter(n_iter)
-            .infill_strategy(InfillStrategy::WB2)
             .run()
             .unwrap();
         assert_abs_diff_eq!(&array![18.], &res.x_opt, epsilon = 3.);
