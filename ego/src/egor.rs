@@ -211,7 +211,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     ///
     /// Either nt = nx then only x are specified and ns evals are done to get y doe values,
     /// or nt = nx + ny then x = doe(:, :nx) and y = doe(:, nx:) are specified
-    pub fn doe(mut self, doe: Option<Array2<f64>>) -> Self {
+    pub fn doe(mut self, doe: &Array2<f64>) -> Self {
         self.solver = self.solver.doe(doe);
         self
     }
@@ -372,7 +372,7 @@ mod tests {
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
             .n_iter(30)
-            .doe(Some(initial_doe.to_owned()))
+            .doe(&initial_doe)
             .target(-15.1)
             .outdir("target/tests")
             .run()
@@ -419,7 +419,7 @@ mod tests {
             .random_seed(42)
             .min_within(&xlimits)
             .n_iter(15)
-            .doe(Some(doe))
+            .doe(&doe)
             .outdir("target/tests")
             .run()
             .expect("Minimize failure");
@@ -481,7 +481,7 @@ mod tests {
         let res = EgorBuilder::optimize(rosenb)
             .random_seed(42)
             .min_within(&xlimits)
-            .doe(Some(doe))
+            .doe(&doe)
             .n_iter(100)
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
@@ -531,7 +531,7 @@ mod tests {
             .random_seed(42)
             .min_within(&xlimits)
             .n_cstr(2)
-            .doe(Some(doe))
+            .doe(&doe)
             .n_iter(20)
             .run()
             .expect("Minimize failure");
@@ -554,7 +554,7 @@ mod tests {
             .n_cstr(2)
             .q_points(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
-            .doe(Some(doe))
+            .doe(&doe)
             .target(-5.508013)
             .n_iter(30)
             .run()
@@ -584,7 +584,7 @@ mod tests {
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
             .min_within_mixed_space(&xtypes)
-            .doe(Some(doe))
+            .doe(&doe)
             .n_iter(n_iter)
             .target(-15.1)
             .infill_strategy(InfillStrategy::EI)
@@ -602,7 +602,7 @@ mod tests {
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
             .min_within_mixed_space(&xtypes)
-            .doe(Some(doe))
+            .doe(&doe)
             .n_iter(n_iter)
             .target(-15.1)
             .infill_strategy(InfillStrategy::EI)

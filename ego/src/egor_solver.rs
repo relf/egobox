@@ -372,8 +372,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     ///
     /// Either nt = nx then only x are specified and ns evals are done to get y doe values,
     /// or nt = nx + ny then x = doe(:, :nx) and y = doe(:, nx:) are specified
-    pub fn doe(mut self, doe: Option<Array2<f64>>) -> Self {
-        self.doe = doe.map(|x| x.to_owned());
+    pub fn doe(mut self, doe: &Array2<f64>) -> Self {
+        self.doe = Some(doe.to_owned());
         self
     }
 
