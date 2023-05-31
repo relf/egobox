@@ -1,13 +1,13 @@
 //! `egobox`, Rust toolbox for efficient global optimization
 //!
 //! Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions,
-//! the EGO algorithm written in Rust (aka `egor`) is binded in Python. You can install the Python package using:
+//! the EGO algorithm written in Rust (aka `Egor`) is binded in Python. You can install the Python package using:
 //!
 //! ```bash
 //! pip install egobox
 //! ```
 //!
-//! See the [tutorial notebook](https://github.com/relf/egobox/doc/TutorialEgor.ipynb) for usage.
+//! See the [tutorial notebook](https://github.com/relf/egobox/doc/Egor_Tutorial.ipynb) for usage.
 //!
 
 use crate::types::*;

@@ -906,13 +906,6 @@ where
         let scale_ic = self
             .infill_criterion
             .scaling(&scaling_points.view(), obj_model, f_min);
-        // let scale_wb2 = if self.infill == InfillStrategy::WB2S {
-        //     let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, f_min);
-        //     info!("WB2S scaling factor is updated to {}", scale);
-        //     scale
-        // } else {
-        //     1.
-        // };
         (scale_infill_obj, scale_cstr, scale_ic)
     }
 
@@ -1193,11 +1186,6 @@ where
         scale_ic: f64,
     ) -> f64 {
         let x_f = x.to_vec();
-        // let obj = match self.infill {
-        //     InfillStrategy::EI => -ei(&x_f, obj_model, f_min),
-        //     InfillStrategy::WB2 => -wb2s(&x_f, obj_model, f_min, 1.),
-        //     InfillStrategy::WB2S => -wb2s(&x_f, obj_model, f_min, scale_wb2),
-        // };
         let obj = -(self
             .infill_criterion
             .value(&x_f, obj_model, f_min, Some(scale_ic)));
@@ -1213,11 +1201,6 @@ where
         scale_ic: f64,
     ) -> Vec<f64> {
         let x_f = x.to_vec();
-        // let grad = match self.infill {
-        //     InfillStrategy::EI => -grad_ei(&x_f, obj_model, f_min),
-        //     InfillStrategy::WB2 => -grad_wbs2(&x_f, obj_model, f_min, 1.),
-        //     InfillStrategy::WB2S => -grad_wbs2(&x_f, obj_model, f_min, scale_wb2),
-        // };
         let grad = -(self
             .infill_criterion
             .grad(&x_f, obj_model, f_min, Some(scale_ic)));

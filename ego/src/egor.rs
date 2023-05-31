@@ -210,7 +210,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Sets an initial DOE containing ns samples
     ///
     /// Either nt = nx then only x are specified and ns evals are done to get y doe values,
-    /// or nt = nx + ny then x = doe(:, :nx) and y = doe(:, nx:) are specified
+    /// or nt = nx + ny then x = doe\[:, :nx\] and y = doe\[:, nx:\] are specified
     pub fn doe(mut self, doe: &Array2<f64>) -> Self {
         self.solver = self.solver.doe(doe);
         self
