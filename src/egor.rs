@@ -349,9 +349,11 @@ impl Egor {
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
             .kpls_dim(self.kpls_dim)
-            .n_clusters(self.n_clusters)
             .target(self.target)
             .hot_start(self.hot_start);
+        if let Some(n_clusters) = self.n_clusters {
+            mixintegor = mixintegor.n_clusters(n_clusters);
+        };
         if let Some(outdir) = self.outdir.as_ref().cloned() {
             mixintegor = mixintegor.outdir(outdir);
         };

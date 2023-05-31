@@ -426,8 +426,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     ///
     /// When set to Some(0), the number of clusters is determined automatically
     /// When set None, default to 1
-    pub fn n_clusters(mut self, n_clusters: Option<usize>) -> Self {
-        self.n_clusters = n_clusters;
+    pub fn n_clusters(mut self, n_clusters: usize) -> Self {
+        self.n_clusters = Some(n_clusters);
         self
     }
 

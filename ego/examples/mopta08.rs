@@ -263,7 +263,7 @@ fn main() -> anyhow::Result<()> {
         .min_within(&xlimits)
         .n_cstr(68)
         .cstr_tol(cstr_tol)
-        .n_clusters(Some(1))
+        .n_clusters(1)
         .n_start(50)
         .n_doe(n_doe)
         .n_iter(n_iter)

@@ -260,7 +260,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Sets the number of clusters used by the mixture of surrogate experts.
     ///
     /// When set to 0, the number of clusters is determined automatically
-    pub fn n_clusters(mut self, n_clusters: Option<usize>) -> Self {
+    pub fn n_clusters(mut self, n_clusters: usize) -> Self {
         self.solver = self.solver.n_clusters(n_clusters);
         self
     }
@@ -402,7 +402,7 @@ mod tests {
     fn test_xsinx_auto_clustering_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
             .min_within(&array![[0.0, 25.0]])
-            .n_clusters(Some(0))
+            .n_clusters(0)
             .n_iter(20)
             .run()
             .expect("Egor with auto clustering should minimize xsinx");
