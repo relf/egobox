@@ -429,7 +429,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 
     /// Removes any PLS dimension reduction usage
-    pub fn no_pls(mut self) -> Self {
+    pub fn no_kpls(mut self) -> Self {
         self.kpls_dim = None;
         self
     }
@@ -452,6 +452,11 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     /// Sets a directory to write optimization history and used as search path for hot start doe
     pub fn outdir(mut self, outdir: impl Into<String>) -> Self {
         self.outdir = Some(outdir.into());
+        self
+    }
+    /// Do not write optimization history
+    pub fn no_outdir(mut self) -> Self {
+        self.outdir = None;
         self
     }
 
