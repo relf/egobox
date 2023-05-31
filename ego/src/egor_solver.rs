@@ -89,7 +89,7 @@
 //!     .n_cstr(2)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .infill_optimizer(InfillOptimizer::Cobyla)
-//!     .doe(Some(doe))
+//!     .doe(&doe)
 //!     .target(-5.5080);
 //!
 //! let res = Executor::new(fobj, solver)

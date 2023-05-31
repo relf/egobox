@@ -79,7 +79,7 @@
 //!            .n_cstr(2)
 //!            .infill_strategy(InfillStrategy::EI)
 //!            .infill_optimizer(InfillOptimizer::Cobyla)
-//!            .doe(Some(doe))
+//!            .doe(&doe)
 //!            .n_iter(40)
 //!            .target(-5.5080)
 //!            .run()
