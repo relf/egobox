@@ -417,8 +417,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
     ///
     /// This is used to address high-dimensional problems typically when nx > 9.
-    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
-        self.kpls_dim = kpls_dim;
+    pub fn kpls_dim(mut self, kpls_dim: usize) -> Self {
+        self.kpls_dim = Some(kpls_dim);
         self
     }
 

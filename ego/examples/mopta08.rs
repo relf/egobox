@@ -270,7 +270,7 @@ fn main() -> anyhow::Result<()> {
         .regression_spec(RegressionSpec::CONSTANT)
         .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
         .infill_optimizer(InfillOptimizer::Slsqp)
-        .kpls_dim(Some(kpls_dim))
+        .kpls_dim(kpls_dim)
         .outdir(outdir)
         .hot_start(true)
         .run()
