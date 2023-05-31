@@ -271,7 +271,7 @@ fn main() -> anyhow::Result<()> {
         .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
         .infill_optimizer(InfillOptimizer::Slsqp)
         .kpls_dim(Some(kpls_dim))
-        .outdir(Some(outdir))
+        .outdir(outdir)
         .hot_start(true)
         .run()
         .expect("Minimize failure");

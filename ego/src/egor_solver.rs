@@ -438,8 +438,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 
     /// Sets a directory to write optimization history and used as search path for hot start doe
-    pub fn outdir(mut self, outdir: Option<String>) -> Self {
-        self.outdir = outdir;
+    pub fn outdir(mut self, outdir: impl Into<String>) -> Self {
+        self.outdir = Some(outdir.into());
         self
     }
 

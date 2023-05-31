@@ -272,7 +272,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     }
 
     /// Sets a directory to write optimization history and used as search path for hot start doe
-    pub fn outdir(mut self, outdir: Option<String>) -> Self {
+    pub fn outdir(mut self, outdir: impl Into<String>) -> Self {
         self.solver = self.solver.outdir(outdir);
         self
     }
@@ -374,7 +374,7 @@ mod tests {
             .n_iter(30)
             .doe(Some(initial_doe.to_owned()))
             .target(-15.1)
-            .outdir(Some("target/tests".to_string()))
+            .outdir("target/tests")
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.1];
@@ -420,7 +420,7 @@ mod tests {
             .min_within(&xlimits)
             .n_iter(15)
             .doe(Some(doe))
-            .outdir(Some("target/tests".to_string()))
+            .outdir("target/tests")
             .run()
             .expect("Minimize failure");
         let expected = array![18.9];
@@ -430,7 +430,7 @@ mod tests {
             .random_seed(42)
             .min_within(&xlimits)
             .n_iter(5)
-            .outdir(Some("target/tests".to_string()))
+            .outdir("target/tests")
             .hot_start(true)
             .run()
             .expect("Egor should minimize xsinx");

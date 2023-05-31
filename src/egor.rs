@@ -332,7 +332,7 @@ impl Egor {
             mixintegor = mixintegor.random_seed(seed);
         };
 
-        let mixintegor = mixintegor
+        let mut mixintegor = mixintegor
             .min_within_mixed_space(&xtypes)
             .n_cstr(self.n_cstr)
             .n_iter(n_iter)
@@ -351,8 +351,10 @@ impl Egor {
             .kpls_dim(self.kpls_dim)
             .n_clusters(self.n_clusters)
             .target(self.target)
-            .outdir(self.outdir.as_ref().cloned())
             .hot_start(self.hot_start);
+        if let Some(outdir) = self.outdir.as_ref().cloned() {
+            mixintegor = mixintegor.outdir(outdir);
+        };
 
         let res = py.allow_threads(|| {
             mixintegor
