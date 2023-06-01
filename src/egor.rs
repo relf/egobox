@@ -1,13 +1,13 @@
 //! `egobox`, Rust toolbox for efficient global optimization
 //!
 //! Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions,
-//! the EGO algorithm written in Rust (aka `egor`) is binded in Python. You can install the Python package using:
+//! the EGO algorithm written in Rust (aka `Egor`) is binded in Python. You can install the Python package using:
 //!
 //! ```bash
 //! pip install egobox
 //! ```
 //!
-//! See the [tutorial notebook](https://github.com/relf/egobox/doc/TutorialEgor.ipynb) for usage.
+//! See the [tutorial notebook](https://github.com/relf/egobox/doc/Egor_Tutorial.ipynb) for usage.
 //!
 
 use crate::types::*;
@@ -303,8 +303,6 @@ impl Egor {
             InfillOptimizer::SLSQP => egobox_ego::InfillOptimizer::Slsqp,
         };
 
-        let doe = self.doe.as_ref().map(|v| v.to_owned());
-
         let xspecs: Vec<XSpec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
         if xspecs.is_empty() {
             panic!("Error: xspecs argument cannot be empty")
@@ -326,20 +324,18 @@ impl Egor {
             })
             .collect();
 
-        let mut mixintegor = egobox_ego::EgorBuilder::optimize(obj);
-
+        let mut mixintegor_build = egobox_ego::EgorBuilder::optimize(obj);
         if let Some(seed) = self.seed {
-            mixintegor = mixintegor.random_seed(seed);
+            mixintegor_build = mixintegor_build.random_seed(seed);
         };
 
-        let mixintegor = mixintegor
+        let mut mixintegor = mixintegor_build
             .min_within_mixed_space(&xtypes)
             .n_cstr(self.n_cstr)
             .n_iter(n_iter)
             .n_start(self.n_start)
             .n_doe(self.n_doe)
             .cstr_tol(self.cstr_tol)
-            .doe(doe)
             .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
             .correlation_spec(
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
@@ -348,11 +344,20 @@ impl Egor {
             .q_points(self.q_points)
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
-            .kpls_dim(self.kpls_dim)
-            .n_clusters(self.n_clusters)
             .target(self.target)
-            .outdir(self.outdir.as_ref().cloned())
             .hot_start(self.hot_start);
+        if let Some(doe) = self.doe.as_ref() {
+            mixintegor = mixintegor.doe(doe);
+        };
+        if let Some(kpls_dim) = self.kpls_dim {
+            mixintegor = mixintegor.kpls_dim(kpls_dim);
+        };
+        if let Some(n_clusters) = self.n_clusters {
+            mixintegor = mixintegor.n_clusters(n_clusters);
+        };
+        if let Some(outdir) = self.outdir.as_ref().cloned() {
+            mixintegor = mixintegor.outdir(outdir);
+        };
 
         let res = py.allow_threads(|| {
             mixintegor

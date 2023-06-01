@@ -67,7 +67,7 @@
 //! let res = EgorBuilder::optimize(mixsinx)
 //!     .random_seed(42)
 //!     .min_within_mixed_space(&xtypes)   // We build mixed-integer optimizer
-//!     .doe(Some(doe))          // we pass an initial doe
+//!     .doe(&doe)                         // we pass an initial doe
 //!     .n_iter(n_iter)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .run()

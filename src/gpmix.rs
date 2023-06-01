@@ -1,3 +1,14 @@
+//! `egobox`, Rust toolbox for efficient global optimization
+//!
+//! Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions,
+//! the mixture of gaussian process surrogates is binded in Python. You can install the Python package using:
+//!
+//! ```bash
+//! pip install egobox
+//! ```
+//!
+//! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
+//!
 use crate::types::*;
 use egobox_moe::{Moe, Surrogate};
 use linfa::{traits::Fit, Dataset};
@@ -12,7 +23,7 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         Number of clusters used by the mixture of surrogate experts.
 ///         When set to 0, the number of cluster is determined automatically and refreshed every
 ///         10-points addition (should say 'tentative addition' because addition may fail for some points
-///         but it is counted anyway).
+///         but failures are counted anyway).
 ///
 ///     regr_spec (RegressionSpec flags, an int in [1, 7]):
 ///         Specification of regression models used in mixture.

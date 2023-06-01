@@ -89,7 +89,7 @@
 //!     .n_cstr(2)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .infill_optimizer(InfillOptimizer::Cobyla)
-//!     .doe(Some(doe))
+//!     .doe(&doe)
 //!     .target(-5.5080);
 //!
 //! let res = Executor::new(fobj, solver)
@@ -158,7 +158,7 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// Constraints violation tolerance meaning cstr < cstr_tol is considered valid
     pub(crate) cstr_tol: f64,
     /// Initial doe can be either \[x\] with x inputs only or an evaluated doe \[x, y\]
-    /// Note: x dimension is determined using xlimits
+    /// Note: x dimension is determined using `xlimits.nrows()`
     pub(crate) doe: Option<Array2<f64>>,
     /// Multipoint strategy used to get several points to be evaluated at each iteration
     pub(crate) q_ei: QEiStrategy,
@@ -175,7 +175,7 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// Number of clusters used by mixture of experts (see [egobox_moe])
     /// When set to 0 the clusters are computes automatically and refreshed
     /// every 10-points (tentative) additions
-    pub(crate) n_clusters: Option<usize>,
+    pub(crate) n_clusters: usize,
     /// Specification of a target objective value which is used to stop the algorithm once reached
     pub(crate) target: f64,
     /// Directory to save intermediate results: inital doe + evalutions at each iteration
@@ -271,7 +271,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
-            n_clusters: Some(1),
+            n_clusters: 1,
             target: f64::NEG_INFINITY,
             outdir: None,
             hot_start: false,
@@ -310,7 +310,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
-            n_clusters: Some(1),
+            n_clusters: 1,
             target: f64::NEG_INFINITY,
             outdir: None,
             hot_start: false,
@@ -372,8 +372,14 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     ///
     /// Either nt = nx then only x are specified and ns evals are done to get y doe values,
     /// or nt = nx + ny then x = doe(:, :nx) and y = doe(:, nx:) are specified
-    pub fn doe(mut self, doe: Option<Array2<f64>>) -> Self {
-        self.doe = doe.map(|x| x.to_owned());
+    pub fn doe(mut self, doe: &Array2<f64>) -> Self {
+        self.doe = Some(doe.to_owned());
+        self
+    }
+
+    /// Removes any previously specified initial doe to get the default doe usage
+    pub fn default_doe(mut self) -> Self {
+        self.doe = None;
         self
     }
 
@@ -417,8 +423,14 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
     ///
     /// This is used to address high-dimensional problems typically when nx > 9.
-    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
-        self.kpls_dim = kpls_dim;
+    pub fn kpls_dim(mut self, kpls_dim: usize) -> Self {
+        self.kpls_dim = Some(kpls_dim);
+        self
+    }
+
+    /// Removes any PLS dimension reduction usage
+    pub fn no_kpls(mut self) -> Self {
+        self.kpls_dim = None;
         self
     }
 
@@ -426,7 +438,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     ///
     /// When set to Some(0), the number of clusters is determined automatically
     /// When set None, default to 1
-    pub fn n_clusters(mut self, n_clusters: Option<usize>) -> Self {
+    pub fn n_clusters(mut self, n_clusters: usize) -> Self {
         self.n_clusters = n_clusters;
         self
     }
@@ -438,8 +450,13 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 
     /// Sets a directory to write optimization history and used as search path for hot start doe
-    pub fn outdir(mut self, outdir: Option<String>) -> Self {
-        self.outdir = outdir;
+    pub fn outdir(mut self, outdir: impl Into<String>) -> Self {
+        self.outdir = Some(outdir.into());
+        self
+    }
+    /// Do not write optimization history
+    pub fn no_outdir(mut self) -> Self {
+        self.outdir = None;
         self
     }
 
@@ -731,11 +748,7 @@ where
     SB: SurrogateBuilder,
 {
     fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
-        if let Some(nc) = self.n_clusters {
-            nc == 0 && (added != 0 && added % 10 == 0 && added - prev_added > 0)
-        } else {
-            false
-        }
+        self.n_clusters == 0 && (added != 0 && added % 10 == 0 && added - prev_added > 0)
     }
 
     fn make_clustered_surrogate(
@@ -751,7 +764,7 @@ where
         builder.set_kpls_dim(self.kpls_dim);
         builder.set_regression_spec(self.regression_spec);
         builder.set_correlation_spec(self.correlation_spec);
-        builder.set_n_clusters(self.n_clusters.unwrap_or(1));
+        builder.set_n_clusters(self.n_clusters);
 
         if init || recluster {
             if recluster {
@@ -893,13 +906,6 @@ where
         let scale_ic = self
             .infill_criterion
             .scaling(&scaling_points.view(), obj_model, f_min);
-        // let scale_wb2 = if self.infill == InfillStrategy::WB2S {
-        //     let scale = compute_wb2s_scale(&scaling_points.view(), obj_model, f_min);
-        //     info!("WB2S scaling factor is updated to {}", scale);
-        //     scale
-        // } else {
-        //     1.
-        // };
         (scale_infill_obj, scale_cstr, scale_ic)
     }
 
@@ -1180,11 +1186,6 @@ where
         scale_ic: f64,
     ) -> f64 {
         let x_f = x.to_vec();
-        // let obj = match self.infill {
-        //     InfillStrategy::EI => -ei(&x_f, obj_model, f_min),
-        //     InfillStrategy::WB2 => -wb2s(&x_f, obj_model, f_min, 1.),
-        //     InfillStrategy::WB2S => -wb2s(&x_f, obj_model, f_min, scale_wb2),
-        // };
         let obj = -(self
             .infill_criterion
             .value(&x_f, obj_model, f_min, Some(scale_ic)));
@@ -1200,11 +1201,6 @@ where
         scale_ic: f64,
     ) -> Vec<f64> {
         let x_f = x.to_vec();
-        // let grad = match self.infill {
-        //     InfillStrategy::EI => -grad_ei(&x_f, obj_model, f_min),
-        //     InfillStrategy::WB2 => -grad_wbs2(&x_f, obj_model, f_min, 1.),
-        //     InfillStrategy::WB2S => -grad_wbs2(&x_f, obj_model, f_min, scale_wb2),
-        // };
         let grad = -(self
             .infill_criterion
             .grad(&x_f, obj_model, f_min, Some(scale_ic)));

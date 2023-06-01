@@ -79,7 +79,7 @@
 //!            .n_cstr(2)
 //!            .infill_strategy(InfillStrategy::EI)
 //!            .infill_optimizer(InfillOptimizer::Cobyla)
-//!            .doe(Some(doe))
+//!            .doe(&doe)
 //!            .n_iter(40)
 //!            .target(-5.5080)
 //!            .run()
@@ -210,8 +210,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Sets an initial DOE containing ns samples
     ///
     /// Either nt = nx then only x are specified and ns evals are done to get y doe values,
-    /// or nt = nx + ny then x = doe(:, :nx) and y = doe(:, nx:) are specified
-    pub fn doe(mut self, doe: Option<Array2<f64>>) -> Self {
+    /// or nt = nx + ny then x = doe\[:, :nx\] and y = doe\[:, nx:\] are specified
+    pub fn doe(mut self, doe: &Array2<f64>) -> Self {
         self.solver = self.solver.doe(doe);
         self
     }
@@ -252,7 +252,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
     ///
     /// This is used to address high-dimensional problems typically when nx > 9.
-    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
+    pub fn kpls_dim(mut self, kpls_dim: usize) -> Self {
         self.solver = self.solver.kpls_dim(kpls_dim);
         self
     }
@@ -260,7 +260,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Sets the number of clusters used by the mixture of surrogate experts.
     ///
     /// When set to 0, the number of clusters is determined automatically
-    pub fn n_clusters(mut self, n_clusters: Option<usize>) -> Self {
+    pub fn n_clusters(mut self, n_clusters: usize) -> Self {
         self.solver = self.solver.n_clusters(n_clusters);
         self
     }
@@ -272,7 +272,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     }
 
     /// Sets a directory to write optimization history and used as search path for hot start doe
-    pub fn outdir(mut self, outdir: Option<String>) -> Self {
+    pub fn outdir(mut self, outdir: impl Into<String>) -> Self {
         self.solver = self.solver.outdir(outdir);
         self
     }
@@ -372,9 +372,9 @@ mod tests {
             .regression_spec(RegressionSpec::QUADRATIC)
             .correlation_spec(CorrelationSpec::ALL)
             .n_iter(30)
-            .doe(Some(initial_doe.to_owned()))
+            .doe(&initial_doe)
             .target(-15.1)
-            .outdir(Some("target/tests".to_string()))
+            .outdir("target/tests")
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.1];
@@ -402,7 +402,7 @@ mod tests {
     fn test_xsinx_auto_clustering_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
             .min_within(&array![[0.0, 25.0]])
-            .n_clusters(Some(0))
+            .n_clusters(0)
             .n_iter(20)
             .run()
             .expect("Egor with auto clustering should minimize xsinx");
@@ -419,8 +419,8 @@ mod tests {
             .random_seed(42)
             .min_within(&xlimits)
             .n_iter(15)
-            .doe(Some(doe))
-            .outdir(Some("target/tests".to_string()))
+            .doe(&doe)
+            .outdir("target/tests")
             .run()
             .expect("Minimize failure");
         let expected = array![18.9];
@@ -430,7 +430,7 @@ mod tests {
             .random_seed(42)
             .min_within(&xlimits)
             .n_iter(5)
-            .outdir(Some("target/tests".to_string()))
+            .outdir("target/tests")
             .hot_start(true)
             .run()
             .expect("Egor should minimize xsinx");
@@ -481,7 +481,7 @@ mod tests {
         let res = EgorBuilder::optimize(rosenb)
             .random_seed(42)
             .min_within(&xlimits)
-            .doe(Some(doe))
+            .doe(&doe)
             .n_iter(100)
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
@@ -531,7 +531,7 @@ mod tests {
             .random_seed(42)
             .min_within(&xlimits)
             .n_cstr(2)
-            .doe(Some(doe))
+            .doe(&doe)
             .n_iter(20)
             .run()
             .expect("Minimize failure");
@@ -554,7 +554,7 @@ mod tests {
             .n_cstr(2)
             .q_points(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
-            .doe(Some(doe))
+            .doe(&doe)
             .target(-5.508013)
             .n_iter(30)
             .run()
@@ -584,7 +584,7 @@ mod tests {
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
             .min_within_mixed_space(&xtypes)
-            .doe(Some(doe))
+            .doe(&doe)
             .n_iter(n_iter)
             .target(-15.1)
             .infill_strategy(InfillStrategy::EI)
@@ -602,7 +602,7 @@ mod tests {
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
             .min_within_mixed_space(&xtypes)
-            .doe(Some(doe))
+            .doe(&doe)
             .n_iter(n_iter)
             .target(-15.1)
             .infill_strategy(InfillStrategy::EI)
