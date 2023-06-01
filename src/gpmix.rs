@@ -8,8 +8,8 @@
 //! ```
 //!
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
-//!use crate::types::*;
 //!
+use crate::types::*;
 use egobox_moe::{Moe, Surrogate};
 use linfa::{traits::Fit, Dataset};
 use ndarray_rand::rand::SeedableRng;
