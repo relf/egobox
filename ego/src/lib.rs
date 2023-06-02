@@ -65,7 +65,7 @@
 //! }
 //!
 //! let n_iter = 10;
-//! let doe = array![[0.], [7.], [25.]]; # the initial doe
+//! let doe = array![[0.], [7.], [25.]];   // the initial doe
 //!
 //! // We define input as being integer
 //! let xtypes = vec![XType::Int(0, 25)];
@@ -99,7 +99,11 @@
 //! approximating your objective function.
 //!
 //! ```no_run
-//!     egor.n_doe(100)
+//! # use egobox_ego::{EgorBuilder};
+//! # use ndarray::{array, Array2, ArrayView2};
+//! # fn fobj(x: &ArrayView2<f64>) -> Array2<f64> { x.to_owned() }
+//! # let egor = EgorBuilder::optimize(fobj).min_within(&array![[-1., 1.]]);
+//!     egor.n_doe(100);
 //! ```
 //!
 //! You can also provide your initial doe though the `egor.doe(your_doe)` method.
@@ -109,7 +113,11 @@
 //! Gaussian process will be built using the `ndim` (usually 3 or 4) main components in the PLS projected space.
 //!
 //! ```no_run
-//!     egor.kpls_dim(3)
+//! # use egobox_ego::{EgorBuilder};
+//! # use ndarray::{array, Array2, ArrayView2};
+//! # fn fobj(x: &ArrayView2<f64>) -> Array2<f64> { x.to_owned() }
+//! # let egor = EgorBuilder::optimize(fobj).min_within(&array![[-1., 1.]]);
+//!     egor.kpls_dim(3);
 //! ```
 //!
 //! * Specifications of constraints (expected to be negative at the end of the optimization)
@@ -117,7 +125,11 @@
 //! the objective function is expected to return an array '\[nsamples, 1 obj value + 2 const values\]'.
 //!
 //! ```no_run
-//!     egor.n_cstr(2)
+//! # use egobox_ego::{EgorBuilder};
+//! # use ndarray::{array, Array2, ArrayView2};
+//! # fn fobj(x: &ArrayView2<f64>) -> Array2<f64> { x.to_owned() }
+//! # let egor = EgorBuilder::optimize(fobj).min_within(&array![[-1., 1.]]);
+//!     egor.n_cstr(2);
 //! ```
 //!
 //! * If the default infill strategy (WB2, Watson and Barnes 2nd criterion),
@@ -125,7 +137,11 @@
 //! See \[[Priem2019](#Priem2019)\]
 //!
 //! ```no_run
-//!     egor.infill_strategy(InfillStrategy::EI)
+//! # use egobox_ego::{EgorBuilder, InfillStrategy};
+//! # use ndarray::{array, Array2, ArrayView2};
+//! # fn fobj(x: &ArrayView2<f64>) -> Array2<f64> { x.to_owned() }
+//! # let egor = EgorBuilder::optimize(fobj).min_within(&array![[-1., 1.]]);
+//!     egor.infill_strategy(InfillStrategy::EI);
 //! ```
 //!
 //! * The default gaussian process surrogate is parameterized with a constant trend and a squared exponential correlation kernel, also
@@ -134,8 +150,12 @@
 //! approximation (quality tested through cross validation).
 //!
 //! ```no_run
+//! # use egobox_ego::{EgorBuilder, RegressionSpec, CorrelationSpec};
+//! # use ndarray::{array, Array2, ArrayView2};
+//! # fn fobj(x: &ArrayView2<f64>) -> Array2<f64> { x.to_owned() }
+//! # let egor = EgorBuilder::optimize(fobj).min_within(&array![[-1., 1.]]);
 //!     egor.regression_spec(RegressionSpec::CONSTANT | RegressionSpec::LINEAR)
-//!         .correlation_spec(CorrelationSpec::MATERN32 | CorrelationSpec::MATERN52)
+//!         .correlation_spec(CorrelationSpec::MATERN32 | CorrelationSpec::MATERN52);
 //! ```
 //! In the above example all GP with combinations of regression and correlation will be tested and the best combination for
 //! each modeled function will be retained. You can also simply specify `RegressionSpec::ALL` and `CorrelationSpec::ALL` to
