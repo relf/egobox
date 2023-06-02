@@ -3,7 +3,7 @@
 //!
 //! Note: Depending on your need you can either use the `EgorSolver` or the provided
 //! `EgorBuilder` which allows to build an `Egor` struct which wraps the `argmin::Executor`
-//! running an `EgorSolver` on `ObjFun`. See [`EgorBuilder`]
+//! running an `EgorSolver` on `ObjFun`. See [`crate::EgorBuilder`]
 //!
 //! ```no_run
 //! use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
@@ -288,7 +288,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     /// when `f` has discrete inputs to be specified with list of xtypes.
     ///
     /// The function `f` should return an objective but also constraint values if any.
-    /// Design space is specified by a list of types for input variables `x` of `f` (see [XType]).
+    /// Design space is specified by a list of types for input variables `x` of `f` (see [`XType`]).
     pub fn new_with_xtypes(xtypes: &[XType], rng: Xoshiro256Plus) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
@@ -362,16 +362,16 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         self
     }
 
-    /// Sets the tolerance on constraints violation (cstr < tol)
+    /// Sets the tolerance on constraints violation (`cstr < tol`)
     pub fn cstr_tol(mut self, tol: f64) -> Self {
         self.cstr_tol = tol;
         self
     }
 
-    /// Sets an initial DOE containing ns samples
+    /// Sets an initial DOE \['ns', `nt`\] containing `ns` samples.
     ///
-    /// Either nt = nx then only x are specified and ns evals are done to get y doe values,
-    /// or nt = nx + ny then x = doe(:, :nx) and y = doe(:, nx:) are specified
+    /// Either `nt` = `nx` then only `x` input values are specified and `ns` evals are done to get y ouput doe values,
+    /// or `nt = nx + ny` then `x = doe\[:, :nx\]` and `y = doe\[:, nx:\]` are specified
     pub fn doe(mut self, doe: &Array2<f64>) -> Self {
         self.doe = Some(doe.to_owned());
         self
@@ -422,7 +422,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 
     /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
     ///
-    /// This is used to address high-dimensional problems typically when nx > 9.
+    /// This is used to address high-dimensional problems typically when `nx` > 9 wher `nx` is the dimension of `x`.
     pub fn kpls_dim(mut self, kpls_dim: usize) -> Self {
         self.kpls_dim = Some(kpls_dim);
         self
@@ -469,7 +469,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     /// Given an evaluated doe (x, y) data, return the next promising x point
     /// where optimum may occurs regarding the infill criterium.
     /// This function inverse the control of the optimization and can used
-    /// ask-and-tell interface to the EGO optmizer.
+    /// ask-and-tell interface to the EGO optimizer.
     pub fn suggest(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,

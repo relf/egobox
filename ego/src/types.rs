@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use argmin::core::CostFunction;
 use egobox_moe::{ClusteredSurrogate, Clustering};
-use egobox_moe::{CorrelationSpec, RegressionSpec};
+pub use egobox_moe::{CorrelationSpec, RegressionSpec};
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
 use serde::{Deserialize, Serialize};

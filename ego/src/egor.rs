@@ -126,8 +126,9 @@ impl<O: GroupFunc> EgorBuilder<O> {
     }
 
     /// Build an Egor optimizer to minimize the function within
-    /// the continuous xlimits specified as [[lower, upper], ...]
-    /// number of rows gives the dimension of the inputs (continuous optimization).
+    /// the continuous `xlimits` specified as [[lower, upper], ...] array where the
+    /// number of rows gives the dimension of the inputs (continuous optimization)
+    /// and the ith row is the interval of the ith component of the input x.
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -207,10 +208,10 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
         self
     }
 
-    /// Sets an initial DOE containing ns samples
+    /// Sets an initial DOE \['ns', `nt`\] containing `ns` samples.
     ///
-    /// Either nt = nx then only x are specified and ns evals are done to get y doe values,
-    /// or nt = nx + ny then x = doe\[:, :nx\] and y = doe\[:, nx:\] are specified
+    /// Either `nt` = `nx` then only `x` input values are specified and `ns` evals are done to get y ouput doe values,
+    /// or `nt = nx + ny` then `x = doe\[:, :nx\]` and `y = doe\[:, nx:\]` are specified
     pub fn doe(mut self, doe: &Array2<f64>) -> Self {
         self.solver = self.solver.doe(doe);
         self
@@ -251,7 +252,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
 
     /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
     ///
-    /// This is used to address high-dimensional problems typically when nx > 9.
+    /// This is used to address high-dimensional problems typically when `nx` > 9 wher `nx` is the dimension of `x`.
     pub fn kpls_dim(mut self, kpls_dim: usize) -> Self {
         self.solver = self.solver.kpls_dim(kpls_dim);
         self
@@ -260,6 +261,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Sets the number of clusters used by the mixture of surrogate experts.
     ///
     /// When set to 0, the number of clusters is determined automatically
+    /// (warning in this case the optimizer runs slower)
     pub fn n_clusters(mut self, n_clusters: usize) -> Self {
         self.solver = self.solver.n_clusters(n_clusters);
         self
@@ -286,7 +288,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Given an evaluated doe (x, y) data, return the next promising x point
     /// where optimum may occurs regarding the infill criterium.
     /// This function inverse the control of the optimization and can used
-    /// ask-and-tell interface to the EGO optmizer.
+    /// ask-and-tell interface to the EGO optimizer.
     pub fn suggest(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
