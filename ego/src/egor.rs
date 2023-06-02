@@ -147,7 +147,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
-    pub fn min_within_mixed_space(self, xtypes: &[XType]) -> Egor<O, MixintMoeParams> {
+    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, MixintMoeParams> {
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
@@ -585,7 +585,7 @@ mod tests {
 
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
-            .min_within_mixed_space(&xtypes)
+            .min_within_mixint_space(&xtypes)
             .doe(&doe)
             .n_iter(n_iter)
             .target(-15.1)
@@ -603,7 +603,7 @@ mod tests {
 
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
-            .min_within_mixed_space(&xtypes)
+            .min_within_mixint_space(&xtypes)
             .doe(&doe)
             .n_iter(n_iter)
             .target(-15.1)
@@ -621,7 +621,7 @@ mod tests {
 
         let res = EgorBuilder::optimize(mixsinx)
             .random_seed(42)
-            .min_within_mixed_space(&xtypes)
+            .min_within_mixint_space(&xtypes)
             .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
             .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
             .n_iter(n_iter)

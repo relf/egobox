@@ -330,7 +330,7 @@ impl Egor {
         };
 
         let mut mixintegor = mixintegor_build
-            .min_within_mixed_space(&xtypes)
+            .min_within_mixint_space(&xtypes)
             .n_cstr(self.n_cstr)
             .n_iter(n_iter)
             .n_start(self.n_start)
