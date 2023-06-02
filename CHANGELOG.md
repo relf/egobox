@@ -1,8 +1,19 @@
 Changes
 -------
 
-Version 0.9.0 - unreleased
+Version 0.10.0 - unreleased
 ==========================
+
+Version 0.9.0 - 02/06/2023
+==========================
+
+* `ego`:
+    * Infill criterion is now a trait object in `EgorSolver` structure (#92)
+    * `Egor` and `EgorSolver` API: methods taking argument of type Option<T> now take argument of type T (#94)
+    * `EgorBuilder::min_within_mixed_space()` is now `EgorBuilder::min_within_mixint_space()` (#96)
+    * `egobox-ego` library doc updated (#95)
+
+* `egobox` Python binding: Upgrade to PyO3 0.18 (#91)
 
 Version 0.8.2 - 31/03/2023
 ==========================
