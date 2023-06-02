@@ -1,10 +1,12 @@
 use crate::errors::Result;
 use argmin::core::CostFunction;
 use egobox_moe::{ClusteredSurrogate, Clustering};
-pub use egobox_moe::{CorrelationSpec, RegressionSpec};
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
 use serde::{Deserialize, Serialize};
+
+/// Enums for regression and correlation selection
+pub use egobox_moe::{CorrelationSpec, RegressionSpec};
 
 /// Optimization result
 #[derive(Clone, Debug)]
