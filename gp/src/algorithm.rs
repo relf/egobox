@@ -23,6 +23,9 @@ use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
+use ndarray_rand::rand_distr::Normal;
+use ndarray_rand::RandomExt;
+
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 const N_START: usize = 10; // number of optimization restart (aka multistart)
 
@@ -186,6 +189,39 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let n_obs = xnorm.nrows();
         let nt = self.xtrain.data.nrows();
         r.into_shape((n_obs, nt)).unwrap().to_owned()
+    }
+
+    fn _compute_covariance(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let r = self._compute_correlation(xnorm);
+        let r_chol = &self.inner_params.r_chol;
+
+        let rt = r_chol.solve_triangular(&r.t(), UPLO::Lower).unwrap();
+
+        let cross_dx = pairwise_differences(xnorm, xnorm);
+        let k = self.corr.value(&cross_dx, &self.theta, &self.w_star);
+        let k = k.into_shape((xnorm.nrows(), xnorm.nrows())).unwrap();
+
+        let b = self.inner_params.ft.t().to_owned().dot(&rt) - self.mean.value(xnorm).t();
+        let u = &self
+            .inner_params
+            .gamma
+            .t()
+            .solve_triangular(&b, UPLO::Lower)
+            .unwrap();
+        let cov_matrix =
+            self.inner_params.sigma2.to_owned() * (k - rt.t().to_owned().dot(&rt) + u.t().dot(u));
+        cov_matrix
+    }
+
+    pub fn sample(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        let n_eval = x.nrows();
+        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let cov = self._compute_covariance(&xnorm);
+        let chol = cov.cholesky().unwrap();
+        let mean = self.predict_values(x).unwrap();
+        let normal = Normal::new(0., 1.).unwrap();
+        let ary = Array::random((n_eval, n_traj), normal).mapv(|v| F::cast(v));
+        mean + chol.dot(&ary)
     }
 
     /// Retrieve number of PLS components 1 <= n <= x dimension
