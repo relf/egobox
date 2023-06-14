@@ -191,6 +191,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 
+    /// Compute covariance matrix given x points specified as a (n, nx) matrix
+    /// and where is x is normalized wrt training data x (eg xnorm = (x - xt.mean)/ xt.std))
+    #[cfg(not(feature = "blas"))]
     fn _compute_covariance(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let r = self._compute_correlation(xnorm);
         let r_chol = &self.inner_params.r_chol;
@@ -213,6 +216,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         cov_matrix
     }
 
+    /// Sample the gaussian process for `n_traj` trajectories
+    #[cfg(not(feature = "blas"))]
     pub fn sample(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
         let n_eval = x.nrows();
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
