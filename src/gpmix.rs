@@ -229,4 +229,26 @@ impl Gpx {
             .unwrap()
             .into_pyarray(py)
     }
+
+    /// Sample gaussian process trajectories.
+    ///
+    /// Parameters
+    ///     x (array[nsamples, nx])
+    ///         locations of the sampled trajectories
+    ///     n_traj number of trajectories to generate
+    ///
+    /// Returns
+    ///     the trajectories as an array[nsamples, n_traj]
+    ///
+    fn sample<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray2<f64>,
+        n_traj: usize,
+    ) -> &'py PyArray2<f64> {
+        self.0
+            .sample(&x.as_array().to_owned(), n_traj)
+            .unwrap()
+            .into_pyarray(py)
+    }
 }

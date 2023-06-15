@@ -202,7 +202,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Compute covariance matrix given x points specified as a (n, nx) matrix
     /// and where is x is normalized wrt training data x (eg xnorm = (x - xt.mean)/ xt.std))
-    #[cfg(not(feature = "blas"))]
     fn _compute_covariance(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let corr = self._compute_correlation(xnorm);
         let inners = &self.inner_params;

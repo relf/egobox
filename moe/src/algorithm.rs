@@ -434,6 +434,16 @@ impl Surrogate for Moe {
         }
     }
 
+    fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
+        if self.n_clusters() != 1 {
+            return Err(MoeError::SampleError(format!(
+                "Can not sample when several clusters {}",
+                self.n_clusters()
+            )));
+        }
+        self.sample_expert(0, x, n_traj)
+    }
+
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> Result<()> {
@@ -725,6 +735,15 @@ impl Moe {
         Ok(vardrv)
     }
 
+    pub fn sample_expert(
+        &self,
+        ith: usize,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        n_traj: usize,
+    ) -> Result<Array2<f64>> {
+        self.experts[ith].sample(&x.view(), n_traj)
+    }
+
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
         <Moe as Surrogate>::predict_values(self, &x.view())
     }
@@ -756,6 +775,15 @@ impl Moe {
         let data = fs::read_to_string(path)?;
         let moe: Moe = serde_json::from_str(&data).unwrap();
         Ok(Box::new(moe))
+    }
+
+    #[cfg(not(feature = "blas"))]
+    pub fn sample(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        n_traj: usize,
+    ) -> Result<Array2<f64>> {
+        <Moe as Surrogate>::sample(self, &x.view(), n_traj)
     }
 }
 

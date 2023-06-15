@@ -531,6 +531,16 @@ impl Surrogate for MixintMoe {
         self.moe.predict_variance_derivatives(&xcast)
     }
 
+    fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> egobox_moe::Result<Array2<f64>> {
+        let mut xcast = if self.work_in_folded_space {
+            unfold_with_enum_mask(&self.xtypes, x)
+        } else {
+            x.to_owned()
+        };
+        cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
+        self.moe.sample(&xcast.view(), n_traj)
+    }
+
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> egobox_moe::Result<()> {

@@ -38,6 +38,8 @@ pub trait Surrogate: std::fmt::Display + Sync + Send {
     /// Predict derivatives of the variance at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
     fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    /// Sample trajectories
+    fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>>;
     /// Save model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> Result<()>;
@@ -119,6 +121,11 @@ macro_rules! declare_surrogate {
                     };
                     file.write_all(bytes.as_bytes())?;
                     Ok(())
+                }
+
+                #[cfg(not(feature = "blas"))]
+                fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
+                    Ok(self.0.sample(x, n_traj))
                 }
             }
 
