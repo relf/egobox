@@ -97,6 +97,15 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     ytrain: NormalizedMatrix<F>,
 }
 
+/// Kriging as GP special case when using constant mean and squared exponential correlation
+type Kriging<F> = GpParams<F, ConstantMean, SquaredExponentialCorr>;
+
+impl<F: Float> Kriging<F> {
+    pub fn params() -> GpParams<F, ConstantMean, SquaredExponentialCorr> {
+        GpParams::new(ConstantMean(), SquaredExponentialCorr())
+    }
+}
+
 impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
     for GaussianProcess<F, Mean, Corr>
 {
@@ -154,17 +163,17 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         #[cfg(not(feature = "blas"))]
         let rt = inners.r_chol.solve_triangular(&corr_t, UPLO::Lower)?;
 
-        let lhs = inners.ft.t().dot(&rt) - self.mean.value(&xnorm).t();
+        let rhs = inners.ft.t().dot(&rt) - self.mean.value(&xnorm).t();
         #[cfg(feature = "blas")]
         let u = inners
             .ft_qr_r
             .to_owned()
             .t()
             .with_lapack()
-            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs.with_lapack())?
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &rhs.with_lapack())?
             .without_lapack();
         #[cfg(not(feature = "blas"))]
-        let u = inners.ft_qr_r.t().solve_triangular(&lhs, UPLO::Lower)?;
+        let u = inners.ft_qr_r.t().solve_triangular(&rhs, UPLO::Lower)?;
 
         let a = &inners.sigma2;
         let b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
@@ -195,24 +204,46 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// and where is x is normalized wrt training data x (eg xnorm = (x - xt.mean)/ xt.std))
     #[cfg(not(feature = "blas"))]
     fn _compute_covariance(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let r = self._compute_correlation(xnorm);
-        let r_chol = &self.inner_params.r_chol;
-
-        let rt = r_chol.solve_triangular(&r.t(), UPLO::Lower).unwrap();
+        let corr = self._compute_correlation(xnorm);
+        let inners = &self.inner_params;
 
         let cross_dx = pairwise_differences(xnorm, xnorm);
         let k = self.corr.value(&cross_dx, &self.theta, &self.w_star);
         let k = k.into_shape((xnorm.nrows(), xnorm.nrows())).unwrap();
 
-        let b = self.inner_params.ft.t().to_owned().dot(&rt) - self.mean.value(xnorm).t();
-        let u = &self
-            .inner_params
-            .gamma
+        let corr_t = corr.t().to_owned();
+        #[cfg(feature = "blas")]
+        let rt = inners
+            .r_chol
+            .to_owned()
+            .with_lapack()
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t.with_lapack())
+            .unwrap()
+            .without_lapack();
+        #[cfg(not(feature = "blas"))]
+        let rt = inners
+            .r_chol
+            .solve_triangular(&corr_t, UPLO::Lower)
+            .unwrap();
+
+        let rhs = inners.ft.t().dot(&rt) - self.mean.value(xnorm).t();
+        #[cfg(feature = "blas")]
+        let u = inners
+            .ft_qr_r
+            .to_owned()
             .t()
-            .solve_triangular(&b, UPLO::Lower)
+            .with_lapack()
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &rhs.with_lapack())
+            .unwrap()
+            .without_lapack();
+        #[cfg(not(feature = "blas"))]
+        let u = inners
+            .ft_qr_r
+            .t()
+            .solve_triangular(&rhs, UPLO::Lower)
             .unwrap();
         let cov_matrix =
-            self.inner_params.sigma2.to_owned() * (k - rt.t().to_owned().dot(&rt) + u.t().dot(u));
+            inners.sigma2.to_owned() * (k - rt.t().to_owned().dot(&rt) + u.t().dot(&u));
         cov_matrix
     }
 
@@ -1371,6 +1402,27 @@ mod tests {
                 assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
             }
         }
+    }
+
+    fn x2sinx(x: &Array2<f64>) -> Array2<f64> {
+        (x * x) * (x).mapv(|v| v.sin())
+    }
+
+    #[test]
+    fn test_sampling() {
+        let xdoe = array![[-8.5], [-4.0], [-3.0], [-1.0], [4.0], [7.5]];
+        let ydoe = x2sinx(&xdoe);
+        let krg = Kriging::<f64>::params()
+            .fit(&Dataset::new(xdoe, ydoe))
+            .expect("Kriging training");
+        let n_plot = 35;
+        let n_traj = 10;
+        let (x_min, x_max) = (-10., 10.);
+        let x = Array::linspace(x_min, x_max, n_plot)
+            .into_shape((n_plot, 1))
+            .unwrap();
+        let trajs = krg.sample(&x, n_traj);
+        assert_eq!(&[n_plot, n_traj], trajs.shape())
     }
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
