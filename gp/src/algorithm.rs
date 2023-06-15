@@ -148,39 +148,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Predict variance values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n variance values as (n, 1) column vector.
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
-        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let corr = self._compute_correlation(&xnorm);
-        let inners = &self.inner_params;
+        let (rt, u, _) = self._compute_rt_u(x);
 
-        let corr_t = corr.t().to_owned();
-        #[cfg(feature = "blas")]
-        let rt = inners
-            .r_chol
-            .to_owned()
-            .with_lapack()
-            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t.with_lapack())?
-            .without_lapack();
-        #[cfg(not(feature = "blas"))]
-        let rt = inners.r_chol.solve_triangular(&corr_t, UPLO::Lower)?;
-
-        let rhs = inners.ft.t().dot(&rt) - self.mean.value(&xnorm).t();
-        #[cfg(feature = "blas")]
-        let u = inners
-            .ft_qr_r
-            .to_owned()
-            .t()
-            .with_lapack()
-            .solve_triangular(UPLO::Upper, Diag::NonUnit, &rhs.with_lapack())?
-            .without_lapack();
-        #[cfg(not(feature = "blas"))]
-        let u = inners.ft_qr_r.t().solve_triangular(&rhs, UPLO::Lower)?;
-
-        let a = &inners.sigma2;
+        let a = &self.inner_params.sigma2;
         let b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
             + u.mapv(|v: F| v * v).sum_axis(Axis(0));
         let mse = einsum("i,j->ji", &[a, &b])
             .unwrap()
-            .into_shape((x.shape()[0], 1))
+            .into_shape((x.nrows(), 1))
             .unwrap();
 
         // Mean Squared Error might be slightly negative depending on
@@ -189,7 +164,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     /// Compute correlation matrix given x points specified as a (n, nx) matrix
-    /// and where is x is normalized wrt training data x (eg xnorm = (x - xt.mean)/ xt.std))
     fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         // Get pairwise componentwise L1-distances to the input training set
         let dx = pairwise_differences(xnorm, &self.xtrain.data);
@@ -201,14 +175,27 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     /// Compute covariance matrix given x points specified as a (n, nx) matrix
-    /// and where is x is normalized wrt training data x (eg xnorm = (x - xt.mean)/ xt.std))
-    fn _compute_covariance(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let corr = self._compute_correlation(xnorm);
-        let inners = &self.inner_params;
+    fn _compute_covariance(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let (rt, u, xnorm) = self._compute_rt_u(x);
 
-        let cross_dx = pairwise_differences(xnorm, xnorm);
+        let cross_dx = pairwise_differences(&xnorm, &xnorm);
         let k = self.corr.value(&cross_dx, &self.theta, &self.w_star);
         let k = k.into_shape((xnorm.nrows(), xnorm.nrows())).unwrap();
+
+        let cov_matrix =
+            &self.inner_params.sigma2.to_owned() * (k - rt.t().to_owned().dot(&rt) + u.t().dot(&u));
+        cov_matrix
+    }
+
+    /// Compute `rt` and `u` matrices and return normalized x as well
+    /// This method factorizes computations done to get variances and covariance matrix
+    fn _compute_rt_u(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array2<F>, Array2<F>, Array2<F>) {
+        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let corr = self._compute_correlation(&xnorm);
+        let inners = &self.inner_params;
 
         let corr_t = corr.t().to_owned();
         #[cfg(feature = "blas")]
@@ -225,7 +212,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .solve_triangular(&corr_t, UPLO::Lower)
             .unwrap();
 
-        let rhs = inners.ft.t().dot(&rt) - self.mean.value(xnorm).t();
+        let rhs = inners.ft.t().dot(&rt) - self.mean.value(&xnorm).t();
         #[cfg(feature = "blas")]
         let u = inners
             .ft_qr_r
@@ -241,18 +228,21 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .t()
             .solve_triangular(&rhs, UPLO::Lower)
             .unwrap();
-        let cov_matrix =
-            inners.sigma2.to_owned() * (k - rt.t().to_owned().dot(&rt) + u.t().dot(&u));
-        cov_matrix
+        (rt, u, xnorm)
     }
 
     /// Sample the gaussian process for `n_traj` trajectories
-    #[cfg(not(feature = "blas"))]
     pub fn sample(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
         let n_eval = x.nrows();
-        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let cov = self._compute_covariance(&xnorm);
+        let cov = self._compute_covariance(x);
+        #[cfg(not(feature = "blas"))]
         let chol = cov.cholesky().unwrap();
+        #[cfg(feature = "blas")]
+        let chol = cov
+            .with_lapack()
+            .cholesky(UPLO::Lower)
+            .unwrap()
+            .without_lapack();
         let mean = self.predict_values(x).unwrap();
         let normal = Normal::new(0., 1.).unwrap();
         let ary = Array::random((n_eval, n_traj), normal).mapv(|v| F::cast(v));
