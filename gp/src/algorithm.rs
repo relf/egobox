@@ -4,18 +4,17 @@ use crate::mean_models::*;
 use crate::parameters::{GpParams, GpValidParams};
 use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedMatrix};
 use egobox_doe::{Lhs, SamplingMethod};
-#[cfg(feature = "blas")]
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 #[cfg(not(feature = "blas"))]
-use linfa_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
+use linfa_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
 #[cfg(feature = "blas")]
 use log::warn;
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
-use ndarray_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
+use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
@@ -97,8 +96,13 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     ytrain: NormalizedMatrix<F>,
 }
 
+enum GpSamplingMethod {
+    Cholesky,
+    EigenValues,
+}
+
 /// Kriging as GP special case when using constant mean and squared exponential correlation
-type Kriging<F> = GpParams<F, ConstantMean, SquaredExponentialCorr>;
+pub type Kriging<F> = GpParams<F, ConstantMean, SquaredExponentialCorr>;
 
 impl<F: Float> Kriging<F> {
     pub fn params() -> GpParams<F, ConstantMean, SquaredExponentialCorr> {
@@ -231,22 +235,67 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         (rt, u, xnorm)
     }
 
-    /// Sample the gaussian process for `n_traj` trajectories
+    /// Sample the gaussian process for `n_traj` trajectories using cholesky decomposition
+    pub fn sample_chol(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self._sample(x, n_traj, GpSamplingMethod::Cholesky)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using eigenvalues decomposition
+    pub fn sample_eig(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self._sample(x, n_traj, GpSamplingMethod::EigenValues)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using eigenvalues decomposition (alias of `sample_eig`)
     pub fn sample(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self.sample_eig(x, n_traj)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using either
+    /// cholesky or eigenvalues decomposition to compute the decomposition of the conditioned covariance matrix.
+    /// The later one is recommended as cholesky decomposition suffer from occurence of ill-conditioned matrices
+    /// when the number of x locations increase.
+    fn _sample(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        n_traj: usize,
+        method: GpSamplingMethod,
+    ) -> Array2<F> {
         let n_eval = x.nrows();
         let cov = self._compute_covariance(x);
-        #[cfg(not(feature = "blas"))]
-        let chol = cov.cholesky().unwrap();
-        #[cfg(feature = "blas")]
-        let chol = cov
-            .with_lapack()
-            .cholesky(UPLO::Lower)
-            .unwrap()
-            .without_lapack();
+        let c = match method {
+            GpSamplingMethod::Cholesky => {
+                #[cfg(not(feature = "blas"))]
+                let c = cov.with_lapack().cholesky().unwrap();
+                #[cfg(feature = "blas")]
+                let c = cov.with_lapack().cholesky(UPLO::Lower).unwrap();
+                c
+            }
+            GpSamplingMethod::EigenValues => {
+                #[cfg(feature = "blas")]
+                let (v, w) = cov.with_lapack().eigh(UPLO::Lower).unwrap();
+                #[cfg(not(feature = "blas"))]
+                let (v, w) = cov.with_lapack().eigh_into().unwrap();
+                let v = v.mapv(F::cast);
+                let v = v.mapv(|x| x.sqrt()).mapv(|x| {
+                    // We lower bound the float value at 1e-7
+                    if x < F::cast(1e-7) {
+                        return F::zero();
+                    }
+                    x
+                });
+                let d = Array2::from_diag(&v).with_lapack();
+                #[cfg(feature = "blas")]
+                let c = w.dot(&d);
+                #[cfg(not(feature = "blas"))]
+                let c = w.dot(&d);
+                c
+            }
+        }
+        .without_lapack();
         let mean = self.predict_values(x).unwrap();
         let normal = Normal::new(0., 1.).unwrap();
         let ary = Array::random((n_eval, n_traj), normal).mapv(|v| F::cast(v));
-        mean + chol.dot(&ary)
+        mean + c.dot(&ary)
     }
 
     /// Retrieve number of PLS components 1 <= n <= x dimension
@@ -1411,6 +1460,23 @@ mod tests {
             .into_shape((n_plot, 1))
             .unwrap();
         let trajs = krg.sample(&x, n_traj);
+        assert_eq!(&[n_plot, n_traj], trajs.shape())
+    }
+
+    #[test]
+    fn test_sampling_eigen() {
+        let xdoe = array![[-8.5], [-4.0], [-3.0], [-1.0], [4.0], [7.5]];
+        let ydoe = x2sinx(&xdoe);
+        let krg = Kriging::<f64>::params()
+            .fit(&Dataset::new(xdoe, ydoe))
+            .expect("Kriging training");
+        let n_plot = 5;
+        let n_traj = 10;
+        let (x_min, x_max) = (-10., 10.);
+        let x = Array::linspace(x_min, x_max, n_plot)
+            .into_shape((n_plot, 1))
+            .unwrap();
+        let trajs = krg.sample_eig(&x, n_traj);
         assert_eq!(&[n_plot, n_traj], trajs.shape())
     }
 
