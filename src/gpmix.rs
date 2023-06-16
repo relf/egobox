@@ -247,7 +247,7 @@ impl Gpx {
         n_traj: usize,
     ) -> &'py PyArray2<f64> {
         self.0
-            .sample(&x.as_array().to_owned(), n_traj)
+            .sample(&x.as_array(), n_traj)
             .unwrap()
             .into_pyarray(py)
     }
