@@ -276,12 +276,12 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
                 #[cfg(not(feature = "blas"))]
                 let (v, w) = cov.with_lapack().eigh_into().unwrap();
                 let v = v.mapv(F::cast);
-                let v = v.mapv(|x| x.sqrt()).mapv(|x| {
-                    // We lower bound the float value at 1e-7
-                    if x < F::cast(1e-7) {
+                let v = v.mapv(|x| {
+                    // We lower bound the float value at 1e-9
+                    if x < F::cast(1e-9) {
                         return F::zero();
                     }
-                    x
+                    x.sqrt()
                 });
                 let d = Array2::from_diag(&v).with_lapack();
                 #[cfg(feature = "blas")]
@@ -1470,14 +1470,15 @@ mod tests {
         let krg = Kriging::<f64>::params()
             .fit(&Dataset::new(xdoe, ydoe))
             .expect("Kriging training");
-        let n_plot = 5;
+        let n_plot = 500;
         let n_traj = 10;
         let (x_min, x_max) = (-10., 10.);
         let x = Array::linspace(x_min, x_max, n_plot)
             .into_shape((n_plot, 1))
             .unwrap();
         let trajs = krg.sample_eig(&x, n_traj);
-        assert_eq!(&[n_plot, n_traj], trajs.shape())
+        assert_eq!(&[n_plot, n_traj], trajs.shape());
+        assert!(!trajs.fold(false, |acc, v| acc || v.is_nan())); // check no nans
     }
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
