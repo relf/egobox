@@ -4,24 +4,26 @@ use crate::mean_models::*;
 use crate::parameters::{GpParams, GpValidParams};
 use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedMatrix};
 use egobox_doe::{Lhs, SamplingMethod};
-#[cfg(feature = "blas")]
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 #[cfg(not(feature = "blas"))]
-use linfa_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
+use linfa_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
 #[cfg(feature = "blas")]
 use log::warn;
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
-use ndarray_linalg::{cholesky::*, qr::*, svd::*, triangular::*};
+use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use nlopt::*;
 use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
+
+use ndarray_rand::rand_distr::Normal;
+use ndarray_rand::RandomExt;
 
 const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 const N_START: usize = 10; // number of optimization restart (aka multistart)
@@ -94,6 +96,20 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     ytrain: NormalizedMatrix<F>,
 }
 
+enum GpSamplingMethod {
+    Cholesky,
+    EigenValues,
+}
+
+/// Kriging as GP special case when using constant mean and squared exponential correlation
+pub type Kriging<F> = GpParams<F, ConstantMean, SquaredExponentialCorr>;
+
+impl<F: Float> Kriging<F> {
+    pub fn params() -> GpParams<F, ConstantMean, SquaredExponentialCorr> {
+        GpParams::new(ConstantMean(), SquaredExponentialCorr())
+    }
+}
+
 impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
     for GaussianProcess<F, Mean, Corr>
 {
@@ -136,6 +152,51 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Predict variance values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n variance values as (n, 1) column vector.
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
+        let (rt, u, _) = self._compute_rt_u(x);
+
+        let a = &self.inner_params.sigma2;
+        let b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
+            + u.mapv(|v: F| v * v).sum_axis(Axis(0));
+        let mse = einsum("i,j->ji", &[a, &b])
+            .unwrap()
+            .into_shape((x.nrows(), 1))
+            .unwrap();
+
+        // Mean Squared Error might be slightly negative depending on
+        // machine precision: set to zero in that case
+        Ok(mse.mapv(|v| if v < F::zero() { F::zero() } else { F::cast(v) }))
+    }
+
+    /// Compute correlation matrix given x points specified as a (n, nx) matrix
+    fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        // Get pairwise componentwise L1-distances to the input training set
+        let dx = pairwise_differences(xnorm, &self.xtrain.data);
+        // Compute the correlation function
+        let r = self.corr.value(&dx, &self.theta, &self.w_star);
+        let n_obs = xnorm.nrows();
+        let nt = self.xtrain.data.nrows();
+        r.into_shape((n_obs, nt)).unwrap().to_owned()
+    }
+
+    /// Compute covariance matrix given x points specified as a (n, nx) matrix
+    fn _compute_covariance(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let (rt, u, xnorm) = self._compute_rt_u(x);
+
+        let cross_dx = pairwise_differences(&xnorm, &xnorm);
+        let k = self.corr.value(&cross_dx, &self.theta, &self.w_star);
+        let k = k.into_shape((xnorm.nrows(), xnorm.nrows())).unwrap();
+
+        let cov_matrix =
+            &self.inner_params.sigma2.to_owned() * (k - rt.t().to_owned().dot(&rt) + u.t().dot(&u));
+        cov_matrix
+    }
+
+    /// Compute `rt` and `u` matrices and return normalized x as well
+    /// This method factorizes computations done to get variances and covariance matrix
+    fn _compute_rt_u(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array2<F>, Array2<F>, Array2<F>) {
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         let corr = self._compute_correlation(&xnorm);
         let inners = &self.inner_params;
@@ -146,46 +207,95 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .r_chol
             .to_owned()
             .with_lapack()
-            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t.with_lapack())?
+            .solve_triangular(UPLO::Lower, Diag::NonUnit, &corr_t.with_lapack())
+            .unwrap()
             .without_lapack();
         #[cfg(not(feature = "blas"))]
-        let rt = inners.r_chol.solve_triangular(&corr_t, UPLO::Lower)?;
+        let rt = inners
+            .r_chol
+            .solve_triangular(&corr_t, UPLO::Lower)
+            .unwrap();
 
-        let lhs = inners.ft.t().dot(&rt) - self.mean.value(&xnorm).t();
+        let rhs = inners.ft.t().dot(&rt) - self.mean.value(&xnorm).t();
         #[cfg(feature = "blas")]
         let u = inners
             .ft_qr_r
             .to_owned()
             .t()
             .with_lapack()
-            .solve_triangular(UPLO::Upper, Diag::NonUnit, &lhs.with_lapack())?
+            .solve_triangular(UPLO::Upper, Diag::NonUnit, &rhs.with_lapack())
+            .unwrap()
             .without_lapack();
         #[cfg(not(feature = "blas"))]
-        let u = inners.ft_qr_r.t().solve_triangular(&lhs, UPLO::Lower)?;
-
-        let a = &inners.sigma2;
-        let b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
-            + u.mapv(|v: F| v * v).sum_axis(Axis(0));
-        let mse = einsum("i,j->ji", &[a, &b])
-            .unwrap()
-            .into_shape((x.shape()[0], 1))
+        let u = inners
+            .ft_qr_r
+            .t()
+            .solve_triangular(&rhs, UPLO::Lower)
             .unwrap();
-
-        // Mean Squared Error might be slightly negative depending on
-        // machine precision: set to zero in that case
-        Ok(mse.mapv(|v| if v < F::zero() { F::zero() } else { F::cast(v) }))
+        (rt, u, xnorm)
     }
 
-    /// Compute correlation matrix given x points specified as a (n, nx) matrix
-    /// and where is x is normalized wrt training data x (eg xnorm = (x - xt.mean)/ xt.std))
-    fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        // Get pairwise componentwise L1-distances to the input training set
-        let dx = pairwise_differences(xnorm, &self.xtrain.data);
-        // Compute the correlation function
-        let r = self.corr.value(&dx, &self.theta, &self.w_star);
-        let n_obs = xnorm.nrows();
-        let nt = self.xtrain.data.nrows();
-        r.into_shape((n_obs, nt)).unwrap().to_owned()
+    /// Sample the gaussian process for `n_traj` trajectories using cholesky decomposition
+    pub fn sample_chol(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self._sample(x, n_traj, GpSamplingMethod::Cholesky)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using eigenvalues decomposition
+    pub fn sample_eig(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self._sample(x, n_traj, GpSamplingMethod::EigenValues)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using eigenvalues decomposition (alias of `sample_eig`)
+    pub fn sample(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self.sample_eig(x, n_traj)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using either
+    /// cholesky or eigenvalues decomposition to compute the decomposition of the conditioned covariance matrix.
+    /// The later one is recommended as cholesky decomposition suffer from occurence of ill-conditioned matrices
+    /// when the number of x locations increase.
+    fn _sample(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        n_traj: usize,
+        method: GpSamplingMethod,
+    ) -> Array2<F> {
+        let n_eval = x.nrows();
+        let cov = self._compute_covariance(x);
+        let c = match method {
+            GpSamplingMethod::Cholesky => {
+                #[cfg(not(feature = "blas"))]
+                let c = cov.with_lapack().cholesky().unwrap();
+                #[cfg(feature = "blas")]
+                let c = cov.with_lapack().cholesky(UPLO::Lower).unwrap();
+                c
+            }
+            GpSamplingMethod::EigenValues => {
+                #[cfg(feature = "blas")]
+                let (v, w) = cov.with_lapack().eigh(UPLO::Lower).unwrap();
+                #[cfg(not(feature = "blas"))]
+                let (v, w) = cov.with_lapack().eigh_into().unwrap();
+                let v = v.mapv(F::cast);
+                let v = v.mapv(|x| {
+                    // We lower bound the float value at 1e-9
+                    if x < F::cast(1e-9) {
+                        return F::zero();
+                    }
+                    x.sqrt()
+                });
+                let d = Array2::from_diag(&v).with_lapack();
+                #[cfg(feature = "blas")]
+                let c = w.dot(&d);
+                #[cfg(not(feature = "blas"))]
+                let c = w.dot(&d);
+                c
+            }
+        }
+        .without_lapack();
+        let mean = self.predict_values(x).unwrap();
+        let normal = Normal::new(0., 1.).unwrap();
+        let ary = Array::random((n_eval, n_traj), normal).mapv(|v| F::cast(v));
+        mean + c.dot(&ary)
     }
 
     /// Retrieve number of PLS components 1 <= n <= x dimension
@@ -1330,6 +1440,45 @@ mod tests {
                 assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
             }
         }
+    }
+
+    fn x2sinx(x: &Array2<f64>) -> Array2<f64> {
+        (x * x) * (x).mapv(|v| v.sin())
+    }
+
+    #[test]
+    fn test_sampling() {
+        let xdoe = array![[-8.5], [-4.0], [-3.0], [-1.0], [4.0], [7.5]];
+        let ydoe = x2sinx(&xdoe);
+        let krg = Kriging::<f64>::params()
+            .fit(&Dataset::new(xdoe, ydoe))
+            .expect("Kriging training");
+        let n_plot = 35;
+        let n_traj = 10;
+        let (x_min, x_max) = (-10., 10.);
+        let x = Array::linspace(x_min, x_max, n_plot)
+            .into_shape((n_plot, 1))
+            .unwrap();
+        let trajs = krg.sample(&x, n_traj);
+        assert_eq!(&[n_plot, n_traj], trajs.shape())
+    }
+
+    #[test]
+    fn test_sampling_eigen() {
+        let xdoe = array![[-8.5], [-4.0], [-3.0], [-1.0], [4.0], [7.5]];
+        let ydoe = x2sinx(&xdoe);
+        let krg = Kriging::<f64>::params()
+            .fit(&Dataset::new(xdoe, ydoe))
+            .expect("Kriging training");
+        let n_plot = 500;
+        let n_traj = 10;
+        let (x_min, x_max) = (-10., 10.);
+        let x = Array::linspace(x_min, x_max, n_plot)
+            .into_shape((n_plot, 1))
+            .unwrap();
+        let trajs = krg.sample_eig(&x, n_traj);
+        assert_eq!(&[n_plot, n_traj], trajs.shape());
+        assert!(!trajs.fold(false, |acc, v| acc || v.is_nan())); // check no nans
     }
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {

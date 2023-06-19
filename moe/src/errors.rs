@@ -24,6 +24,9 @@ pub enum MoeError {
     /// When error on clustering
     #[error("Clustering error: {0}")]
     ClusteringError(String),
+    /// When sampling fails
+    #[error("Sample error: {0}")]
+    SampleError(String),
     /// When error during saving
     #[cfg(feature = "persistent")]
     #[error("Save error: {0}")]
