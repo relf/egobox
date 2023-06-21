@@ -2,14 +2,15 @@ use pyo3::prelude::*;
 
 #[pyclass]
 #[derive(Clone)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Recombination {
     /// prediction is taken from the expert with highest responsability
     /// resulting in a model with discontinuities
-    Hard = 0,
+    HARD = 0,
     /// Prediction is a combination experts prediction wrt their responsabilities,
     /// an optional heaviside factor might be used control steepness of the change between
     /// experts regions.
-    Smooth = 1,
+    SMOOTH = 1,
 }
 
 #[pyclass]

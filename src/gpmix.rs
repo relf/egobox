@@ -70,7 +70,7 @@ impl GpMix {
         n_clusters = 1,
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        recombination = Recombination::Smooth,
+        recombination = Recombination::SMOOTH,
         kpls_dim = None,
         seed = None
     ))]
@@ -114,8 +114,8 @@ impl GpMix {
     ///
     fn train(&mut self) -> Gpx {
         let recomb = match self.recombination {
-            Recombination::Hard => egobox_moe::Recombination::Hard,
-            Recombination::Smooth => egobox_moe::Recombination::Smooth(None),
+            Recombination::HARD => egobox_moe::Recombination::Hard,
+            Recombination::SMOOTH => egobox_moe::Recombination::Smooth(None),
         };
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
@@ -152,7 +152,7 @@ impl Gpx {
         n_clusters = 1,
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        recombination = Recombination::Smooth,
+        recombination = Recombination::SMOOTH,
         kpls_dim = None,
         seed = None
     ))]
