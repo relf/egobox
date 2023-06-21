@@ -21,6 +21,7 @@ use nlopt::*;
 use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use ndarray_rand::rand_distr::Normal;
 use ndarray_rand::RandomExt;
@@ -123,6 +124,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
             xtrain: self.xtrain.clone(),
             ytrain: self.xtrain.clone(),
         }
+    }
+}
+
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> fmt::Display
+    for GaussianProcess<F, Mean, Corr>
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "GP({}, {})", self.mean, self.corr)
     }
 }
 

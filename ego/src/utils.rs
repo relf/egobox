@@ -1,9 +1,9 @@
+use crate::types::XType;
 use egobox_moe::ClusteredSurrogate;
 use libm::erfc;
 use ndarray::{concatenate, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_stats::{DeviationExt, QuantileExt};
 use rayon::prelude::*;
-
 const SQRT_2PI: f64 = 2.5066282746310007;
 
 /// Computes scaling factors used to scale constraint functions values.
@@ -74,6 +74,12 @@ pub fn update_data(
             }
         });
     appended
+}
+
+pub fn no_discrete(xtypes: &[XType]) -> bool {
+    !xtypes
+        .iter()
+        .any(|t| matches!(t, &XType::Int(_, _) | &XType::Ord(_) | &XType::Enum(_)))
 }
 
 #[cfg(test)]

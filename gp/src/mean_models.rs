@@ -9,12 +9,14 @@
 
 use linfa::Float;
 use ndarray::{concatenate, s, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use paste::paste;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use std::fmt;
 
 /// A trait for mean models used in GP regression
-pub trait RegressionModel<F: Float>: Clone + Copy + Default {
+pub trait RegressionModel<F: Float>: Clone + Copy + Default + fmt::Display {
     /// Compute regression coefficients defining the mean behaviour of the GP model
     /// for the given `x` data points specified as (n, nx) matrix.
     fn value(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F>;
@@ -50,23 +52,6 @@ impl<F: Float> RegressionModel<F> for ConstantMean {
     }
 }
 
-impl From<ConstantMean> for String {
-    fn from(_item: ConstantMean) -> Self {
-        "Constant".to_string()
-    }
-}
-
-impl TryFrom<String> for ConstantMean {
-    type Error = &'static str;
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        if s == "Constant" {
-            Ok(Self::default())
-        } else {
-            Err("Bad string value for ConstantMean, should be \'Constant\'")
-        }
-    }
-}
-
 /// An affine function as mean of the GP
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(
@@ -93,23 +78,6 @@ impl<F: Float> RegressionModel<F> for LinearMean {
         let mut jac = Array2::<F>::zeros((nx + 1, nx));
         jac.slice_mut(s![1.., ..]).assign(&Array2::eye(x.len()));
         jac
-    }
-}
-
-impl From<LinearMean> for String {
-    fn from(_item: LinearMean) -> Self {
-        "Linear".to_string()
-    }
-}
-
-impl TryFrom<String> for LinearMean {
-    type Error = &'static str;
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        if s == "Linear" {
-            Ok(Self::default())
-        } else {
-            Err("Bad string value for LinearMean, should be \'Linear\'")
-        }
     }
 }
 
@@ -159,22 +127,38 @@ impl<F: Float> RegressionModel<F> for QuadraticMean {
     }
 }
 
-impl From<QuadraticMean> for String {
-    fn from(_item: QuadraticMean) -> Self {
-        "Quadratic".to_string()
-    }
+macro_rules! declare_mean_util_impls {
+    ($regr:ident) => {
+        paste! {
+            impl fmt::Display for [<$regr Mean>] {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    write!(f, "{}Mean", stringify!($regr))
+                }
+            }
+
+            impl From<[<$regr Mean>]> for String {
+                fn from(_item: [<$regr Mean>]) -> Self {
+                    [<$regr Mean>]().to_string()
+                }
+            }
+
+            impl TryFrom<String> for [<$regr Mean>] {
+                type Error = &'static str;
+                fn try_from(s: String) -> Result<Self, Self::Error> {
+                    if s == stringify!([<$regr Mean>]) {
+                        Ok(Self::default())
+                    } else {
+                        Err("Bad string value for [<$regr Mean>], should be \'[<$regr Mean>]\'")
+                    }
+                }
+            }
+        }
+    };
 }
 
-impl TryFrom<String> for QuadraticMean {
-    type Error = &'static str;
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        if s == "Quadratic" {
-            Ok(Self::default())
-        } else {
-            Err("Bad string value for QuadraticMean, should be \'Quadratic\'")
-        }
-    }
-}
+declare_mean_util_impls!(Constant);
+declare_mean_util_impls!(Linear);
+declare_mean_util_impls!(Quadratic);
 
 #[cfg(test)]
 mod tests {
@@ -226,5 +210,10 @@ mod tests {
             expected,
             QuadraticMean::default().jacobian(&array![1., 2., 3.])
         );
+    }
+
+    #[test]
+    fn test_utils() {
+        assert_eq!("ConstantMean", ConstantMean().to_string());
     }
 }

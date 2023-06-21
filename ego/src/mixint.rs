@@ -470,7 +470,12 @@ pub struct MixintMoe {
 
 impl std::fmt::Display for MixintMoe {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.moe)
+        let prefix = if crate::utils::no_discrete(&self.xtypes) {
+            ""
+        } else {
+            "MixInt"
+        };
+        write!(f, "{}{}", prefix, &self.moe)
     }
 }
 
