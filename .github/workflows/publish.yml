@@ -20,11 +20,14 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Publish doe
-        working-directory: ./doe
-        run: cargo publish --token ${CRATES_TOKEN}
+      - name: Cargo login
+        run: cargo login ${CRATES_TOKEN}
         env:
           CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
+
+      - name: Publish doe
+        working-directory: ./doe
+        run: cargo publish
 
       - name: Publish gp
         working-directory: ./gp
