@@ -1,8 +1,20 @@
 Changes
 -------
 
-Version 0.10.0 - unreleased
-==========================
+Version 0.11.0 - unreleased
+===========================
+
+Version 0.10.0 - 22/06/2023
+===========================
+
+* `gp`, `moe` and `egobox` Python module:
+  * Added Gaussian process sampling (#97) 
+  * Added string representation (#98)
+
+* `egobox` Python module:
+  * Change recombination enum to respect Python uppercase convention (#98)
+
+* Notebooks and documentation updates (#97, #98, #99)
 
 Version 0.9.0 - 02/06/2023
 ==========================
@@ -13,7 +25,7 @@ Version 0.9.0 - 02/06/2023
     * `EgorBuilder::min_within_mixed_space()` is now `EgorBuilder::min_within_mixint_space()` (#96)
     * `egobox-ego` library doc updated (#95)
 
-* `egobox` Python binding: Upgrade to PyO3 0.18 (#91)
+* `egobox` Python module: Upgrade to PyO3 0.18 (#91)
 
 Version 0.8.2 - 31/03/2023
 ==========================
