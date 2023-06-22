@@ -39,7 +39,8 @@ use rand_xoshiro::Xoshiro256Plus;
 ///     recombination (Recombination.Smooth or Recombination.Hard)
 ///         Specify how the various experts predictions are recombined
 ///         * Smooth: prediction is a combination of experts prediction wrt their responsabilities,
-///         an optional heaviside factor might be used control steepness of the change between experts regions.
+///         the heaviside factor which controls steepness of the change between experts regions is optimized
+///         to get best mixture quality.
 ///         * Hard: prediction is taken from the expert with highest responsability
 ///         resulting in a model with discontinuities.
 ///
@@ -69,7 +70,7 @@ impl GpMix {
         n_clusters = 1,
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        recombination = Recombination::Smooth,
+        recombination = Recombination::SMOOTH,
         kpls_dim = None,
         seed = None
     ))]
@@ -113,8 +114,8 @@ impl GpMix {
     ///
     fn train(&mut self) -> Gpx {
         let recomb = match self.recombination {
-            Recombination::Hard => egobox_moe::Recombination::Hard,
-            Recombination::Smooth => egobox_moe::Recombination::Smooth(None),
+            Recombination::HARD => egobox_moe::Recombination::Hard,
+            Recombination::SMOOTH => egobox_moe::Recombination::Smooth(None),
         };
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
@@ -151,7 +152,7 @@ impl Gpx {
         n_clusters = 1,
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        recombination = Recombination::Smooth,
+        recombination = Recombination::SMOOTH,
         kpls_dim = None,
         seed = None
     ))]
@@ -171,6 +172,16 @@ impl Gpx {
             kpls_dim,
             seed,
         )
+    }
+
+    /// Returns the String representation from serde json serializer
+    fn __repr__(&self) -> String {
+        serde_json::to_string(&self.0).unwrap()
+    }
+
+    /// Returns a String informal representation
+    fn __str__(&self) -> String {
+        self.0.to_string()
     }
 
     /// Save Gaussian processes mixture in a json file.

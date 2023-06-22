@@ -380,7 +380,7 @@ impl std::fmt::Display for Moe {
             .map(|expert| expert.to_string())
             .reduce(|acc, s| acc + ", " + &s)
             .unwrap();
-        write!(f, "Mixture[{}], ({})", &recomb, &experts)
+        write!(f, "Mixture[{}]({})", &recomb, &experts)
     }
 }
 
@@ -1201,5 +1201,22 @@ mod tests {
     #[test]
     fn test_moe_var_deriv_rosenb() {
         test_variance_derivatives(rosenb);
+    }
+
+    #[test]
+    fn test_moe_display() {
+        let rng = Xoshiro256Plus::seed_from_u64(0);
+        let xt = Lhs::new(&array![[0., 1.]]).sample(100);
+        let yt = f_test_1d(&xt);
+
+        let moe = Moe::params()
+            .n_clusters(3)
+            .regression_spec(RegressionSpec::CONSTANT)
+            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+            .recombination(Recombination::Hard)
+            .with_rng(rng)
+            .fit(&Dataset::new(xt, yt))
+            .expect("MOE fitted");
+        assert_eq!("Mixture[Hard](Constant_SquaredExponential, Constant_SquaredExponential, Constant_SquaredExponential)", moe.to_string());
     }
 }

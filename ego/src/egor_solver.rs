@@ -105,8 +105,7 @@ use crate::errors::{EgoError, Result};
 use crate::lhs_optimizer::LhsOptimizer;
 use crate::mixint::*;
 use crate::types::*;
-use crate::utils::compute_cstr_scales;
-use crate::utils::update_data;
+use crate::utils::{compute_cstr_scales, no_discrete, update_data};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, MoeParams, RegressionSpec};
@@ -317,9 +316,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             xlimits,
             xtypes: Some(v_xtypes),
             surrogate_builder: SB::new_with_xtypes_rng(xtypes),
-            no_discrete: !xtypes
-                .iter()
-                .any(|t| matches!(t, &XType::Int(_, _) | &XType::Ord(_) | &XType::Enum(_))),
+            no_discrete: no_discrete(xtypes),
             rng,
         }
     }
