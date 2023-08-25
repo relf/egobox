@@ -14,6 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         toolchain:
+          - 1.70.0
           - stable
         os: 
           - ubuntu-20.04
@@ -32,13 +33,6 @@ jobs:
 
       - name: Log active toolchain
         run: rustup show
-
-      - name: Install LLVM and Clang on Windows
-        if: ${{ matrix.os == 'windows-2019' }} 
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          version: "11.0"
-          directory: ${{ runner.temp }}/llvm
 
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
@@ -54,6 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         toolchain:
+          - 1.70.0
           - stable
         os: 
           - ubuntu-20.04
@@ -72,13 +67,6 @@ jobs:
 
       - name: Log active toolchain
         run: rustup show
-
-      - name: Install LLVM and Clang on Windows
-        if: ${{ matrix.os == 'windows-2019' }} 
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          version: "11.0"
-          directory: ${{ runner.temp }}/llvm
 
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
