@@ -171,10 +171,9 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             // Extract 5% of data for validation
             // TODO: Use cross-validation ? Performances
             let (test, _) = extract_part(&data, 5);
-            let xtest = Some(test.slice(s![.., ..nx]).to_owned());
-            let ytest = Some(test.slice(s![.., nx..]).to_owned());
-            let factor =
-                self.optimize_heaviside_factor(&experts, gmx, &xtest.unwrap(), &ytest.unwrap());
+            let xtest = test.slice(s![.., ..nx]).to_owned();
+            let ytest = test.slice(s![.., nx..]).to_owned();
+            let factor = self.optimize_heaviside_factor(&experts, gmx, &xtest, &ytest);
             info!("Retrain mixture with optimized heaviside factor={}", factor);
             let moe = MoeParams::from(self.clone())
                 .n_clusters(gmx.n_clusters())
