@@ -44,8 +44,8 @@ pub fn unfold_xtypes_as_continuous_limits(xtypes: &[XType]) -> Array2<f64> {
         XType::Ord(v) => {
             dim += 1;
             xlimits.extend([
-                (*v.iter().min().unwrap()) as f64,
-                (*v.iter().max().unwrap()) as f64,
+                (v.iter().fold(f64::INFINITY, |a, &b| a.min(b))),
+                (v.iter().fold(-f64::INFINITY, |a, &b| a.max(b))),
             ]);
         }
         XType::Enum(v) => {
@@ -136,9 +136,9 @@ fn unfold_with_enum_mask(
 }
 
 /// Find closest value to `val` in given slice `v`.
-fn take_closest(v: &[i32], val: f64) -> i32 {
+fn take_closest(v: &[f64], val: f64) -> f64 {
     let idx = Array::from_vec(v.to_vec())
-        .map(|refval| (val - *refval as f64).abs())
+        .map(|refval| (val - *refval).abs())
         .argmin()
         .unwrap();
     v[idx]
@@ -157,10 +157,7 @@ fn cast_to_discrete_values_mut(xtypes: &[XType], x: &mut ArrayBase<impl DataMut<
             xcol += 1;
         }
         XType::Ord(v) => {
-            let xround = x
-                .column(xcol)
-                .mapv(|val| take_closest(v, val) as f64)
-                .to_owned();
+            let xround = x.column(xcol).mapv(|val| take_closest(v, val)).to_owned();
             x.column_mut(xcol).assign(&xround);
             xcol += 1;
         }
@@ -315,7 +312,6 @@ impl MixintMoeValidParams {
             moe: self
                 .surrogate_builder
                 .clone()
-                .regression_spec(RegressionSpec::CONSTANT)
                 .check()?
                 .train(&xcast, &yt.to_owned())
                 .unwrap(),
@@ -341,8 +337,7 @@ impl MixintMoeValidParams {
             moe: self
                 .surrogate_builder
                 .clone()
-                .regression_spec(RegressionSpec::CONSTANT)
-                .check_ref()? // mixinteger works only with constant regression
+                .check_ref()?
                 .train_on_clusters(&xcast, &yt.to_owned(), clustering)
                 .unwrap(),
             xtypes: self.xtypes.clone(),
@@ -671,7 +666,7 @@ mod tests {
                 "green".to_string(),
             ]),
             XType::Int(-10, 10),
-            XType::Ord(vec![1, 3, 5, 8]),
+            XType::Ord(vec![1., 3., 5., 8.]),
         ];
 
         let mixi = MixintContext::new(&xtypes);

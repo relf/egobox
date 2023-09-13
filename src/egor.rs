@@ -33,7 +33,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
     }
     Ok(xlimits
         .iter()
-        .map(|xlimit| XSpec::new(XType(XType::FLOAT), xlimit.clone()))
+        .map(|xlimit| XSpec::new(XType(XType::FLOAT), xlimit.clone(), vec![]))
         .collect::<Vec<XSpec>>()
         .into_py(py))
 }
@@ -315,6 +315,8 @@ impl Egor {
                 XType(XType::INT) => {
                     egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
                 }
+                XType(XType::ORD) => egobox_ego::XType::Ord(spec.xlimits.clone()),
+                XType(XType::ENUM) => egobox_ego::XType::Enum(spec.xnames.clone()),
                 XType(i) => panic!(
                     "Bad variable type: should be either XType.FLOAT {} or XType.INT {}, got {}",
                     XType::FLOAT,
