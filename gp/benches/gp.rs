@@ -10,8 +10,8 @@ use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
 fn criterion_gp(c: &mut Criterion) {
-    let dims = vec![5, 10, 20, 60];
-    let nts = vec![100, 300, 400, 800];
+    let dims = [5, 10, 20, 60];
+    let nts = [100, 300, 400, 800];
 
     let mut group = c.benchmark_group("gp");
     group.sample_size(20);

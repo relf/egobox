@@ -160,6 +160,7 @@ declare_surrogate!(Quadratic, Matern52);
 macro_rules! make_surrogate_params {
     ($regr:ident, $corr:ident) => {
         paste! {
+            #[allow(unused_allocation)]
             Box::new([<Gp $regr $corr SurrogateParams>]::new(
                 GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
                     [<$regr Mean>]::default(),
