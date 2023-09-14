@@ -97,10 +97,10 @@ pub enum XType {
     Cont(f64, f64),
     /// Integer variable in lower bound .. upper bound
     Int(i32, i32),
-    /// An Ordered variable in { float_1, float_2, ... float_n }
+    /// An Ordered variable in { float_1, float_2, ..., float_n }
     Ord(Vec<f64>),
-    /// An Enum variable in { str_1, str_2, ..., str_n }
-    Enum(Vec<String>),
+    /// An Enum variable in { 1, 2, ..., int_n }
+    Enum(usize),
 }
 
 /// A trait for surrogate training

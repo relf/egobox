@@ -316,11 +316,13 @@ impl Egor {
                     egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
                 }
                 XType(XType::ORD) => egobox_ego::XType::Ord(spec.xlimits.clone()),
-                XType(XType::ENUM) => egobox_ego::XType::Enum(spec.xnames.clone()),
+                XType(XType::ENUM) => egobox_ego::XType::Enum(spec.xnames.len()),
                 XType(i) => panic!(
-                    "Bad variable type: should be either XType.FLOAT {} or XType.INT {}, got {}",
+                    "Bad variable type: should be either XType.FLOAT {}, XType.INT {}, XType.ORD {}, XType.ENUM {}, got {}",
                     XType::FLOAT,
                     XType::INT,
+                    XType::ORD,
+                    XType::ENUM,                    
                     i
                 ),
             })

@@ -629,4 +629,49 @@ mod tests {
             .unwrap();
         assert_abs_diff_eq!(&array![18.], &res.x_opt, epsilon = 3.);
     }
+
+    fn mixobj(x: &ArrayView2<f64>) -> Array2<f64> {
+        // XType.Float
+        let x1 = x.column(0);
+        // XType.ENUM 1
+        let c1 = x.column(1);
+        let x2 = c1.mapv(|v| (v == 0.) as i32 as f64);
+        let x3 = c1.mapv(|v| (v == 1.) as i32 as f64);
+        let x4 = c1.mapv(|v| (v == 2.) as i32 as f64);
+        // XType.ENUM 2
+        let c2 = x.column(2);
+        let x5 = c2.mapv(|v| (v == 0.) as i32 as f64);
+        let x6 = c2.mapv(|v| (v == 1.) as i32 as f64);
+        // XTypes.ORD
+        let i = x.column(3);
+
+        let y = (x2.clone() + x3.mapv(|v| 2. * v) + x4.mapv(|v| 3. * v)) * x5 * x1
+            + (x2 + x3.mapv(|v| 2. * v) + x4.mapv(|v| 3. * v)) * x6 * 0.95 * x1
+            + i;
+        let d = y.len();
+        y.into_shape((d, 1)).unwrap()
+    }
+
+    #[test]
+    #[serial]
+    fn test_mixobj_mixint_egor_builder() {
+        let n_iter = 30;
+        let xtypes = vec![
+            XType::Cont(-5., 5.),
+            XType::Enum(3),
+            XType::Enum(2),
+            XType::Ord(vec![0., 2., 3.]),
+        ];
+
+        let res = EgorBuilder::optimize(mixobj)
+            .random_seed(42)
+            .min_within_mixint_space(&xtypes)
+            .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
+            .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
+            .n_iter(n_iter)
+            .run()
+            .unwrap();
+        println!("res={:?}", res);
+        assert_abs_diff_eq!(&array![-15.], &res.y_opt, epsilon = 1.);
+    }
 }

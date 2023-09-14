@@ -1210,8 +1210,8 @@ where
         x: &Array2<f64>,
     ) -> Array2<f64> {
         let params = if let Some(xtypes) = &self.xtypes {
-            let fold = fold_with_enum_index(xtypes, &x.view());
-            cast_to_discrete_values(xtypes, &fold)
+            let xcast = cast_to_discrete_values(xtypes, x);
+            fold_with_enum_index(xtypes, &xcast.view())
         } else {
             x.to_owned()
         };

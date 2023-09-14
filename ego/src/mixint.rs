@@ -49,8 +49,8 @@ pub fn unfold_xtypes_as_continuous_limits(xtypes: &[XType]) -> Array2<f64> {
             ]);
         }
         XType::Enum(v) => {
-            dim += v.len();
-            v.iter().for_each(|_| {
+            dim += v;
+            (1..=*v).for_each(|_| {
                 xlimits.extend([0., 1.]);
             })
         }
@@ -78,10 +78,10 @@ pub fn fold_with_enum_index(
             unfold_index += 1;
         }
         XType::Enum(v) => {
-            let xenum = x.slice(s![.., j..j + v.len()]);
+            let xenum = x.slice(s![.., j..j + v]);
             let argmaxx = xenum.map_axis(Axis(1), |row| row.argmax().unwrap() as f64);
             col.assign(&argmaxx);
-            unfold_index += v.len();
+            unfold_index += v;
         }
     });
     xfold
@@ -92,7 +92,7 @@ fn compute_unfolded_dimension(xtypes: &[XType]) -> usize {
     xtypes
         .iter()
         .map(|s| match s {
-            XType::Enum(v) => v.len(),
+            XType::Enum(v) => *v,
             _ => 1,
         })
         .reduce(|acc, l| -> usize { acc + l })
@@ -119,7 +119,7 @@ fn unfold_with_enum_mask(
             unfold_index += 1;
         }
         XType::Enum(v) => {
-            let mut unfold = Array::zeros((x.nrows(), v.len()));
+            let mut unfold = Array::zeros((x.nrows(), *v));
             Zip::from(unfold.rows_mut())
                 .and(x.rows())
                 .for_each(|mut row, xrow| {
@@ -127,9 +127,9 @@ fn unfold_with_enum_mask(
                     row[[index]] = 1.;
                 });
             xunfold
-                .slice_mut(s![.., unfold_index..unfold_index + v.len()])
+                .slice_mut(s![.., unfold_index..unfold_index + v])
                 .assign(&unfold);
-            unfold_index += v.len();
+            unfold_index += v;
         }
     });
     xunfold
@@ -162,16 +162,16 @@ fn cast_to_discrete_values_mut(xtypes: &[XType], x: &mut ArrayBase<impl DataMut<
             xcol += 1;
         }
         XType::Enum(v) => {
-            let mut xenum = x.slice_mut(s![.., xcol..xcol + v.len()]);
+            let mut xenum = x.slice_mut(s![.., xcol..xcol + *v]);
             let argmaxx = xenum.map_axis(Axis(1), |row| row.argmax().unwrap());
             Zip::from(xenum.rows_mut())
                 .and(&argmaxx)
                 .for_each(|mut row, &m| {
-                    let mut xcast = Array::zeros(v.len());
+                    let mut xcast = Array::zeros(*v);
                     xcast[m] = 1.;
                     row.assign(&xcast);
                 });
-            xcol += v.len();
+            xcol += *v;
         }
     });
 }
@@ -660,11 +660,7 @@ mod tests {
     fn test_mixint_lhs() {
         let xtypes = vec![
             XType::Cont(-10.0, 10.0),
-            XType::Enum(vec![
-                "blue".to_string(),
-                "red".to_string(),
-                "green".to_string(),
-            ]),
+            XType::Enum(3),
             XType::Int(-10, 10),
             XType::Ord(vec![1., 3., 5., 8.]),
         ];
@@ -733,16 +729,7 @@ mod tests {
 
     #[test]
     fn test_mixint_moe_3d() {
-        let xtypes = vec![
-            XType::Int(0, 5),
-            XType::Cont(0., 4.),
-            XType::Enum(vec![
-                "blue".to_string(),
-                "red".to_string(),
-                "green".to_string(),
-                "yellow".to_string(),
-            ]),
-        ];
+        let xtypes = vec![XType::Int(0, 5), XType::Cont(0., 4.), XType::Enum(4)];
 
         let mixi = MixintContext::new(&xtypes);
         let mixi_lhs = mixi.create_sampling(Some(0));
