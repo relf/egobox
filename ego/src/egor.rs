@@ -543,6 +543,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_egor_g24_qei_egor_builder() {
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
@@ -596,6 +597,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_mixsinx_reclustering_mixint_egor_builder() {
         let n_iter = 30;
         let doe = array![[0.], [7.], [25.]];
@@ -655,7 +657,11 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixobj_mixint_egor_builder() {
-        let n_iter = 30;
+        let env = env_logger::Env::new().filter_or("EGOBOX_LOG", "info");
+        let mut builder = env_logger::Builder::from_env(env);
+        let builder = builder.target(env_logger::Target::Stdout);
+        builder.try_init().ok();
+        let n_iter = 10;
         let xtypes = vec![
             XType::Cont(-5., 5.),
             XType::Enum(3),

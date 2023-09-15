@@ -74,7 +74,8 @@ pub fn find_best_result_index<F: Float>(
         }
     } else {
         // unconstrained optimization
-        y_data.column(0).argmin().unwrap()
+        let y_best = y_data.column(0).argmin().unwrap();
+        y_best
     }
 }
 
@@ -454,7 +455,6 @@ where
             Some((x_data, y_data)) => {
                 let best_index = find_best_result_index(y_data, self.cstr_tol);
                 let best_iter = best_index.saturating_sub(self.doe_size) as u64 + 1;
-
                 if best_iter > self.last_best_iter {
                     let param = x_data.row(best_index).to_owned();
                     std::mem::swap(&mut self.prev_best_param, &mut self.best_param);
@@ -463,8 +463,13 @@ where
                     let cost = y_data.row(best_index).to_owned();
                     std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
                     self.best_cost = Some(cost);
-                    self.last_best_iter = best_iter;
+                    if best_index > self.doe_size {
+                        self.last_best_iter = best_iter;
+                    } else {
+                        // best point in doe => self.last_best_iter remains 0
+                    }
                 }
+                if self.best_cost.is_none() {}
             }
         };
     }
