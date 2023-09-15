@@ -92,7 +92,7 @@ pub(crate) fn lhs(
 ///         * when FLOAT: xlimits is [float lower_bound, float upper_bound],
 ///         * when INT: xlimits is [int lower_bound, int upper_bound],
 ///         * when ORD: xlimits is [float_1, float_2, ..., float_n],
-///         * when ENUM: xlimits is just the int size of the enumeration otherwise a list of tags is specified 
+///         * when ENUM: xlimits is just the int size of the enumeration otherwise a list of tags is specified
 ///           (eg xlimits=[3] or tags=["red", "green", "blue"], tags are there for documention purpose but
 ///            tags specific values themselves are not used only indices in the enum are used hence
 ///            we can just specify the size of the enum, xlimits=[3]),
@@ -336,7 +336,7 @@ impl Egor {
                     XType::FLOAT,
                     XType::INT,
                     XType::ORD,
-                    XType::ENUM,                    
+                    XType::ENUM,
                     i
                 ),
             })
