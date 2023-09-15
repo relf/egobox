@@ -86,8 +86,16 @@ pub(crate) fn lhs(
 ///     cstr_tol (float):
 ///         tolerance on constraints violation (cstr < tol).
 ///
-///     xspecs (list(XSpec)) where XSpec(xtype=FLOAT|INT, xlimits=[lower bound, upper bound]):
-///         Bounds of the nx components of the input x (eg. len(xspecs) == nx)
+///     xspecs (list(XSpec)) where XSpec(xtype=FLOAT|INT|ORD|ENUM, xlimits=[<f(xtype)>] or tags=[strings]):
+///         Specifications of the nx components of the input x (eg. len(xspecs) == nx)
+///         Depending on the x type we get the following for xlimits:
+///         * when FLOAT: xlimits is [float lower_bound, float upper_bound],
+///         * when INT: xlimits is [int lower_bound, int upper_bound],
+///         * when ORD: xlimits is [float_1, float_2, ..., float_n],
+///         * when ENUM: xlimits is just the int size of the enumeration otherwise a list of tags is specified 
+///           (eg xlimits=[3] or tags=["red", "green", "blue"], tags are there for documention purpose but
+///            tags specific values themselves are not used only indices in the enum are used hence
+///            we can just specify the size of the enum, xlimits=[3]),
 ///
 ///     n_start (int > 0):
 ///         Number of runs of infill strategy optimizations (best result taken)
@@ -316,7 +324,13 @@ impl Egor {
                     egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
                 }
                 XType(XType::ORD) => egobox_ego::XType::Ord(spec.xlimits.clone()),
-                XType(XType::ENUM) => egobox_ego::XType::Enum(spec.xnames.len()),
+                XType(XType::ENUM) => {
+                    if spec.tags.is_empty() {
+                        egobox_ego::XType::Enum(spec.xlimits[0] as usize)
+                    } else {
+                        egobox_ego::XType::Enum(spec.tags.len())
+                    }
+                },
                 XType(i) => panic!(
                     "Bad variable type: should be either XType.FLOAT {}, XType.INT {}, XType.ORD {}, XType.ENUM {}, got {}",
                     XType::FLOAT,
@@ -327,6 +341,7 @@ impl Egor {
                 ),
             })
             .collect();
+        println!("{:?}", xtypes);
 
         let mut mixintegor_build = egobox_ego::EgorBuilder::optimize(obj);
         if let Some(seed) = self.seed {

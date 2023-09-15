@@ -129,18 +129,18 @@ pub(crate) struct XSpec {
     #[pyo3(get)]
     pub(crate) xlimits: Vec<f64>,
     #[pyo3(get)]
-    pub(crate) xnames: Vec<String>,
+    pub(crate) tags: Vec<String>,
 }
 
 #[pymethods]
 impl XSpec {
     #[new]
-    #[pyo3(signature = (xtype, xlimits=vec![], xnames=vec![]))]
-    pub(crate) fn new(xtype: XType, xlimits: Vec<f64>, xnames: Vec<String>) -> Self {
+    #[pyo3(signature = (xtype, xlimits=vec![], tags=vec![]))]
+    pub(crate) fn new(xtype: XType, xlimits: Vec<f64>, tags: Vec<String>) -> Self {
         XSpec {
             xtype,
             xlimits,
-            xnames,
+            tags,
         }
     }
 }
