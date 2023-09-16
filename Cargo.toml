@@ -1,13 +1,18 @@
 [package]
 name = "egobox"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A toolbox for efficient global optimization"
 license = "Apache-2.0"
 repository = "https://github.com/relf/egobox"
-keywords = ["machine-learning", "doe", "gaussian-process", 
-            "mixture-of-experts", "optimization"]
+keywords = [
+  "machine-learning",
+  "doe",
+  "gaussian-process",
+  "mixture-of-experts",
+  "optimization",
+]
 categories = ["algorithms", "mathematics", "science"]
 
 exclude = [".github/"]
@@ -25,14 +30,14 @@ persistent-ego = ["egobox-ego/persistent"]
 blas = ["ndarray/blas", "egobox-gp/blas", "egobox-moe/blas", "egobox-ego/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.10.0", path="./doe" }
-egobox-gp = { version = "0.10.0", path="./gp" }
-egobox-moe = { version = "0.10.0", path="./moe", features=["persistent"] }
-egobox-ego = { version = "0.10.0", path="./ego", features=["persistent"] }
+egobox-doe = { version = "0.10.1", path = "./doe" }
+egobox-gp = { version = "0.10.1", path = "./gp" }
+egobox-moe = { version = "0.10.1", path = "./moe", features = ["persistent"] }
+egobox-ego = { version = "0.10.1", path = "./ego", features = ["persistent"] }
 
 linfa = { version = "0.6.1", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx"]}
+ndarray = { version = "0.15", features = ["rayon", "approx"] }
 ndarray-rand = "0.14"
 numpy = "0.18"
 anyhow = "1"
@@ -40,7 +45,7 @@ rayon = "1"
 
 rand_xoshiro = "0.6"
 libm = "0.2"
-finitediff = { version="0.1.4", features = ["ndarray"] }
+finitediff = { version = "0.1.4", features = ["ndarray"] }
 env_logger = "0.10.0"
 log = "0.4"
 pyo3 = { version = "0.18.0", features = ["extension-module"] }
@@ -54,9 +59,4 @@ approx = "0.4"
 argmin_testfunctions = "0.1"
 
 [workspace]
-members = [
-  "doe", 
-  "gp",
-  "moe",
-  "ego"
-]
+members = ["doe", "gp", "moe", "ego"]
