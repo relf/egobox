@@ -1119,8 +1119,8 @@ mod tests {
 
     #[test]
     fn test_kpls_griewank() {
-        let dims = vec![5, 10, 20]; //, 60];
-        let nts = vec![100, 300, 400]; //, 800];
+        let dims = [5, 10, 20]; //, 60];
+        let nts = [100, 300, 400]; //, 800];
 
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();

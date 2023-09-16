@@ -44,13 +44,13 @@ pub fn unfold_xtypes_as_continuous_limits(xtypes: &[XType]) -> Array2<f64> {
         XType::Ord(v) => {
             dim += 1;
             xlimits.extend([
-                (*v.iter().min().unwrap()) as f64,
-                (*v.iter().max().unwrap()) as f64,
+                (v.iter().fold(f64::INFINITY, |a, &b| a.min(b))),
+                (v.iter().fold(-f64::INFINITY, |a, &b| a.max(b))),
             ]);
         }
         XType::Enum(v) => {
-            dim += v.len();
-            v.iter().for_each(|_| {
+            dim += v;
+            (1..=*v).for_each(|_| {
                 xlimits.extend([0., 1.]);
             })
         }
@@ -78,10 +78,10 @@ pub fn fold_with_enum_index(
             unfold_index += 1;
         }
         XType::Enum(v) => {
-            let xenum = x.slice(s![.., j..j + v.len()]);
+            let xenum = x.slice(s![.., j..j + v]);
             let argmaxx = xenum.map_axis(Axis(1), |row| row.argmax().unwrap() as f64);
             col.assign(&argmaxx);
-            unfold_index += v.len();
+            unfold_index += v;
         }
     });
     xfold
@@ -92,7 +92,7 @@ fn compute_unfolded_dimension(xtypes: &[XType]) -> usize {
     xtypes
         .iter()
         .map(|s| match s {
-            XType::Enum(v) => v.len(),
+            XType::Enum(v) => *v,
             _ => 1,
         })
         .reduce(|acc, l| -> usize { acc + l })
@@ -119,7 +119,7 @@ fn unfold_with_enum_mask(
             unfold_index += 1;
         }
         XType::Enum(v) => {
-            let mut unfold = Array::zeros((x.nrows(), v.len()));
+            let mut unfold = Array::zeros((x.nrows(), *v));
             Zip::from(unfold.rows_mut())
                 .and(x.rows())
                 .for_each(|mut row, xrow| {
@@ -127,18 +127,18 @@ fn unfold_with_enum_mask(
                     row[[index]] = 1.;
                 });
             xunfold
-                .slice_mut(s![.., unfold_index..unfold_index + v.len()])
+                .slice_mut(s![.., unfold_index..unfold_index + v])
                 .assign(&unfold);
-            unfold_index += v.len();
+            unfold_index += v;
         }
     });
     xunfold
 }
 
 /// Find closest value to `val` in given slice `v`.
-fn take_closest(v: &[i32], val: f64) -> i32 {
+fn take_closest(v: &[f64], val: f64) -> f64 {
     let idx = Array::from_vec(v.to_vec())
-        .map(|refval| (val - *refval as f64).abs())
+        .map(|refval| (val - *refval).abs())
         .argmin()
         .unwrap();
     v[idx]
@@ -157,24 +157,21 @@ fn cast_to_discrete_values_mut(xtypes: &[XType], x: &mut ArrayBase<impl DataMut<
             xcol += 1;
         }
         XType::Ord(v) => {
-            let xround = x
-                .column(xcol)
-                .mapv(|val| take_closest(v, val) as f64)
-                .to_owned();
+            let xround = x.column(xcol).mapv(|val| take_closest(v, val)).to_owned();
             x.column_mut(xcol).assign(&xround);
             xcol += 1;
         }
         XType::Enum(v) => {
-            let mut xenum = x.slice_mut(s![.., xcol..xcol + v.len()]);
+            let mut xenum = x.slice_mut(s![.., xcol..xcol + *v]);
             let argmaxx = xenum.map_axis(Axis(1), |row| row.argmax().unwrap());
             Zip::from(xenum.rows_mut())
                 .and(&argmaxx)
                 .for_each(|mut row, &m| {
-                    let mut xcast = Array::zeros(v.len());
+                    let mut xcast = Array::zeros(*v);
                     xcast[m] = 1.;
                     row.assign(&xcast);
                 });
-            xcol += v.len();
+            xcol += *v;
         }
     });
 }
@@ -315,7 +312,6 @@ impl MixintMoeValidParams {
             moe: self
                 .surrogate_builder
                 .clone()
-                .regression_spec(RegressionSpec::CONSTANT)
                 .check()?
                 .train(&xcast, &yt.to_owned())
                 .unwrap(),
@@ -341,8 +337,7 @@ impl MixintMoeValidParams {
             moe: self
                 .surrogate_builder
                 .clone()
-                .regression_spec(RegressionSpec::CONSTANT)
-                .check_ref()? // mixinteger works only with constant regression
+                .check_ref()?
                 .train_on_clusters(&xcast, &yt.to_owned(), clustering)
                 .unwrap(),
             xtypes: self.xtypes.clone(),
@@ -665,13 +660,9 @@ mod tests {
     fn test_mixint_lhs() {
         let xtypes = vec![
             XType::Cont(-10.0, 10.0),
-            XType::Enum(vec![
-                "blue".to_string(),
-                "red".to_string(),
-                "green".to_string(),
-            ]),
+            XType::Enum(3),
             XType::Int(-10, 10),
-            XType::Ord(vec![1, 3, 5, 8]),
+            XType::Ord(vec![1., 3., 5., 8.]),
         ];
 
         let mixi = MixintContext::new(&xtypes);
@@ -738,16 +729,7 @@ mod tests {
 
     #[test]
     fn test_mixint_moe_3d() {
-        let xtypes = vec![
-            XType::Int(0, 5),
-            XType::Cont(0., 4.),
-            XType::Enum(vec![
-                "blue".to_string(),
-                "red".to_string(),
-                "green".to_string(),
-                "yellow".to_string(),
-            ]),
-        ];
+        let xtypes = vec![XType::Int(0, 5), XType::Cont(0., 4.), XType::Enum(4)];
 
         let mixi = MixintContext::new(&xtypes);
         let mixi_lhs = mixi.create_sampling(Some(0));

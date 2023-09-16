@@ -108,6 +108,10 @@ impl XType {
     pub(crate) const FLOAT: u8 = 1;
     #[classattr]
     pub(crate) const INT: u8 = 2;
+    #[classattr]
+    pub(crate) const ORD: u8 = 3;
+    #[classattr]
+    pub(crate) const ENUM: u8 = 4;
     #[new]
     pub(crate) fn new(xtype: u8) -> Self {
         XType(xtype)
@@ -124,12 +128,19 @@ pub(crate) struct XSpec {
     pub(crate) xtype: XType,
     #[pyo3(get)]
     pub(crate) xlimits: Vec<f64>,
+    #[pyo3(get)]
+    pub(crate) tags: Vec<String>,
 }
 
 #[pymethods]
 impl XSpec {
     #[new]
-    pub(crate) fn new(xtype: XType, xlimits: Vec<f64>) -> Self {
-        XSpec { xtype, xlimits }
+    #[pyo3(signature = (xtype, xlimits=vec![], tags=vec![]))]
+    pub(crate) fn new(xtype: XType, xlimits: Vec<f64>, tags: Vec<String>) -> Self {
+        XSpec {
+            xtype,
+            xlimits,
+            tags,
+        }
     }
 }
