@@ -1,12 +1,18 @@
 [package]
 name = "egobox-doe"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A library for design of experiments"
 license = "Apache-2.0"
 repository = "https://github.com/relf/egobox"
-keywords = ["machine-learning", "design", "experiments", "lhs", "full-factorial"]
+keywords = [
+    "machine-learning",
+    "design",
+    "experiments",
+    "lhs",
+    "full-factorial",
+]
 categories = ["algorithms", "mathematics", "science"]
 
 [features]
@@ -16,7 +22,7 @@ serializable = ["serde", "rand_xoshiro/serde1"]
 
 [dependencies]
 linfa = { version = "0.6.1", default-features = false }
-ndarray = { version = "0.15", features = ["rayon", "approx"]}
+ndarray = { version = "0.15", features = ["rayon", "approx"] }
 ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 rand_xoshiro = "0.6"
@@ -29,5 +35,5 @@ serde_json = "1"
 approx = "0.4"
 
 [[bench]]
-name = "lhs" 
+name = "lhs"
 harness = false

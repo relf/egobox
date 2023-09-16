@@ -1,6 +1,6 @@
 [package]
 name = "egobox-ego"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A library for efficient global optimization"
@@ -16,34 +16,38 @@ persistent = ["serde_json"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.10.0", path = "../doe", features = ["serializable"] }
-egobox-gp = { version = "0.10.0", path = "../gp", features = ["serializable"] }
-egobox-moe = { version = "0.10.0", path = "../moe", features = ["serializable"] }
+egobox-doe = { version = "0.10.1", path = "../doe", features = [
+    "serializable",
+] }
+egobox-gp = { version = "0.10.1", path = "../gp", features = ["serializable"] }
+egobox-moe = { version = "0.10.1", path = "../moe", features = [
+    "serializable",
+] }
 
 linfa = { version = "0.6.1", default-features = false }
 linfa-pls = { version = "0.6.1", default-features = false }
 linfa-linalg = { version = "0.1", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx"]}
+ndarray = { version = "0.15", features = ["rayon", "approx"] }
 ndarray-linalg = { version = "0.15", optional = true }
 ndarray-stats = "0.5"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
-rayon="1"
+rayon = "1"
 
 argmin = { version = "0.8.0", features = ["serde1", "ctrlc"] }
 instant = "0.1"
 nlopt = "0.6.0"
 rand_xoshiro = { version = "0.6", features = ["serde1"] }
 libm = "0.2.6"
-finitediff = { version="0.1", features = ["ndarray"] }
+finitediff = { version = "0.1", features = ["ndarray"] }
 # sort-axis
 rawpointer = { version = "0.2" }
 log = "0.4"
 env_logger = "0.10.0"
 thiserror = "1"
 anyhow = "1"
-clap = { version = "4", features=["derive"] }
+clap = { version = "4", features = ["derive"] }
 
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", optional = true }
