@@ -1,6 +1,6 @@
 [package]
 name = "egobox"
-version = "0.10.1"
+version = "0.10.1-post1"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2018"
 description = "A toolbox for efficient global optimization"
