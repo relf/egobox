@@ -6,6 +6,12 @@
 name: python
 
 on:
+  push:
+    branches:
+      - master
+    tags:
+      - '*'
+  pull_request:
   workflow_dispatch:
   release:
     types: [published]
