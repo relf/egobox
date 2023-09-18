@@ -88,26 +88,26 @@ jobs:
   #         name: wheels
   #         path: dist
 
-  sdist:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Build sdist
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --out dist --release
-      - name: Upload sdist
-        uses: actions/upload-artifact@v3
-        with:
-          name: wheels
-          path: dist
+  # sdist:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Build sdist
+  #       uses: PyO3/maturin-action@v1
+  #       with:
+  #         command: build
+  #         args: --out dist --release
+  #     - name: Upload sdist
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: wheels
+  #         path: dist
 
   release:
     name: Release
     runs-on: ubuntu-latest
     if: "startsWith(github.ref, 'refs/tags/')"
-    needs: [linux, windows, sdist]
+    needs: [linux, windows]
     steps:
       - uses: actions/download-artifact@v3
         with:
