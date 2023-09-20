@@ -4,13 +4,13 @@
 #![allow(dead_code)]
 use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
-use egobox_doe::{Lhs, SamplingMethod};
+use egobox_doe::{FullFactorial, Lhs, Random};
 use egobox_moe::{
     Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec,
     Surrogate,
 };
 use linfa::traits::{Fit, PredictInplace};
-use linfa::{DatasetBase, ParamGuard};
+use linfa::{DatasetBase, Float, ParamGuard};
 use ndarray::{s, Array, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -24,34 +24,37 @@ use egobox_moe::MoeError;
 use std::fs;
 #[cfg(feature = "persistent")]
 use std::io::Write;
+use std::marker::PhantomData;
 
 /// Expand xlimits to add continuous dimensions for enumeration x features.
 ///
 /// Each level of an enumerate gives a new continuous dimension in [0, 1].
 /// Each integer dimensions are relaxed continuously.
-pub fn unfold_xtypes_as_continuous_limits(xtypes: &[XType]) -> Array2<f64> {
-    let mut xlimits: Vec<f64> = vec![];
+pub fn unfold_xtypes_as_continuous_limits<F: Float>(xtypes: &[XType]) -> Array2<F> {
+    let mut xlimits: Vec<F> = vec![];
     let mut dim = 0;
     xtypes.iter().for_each(|xtype| match xtype {
         XType::Cont(lower, upper) => {
             dim += 1;
-            xlimits.extend([*lower, *upper]);
+            xlimits.extend([F::cast(*lower), F::cast(*upper)]);
         }
         XType::Int(lower, upper) => {
             dim += 1;
-            xlimits.extend([*lower as f64, *upper as f64]);
+            xlimits.extend([F::cast(*lower), F::cast(*upper)]);
         }
         XType::Ord(v) => {
             dim += 1;
             xlimits.extend([
-                (v.iter().fold(f64::INFINITY, |a, &b| a.min(b))),
-                (v.iter().fold(-f64::INFINITY, |a, &b| a.max(b))),
+                (v.iter()
+                    .fold(F::infinity(), |a, &b| F::cast(a).min(F::cast(b)))),
+                (v.iter()
+                    .fold(-F::infinity(), |a, &b| F::cast(a).max(F::cast(b)))),
             ]);
         }
         XType::Enum(v) => {
             dim += v;
             (1..=*v).for_each(|_| {
-                xlimits.extend([0., 1.]);
+                xlimits.extend([F::zero(), F::one()]);
             })
         }
     });
@@ -66,10 +69,10 @@ pub fn unfold_xtypes_as_continuous_limits(xtypes: &[XType]) -> Array2<f64> {
 /// the input x may contain the mask [..., 0, 0, 1, ...] which will be contracted in [..., 2, ...]
 /// meaning the "green" value.
 /// This function is the opposite of unfold_with_enum_mask().
-pub fn fold_with_enum_index(
+pub fn fold_with_enum_index<F: Float>(
     xtypes: &[XType],
-    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-) -> Array2<f64> {
+    x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+) -> Array2<F> {
     let mut xfold = Array::zeros((x.nrows(), xtypes.len()));
     let mut unfold_index = 0;
     Zip::indexed(xfold.columns_mut()).for_each(|j, mut col| match &xtypes[j] {
@@ -79,7 +82,7 @@ pub fn fold_with_enum_index(
         }
         XType::Enum(v) => {
             let xenum = x.slice(s![.., j..j + v]);
-            let argmaxx = xenum.map_axis(Axis(1), |row| row.argmax().unwrap() as f64);
+            let argmaxx = xenum.map_axis(Axis(1), |row| F::cast(row.argmax().unwrap()));
             col.assign(&argmaxx);
             unfold_index += v;
         }
@@ -136,7 +139,7 @@ fn unfold_with_enum_mask(
 }
 
 /// Find closest value to `val` in given slice `v`.
-fn take_closest(v: &[f64], val: f64) -> f64 {
+fn take_closest<F: Float>(v: &[F], val: F) -> F {
     let idx = Array::from_vec(v.to_vec())
         .map(|refval| (val - *refval).abs())
         .argmin()
@@ -147,7 +150,10 @@ fn take_closest(v: &[f64], val: f64) -> f64 {
 /// Project continuously relaxed values to their closer assessable values.
 ///
 /// See cast_to_discrete_values
-fn cast_to_discrete_values_mut(xtypes: &[XType], x: &mut ArrayBase<impl DataMut<Elem = f64>, Ix2>) {
+fn cast_to_discrete_values_mut<F: Float>(
+    xtypes: &[XType],
+    x: &mut ArrayBase<impl DataMut<Elem = F>, Ix2>,
+) {
     let mut xcol = 0;
     xtypes.iter().for_each(|s| match s {
         XType::Cont(_, _) => xcol += 1,
@@ -157,7 +163,11 @@ fn cast_to_discrete_values_mut(xtypes: &[XType], x: &mut ArrayBase<impl DataMut<
             xcol += 1;
         }
         XType::Ord(v) => {
-            let xround = x.column(xcol).mapv(|val| take_closest(v, val)).to_owned();
+            let vals: Vec<F> = v.iter().map(|&v| F::cast(v)).collect();
+            let xround = x
+                .column(xcol)
+                .mapv(|val| take_closest(&vals, val))
+                .to_owned();
             x.column_mut(xcol).assign(&xround);
             xcol += 1;
         }
@@ -168,7 +178,7 @@ fn cast_to_discrete_values_mut(xtypes: &[XType], x: &mut ArrayBase<impl DataMut<
                 .and(&argmaxx)
                 .for_each(|mut row, &m| {
                     let mut xcast = Array::zeros(*v);
-                    xcast[m] = 1.;
+                    xcast[m] = F::one();
                     row.assign(&xcast);
                 });
             xcol += *v;
@@ -192,26 +202,34 @@ pub fn cast_to_discrete_values(
     xcast
 }
 
+enum Method {
+    Lhs,
+    FullFactorial,
+    Random,
+}
+
 /// A decorator of LHS sampling that takes into account XType specifications
 /// casting continuous LHS result from floats to discrete types.
 #[derive(Serialize, Deserialize)]
-pub struct MixintSampling {
-    /// The continuous LHS sampling method
-    lhs: Lhs<f64, Xoshiro256Plus>,
+pub struct MixintSampling<F: Float, S: egobox_doe::SamplingMethod<F>> {
+    /// The continuous sampling method
+    method: S,
     /// The input specifications
     xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
     output_in_folded_space: bool,
+    phantom: PhantomData<F>,
 }
 
-impl MixintSampling {
+impl<F: Float, S: egobox_doe::SamplingMethod<F>> MixintSampling<F, S> {
     /// Constructor using `xtypes` specifications
-    pub fn new(xtypes: Vec<XType>) -> Self {
+    pub fn new(method: S, xtypes: Vec<XType>) -> Self {
         MixintSampling {
-            lhs: Lhs::new(&unfold_xtypes_as_continuous_limits(&xtypes)),
+            method,
             xtypes: xtypes.clone(),
             output_in_folded_space: false,
+            phantom: PhantomData,
         }
     }
 
@@ -222,17 +240,19 @@ impl MixintSampling {
     }
 }
 
-impl SamplingMethod<f64> for MixintSampling {
-    fn sampling_space(&self) -> &Array2<f64> {
-        self.lhs.sampling_space()
+impl<F: Float, S: egobox_doe::SamplingMethod<F>> egobox_doe::SamplingMethod<F>
+    for MixintSampling<F, S>
+{
+    fn sampling_space(&self) -> &Array2<F> {
+        self.method.sampling_space()
     }
 
-    fn normalized_sample(&self, ns: usize) -> Array2<f64> {
-        self.lhs.normalized_sample(ns)
+    fn normalized_sample(&self, ns: usize) -> Array2<F> {
+        self.method.normalized_sample(ns)
     }
 
-    fn sample(&self, ns: usize) -> Array2<f64> {
-        let mut doe = self.lhs.sample(ns);
+    fn sample(&self, ns: usize) -> Array2<F> {
+        let mut doe = self.method.sample(ns);
         cast_to_discrete_values_mut(&self.xtypes, &mut doe);
         if self.output_in_folded_space {
             fold_with_enum_index(&self.xtypes, &doe.view())
@@ -621,7 +641,10 @@ impl MixintContext {
     }
 
     /// Create a mixed integer LHS
-    pub fn create_sampling(&self, seed: Option<u64>) -> MixintSampling {
+    pub fn create_lhs_sampling<F: Float>(
+        &self,
+        seed: Option<u64>,
+    ) -> MixintSampling<F, Lhs<F, Xoshiro256Plus>> {
         let lhs = seed.map_or(
             Lhs::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)),
             |seed| {
@@ -630,9 +653,40 @@ impl MixintContext {
             },
         );
         MixintSampling {
-            lhs,
+            method: lhs,
             xtypes: self.xtypes.clone(),
             output_in_folded_space: self.work_in_folded_space,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Create a mixed integer full factorial
+    pub fn create_ffact_sampling<F: Float>(&self) -> MixintSampling<F, FullFactorial<F>> {
+        MixintSampling {
+            method: FullFactorial::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)),
+            xtypes: self.xtypes.clone(),
+            output_in_folded_space: self.work_in_folded_space,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Create a mixed integer random sampling
+    pub fn create_rand_sampling<F: Float>(
+        &self,
+        seed: Option<u64>,
+    ) -> MixintSampling<F, Random<F, Xoshiro256Plus>> {
+        let rand = seed.map_or(
+            Random::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)),
+            |seed| {
+                let rng = Xoshiro256Plus::seed_from_u64(seed);
+                Random::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)).with_rng(rng)
+            },
+        );
+        MixintSampling {
+            method: rand,
+            xtypes: self.xtypes.clone(),
+            output_in_folded_space: self.work_in_folded_space,
+            phantom: PhantomData,
         }
     }
 
@@ -652,6 +706,7 @@ impl MixintContext {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use egobox_doe::SamplingMethod;
     use egobox_moe::CorrelationSpec;
     use linfa::Dataset;
     use ndarray::array;
@@ -666,7 +721,7 @@ mod tests {
         ];
 
         let mixi = MixintContext::new(&xtypes);
-        let mixi_lhs = mixi.create_sampling(Some(0));
+        let mixi_lhs = mixi.create_lhs_sampling(Some(0));
 
         let actual = mixi_lhs.sample(10);
         let expected = array![
@@ -680,6 +735,63 @@ mod tests {
             [-8.291614427265058, 0.0, 7.0, 3.0],
             [8.455590615130134, 1.0, 6.0, 5.0],
             [0.9688101123304538, 0.0, -9.0, 5.0]
+        ];
+        assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_mixint_ffact() {
+        let xtypes = vec![XType::Cont(-10.0, 10.0), XType::Int(-10, 10)];
+
+        let mixi = MixintContext::new(&xtypes);
+        let mixi_ff = mixi.create_ffact_sampling();
+
+        let actual = mixi_ff.sample(16);
+        let expected = array![
+            [-10.0, -10.0],
+            [-10.0, -3.0],
+            [-10.0, 3.0],
+            [-10.0, 10.0],
+            [-3.333333333333334, -10.0],
+            [-3.333333333333334, -3.0],
+            [-3.333333333333334, 3.0],
+            [-3.333333333333334, 10.0],
+            [3.333333333333332, -10.0],
+            [3.333333333333332, -3.0],
+            [3.333333333333332, 3.0],
+            [3.333333333333332, 10.0],
+            [10.0, -10.0],
+            [10.0, -3.0],
+            [10.0, 3.0],
+            [10.0, 10.0]
+        ];
+        assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_mixint_random() {
+        let xtypes = vec![
+            XType::Cont(-10.0, 10.0),
+            XType::Enum(3),
+            XType::Int(-10, 10),
+            XType::Ord(vec![1., 3., 5., 8.]),
+        ];
+
+        let mixi = MixintContext::new(&xtypes);
+        let mixi_rand = mixi.create_rand_sampling(Some(0));
+
+        let actual = mixi_rand.sample(10);
+        let expected = array![
+            [7.08385572734942, 1.0, -5.0, 1.0],
+            [3.923592153620703, 2.0, -3.0, 3.0],
+            [1.6925857875746217, 1.0, 10.0, 3.0],
+            [-0.12628232178356846, 1.0, 4.0, 3.0],
+            [-4.333973977708889, 2.0, -7.0, 3.0],
+            [-0.31189887669548, 2.0, 2.0, 8.0],
+            [5.274476356096036, 0.0, -5.0, 3.0],
+            [0.21749742902273717, 2.0, 6.0, 5.0],
+            [6.267468405479235, 0.0, -3.0, 8.0],
+            [-5.444093848698666, 0.0, 7.0, 8.0]
         ];
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
@@ -732,7 +844,7 @@ mod tests {
         let xtypes = vec![XType::Int(0, 5), XType::Cont(0., 4.), XType::Enum(4)];
 
         let mixi = MixintContext::new(&xtypes);
-        let mixi_lhs = mixi.create_sampling(Some(0));
+        let mixi_lhs = mixi.create_lhs_sampling(Some(0));
 
         let n = mixi.get_unfolded_dim() * 10;
         let xt = mixi_lhs.sample(n);
@@ -746,7 +858,7 @@ mod tests {
             .expect("Mixint surrogate creation");
 
         let ntest = 10;
-        let mixi_lhs = mixi.create_sampling(Some(42));
+        let mixi_lhs = mixi.create_lhs_sampling(Some(42));
 
         let xtest = mixi_lhs.sample(ntest);
         let ytest = mixi_moe
