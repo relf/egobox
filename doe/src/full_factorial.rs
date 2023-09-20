@@ -53,7 +53,6 @@ impl<F: Float> SamplingMethod<F> for FullFactorial<F> {
             let ind = (&weights - &w).argmax().unwrap();
             num_list[ind] += 1;
         }
-
         let nrows = num_list.fold(1, |acc, n| acc * n);
         let mut doe = Array2::<F>::zeros((nrows, nx));
 
@@ -64,7 +63,11 @@ impl<F: Float> SamplingMethod<F> for FullFactorial<F> {
             level_repeat /= n;
             let mut chunk = Array1::zeros(level_repeat * n);
             for i in 0..n {
-                let fill = F::cast(i) / F::cast(n - 1);
+                let fill = if n > 1 {
+                    F::cast(i) / F::cast(n - 1)
+                } else {
+                    F::cast(i)
+                };
                 chunk
                     .slice_mut(s![i * level_repeat..(i + 1) * level_repeat])
                     .assign(&Array1::from_elem(level_repeat, fill));
@@ -75,7 +78,7 @@ impl<F: Float> SamplingMethod<F> for FullFactorial<F> {
             }
             range_repeat *= n;
         }
-        doe
+        doe.slice(s![0..ns, ..]).to_owned()
     }
 }
 
@@ -100,6 +103,33 @@ mod tests {
             [10., 1.],
         ];
         let actual = FullFactorial::new(&xlimits).sample(9);
+        assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_ffact2() {
+        let xlimits = arr2(&[
+            [-10., 10.],
+            [0., 1.],
+            [0., 1.],
+            [0., 1.],
+            [-10., 10.],
+            [1., 8.],
+        ]);
+        let expected = array![
+            [-10.0, 0.0, 0.0, 0.0, -10.0, 1.0],
+            [-10.0, 0.0, 0.0, 1.0, -10.0, 1.0],
+            [-10.0, 0.0, 1.0, 0.0, -10.0, 1.0],
+            [-10.0, 0.0, 1.0, 1.0, -10.0, 1.0],
+            [-10.0, 1.0, 0.0, 0.0, -10.0, 1.0],
+            [-10.0, 1.0, 0.0, 1.0, -10.0, 1.0],
+            [-10.0, 1.0, 1.0, 0.0, -10.0, 1.0],
+            [-10.0, 1.0, 1.0, 1.0, -10.0, 1.0],
+            [10.0, 0.0, 0.0, 0.0, -10.0, 1.0],
+            [10.0, 0.0, 0.0, 1.0, -10.0, 1.0]
+        ];
+
+        let actual = FullFactorial::new(&xlimits).sample(10);
         assert_abs_diff_eq!(expected, actual, epsilon = 1e-6);
     }
 }
