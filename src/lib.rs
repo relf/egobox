@@ -23,6 +23,7 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sampling::sampling, m)?)?;
 
     // types
+    m.add_class::<sampling::Sampling>()?;
     m.add_class::<RegressionSpec>()?;
     m.add_class::<CorrelationSpec>()?;
     m.add_class::<InfillStrategy>()?;

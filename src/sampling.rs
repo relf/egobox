@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 #[pyclass]
 #[derive(Debug, Clone, Copy)]
 #[allow(clippy::upper_case_acronyms)]
-pub enum Method {
+pub enum Sampling {
     LHS = 0,
     #[allow(non_camel_case_types)]
     FULL_FACTORIAL = 1,
@@ -28,7 +28,7 @@ pub enum Method {
 #[pyfunction]
 pub fn sampling(
     py: Python,
-    method: Method,
+    method: Sampling,
     xspecs: PyObject,
     n_samples: usize,
     seed: Option<u64>,
@@ -64,13 +64,13 @@ pub fn sampling(
         .collect();
 
     let doe = match method {
-        Method::LHS => MixintContext::new(&xtypes)
+        Sampling::LHS => MixintContext::new(&xtypes)
             .create_lhs_sampling(seed)
             .sample(n_samples),
-        Method::FULL_FACTORIAL => egobox_ego::MixintContext::new(&xtypes)
+        Sampling::FULL_FACTORIAL => egobox_ego::MixintContext::new(&xtypes)
             .create_ffact_sampling()
             .sample(n_samples),
-        Method::RANDOM => egobox_ego::MixintContext::new(&xtypes)
+        Sampling::RANDOM => egobox_ego::MixintContext::new(&xtypes)
             .create_rand_sampling(seed)
             .sample(n_samples),
     };
@@ -94,5 +94,5 @@ pub(crate) fn lhs(
     n_samples: usize,
     seed: Option<u64>,
 ) -> &PyArray2<f64> {
-    sampling(py, Method::LHS, xspecs, n_samples, seed)
+    sampling(py, Sampling::LHS, xspecs, n_samples, seed)
 }
