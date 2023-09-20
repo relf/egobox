@@ -11,7 +11,6 @@
 //!
 
 use crate::types::*;
-use egobox_doe::SamplingMethod;
 use numpy::ndarray::{Array2, ArrayView2};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
@@ -36,37 +35,6 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
         .map(|xlimit| XSpec::new(XType(XType::FLOAT), xlimit.clone(), vec![]))
         .collect::<Vec<XSpec>>()
         .into_py(py))
-}
-
-#[pyfunction]
-pub(crate) fn lhs(
-    py: Python,
-    xspecs: PyObject,
-    n_samples: usize,
-    seed: Option<u64>,
-) -> &PyArray2<f64> {
-    let specs: Vec<XSpec> = xspecs.extract(py).expect("Error in xspecs conversion");
-    if specs.is_empty() {
-        panic!("Error: xspecs argument cannot be empty")
-    }
-    let xtypes: Vec<egobox_ego::XType> = specs
-        .iter()
-        .map(|spec| match spec.xtype {
-            XType(XType::FLOAT) => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
-            XType(XType::INT) => {
-                egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
-            }
-            XType(i) => panic!(
-                "Bad variable type: should be either XType.FLOAT {} or XType.INT {}, got {}",
-                XType::FLOAT,
-                XType::INT,
-                i
-            ),
-        })
-        .collect();
-    let lhs = egobox_ego::MixintContext::new(&xtypes).create_sampling(seed);
-    let doe = lhs.sample(n_samples);
-    doe.into_pyarray(py)
 }
 
 /// Optimizer constructor

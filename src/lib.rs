@@ -2,10 +2,12 @@
 
 mod egor;
 mod gpmix;
+mod sampling;
 pub(crate) mod types;
 
 use egor::*;
 use gpmix::*;
+use sampling::*;
 use types::*;
 
 use pyo3::prelude::*;
@@ -18,6 +20,7 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     // utils
     m.add_function(wrap_pyfunction!(to_specs, m)?)?;
     m.add_function(wrap_pyfunction!(lhs, m)?)?;
+    m.add_function(wrap_pyfunction!(sampling::sampling, m)?)?;
 
     // types
     m.add_class::<RegressionSpec>()?;
