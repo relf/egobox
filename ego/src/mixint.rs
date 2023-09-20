@@ -140,7 +140,6 @@ fn unfold_with_enum_mask(
 
 /// Find closest value to `val` in given slice `v`.
 fn take_closest<F: Float>(v: &[F], val: F) -> F {
-    println!("{:?} {}", v.to_vec(), val);
     let idx = Array::from_vec(v.to_vec())
         .map(|refval| (val - *refval).abs())
         .argmin()
@@ -155,7 +154,6 @@ fn cast_to_discrete_values_mut<F: Float>(
     xtypes: &[XType],
     x: &mut ArrayBase<impl DataMut<Elem = F>, Ix2>,
 ) {
-    println!("{}", x);
     let mut xcol = 0;
     xtypes.iter().for_each(|s| match s {
         XType::Cont(_, _) => xcol += 1,
@@ -255,7 +253,6 @@ impl<F: Float, S: egobox_doe::SamplingMethod<F>> egobox_doe::SamplingMethod<F>
 
     fn sample(&self, ns: usize) -> Array2<F> {
         let mut doe = self.method.sample(ns);
-        println!("doe: {}", doe);
         cast_to_discrete_values_mut(&self.xtypes, &mut doe);
         if self.output_in_folded_space {
             fold_with_enum_index(&self.xtypes, &doe.view())
@@ -665,10 +662,6 @@ impl MixintContext {
 
     /// Create a mixed integer full factorial
     pub fn create_ffact_sampling<F: Float>(&self) -> MixintSampling<F, FullFactorial<F>> {
-        println!(
-            "unfold {}",
-            unfold_xtypes_as_continuous_limits::<F>(&self.xtypes)
-        );
         MixintSampling {
             method: FullFactorial::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)),
             xtypes: self.xtypes.clone(),
