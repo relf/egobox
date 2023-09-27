@@ -17,11 +17,15 @@ use ndarray_einsum_beta::*;
 use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
-use nlopt::*;
+
 use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use cobyla::{fmin_cobyla, CstrFn};
+#[cfg(feature = "nlopt")]
+use nlopt::*;
 
 use ndarray_rand::rand_distr::Normal;
 use ndarray_rand::RandomExt;
@@ -792,6 +796,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParam
 }
 
 /// Optimize gp hyper parameter theta given an initial guess `theta0`
+#[cfg(feature = "nlopt")]
 fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
@@ -840,6 +845,60 @@ where
             // println!("ERROR OPTIM in GP {:?}", e);
             (arr1(&theta_vec).mapv(|v| base.powf(v)), f64::INFINITY)
         }
+    }
+}
+
+#[cfg(not(feature = "nlopt"))]
+fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
+where
+    ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
+    F: Float,
+{
+    let base: f64 = 10.;
+    // block to drop optimizer and allow self.corr borrowing after
+    let mut cons = vec![];
+    for i in 0..theta0.len() {
+        let cstr_low = Box::new(move |x: &[f64]| -> f64 {
+            // -(x[i] - f64::log10(1e-6))
+            -x[i] - 6.
+        });
+        cons.push(cstr_low as Box<dyn CstrFn>);
+        let cstr_up = Box::new(move |x: &[f64]| -> f64 {
+            // -(f64::log10(20.) - x[i])
+            x[i] - LOG10_20
+        });
+        cons.push(cstr_up as Box<dyn CstrFn>);
+    }
+    let mut theta_vec = theta0
+        .map(|v| unsafe { *(v as *const F as *const f64) })
+        .into_raw_vec();
+
+    let initial_step = 0.5;
+    let f_rtol = 1e-4;
+    let maxeval = 15 * theta0.len() as i32;
+    let (status, x_opt) = fmin_cobyla(
+        |x, u| objfn(x, None, u),
+        &mut theta_vec,
+        &cons,
+        (),
+        initial_step,
+        f_rtol,
+        maxeval,
+        1,
+    );
+
+    if status == 0 {
+        let fmin = objfn(x_opt, None, &mut ());
+        let thetas_opt = arr1(x_opt).mapv(|v| base.powf(v));
+        let fval = if f64::is_nan(fmin) {
+            f64::INFINITY
+        } else {
+            fmin
+        };
+        (thetas_opt, fval)
+    } else {
+        println!("ERROR Cobyla optimizer in GP {:?}", status);
+        (arr1(&theta_vec).mapv(|v| base.powf(v)), f64::INFINITY)
     }
 }
 
