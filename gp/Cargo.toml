@@ -10,6 +10,7 @@ keywords = ["machine-learning", "gaussian-process", "kriging", "surrogate"]
 categories = ["algorithms", "mathematics", "science"]
 
 [features]
+
 default = []
 
 serializable = ["serde", "linfa/serde"]
@@ -28,7 +29,8 @@ ndarray-stats = "0.5"
 ndarray_einsum_beta = "0.7"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
-nlopt = "0.6.0"
+nlopt = { version = "0.6.0", optional = true }
+cobyla = { version = "0.4.0" }
 rand_xoshiro = "0.6"
 paste = "1.0"
 num-traits = "0.2"

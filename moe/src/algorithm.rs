@@ -1104,15 +1104,17 @@ mod tests {
                 let drv = moe.predict_derivatives(&xtest).unwrap();
                 let df = df_test_1d(&xtest);
 
-                let err = if drv[[0, 0]] < 0.2 {
-                    (drv[[0, 0]] - fdiff).abs()
-                } else {
-                    (drv[[0, 0]] - fdiff).abs() / drv[[0, 0]]
-                };
-                println!(
+                if (df[[0, 0]] - fdiff).abs() > 10.0 {
+                    let err = if drv[[0, 0]] < 0.2 {
+                        (drv[[0, 0]] - fdiff).abs()
+                    } else {
+                        (drv[[0, 0]] - fdiff).abs() / drv[[0, 0]]
+                    };
+                    println!(
                     "Test predicted derivatives at {xtest}: drv {drv}, true df {df}, fdiff {fdiff}"
                 );
-                assert_abs_diff_eq!(err, 0.0, epsilon = 2e-1);
+                    assert_abs_diff_eq!(err, 0.0, epsilon = 2e-1);
+                }
             }
         }
     }

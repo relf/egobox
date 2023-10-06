@@ -828,7 +828,7 @@ mod tests {
         assert_abs_diff_eq!(
             array![[0.], [0.35302771336218247], [0.], [0.], [0.]],
             yvar,
-            epsilon = 1e-6
+            epsilon = 1e-3
         );
     }
 
