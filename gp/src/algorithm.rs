@@ -803,28 +803,11 @@ where
     let base: f64 = 10.;
     // block to drop optimizer and allow self.corr borrowing after
     let mut optimizer = Nlopt::new(Algorithm::Cobyla, theta0.len(), objfn, Target::Minimize, ());
-    let mut index;
-    for i in 0..theta0.len() {
-        index = i; // cannot use i in closure directly: it is undefined in closures when compiling in release mode.
-        let cstr_low = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-            // -(x[i] - f64::log10(1e-6))
-            -x[index] - 6.
-        };
-        let cstr_up = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-            // -(f64::log10(1e2) - x[i])
-            x[index] - 2.
-        };
-
-        optimizer
-            .add_inequality_constraint(cstr_low, (), 2e-4)
-            .unwrap();
-        optimizer
-            .add_inequality_constraint(cstr_up, (), 2e-4)
-            .unwrap();
-    }
     let mut theta_vec = theta0
         .map(|v| unsafe { *(v as *const F as *const f64) })
         .into_raw_vec();
+    optimizer.set_lower_bound(-6.).unwrap();
+    optimizer.set_upper_bound(2.).unwrap();
     optimizer.set_initial_step1(0.5).unwrap();
     optimizer.set_maxeval(15 * theta0.len() as u32).unwrap();
     optimizer.set_ftol_rel(1e-4).unwrap();
@@ -847,7 +830,7 @@ where
 }
 
 /// Optimize gp hyper parameter theta given an initial guess `theta0`
-#[cfg(all(not(feature = "nlopt"), not(feature = "fmin-cobyla")))]
+#[cfg(not(feature = "nlopt"))]
 fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
@@ -888,62 +871,6 @@ where
         (thetas_opt, fval)
     } else {
         println!("ERROR Cobyla optimizer in GP status={:?}", status);
-        (arr1(&theta_vec).mapv(|v| base.powf(v)), f64::INFINITY)
-    }
-}
-
-#[cfg(feature = "fmin-cobyla")]
-fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
-where
-    ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
-    F: Float,
-{
-    use cobyla::{fmin_cobyla, CstrFn};
-
-    let base: f64 = 10.;
-    // block to drop optimizer and allow self.corr borrowing after
-    let mut cons = vec![];
-    for i in 0..theta0.len() {
-        let cstr_low = Box::new(move |x: &[f64], _user_data: &mut ()| -> f64 {
-            // -(x[i] - f64::log10(1e-6))
-            -x[i] - 6.
-        });
-        cons.push(cstr_low as Box<dyn CstrFn<()>>);
-        let cstr_up = Box::new(move |x: &[f64], _user_data: &mut ()| -> f64 {
-            // -(f64::log10(100.) - x[i])
-            x[i] - 2.
-        });
-        cons.push(cstr_up as Box<dyn CstrFn<()>>);
-    }
-    let mut theta_vec = theta0
-        .map(|v| unsafe { *(v as *const F as *const f64) })
-        .into_raw_vec();
-
-    let initial_step = 0.5;
-    let f_rtol = 1e-4;
-    let maxeval = 15 * theta0.len() as i32;
-    let (status, x_opt) = fmin_cobyla(
-        |x, u| objfn(x, None, u),
-        &mut theta_vec,
-        &cons,
-        (),
-        initial_step,
-        f_rtol,
-        maxeval,
-        0,
-    );
-
-    if status == 0 {
-        let fmin = objfn(x_opt, None, &mut ());
-        let thetas_opt = arr1(x_opt).mapv(|v| base.powf(v));
-        let fval = if f64::is_nan(fmin) {
-            f64::INFINITY
-        } else {
-            fmin
-        };
-        (thetas_opt, fval)
-    } else {
-        println!("ERROR Cobyla optimizer in GP {:?}", status);
         (arr1(&theta_vec).mapv(|v| base.powf(v)), f64::INFINITY)
     }
 }
