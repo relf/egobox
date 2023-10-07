@@ -18,7 +18,6 @@ jobs:
       fail-fast: false
       matrix:
         toolchain:
-          - 1.70.0
           - stable
         os: 
           - ubuntu-20.04
