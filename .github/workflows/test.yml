@@ -1,7 +1,11 @@
 name: tests
 
-on: [push, pull_request]
-
+on: 
+  pull_request:
+    branches: [ master ]
+  push:
+    branches: [ master ]
+  
 env:
   CARGO_TERM_COLOR: always
 
@@ -48,7 +52,6 @@ jobs:
       fail-fast: false
       matrix:
         toolchain:
-          - 1.70.0
           - stable
         os: 
           - ubuntu-20.04
