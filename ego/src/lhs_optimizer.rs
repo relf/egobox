@@ -11,7 +11,8 @@ use linfa_linalg::norm::*;
 use ndarray_linalg::Norm;
 
 use ndarray_stats::QuantileExt;
-use nlopt::ObjFn;
+// use nlopt::ObjFn;
+use crate::types::{ObjFn, Optimizer};
 
 pub(crate) struct LhsOptimizer<'a, R: Rng + Clone + Sync + Send> {
     xlimits: Array2<f64>,
@@ -19,7 +20,7 @@ pub(crate) struct LhsOptimizer<'a, R: Rng + Clone + Sync + Send> {
     n_points: usize,
     cstr_tol: f64,
     obj: &'a (dyn ObjFn<ObjData<f64>> + Sync),
-    cstrs: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
+    cstrs: &'a Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
     obj_data: ObjData<f64>,
     rng: R,
 }
@@ -28,7 +29,7 @@ impl<'a> LhsOptimizer<'a, Xoshiro256Plus> {
     pub fn new(
         xlimits: &Array2<f64>,
         obj: &'a (dyn ObjFn<ObjData<f64>> + Sync),
-        cstrs: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
+        cstrs: &'a Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
         obj_data: &ObjData<f64>,
     ) -> LhsOptimizer<'a, Xoshiro256Plus> {
         Self::new_with_rng(
@@ -45,15 +46,15 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
     pub fn new_with_rng(
         xlimits: &Array2<f64>,
         obj: &'a (dyn ObjFn<ObjData<f64>> + Sync),
-        cstrs: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
+        cstrs: &'a Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
         obj_data: &ObjData<f64>,
         rng: R,
     ) -> LhsOptimizer<'a, R> {
         LhsOptimizer {
             xlimits: xlimits.to_owned(),
-            n_start: 20,
-            n_points: 100,
-            cstr_tol: 1e-6,
+            n_start: 20,    // hardcoded
+            n_points: 100,  // hardcoded
+            cstr_tol: 1e-6, // hardcoded
             obj,
             cstrs,
             obj_data: obj_data.clone(),
@@ -71,34 +72,6 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
             cstrs: self.cstrs,
             obj_data: self.obj_data,
             rng,
-        }
-    }
-
-    pub fn minimize(&self) -> Array1<f64> {
-        let lhs = Lhs::new(&self.xlimits)
-            .kind(LhsKind::Classic)
-            .with_rng(self.rng.clone());
-
-        // Make n_start optim
-        let x_optims = (0..self.n_start)
-            .into_par_iter()
-            .map(|_| self.find_lhs_min(lhs.clone()))
-            .collect::<Vec<_>>();
-
-        // Pick best
-        if x_optims.iter().any(|opt| opt.0) {
-            let values: Array1<_> = x_optims
-                .iter()
-                .filter(|opt| opt.0)
-                .map(|opt| (opt.1.to_owned(), opt.2))
-                .collect();
-            let yvals: Array1<_> = values.iter().map(|val| val.1).collect();
-            let index_min = yvals.argmin().unwrap();
-            values[index_min].0.to_owned()
-        } else {
-            let l1_norms: Array1<_> = x_optims.iter().map(|opt| opt.3.norm_l1()).collect();
-            let index_min = l1_norms.argmin().unwrap();
-            x_optims[index_min].1.to_owned()
         }
     }
 
@@ -161,6 +134,36 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
     }
 }
 
+impl<'a, R: Rng + Clone + Sync + Send> Optimizer for LhsOptimizer<'a, R> {
+    fn minimize(&self) -> std::result::Result<(Array1<f64>, f64), ()> {
+        let lhs = Lhs::new(&self.xlimits)
+            .kind(LhsKind::Classic)
+            .with_rng(self.rng.clone());
+
+        // Make n_start optim
+        let x_optims = (0..self.n_start)
+            .into_par_iter()
+            .map(|_| self.find_lhs_min(lhs.clone()))
+            .collect::<Vec<_>>();
+
+        // Pick best
+        if x_optims.iter().any(|opt| opt.0) {
+            let values: Array1<_> = x_optims
+                .iter()
+                .filter(|opt| opt.0)
+                .map(|opt| (opt.1.to_owned(), opt.2))
+                .collect();
+            let yvals: Array1<_> = values.iter().map(|val| val.1).collect();
+            let index_min = yvals.argmin().unwrap();
+            Ok((values[index_min].0.to_owned(), yvals[index_min]))
+        } else {
+            let l1_norms: Array1<_> = x_optims.iter().map(|opt| opt.3.norm_l1()).collect();
+            let index_min = l1_norms.argmin().unwrap();
+            Ok((x_optims[index_min].1.to_owned(), l1_norms[index_min]))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,9 +184,10 @@ mod tests {
             scale_wb2: 1.,
         };
 
-        let res = LhsOptimizer::new(&xlimits, &obj, cstrs, &obj_data)
+        let (res, _) = LhsOptimizer::new(&xlimits, &obj, &cstrs, &obj_data)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
-            .minimize();
+            .minimize()
+            .unwrap();
         assert_abs_diff_eq!(res, array![0.], epsilon = 1e-1)
     }
 }

@@ -104,6 +104,7 @@ use crate::egor_state::{find_best_result_index, EgorState, MAX_POINT_ADDITION_RE
 use crate::errors::{EgoError, Result};
 use crate::lhs_optimizer::LhsOptimizer;
 use crate::mixint::*;
+use crate::optimizer::*;
 use crate::types::*;
 use crate::utils::{compute_cstr_scales, no_discrete, update_data};
 
@@ -119,7 +120,9 @@ use ndarray::{
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
+
 use nlopt::*;
+
 use rand_xoshiro::Xoshiro256Plus;
 
 use argmin::argmin_error_closure;
@@ -926,8 +929,8 @@ where
             self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
 
         let algorithm = match self.infill_optimizer {
-            InfillOptimizer::Slsqp => Algorithm::Slsqp,
-            InfillOptimizer::Cobyla => Algorithm::Cobyla,
+            InfillOptimizer::Slsqp => nlopt::Algorithm::Slsqp,
+            InfillOptimizer::Cobyla => nlopt::Algorithm::Cobyla,
         };
 
         let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
@@ -956,7 +959,7 @@ where
             self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
         };
 
-        let cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>> = (0..self.n_cstr)
+        let cstrs: Vec<Box<dyn crate::types::ObjFn<ObjData<f64>> + Sync>> = (0..self.n_cstr)
             .map(|i| {
                 let index = i;
                 let cstr = move |x: &[f64],
@@ -999,7 +1002,7 @@ where
                         .unwrap()[[0, 0]]
                         / params.scale_cstr[index]
                 };
-                Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>
+                Box::new(cstr) as Box<dyn crate::types::ObjFn<ObjData<f64>> + Sync>
             })
             .collect();
 
@@ -1013,10 +1016,23 @@ where
                     scale_cstr: scale_cstr.to_owned(),
                     scale_wb2,
                 };
-                let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
-                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
-                    .with_rng(Xoshiro256Plus::seed_from_u64(seed))
-                    .minimize();
+                let cstr_refs: Vec<&(dyn crate::types::ObjFn<ObjData<f64>> + Sync)> =
+                    cstrs.iter().map(|c| c.as_ref()).collect();
+                // let (x_opt, _) = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
+                //     .with_rng(Xoshiro256Plus::seed_from_u64(seed))
+                //     .minimize()
+                //     .unwrap();
+                let (x_opt, _) = OptimizerBuilder::new(
+                    crate::types::Algorithm::Lhs,
+                    &obj,
+                    cstr_refs,
+                    &obj_data,
+                    &self.xlimits,
+                )
+                .seed(seed)
+                .minimize()
+                .unwrap();
+
                 info!("LHS optimization best_x {}", x_opt);
                 best_x = Some(x_opt);
                 success = true;
@@ -1092,9 +1108,19 @@ where
                     scale_wb2,
                 };
                 let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
-                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
-                    .with_rng(Xoshiro256Plus::from_entropy())
-                    .minimize();
+                // let (x_opt, _) = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
+                //     .with_rng(Xoshiro256Plus::from_entropy())
+                //     .minimize()
+                //     .unwrap();
+                let (x_opt, _) = OptimizerBuilder::new(
+                    crate::types::Algorithm::Lhs,
+                    &obj,
+                    cstr_refs,
+                    &obj_data,
+                    &self.xlimits,
+                )
+                .minimize()
+                .unwrap();
                 info!("LHS optimization best_x {}", x_opt);
                 best_x = Some(x_opt);
                 success = true;

@@ -193,6 +193,7 @@ mod egor_state;
 mod errors;
 mod lhs_optimizer;
 mod mixint;
+mod optimizer;
 mod sort_axis;
 mod types;
 mod utils;
