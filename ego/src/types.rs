@@ -141,13 +141,6 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
 pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 
-#[derive(Copy, Clone, Debug)]
-pub enum Algorithm {
-    Cobyla,
-    Slsqp,
-    Lhs,
-}
-
 /// Data used by internal infill criteria to be optimized
 #[derive(Clone)]
 pub(crate) struct ObjData<F> {

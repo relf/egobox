@@ -102,9 +102,15 @@
 use crate::criteria::*;
 use crate::egor_state::{find_best_result_index, EgorState, MAX_POINT_ADDITION_RETRY};
 use crate::errors::{EgoError, Result};
+
+#[cfg(feature = "nlopt")]
 use crate::lhs_optimizer::LhsOptimizer;
+
 use crate::mixint::*;
+
+#[cfg(not(feature = "nlopt"))]
 use crate::optimizer::*;
+
 use crate::types::*;
 use crate::utils::{compute_cstr_scales, no_discrete, update_data};
 
@@ -115,13 +121,11 @@ use finitediff::FiniteDiff;
 use linfa::ParamGuard;
 use log::{debug, info, warn};
 use ndarray::{
-    concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
+    arr1, concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
 };
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
-
-use nlopt::*;
 
 use rand_xoshiro::Xoshiro256Plus;
 
@@ -928,9 +932,10 @@ where
         let (scale_infill_obj, scale_cstr, scale_wb2) =
             self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
 
+        #[cfg(not(feature = "nlopt"))]
         let algorithm = match self.infill_optimizer {
-            InfillOptimizer::Slsqp => nlopt::Algorithm::Slsqp,
-            InfillOptimizer::Cobyla => nlopt::Algorithm::Cobyla,
+            InfillOptimizer::Slsqp => crate::optimizer::Algorithm::Slsqp,
+            InfillOptimizer::Cobyla => crate::optimizer::Algorithm::Cobyla,
         };
 
         let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
@@ -959,7 +964,7 @@ where
             self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
         };
 
-        let cstrs: Vec<Box<dyn crate::types::ObjFn<ObjData<f64>> + Sync>> = (0..self.n_cstr)
+        let cstrs: Vec<_> = (0..self.n_cstr)
             .map(|i| {
                 let index = i;
                 let cstr = move |x: &[f64],
@@ -1002,7 +1007,14 @@ where
                         .unwrap()[[0, 0]]
                         / params.scale_cstr[index]
                 };
-                Box::new(cstr) as Box<dyn crate::types::ObjFn<ObjData<f64>> + Sync>
+                #[cfg(feature = "nlopt")]
+                {
+                    Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>
+                }
+                #[cfg(not(feature = "nlopt"))]
+                {
+                    Box::new(cstr) as Box<dyn crate::types::ObjFn<ObjData<f64>> + Sync>
+                }
             })
             .collect();
 
@@ -1016,22 +1028,32 @@ where
                     scale_cstr: scale_cstr.to_owned(),
                     scale_wb2,
                 };
-                let cstr_refs: Vec<&(dyn crate::types::ObjFn<ObjData<f64>> + Sync)> =
-                    cstrs.iter().map(|c| c.as_ref()).collect();
+                // let cstr_refs: Vec<&(dyn crate::types::ObjFn<ObjData<f64>> + Sync)> =
+                //     cstrs.iter().map(|c| c.as_ref()).collect();
                 // let (x_opt, _) = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
                 //     .with_rng(Xoshiro256Plus::seed_from_u64(seed))
                 //     .minimize()
                 //     .unwrap();
-                let (x_opt, _) = OptimizerBuilder::new(
-                    crate::types::Algorithm::Lhs,
-                    &obj,
-                    cstr_refs,
-                    &obj_data,
-                    &self.xlimits,
-                )
-                .seed(seed)
-                .minimize()
-                .unwrap();
+                // let (_, x_opt) =
+                //     Optimizer::new(Algorithm::Lhs, &obj, cstr_refs, &obj_data, &self.xlimits)
+                //         .seed(seed)
+                //         .minimize();
+                #[cfg(feature = "nlopt")]
+                let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
+                #[cfg(feature = "nlopt")]
+                let (_, x_opt) = LhsOptimizer::new(&self.xlimits, &obj, &cstr_refs, &obj_data)
+                    .with_rng(Xoshiro256Plus::seed_from_u64(seed))
+                    .minimize();
+
+                #[cfg(not(feature = "nlopt"))]
+                let cstr_refs: Vec<
+                    &(dyn crate::types::ObjFn<ObjData<f64>> + Sync),
+                > = cstrs.iter().map(|c| c.as_ref()).collect();
+                #[cfg(not(feature = "nlopt"))]
+                let (_, x_opt) =
+                    Optimizer::new(Algorithm::Lhs, &obj, cstr_refs, &obj_data, &self.xlimits)
+                        .seed(seed)
+                        .minimize();
 
                 info!("LHS optimization best_x {}", x_opt);
                 best_x = Some(x_opt);
@@ -1042,53 +1064,84 @@ where
                 let res = (0..self.n_start)
                     .into_par_iter()
                     .map(|i| {
-                        let mut optimizer = Nlopt::new(
-                            algorithm,
-                            dim,
-                            obj,
-                            Target::Minimize,
-                            ObjData {
-                                scale_infill_obj,
-                                scale_cstr: scale_cstr.to_owned(),
-                                scale_wb2,
-                            },
-                        );
-                        let lower = self.xlimits.column(0).to_owned();
-                        optimizer
-                            .set_lower_bounds(lower.as_slice().unwrap())
-                            .unwrap();
-                        let upper = self.xlimits.column(1).to_owned();
-                        optimizer
-                            .set_upper_bounds(upper.as_slice().unwrap())
-                            .unwrap();
-                        optimizer.set_maxeval(200).unwrap();
-                        optimizer.set_ftol_rel(1e-4).unwrap();
-                        optimizer.set_ftol_abs(1e-4).unwrap();
-                        cstrs.iter().enumerate().for_each(|(i, cstr)| {
+                        #[cfg(feature = "nlopt")]
+                        {
+                            use nlopt::*;
+                            let algorithm = match self.infill_optimizer {
+                                InfillOptimizer::Slsqp => nlopt::Algorithm::Slsqp,
+                                InfillOptimizer::Cobyla => nlopt::Algorithm::Cobyla,
+                            };
+                            let mut optimizer = Nlopt::new(
+                                algorithm,
+                                dim,
+                                obj,
+                                Target::Minimize,
+                                ObjData {
+                                    scale_infill_obj,
+                                    scale_cstr: scale_cstr.to_owned(),
+                                    scale_wb2,
+                                },
+                            );
+                            let lower = self.xlimits.column(0).to_owned();
                             optimizer
-                                .add_inequality_constraint(
-                                    cstr,
-                                    ObjData {
-                                        scale_infill_obj,
-                                        scale_wb2,
-                                        scale_cstr: scale_cstr.to_owned(),
-                                    },
-                                    self.cstr_tol / scale_cstr[i],
-                                )
+                                .set_lower_bounds(lower.as_slice().unwrap())
                                 .unwrap();
-                        });
+                            let upper = self.xlimits.column(1).to_owned();
+                            optimizer
+                                .set_upper_bounds(upper.as_slice().unwrap())
+                                .unwrap();
+                            optimizer.set_maxeval(200).unwrap();
+                            optimizer.set_ftol_rel(1e-4).unwrap();
+                            optimizer.set_ftol_abs(1e-4).unwrap();
+                            cstrs.iter().enumerate().for_each(|(i, cstr)| {
+                                optimizer
+                                    .add_inequality_constraint(
+                                        cstr,
+                                        ObjData {
+                                            scale_infill_obj,
+                                            scale_wb2,
+                                            scale_cstr: scale_cstr.to_owned(),
+                                        },
+                                        self.cstr_tol / scale_cstr[i],
+                                    )
+                                    .unwrap();
+                            });
 
-                        let mut x_opt = x_start.row(i).to_vec();
-                        match optimizer.optimize(&mut x_opt) {
-                            Ok((_, opt)) => (opt, x_opt),
-                            Err((err, code)) => {
-                                debug!("Nlopt Err: {:?} (y_opt={})", err, code);
-                                (f64::INFINITY, x_opt)
+                            let mut x_opt = x_start.row(i).to_vec();
+                            match optimizer.optimize(&mut x_opt) {
+                                Ok((_, opt)) => (opt, arr1(&x_opt)),
+                                Err((err, code)) => {
+                                    debug!("Nlopt Err: {:?} (y_opt={})", err, code);
+                                    (f64::INFINITY, arr1(&x_opt))
+                                }
                             }
+                        }
+
+                        #[cfg(not(feature = "nlopt"))]
+                        {
+                            let cstr_refs: Vec<&(dyn crate::types::ObjFn<ObjData<f64>> + Sync)> =
+                                cstrs.iter().map(|c| c.as_ref()).collect();
+
+                            Optimizer::new(
+                                algorithm,
+                                &obj,
+                                cstr_refs,
+                                &ObjData {
+                                    scale_infill_obj,
+                                    scale_cstr: scale_cstr.to_owned(),
+                                    scale_wb2,
+                                },
+                                &self.xlimits,
+                            )
+                            .xinit(&x_start.row(i))
+                            .max_eval(200)
+                            .ftol_rel(1e-4)
+                            .ftol_abs(1e-4)
+                            .minimize()
                         }
                     })
                     .reduce(
-                        || (f64::INFINITY, vec![1.0; dim]),
+                        || (f64::INFINITY, Array::ones((dim,))),
                         |a, b| if b.0 < a.0 { b } else { a },
                     );
 
@@ -1107,20 +1160,23 @@ where
                     scale_cstr: scale_cstr.to_owned(),
                     scale_wb2,
                 };
-                let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
-                // let (x_opt, _) = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
-                //     .with_rng(Xoshiro256Plus::from_entropy())
-                //     .minimize()
-                //     .unwrap();
-                let (x_opt, _) = OptimizerBuilder::new(
-                    crate::types::Algorithm::Lhs,
-                    &obj,
-                    cstr_refs,
-                    &obj_data,
-                    &self.xlimits,
-                )
-                .minimize()
-                .unwrap();
+
+                #[cfg(feature = "nlopt")]
+                let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
+                #[cfg(feature = "nlopt")]
+                let (_, x_opt) = LhsOptimizer::new(&self.xlimits, &obj, &cstr_refs, &obj_data)
+                    .with_rng(Xoshiro256Plus::from_entropy())
+                    .minimize();
+
+                #[cfg(not(feature = "nlopt"))]
+                let cstr_refs: Vec<
+                    &(dyn crate::types::ObjFn<ObjData<f64>> + Sync),
+                > = cstrs.iter().map(|c| c.as_ref()).collect();
+                #[cfg(not(feature = "nlopt"))]
+                let (_, x_opt) =
+                    Optimizer::new(Algorithm::Lhs, &obj, cstr_refs, &obj_data, &self.xlimits)
+                        .minimize();
+
                 info!("LHS optimization best_x {}", x_opt);
                 best_x = Some(x_opt);
                 success = true;

@@ -35,10 +35,13 @@ ndarray-rand = "0.14"
 ndarray-npy = "0.8"
 rayon = "1"
 
+cobyla = { version = "0.5.0" }
+slsqp = { version = "0.1.0" }
+nlopt = { version = "0.6.0", optional = true }
+
+rand_xoshiro = { version = "0.6", features = ["serde1"] }
 argmin = { version = "0.8.0", features = ["serde1", "ctrlc"] }
 instant = "0.1"
-nlopt = "0.6.0"
-rand_xoshiro = { version = "0.6", features = ["serde1"] }
 libm = "0.2.6"
 finitediff = { version = "0.1", features = ["ndarray"] }
 # sort-axis

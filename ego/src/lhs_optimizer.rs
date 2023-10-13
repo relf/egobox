@@ -10,9 +10,11 @@ use linfa_linalg::norm::*;
 #[cfg(feature = "blas")]
 use ndarray_linalg::Norm;
 
+#[cfg(not(feature = "nlopt"))]
+use crate::types::ObjFn;
 use ndarray_stats::QuantileExt;
-// use nlopt::ObjFn;
-use crate::types::{ObjFn, Optimizer};
+#[cfg(feature = "nlopt")]
+use nlopt::ObjFn;
 
 pub(crate) struct LhsOptimizer<'a, R: Rng + Clone + Sync + Send> {
     xlimits: Array2<f64>,
@@ -132,10 +134,8 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
             )
         }
     }
-}
 
-impl<'a, R: Rng + Clone + Sync + Send> Optimizer for LhsOptimizer<'a, R> {
-    fn minimize(&self) -> std::result::Result<(Array1<f64>, f64), ()> {
+    pub fn minimize(&self) -> (f64, Array1<f64>) {
         let lhs = Lhs::new(&self.xlimits)
             .kind(LhsKind::Classic)
             .with_rng(self.rng.clone());
@@ -155,11 +155,11 @@ impl<'a, R: Rng + Clone + Sync + Send> Optimizer for LhsOptimizer<'a, R> {
                 .collect();
             let yvals: Array1<_> = values.iter().map(|val| val.1).collect();
             let index_min = yvals.argmin().unwrap();
-            Ok((values[index_min].0.to_owned(), yvals[index_min]))
+            (yvals[index_min], values[index_min].0.to_owned())
         } else {
             let l1_norms: Array1<_> = x_optims.iter().map(|opt| opt.3.norm_l1()).collect();
             let index_min = l1_norms.argmin().unwrap();
-            Ok((x_optims[index_min].1.to_owned(), l1_norms[index_min]))
+            (l1_norms[index_min], x_optims[index_min].1.to_owned())
         }
     }
 }
@@ -184,10 +184,9 @@ mod tests {
             scale_wb2: 1.,
         };
 
-        let (res, _) = LhsOptimizer::new(&xlimits, &obj, &cstrs, &obj_data)
+        let (_, res) = LhsOptimizer::new(&xlimits, &obj, &cstrs, &obj_data)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
-            .minimize()
-            .unwrap();
+            .minimize();
         assert_abs_diff_eq!(res, array![0.], epsilon = 1e-1)
     }
 }
