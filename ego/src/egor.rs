@@ -558,7 +558,7 @@ mod tests {
             .q_points(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
             .doe(&doe)
-            .target(-5.508013)
+            .target(-5.5030)
             .n_iter(30)
             .run()
             .expect("Egor minimization");

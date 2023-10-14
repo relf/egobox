@@ -194,10 +194,8 @@ mod errors;
 mod mixint;
 mod types;
 
-#[cfg(not(feature = "nlopt"))]
-mod optimizer;
-
 mod lhs_optimizer;
+mod optimizer;
 mod sort_axis;
 mod utils;
 
