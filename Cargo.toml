@@ -24,6 +24,7 @@ crate-type = ["cdylib"]
 [features]
 default = []
 
+nlopt = ["egobox-ego/nlopt", "egobox-gp/nlopt"]
 serializable-gp = ["egobox-gp/serializable"]
 persistent-moe = ["egobox-moe/persistent"]
 persistent-ego = ["egobox-ego/persistent"]

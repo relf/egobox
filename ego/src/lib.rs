@@ -191,10 +191,12 @@ mod egor;
 mod egor_solver;
 mod egor_state;
 mod errors;
-mod lhs_optimizer;
 mod mixint;
-mod sort_axis;
 mod types;
+
+mod lhs_optimizer;
+mod optimizer;
+mod sort_axis;
 mod utils;
 
 pub use crate::criteria::*;

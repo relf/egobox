@@ -138,7 +138,10 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
     ) -> Result<Box<dyn ClusteredSurrogate>>;
 }
 
-/// Data used by internal infill criteria to be optimized using NlOpt
+pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
+impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
+
+/// Data used by internal infill criteria to be optimized
 #[derive(Clone)]
 pub(crate) struct ObjData<F> {
     pub scale_infill_obj: F,

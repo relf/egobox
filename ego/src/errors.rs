@@ -1,4 +1,3 @@
-use nlopt::FailState;
 use thiserror::Error;
 
 /// A result type for EGO errors
@@ -16,9 +15,6 @@ pub enum EgoError {
     /// When an invalid value is encountered
     #[error("Value error: {0}")]
     InvalidValue(String),
-    /// When `NLOpt` fails
-    #[error("NLOpt optimizer error")]
-    NloptFailure,
     /// When Moe error occurs
     #[error("MOE error")]
     MoeError(#[from] egobox_moe::MoeError),
@@ -37,10 +33,4 @@ pub enum EgoError {
     /// When an Argmin framework is raised
     #[error(transparent)]
     ArgminError(#[from] argmin::core::Error),
-}
-
-impl From<FailState> for EgoError {
-    fn from(_error: FailState) -> EgoError {
-        EgoError::NloptFailure
-    }
 }

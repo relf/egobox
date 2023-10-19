@@ -1,10 +1,11 @@
 use clap::Parser;
 use egobox_ego::{EgorBuilder, GroupFunc, InfillOptimizer};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
+use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
 use std::fs::{remove_file, File};
 use std::io::prelude::*;
 use std::io::{BufRead, BufReader};
+use std::iter::zip;
 use std::path::Path;
 use std::process::Command;
 
@@ -253,7 +254,8 @@ fn main() -> anyhow::Result<()> {
     let outdir = args.outdir;
     let n_doe = 2 * dim;
     let n_iter = 2 * dim;
-    let cstr_tol = 1e-4;
+    const N_CSTR: usize = 68;
+    let cstr_tol = Array1::from_elem(N_CSTR, 1e-4);
     let kpls_dim = 3;
 
     let mut xlimits = Array2::zeros((dim, 2));
@@ -261,8 +263,8 @@ fn main() -> anyhow::Result<()> {
 
     let res = EgorBuilder::optimize(mopta_func(dim))
         .min_within(&xlimits)
-        .n_cstr(68)
-        .cstr_tol(cstr_tol)
+        .n_cstr(N_CSTR)
+        .cstr_tol(&cstr_tol)
         .n_clusters(1)
         .n_start(50)
         .n_doe(n_doe)
@@ -281,10 +283,8 @@ fn main() -> anyhow::Result<()> {
     );
     println!(
         "Violated constraints = {}/68",
-        res.y_opt
-            .to_vec()
-            .into_iter()
-            .filter(|v| *v > cstr_tol)
+        zip(res.y_opt.slice(s![1..]).to_vec(), cstr_tol)
+            .filter(|(c, tol)| c > tol)
             .count()
     );
     Ok(())

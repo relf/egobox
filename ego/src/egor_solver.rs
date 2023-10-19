@@ -102,8 +102,11 @@
 use crate::criteria::*;
 use crate::egor_state::{find_best_result_index, EgorState, MAX_POINT_ADDITION_RETRY};
 use crate::errors::{EgoError, Result};
-use crate::lhs_optimizer::LhsOptimizer;
+
 use crate::mixint::*;
+
+use crate::optimizer::*;
+
 use crate::types::*;
 use crate::utils::{compute_cstr_scales, no_discrete, update_data};
 
@@ -117,9 +120,8 @@ use ndarray::{
     concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
 };
 use ndarray_npy::{read_npy, write_npy};
-use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
-use nlopt::*;
+
 use rand_xoshiro::Xoshiro256Plus;
 
 use argmin::argmin_error_closure;
@@ -130,8 +132,13 @@ use argmin::core::{
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// Numpy filename for initial DOE dump
 pub const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
+/// Numpy Filename for current DOE dump
 pub const DOE_FILE: &str = "egor_doe.npy";
+
+/// Default tolerance value for constraints to be satisfied (ie cstr < tol)
+pub const DEFAULT_CSTR_TOL: f64 = 1e-6;
 
 /// Implementation of `argmin::core::Solver` for Egor optimizer.
 /// Therefore this structure can be used with `argmin::core::Executor` and benefit
@@ -154,8 +161,8 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// Number of Constraints
     /// Note: dim function ouput = 1 objective + n_cstr constraints
     pub(crate) n_cstr: usize,
-    /// Constraints violation tolerance meaning cstr < cstr_tol is considered valid
-    pub(crate) cstr_tol: f64,
+    /// Optional constraints violation tolerance meaning cstr < cstr_tol is considered valid
+    pub(crate) cstr_tol: Option<Array1<f64>>,
     /// Initial doe can be either \[x\] with x inputs only or an evaluated doe \[x, y\]
     /// Note: x dimension is determined using `xlimits.nrows()`
     pub(crate) doe: Option<Array2<f64>>,
@@ -262,7 +269,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             q_points: 1,
             n_doe: 0,
             n_cstr: 0,
-            cstr_tol: 1e-6,
+            cstr_tol: None,
             doe: None,
             q_ei: QEiStrategy::KrigingBeliever,
             infill_criterion: Box::new(WB2),
@@ -301,7 +308,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             q_points: 1,
             n_doe: 0,
             n_cstr: 0,
-            cstr_tol: 1e-6,
+            cstr_tol: None,
             doe: None,
             q_ei: QEiStrategy::KrigingBeliever,
             infill_criterion: Box::new(WB2),
@@ -360,8 +367,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 
     /// Sets the tolerance on constraints violation (`cstr < tol`)
-    pub fn cstr_tol(mut self, tol: f64) -> Self {
-        self.cstr_tol = tol;
+    pub fn cstr_tol(mut self, tol: &Array1<f64>) -> Self {
+        self.cstr_tol = Some(tol.to_owned());
         self
     }
 
@@ -475,12 +482,17 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let rng = self.rng.clone();
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
         let mut clusterings = vec![None; 1 + self.n_cstr];
+        let cstr_tol = self
+            .cstr_tol
+            .clone()
+            .unwrap_or(Array1::from_elem(self.n_cstr, DEFAULT_CSTR_TOL));
         let (x_dat, _) = self.next_points(
             true,
             false, // done anyway
             &mut clusterings,
             x_data,
             y_data,
+            &cstr_tol,
             &sampling,
             None,
         );
@@ -574,7 +586,10 @@ where
         initial_state.max_iters = self.n_iter as u64;
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
-        initial_state.cstr_tol = self.cstr_tol;
+        initial_state.cstr_tol = self
+            .cstr_tol
+            .clone()
+            .unwrap_or(Array1::from_elem(self.n_cstr, DEFAULT_CSTR_TOL));
         initial_state.target_cost = self.target;
         debug!("INITIAL STATE = {:?}", initial_state);
         Ok((initial_state, None))
@@ -633,6 +648,7 @@ where
                 &mut clusterings,
                 &x_data,
                 &y_data,
+                &state.cstr_tol,
                 &sampling,
                 lhs_optim_seed,
             );
@@ -714,7 +730,7 @@ where
             info!("Save doe in {:?}", filepath);
             write_npy(filepath, &doe).expect("Write current doe");
         }
-        let best_index = self.find_best_result_index(&y_data);
+        let best_index = find_best_result_index(&y_data, &new_state.cstr_tol);
         info!(
             "********* End iteration {}/{}: Best fun(x)={} at x={}",
             new_state.get_iter() + 1,
@@ -796,6 +812,7 @@ where
         clusterings: &mut [Option<Clustering>],
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        cstr_tol: &Array1<f64>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
     ) -> (Array2<f64>, Array2<f64>) {
@@ -843,6 +860,7 @@ where
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,
+                cstr_tol,
                 lhs_optim,
             ) {
                 Ok(xk) => {
@@ -906,6 +924,7 @@ where
         (scale_infill_obj, scale_cstr, scale_ic)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn find_best_point(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -913,6 +932,7 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn ClusteredSurrogate,
         cstr_models: &[Box<dyn ClusteredSurrogate>],
+        cstr_tol: &Array1<f64>,
         lhs_optim_seed: Option<u64>,
     ) -> Result<Array1<f64>> {
         let f_min = y_data.min().unwrap();
@@ -926,8 +946,8 @@ where
             self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
 
         let algorithm = match self.infill_optimizer {
-            InfillOptimizer::Slsqp => Algorithm::Slsqp,
-            InfillOptimizer::Cobyla => Algorithm::Cobyla,
+            InfillOptimizer::Slsqp => crate::optimizer::Algorithm::Slsqp,
+            InfillOptimizer::Cobyla => crate::optimizer::Algorithm::Cobyla,
         };
 
         let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
@@ -956,7 +976,7 @@ where
             self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
         };
 
-        let cstrs: Vec<Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>> = (0..self.n_cstr)
+        let cstrs: Vec<_> = (0..self.n_cstr)
             .map(|i| {
                 let index = i;
                 let cstr = move |x: &[f64],
@@ -999,80 +1019,51 @@ where
                         .unwrap()[[0, 0]]
                         / params.scale_cstr[index]
                 };
-                Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>
+                #[cfg(feature = "nlopt")]
+                {
+                    Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>
+                }
+                #[cfg(not(feature = "nlopt"))]
+                {
+                    Box::new(cstr) as Box<dyn crate::types::ObjFn<ObjData<f64>> + Sync>
+                }
             })
             .collect();
+        let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
 
         info!("Optimize infill criterion...");
+        let obj_data = ObjData {
+            scale_infill_obj,
+            scale_cstr: scale_cstr.to_owned(),
+            scale_wb2,
+        };
         while !success && n_optim <= n_max_optim {
             let x_start = sampling.sample(self.n_start);
 
             if let Some(seed) = lhs_optim_seed {
-                let obj_data = ObjData {
-                    scale_infill_obj,
-                    scale_cstr: scale_cstr.to_owned(),
-                    scale_wb2,
-                };
-                let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
-                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
-                    .with_rng(Xoshiro256Plus::seed_from_u64(seed))
-                    .minimize();
+                let (_, x_opt) =
+                    Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &obj_data, &self.xlimits)
+                        .cstr_tol(cstr_tol.to_owned())
+                        .seed(seed)
+                        .minimize();
+
                 info!("LHS optimization best_x {}", x_opt);
                 best_x = Some(x_opt);
                 success = true;
             } else {
                 let dim = x_data.ncols();
-
                 let res = (0..self.n_start)
                     .into_par_iter()
                     .map(|i| {
-                        let mut optimizer = Nlopt::new(
-                            algorithm,
-                            dim,
-                            obj,
-                            Target::Minimize,
-                            ObjData {
-                                scale_infill_obj,
-                                scale_cstr: scale_cstr.to_owned(),
-                                scale_wb2,
-                            },
-                        );
-                        let lower = self.xlimits.column(0).to_owned();
-                        optimizer
-                            .set_lower_bounds(lower.as_slice().unwrap())
-                            .unwrap();
-                        let upper = self.xlimits.column(1).to_owned();
-                        optimizer
-                            .set_upper_bounds(upper.as_slice().unwrap())
-                            .unwrap();
-                        optimizer.set_maxeval(200).unwrap();
-                        optimizer.set_ftol_rel(1e-4).unwrap();
-                        optimizer.set_ftol_abs(1e-4).unwrap();
-                        cstrs.iter().enumerate().for_each(|(i, cstr)| {
-                            optimizer
-                                .add_inequality_constraint(
-                                    cstr,
-                                    ObjData {
-                                        scale_infill_obj,
-                                        scale_wb2,
-                                        scale_cstr: scale_cstr.to_owned(),
-                                    },
-                                    self.cstr_tol / scale_cstr[i],
-                                )
-                                .unwrap();
-                        });
-
-                        let mut x_opt = x_start.row(i).to_vec();
-                        match optimizer.optimize(&mut x_opt) {
-                            Ok((_, opt)) => (opt, x_opt),
-                            Err((err, code)) => {
-                                debug!("Nlopt Err: {:?} (y_opt={})", err, code);
-                                (f64::INFINITY, x_opt)
-                            }
-                        }
+                        Optimizer::new(algorithm, &obj, &cstr_refs, &obj_data, &self.xlimits)
+                            .xinit(&x_start.row(i))
+                            .max_eval(200)
+                            .ftol_rel(1e-4)
+                            .ftol_abs(1e-4)
+                            .minimize()
                     })
                     .reduce(
-                        || (f64::INFINITY, vec![1.0; dim]),
+                        || (f64::INFINITY, Array::ones((dim,))),
                         |a, b| if b.0 < a.0 { b } else { a },
                     );
 
@@ -1086,15 +1077,10 @@ where
 
             if n_optim == n_max_optim && best_x.is_none() {
                 info!("All optimizations fail => Trigger LHS optimization");
-                let obj_data = ObjData {
-                    scale_infill_obj,
-                    scale_cstr: scale_cstr.to_owned(),
-                    scale_wb2,
-                };
-                let cstr_refs = cstrs.iter().map(|c| c.as_ref()).collect();
-                let x_opt = LhsOptimizer::new(&self.xlimits, &obj, cstr_refs, &obj_data)
-                    .with_rng(Xoshiro256Plus::from_entropy())
-                    .minimize();
+                let (_, x_opt) =
+                    Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &obj_data, &self.xlimits)
+                        .minimize();
+
                 info!("LHS optimization best_x {}", x_opt);
                 best_x = Some(x_opt);
                 success = true;
@@ -1105,10 +1091,6 @@ where
             debug!("... infill criterion optimum found");
         }
         best_x.ok_or_else(|| EgoError::EgoError(String::from("Can not find best point")))
-    }
-
-    fn find_best_result_index(&self, y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> usize {
-        find_best_result_index(y_data, self.cstr_tol)
     }
 
     fn get_virtual_point(
@@ -1222,97 +1204,4 @@ where
         pb.problem("cost_count", |problem| problem.cost(&params))
             .expect("Objective evaluation")
     }
-}
-
-#[cfg(test)]
-mod tests {
-    // use super::*;
-    // use approx::assert_abs_diff_eq;
-    // use argmin::core::Executor;
-    // use argmin_testfunctions::rosenbrock;
-    // use ndarray::{array, ArrayView1};
-
-    // #[test]
-    // fn test_unfold_xtypes_as_continuous_limits() {
-    //     let xtypes = vec![XType::Int(0, 25)];
-    //     let xlimits = unfold_xtypes_as_continuous_limits(&xtypes);
-    //     let expected = array![[0., 25.]];
-    //     assert_abs_diff_eq!(expected, xlimits);
-    // }
-
-    // fn rosenb(x: &ArrayView2<f64>) -> Array2<f64> {
-    //     let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
-    //     Zip::from(y.rows_mut())
-    //         .and(x.rows())
-    //         .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]));
-    //     y
-    // }
-
-    // #[test]
-    // fn test_rosenbrock_egor_solver() {
-    //     let rng = Xoshiro256Plus::seed_from_u64(42);
-    //     let xlimits = array![[-2., 2.], [-2., 2.]];
-
-    //     let fobj = ObjFunc::new(rosenb);
-    //     let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> = EgorSolver::new(&xlimits, rng);
-
-    //     let res = Executor::new(fobj, solver)
-    //         .configure(|state| state.max_iters(20))
-    //         .run()
-    //         .unwrap();
-
-    //     let expected = array![1., 1.];
-    //     assert_abs_diff_eq!(
-    //         expected,
-    //         res.state.get_best_param().unwrap(),
-    //         epsilon = 5e-1
-    //     );
-    // }
-
-    // // Function G24: 1 global optimum y_opt = -5.5080 at x_opt =(2.3295, 3.1785)
-    // fn g24(x: &ArrayView1<f64>) -> f64 {
-    //     -x[0] - x[1]
-    // }
-    // // Constraints < 0
-    // fn g24_c1(x: &ArrayView1<f64>) -> f64 {
-    //     -2.0 * x[0].powf(4.0) + 8.0 * x[0].powf(3.0) - 8.0 * x[0].powf(2.0) + x[1] - 2.0
-    // }
-    // fn g24_c2(x: &ArrayView1<f64>) -> f64 {
-    //     -4.0 * x[0].powf(4.0) + 32.0 * x[0].powf(3.0) - 88.0 * x[0].powf(2.0) + 96.0 * x[0] + x[1]
-    //         - 36.0
-    // }
-    // // Gouped function : objective + constraints
-    // fn f_g24(x: &ArrayView2<f64>) -> Array2<f64> {
-    //     let mut y = Array2::zeros((x.nrows(), 3));
-    //     Zip::from(y.rows_mut())
-    //         .and(x.rows())
-    //         .for_each(|mut yi, xi| {
-    //             yi.assign(&array![g24(&xi), g24_c1(&xi), g24_c2(&xi)]);
-    //         });
-    //     y
-    // }
-
-    // #[test]
-    // fn test_g24_egor_solver() {
-    //     let rng = Xoshiro256Plus::seed_from_u64(42);
-    //     let xlimits = array![[0., 3.], [0., 4.]];
-    //     let fobj = ObjFunc::new(f_g24);
-    //     let solver = EgorSolver::<MoeParams<f64, _>>::new(&xlimits, rng)
-    //         .n_doe(3)
-    //         .n_cstr(2);
-
-    //     let res = Executor::new(fobj, solver)
-    //         .configure(|state| state.max_iters(20))
-    //         .run()
-    //         .unwrap();
-
-    //     let expected = array![2.3295201833653514, 3.178493151673985];
-    //     assert_abs_diff_eq!(
-    //         expected,
-    //         res.state.get_best_param().unwrap(),
-    //         epsilon = 5e-1
-    //     );
-    //     let expected = -5.50;
-    //     assert_abs_diff_eq!(expected, res.state.get_best_cost(), epsilon = 5e-1);
-    // }
 }

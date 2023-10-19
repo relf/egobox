@@ -124,7 +124,7 @@ class TestOptimizer(unittest.TestCase):
         egor = egx.Egor(
             g24,
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
-            cstr_tol=1e-3,
+            cstr_tol=np.array([1e-3, 1e-3]),
             n_cstr=n_cstr,
             seed=42,
             n_doe=n_doe,
@@ -144,7 +144,7 @@ class TestOptimizer(unittest.TestCase):
             g24,
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             n_cstr=2,
-            cstr_tol=1e-3,
+            cstr_tol=np.array([1e-3, 1e-3]),
             regr_spec=egx.RegressionSpec.CONSTANT,
             corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
             kpls_dim=1,

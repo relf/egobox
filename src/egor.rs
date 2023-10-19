@@ -11,6 +11,7 @@
 //!
 
 use crate::types::*;
+use ndarray::Array1;
 use numpy::ndarray::{Array2, ArrayView2};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
@@ -51,8 +52,9 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///     n_cstr (int):
 ///         the number of constraint functions.
 ///
-///     cstr_tol (float):
-///         tolerance on constraints violation (cstr < tol).
+///     cstr_tol (list(n_cstr,)):
+///         List of tolerances for constraints to be satisfied (cstr < tol), list size should be equal to n_cstr.
+///         None by default means zero tolerances.
 ///
 ///     xspecs (list(XSpec)) where XSpec(xtype=FLOAT|INT|ORD|ENUM, xlimits=[<f(xtype)>] or tags=[strings]):
 ///         Specifications of the nx components of the input x (eg. len(xspecs) == nx)
@@ -131,13 +133,13 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///      
 #[pyclass]
 #[pyo3(
-    text_signature = "(fun, n_cstr=0, cstr_tol=1e-6, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, q_points=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
+    text_signature = "(fun, n_cstr=0, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, q_points=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
 )]
 pub(crate) struct Egor {
     pub fun: PyObject,
     pub xspecs: PyObject,
     pub n_cstr: usize,
-    pub cstr_tol: f64,
+    pub cstr_tol: Option<Vec<f64>>,
     pub n_start: usize,
     pub n_doe: usize,
     pub doe: Option<Array2<f64>>,
@@ -174,7 +176,7 @@ impl Egor {
         fun,
         xspecs,
         n_cstr = 0,
-        cstr_tol = 1e-6,
+        cstr_tol = None,
         n_start = 20,
         n_doe = 0,
         doe = None,
@@ -197,7 +199,7 @@ impl Egor {
         fun: PyObject,
         xspecs: PyObject,
         n_cstr: usize,
-        cstr_tol: f64,
+        cstr_tol: Option<Vec<f64>>,
         n_start: usize,
         n_doe: usize,
         doe: Option<PyReadonlyArray2<f64>>,
@@ -316,13 +318,16 @@ impl Egor {
             mixintegor_build = mixintegor_build.random_seed(seed);
         };
 
+        let cstr_tol = self.cstr_tol.clone().unwrap_or(vec![0.0; self.n_cstr]);
+        let cstr_tol = Array1::from_vec(cstr_tol);
+
         let mut mixintegor = mixintegor_build
             .min_within_mixint_space(&xtypes)
             .n_cstr(self.n_cstr)
             .n_iter(n_iter)
             .n_start(self.n_start)
             .n_doe(self.n_doe)
-            .cstr_tol(self.cstr_tol)
+            .cstr_tol(&cstr_tol)
             .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
             .correlation_spec(
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),

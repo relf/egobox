@@ -8,7 +8,7 @@ use ndarray::{array, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::zip};
 
 /// Max number of retry when adding a new point. Point addition may fail
 /// if new point is too close to a previous point in the growing doe used
@@ -19,7 +19,7 @@ pub const MAX_POINT_ADDITION_RETRY: i32 = 3;
 /// y_data containing ns samples [objective, cstr_1, ... cstr_nc] is given as a matrix (ns, nc + 1)  
 pub fn find_best_result_index<F: Float>(
     y_data: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    cstr_tol: F,
+    cstr_tol: &Array1<F>,
 ) -> usize {
     if y_data.ncols() > 1 {
         // Compute sum of violated constraints
@@ -30,11 +30,9 @@ pub fn find_best_result_index<F: Float>(
             .and(cstrs.rows())
             .and(y_data.slice(s![.., 0]))
             .for_each(|mut c_obj_row, c_row, obj| {
-                let c_sum = c_row
-                    .to_owned()
-                    .into_iter()
-                    .filter(|c| *c > cstr_tol)
-                    .fold(F::zero(), |acc, c| acc + (c - cstr_tol).abs());
+                let c_sum = zip(c_row, cstr_tol)
+                    .filter(|(c, ctol)| *c > ctol)
+                    .fold(F::zero(), |acc, (c, ctol)| acc + (*c - *ctol).abs());
                 c_obj_row.assign(&array![c_sum, *obj]);
             });
         let min_csum_index = c_obj.slice(s![.., 0]).argmin().ok();
@@ -65,7 +63,10 @@ pub fn find_best_result_index<F: Float>(
 
             // Take the first one which do not violate constraints
             for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
-                if !row.slice(s![1..]).iter().any(|v| *v > cstr_tol) {
+                let success =
+                    zip(row.slice(s![1..]), cstr_tol).fold(true, |acc, (c, tol)| acc && c < tol);
+
+                if success {
                     index = i;
                     break;
                 }
@@ -88,28 +89,58 @@ mod tests {
     fn test_find_best_obj() {
         // respect constraint (0, 1, 2) and minimize obj (1)
         let ydata = array![[1.0, -0.15], [-1.0, -0.01], [2.0, -0.2], [-3.0, 2.0]];
-        let cstr_tol = 0.1;
-        assert_abs_diff_eq!(1, find_best_result_index(&ydata, cstr_tol));
+        let cstr_tol = Array1::from_elem(4, 0.1);
+        assert_abs_diff_eq!(1, find_best_result_index(&ydata, &cstr_tol));
 
         // respect constraint (0, 1, 2) and minimize obj (2)
         let ydata = array![[1.0, -0.15], [-1.0, -0.01], [-2.0, -0.2], [-3.0, 2.0]];
-        let cstr_tol = 0.1;
-        assert_abs_diff_eq!(2, find_best_result_index(&ydata, cstr_tol));
+        let cstr_tol = Array1::from_elem(4, 0.1);
+        assert_abs_diff_eq!(2, find_best_result_index(&ydata, &cstr_tol));
 
         // all out of tolerance => minimize constraint overshoot sum (0)
         let ydata = array![[1.0, 0.15], [-1.0, 0.3], [2.0, 0.2], [-3.0, 2.0]];
-        let cstr_tol = 0.1;
-        assert_abs_diff_eq!(0, find_best_result_index(&ydata, cstr_tol));
+        let cstr_tol = Array1::from_elem(4, 0.1);
+        assert_abs_diff_eq!(0, find_best_result_index(&ydata, &cstr_tol));
 
         // all in tolerance => min obj
         let ydata = array![[1.0, 0.15], [-1.0, 0.3], [2.0, 0.2], [-3.0, 2.0]];
-        let cstr_tol = 3.0;
-        assert_abs_diff_eq!(3, find_best_result_index(&ydata, cstr_tol));
+        let cstr_tol = Array1::from_elem(4, 3.0);
+        assert_abs_diff_eq!(3, find_best_result_index(&ydata, &cstr_tol));
 
         // unconstrained => min obj
         let ydata = array![[1.0], [-1.0], [2.0], [-3.0]];
-        let cstr_tol = 0.1;
-        assert_abs_diff_eq!(3, find_best_result_index(&ydata, cstr_tol));
+        let cstr_tol = Array1::from_elem(4, 0.1);
+        assert_abs_diff_eq!(3, find_best_result_index(&ydata, &cstr_tol));
+    }
+
+    #[test]
+    fn test_find_best_result() {
+        let y_data = array![
+            [-1.05044744051, -3.854157649246, 0.03068950747],
+            [-2.74965213562, -1.955703115787, -0.70939921583],
+            [-2.35364705246, 0.322760821911, -31.26001920874],
+            [-4.30684045535, -0.188609601161, 0.12375208631],
+            [-2.66585377971, -1.665992782883, -3.31489212502],
+            [-5.76598597442, 1.767753631322, -0.23219495778],
+            [-3.84677718652, -0.164470342807, -0.43935857142],
+            [-4.23672675117, -2.343687786724, -0.86266607911],
+            [-1.23999705899, -1.653209288978, -12.42363834689],
+            [-5.81590801801, -11.725502513342, 2.72175031293],
+            [-5.57379997815, -0.075893786744, 0.12260068082],
+            [-5.26821022904, -0.093334332384, -0.29931405911],
+            [-5.50558228637, -0.008847697249, 0.00015874647],
+            [-5.50802373110, -2.479726473358e-5, 2.46930218281e-5],
+            [-5.50802210236, -2.586721399788e-5, 2.28386911871e-5],
+            [-5.50801726964, 2.607167473023e-7, 5.50684865174e-6],
+            [-5.50801509642, 1.951629235996e-7, 2.48275059533e-6],
+            [-5.50801399313, -6.707576982734e-8, 1.03991762046e-6]
+        ];
+        let cstr_tol = Array1::from_vec(vec![1e-6; 2]); // this is the default
+        let index = find_best_result_index(&y_data, &cstr_tol);
+        assert_eq!(11, index);
+        let cstr_tol = Array1::from_vec(vec![2e-6; 2]);
+        let index = find_best_result_index(&y_data, &cstr_tol);
+        assert_eq!(17, index);
     }
 }
 
@@ -172,7 +203,7 @@ pub struct EgorState<F: Float> {
     pub(crate) sampling: Option<Lhs<F, Xoshiro256Plus>>,
     /// Constraint tolerance cstr < cstr_tol.
     /// It used to assess the validity of the param point and hence the corresponding cost
-    pub(crate) cstr_tol: F,
+    pub(crate) cstr_tol: Array1<F>,
 }
 
 impl<F> EgorState<F>
@@ -412,7 +443,7 @@ where
             clusterings: None,
             data: None,
             sampling: None,
-            cstr_tol: F::cast(1e-6),
+            cstr_tol: Array1::zeros(0),
         }
     }
 
@@ -453,7 +484,7 @@ where
                 println!("Warning: update should occur after data initialization");
             }
             Some((x_data, y_data)) => {
-                let best_index = find_best_result_index(y_data, self.cstr_tol);
+                let best_index = find_best_result_index(y_data, &self.cstr_tol);
                 let best_iter = best_index.saturating_sub(self.doe_size) as u64 + 1;
                 if best_iter > self.last_best_iter {
                     let param = x_data.row(best_index).to_owned();
