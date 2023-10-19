@@ -25,6 +25,7 @@ pub(crate) struct Optimizer<'a> {
     algo: Algorithm,
     fun: &'a (dyn ObjFn<ObjData<f64>> + Sync),
     cons: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
+    cstr_tol: Option<Array1<f64>>,
     bounds: Array2<f64>,
     user_data: &'a ObjData<f64>,
     max_eval: usize,
@@ -46,6 +47,7 @@ impl<'a> Optimizer<'a> {
             algo,
             fun,
             cons: cons.to_vec(),
+            cstr_tol: None,
             bounds: bounds.clone(),
             user_data,
             max_eval: 200,
@@ -66,6 +68,11 @@ impl<'a> Optimizer<'a> {
         self
     }
 
+    pub fn cstr_tol(&mut self, cstr_tol: Array1<f64>) -> &mut Self {
+        self.cstr_tol = Some(cstr_tol);
+        self
+    }
+
     pub fn max_eval(&mut self, max_eval: usize) -> &mut Self {
         self.max_eval = max_eval;
         self
@@ -82,7 +89,7 @@ impl<'a> Optimizer<'a> {
     }
 
     #[cfg(feature = "nlopt")]
-    fn nlopt_minimize(&self, algo: nlopt::Algorithm) -> (f64, Array1<f64>) {
+    fn nlopt_minimize(&self, algo: nlopt::Algorithm, cstr_tol: Array1<f64>) -> (f64, Array1<f64>) {
         use nlopt::*;
         let mut optimizer = Nlopt::new(
             algo,
@@ -111,8 +118,7 @@ impl<'a> Optimizer<'a> {
                 .add_inequality_constraint(
                     cstr,
                     self.user_data.clone(),
-                    // self.cstr_tol / self.user_data.scale_cstr[i],
-                    2e-4 / self.user_data.scale_cstr[i],
+                    self.cstr_tol[i] / self.user_data.scale_cstr[i],
                 )
                 .unwrap();
         });
@@ -128,11 +134,15 @@ impl<'a> Optimizer<'a> {
     }
 
     pub fn minimize(&self) -> (f64, Array1<f64>) {
+        let cstr_tol = self
+            .cstr_tol
+            .clone()
+            .unwrap_or(Array1::zeros(self.cons.len()));
         match self.algo {
             Algorithm::Cobyla => {
                 #[cfg(feature = "nlopt")]
                 {
-                    self.nlopt_minimize(nlopt::Algorithm::Cobyla)
+                    self.nlopt_minimize(nlopt::Algorithm::Cobyla, cstr_tol)
                 }
 
                 #[cfg(not(feature = "nlopt"))]
@@ -146,7 +156,13 @@ impl<'a> Optimizer<'a> {
                     let cstrs: Vec<_> = self
                         .cons
                         .iter()
-                        .map(|f| |x: &[f64], u: &mut ObjData<f64>| -(*f)(x, None, u))
+                        .enumerate()
+                        .map(|(i, f)| {
+                            let cstr_tol = cstr_tol[i];
+                            move |x: &[f64], u: &mut ObjData<f64>| {
+                                -(*f)(x, None, u) - cstr_tol / u.scale_cstr[i]
+                            }
+                        })
                         .collect();
                     let res = cobyla::minimize(
                         |x: &[f64], u: &mut ObjData<f64>| (self.fun)(x, None, u),
@@ -171,7 +187,7 @@ impl<'a> Optimizer<'a> {
             Algorithm::Slsqp => {
                 #[cfg(feature = "nlopt")]
                 {
-                    self.nlopt_minimize(nlopt::Algorithm::Slsqp)
+                    self.nlopt_minimize(nlopt::Algorithm::Slsqp, cstr_tol)
                 }
                 #[cfg(not(feature = "nlopt"))]
                 {
@@ -181,11 +197,22 @@ impl<'a> Optimizer<'a> {
                         .outer_iter()
                         .map(|row| (row[0], row[1]))
                         .collect();
+                    let cstrs: Vec<_> = self
+                        .cons
+                        .iter()
+                        .enumerate()
+                        .map(|(i, f)| {
+                            let cstr_tol = cstr_tol[i];
+                            move |x: &[f64], g: Option<&mut [f64]>, u: &mut ObjData<f64>| {
+                                (*f)(x, g, u) - cstr_tol / u.scale_cstr[i]
+                            }
+                        })
+                        .collect();
                     let res = slsqp::minimize(
                         self.fun,
                         &xinit,
                         &bounds,
-                        &self.cons,
+                        &cstrs,
                         self.user_data.clone(),
                         self.max_eval,
                         Some(slsqp::StopTols {

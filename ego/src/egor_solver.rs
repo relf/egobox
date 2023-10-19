@@ -156,8 +156,8 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// Number of Constraints
     /// Note: dim function ouput = 1 objective + n_cstr constraints
     pub(crate) n_cstr: usize,
-    /// Constraints violation tolerance meaning cstr < cstr_tol is considered valid
-    pub(crate) cstr_tol: f64,
+    /// Optional constraints violation tolerance meaning cstr < cstr_tol is considered valid
+    pub(crate) cstr_tol: Option<Array1<f64>>,
     /// Initial doe can be either \[x\] with x inputs only or an evaluated doe \[x, y\]
     /// Note: x dimension is determined using `xlimits.nrows()`
     pub(crate) doe: Option<Array2<f64>>,
@@ -264,7 +264,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             q_points: 1,
             n_doe: 0,
             n_cstr: 0,
-            cstr_tol: 1e-6,
+            cstr_tol: None,
             doe: None,
             q_ei: QEiStrategy::KrigingBeliever,
             infill_criterion: Box::new(WB2),
@@ -303,7 +303,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             q_points: 1,
             n_doe: 0,
             n_cstr: 0,
-            cstr_tol: 1e-6,
+            cstr_tol: None,
             doe: None,
             q_ei: QEiStrategy::KrigingBeliever,
             infill_criterion: Box::new(WB2),
@@ -362,8 +362,8 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     }
 
     /// Sets the tolerance on constraints violation (`cstr < tol`)
-    pub fn cstr_tol(mut self, tol: f64) -> Self {
-        self.cstr_tol = tol;
+    pub fn cstr_tol(mut self, tol: &Array1<f64>) -> Self {
+        self.cstr_tol = Some(tol.to_owned());
         self
     }
 
@@ -576,7 +576,7 @@ where
         initial_state.max_iters = self.n_iter as u64;
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
-        initial_state.cstr_tol = self.cstr_tol;
+        initial_state.cstr_tol = self.cstr_tol.clone();
         initial_state.target_cost = self.target;
         debug!("INITIAL STATE = {:?}", initial_state);
         Ok((initial_state, None))
@@ -1013,6 +1013,8 @@ where
             .collect();
         let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
 
+        let cstr_tol = self.cstr_tol.clone().unwrap_or(Array1::zeros(cstrs.len()));
+
         info!("Optimize infill criterion...");
         let obj_data = ObjData {
             scale_infill_obj,
@@ -1025,6 +1027,7 @@ where
             if let Some(seed) = lhs_optim_seed {
                 let (_, x_opt) =
                     Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &obj_data, &self.xlimits)
+                        .cstr_tol(cstr_tol.to_owned())
                         .seed(seed)
                         .minimize();
 
@@ -1075,7 +1078,12 @@ where
     }
 
     fn find_best_result_index(&self, y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> usize {
-        find_best_result_index(y_data, self.cstr_tol)
+        let cstr_tol = if let Some(ctol) = self.cstr_tol.clone() {
+            ctol.clone()
+        } else {
+            Array1::zeros(self.n_cstr)
+        };
+        find_best_result_index(y_data, &cstr_tol)
     }
 
     fn get_virtual_point(

@@ -94,6 +94,7 @@ use crate::types::*;
 
 use egobox_moe::{CorrelationSpec, MoeParams, RegressionSpec};
 use log::info;
+use ndarray::Array1;
 use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
@@ -203,7 +204,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     }
 
     /// Sets the tolerance on constraints violation (cstr < tol)
-    pub fn cstr_tol(mut self, tol: f64) -> Self {
+    pub fn cstr_tol(mut self, tol: &Array1<f64>) -> Self {
         self.solver = self.solver.cstr_tol(tol);
         self
     }
