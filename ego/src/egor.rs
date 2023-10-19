@@ -556,6 +556,7 @@ mod tests {
             .regression_spec(RegressionSpec::ALL)
             .correlation_spec(CorrelationSpec::ALL)
             .n_cstr(2)
+            .cstr_tol(&array![2e-6, 2e-6])
             .q_points(2)
             .qei_strategy(QEiStrategy::KrigingBeliever)
             .doe(&doe)
