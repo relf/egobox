@@ -112,6 +112,36 @@ mod tests {
         let cstr_tol = Array1::from_elem(4, 0.1);
         assert_abs_diff_eq!(3, find_best_result_index(&ydata, &cstr_tol));
     }
+
+    #[test]
+    fn test_find_best_result() {
+        let y_data = array![
+            [-1.05044744051, -3.854157649246, 0.03068950747],
+            [-2.74965213562, -1.955703115787, -0.70939921583],
+            [-2.35364705246, 0.322760821911, -31.26001920874],
+            [-4.30684045535, -0.188609601161, 0.12375208631],
+            [-2.66585377971, -1.665992782883, -3.31489212502],
+            [-5.76598597442, 1.767753631322, -0.23219495778],
+            [-3.84677718652, -0.164470342807, -0.43935857142],
+            [-4.23672675117, -2.343687786724, -0.86266607911],
+            [-1.23999705899, -1.653209288978, -12.42363834689],
+            [-5.81590801801, -11.725502513342, 2.72175031293],
+            [-5.57379997815, -0.075893786744, 0.12260068082],
+            [-5.26821022904, -0.093334332384, -0.29931405911],
+            [-5.50558228637, -0.008847697249, 0.00015874647],
+            [-5.50802373110, -2.479726473358e-5, 2.46930218281e-5],
+            [-5.50802210236, -2.586721399788e-5, 2.28386911871e-5],
+            [-5.50801726964, 2.607167473023e-7, 5.50684865174e-6],
+            [-5.50801509642, 1.951629235996e-7, 2.48275059533e-6],
+            [-5.50801399313, -6.707576982734e-8, 1.03991762046e-6]
+        ];
+        let cstr_tol = Array1::from_vec(vec![1e-6; 2]); // this is the default
+        let index = find_best_result_index(&y_data, &cstr_tol);
+        assert_eq!(11, index);
+        let cstr_tol = Array1::from_vec(vec![2e-6; 2]);
+        let index = find_best_result_index(&y_data, &cstr_tol);
+        assert_eq!(17, index);
+    }
 }
 
 /// Maintains the state from iteration to iteration of the [crate::EgorSolver].
@@ -173,7 +203,7 @@ pub struct EgorState<F: Float> {
     pub(crate) sampling: Option<Lhs<F, Xoshiro256Plus>>,
     /// Constraint tolerance cstr < cstr_tol.
     /// It used to assess the validity of the param point and hence the corresponding cost
-    pub(crate) cstr_tol: Option<Array1<F>>,
+    pub(crate) cstr_tol: Array1<F>,
 }
 
 impl<F> EgorState<F>
@@ -413,7 +443,7 @@ where
             clusterings: None,
             data: None,
             sampling: None,
-            cstr_tol: None,
+            cstr_tol: Array1::zeros(0),
         }
     }
 
@@ -454,12 +484,7 @@ where
                 println!("Warning: update should occur after data initialization");
             }
             Some((x_data, y_data)) => {
-                let best_index = find_best_result_index(
-                    y_data,
-                    self.cstr_tol
-                        .as_ref()
-                        .unwrap_or(&Array1::zeros(y_data.ncols() - 1)),
-                );
+                let best_index = find_best_result_index(y_data, &self.cstr_tol);
                 let best_iter = best_index.saturating_sub(self.doe_size) as u64 + 1;
                 if best_iter > self.last_best_iter {
                     let param = x_data.row(best_index).to_owned();
