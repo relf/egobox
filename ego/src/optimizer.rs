@@ -118,7 +118,7 @@ impl<'a> Optimizer<'a> {
                 .add_inequality_constraint(
                     cstr,
                     self.user_data.clone(),
-                    self.cstr_tol[i] / self.user_data.scale_cstr[i],
+                    cstr_tol[i] / self.user_data.scale_cstr[i],
                 )
                 .unwrap();
         });
