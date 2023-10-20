@@ -1,8 +1,19 @@
 Changes
 -------
 
+Version 0.12.0 - unreleased
+===========================
+
+* Pure Rust egobox implementation (make nlopt an optional feature)
+* Use Rust edition 2021
+* CI maintainance
+
 Version 0.11.0 - unreleased
 ===========================
+
+* Automate Python package build and upload on Pypi from Github CI by @relf in https://github.com/relf/egobox/pull/104
+* Fix FullFactorial when asked nb iof samples is small wrt x dimension by @relf in https://github.com/relf/egobox/pull/105
+* Make mixed-integer sampling methods available in Python by @relf in https://github.com/relf/egobox/pull/106
 
 Version 0.10.0 - 22/06/2023
 ===========================
