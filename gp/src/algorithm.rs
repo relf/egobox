@@ -836,42 +836,45 @@ where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
     F: Float,
 {
-    use cobyla::{nlopt_cobyla, NLoptObjFn};
+    use cobyla::{minimize, Func, StopTols};
 
     let base: f64 = 10.;
-    // block to drop optimizer and allow self.corr borrowing after
-    let cons: Vec<&dyn NLoptObjFn<()>> = vec![];
-    let mut theta_vec = theta0
+    let cons: Vec<&dyn Func<()>> = vec![];
+    let theta_init = theta0
         .map(|v| unsafe { *(v as *const F as *const f64) })
         .into_raw_vec();
 
     let initial_step = 0.5;
-    let f_rtol = 1e-4;
-    let maxeval = 15 * theta0.len() as i32;
-    let (status, x_opt) = nlopt_cobyla(
-        |x, g, u| objfn(x, g, u),
-        &mut theta_vec,
+    let ftol_rel = 1e-4;
+    let maxeval = 15 * theta0.len();
+    let bounds = vec![(-6., 2.); theta0.len()];
+
+    match minimize(
+        |x, u| objfn(x, None, u),
+        &theta_init,
+        &bounds,
         &cons,
         (),
-        initial_step,
-        f_rtol,
         maxeval,
-        0,
-        (-6., 2.),
-    );
-
-    if status > 0 || status < 5 {
-        let fmin = objfn(x_opt, None, &mut ());
-        let thetas_opt = arr1(x_opt).mapv(|v| base.powf(v));
-        let fval = if f64::is_nan(fmin) {
-            f64::INFINITY
-        } else {
-            fmin
-        };
-        (thetas_opt, fval)
-    } else {
-        println!("ERROR Cobyla optimizer in GP status={:?}", status);
-        (arr1(&theta_vec).mapv(|v| base.powf(v)), f64::INFINITY)
+        cobyla::RhoBeg::All(initial_step),
+        Some(StopTols {
+            ftol_rel,
+            ..StopTols::default()
+        }),
+    ) {
+        Ok((_, x_opt, fval)) => {
+            let thetas_opt = arr1(&x_opt).mapv(|v| base.powf(v));
+            let fval = if f64::is_nan(fval) {
+                f64::INFINITY
+            } else {
+                fval
+            };
+            (thetas_opt, fval)
+        }
+        Err((status, x_opt, _)) => {
+            println!("ERROR Cobyla optimizer in GP status={:?}", status);
+            (arr1(&x_opt).mapv(|v| base.powf(v)), f64::INFINITY)
+        }
     }
 }
 
