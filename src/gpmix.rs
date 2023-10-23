@@ -52,7 +52,6 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         Random generator seed to allow computation reproducibility.
 ///         
 #[pyclass]
-#[pyo3(text_signature = "()")]
 pub(crate) struct GpMix {
     pub n_clusters: usize,
     pub regression_spec: RegressionSpec,
@@ -139,7 +138,6 @@ impl GpMix {
 
 /// A trained Gaussian processes mixture
 #[pyclass]
-#[pyo3(text_signature = "()")]
 pub(crate) struct Gpx(Box<Moe>);
 
 #[pymethods]
