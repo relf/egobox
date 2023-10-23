@@ -49,9 +49,7 @@ log = "0.4"
 env_logger = "0.10.0"
 thiserror = "1"
 
-serde = { version = "1", features = [
-    "derive",
-], default-features = false, optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 typetag = { version = "0.1", optional = true }
 
