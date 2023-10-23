@@ -50,6 +50,7 @@ bitflags! {
     /// ```
     ///
     /// See [bitflags::bitflags]
+    #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
     #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
     pub struct RegressionSpec: u8 {
         /// Constant regression
@@ -59,9 +60,9 @@ bitflags! {
         /// 2-degree polynomial regression
         const QUADRATIC = 0x04;
         /// All regression models available
-        const ALL = RegressionSpec::CONSTANT.bits
-                    | RegressionSpec::LINEAR.bits
-                    | RegressionSpec::QUADRATIC.bits;
+        const ALL = RegressionSpec::CONSTANT.bits()
+                    | RegressionSpec::LINEAR.bits()
+                    | RegressionSpec::QUADRATIC.bits();
     }
 }
 
@@ -74,7 +75,8 @@ bitflags! {
     /// ```
     ///
     /// See [bitflags::bitflags]
-    #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+    #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
+    #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize), serde(transparent))]
     pub struct CorrelationSpec: u8 {
         /// Squared exponential correlation model
         const SQUAREDEXPONENTIAL = 0x01;
@@ -85,10 +87,10 @@ bitflags! {
         /// Matern 5/2 correlation model
         const MATERN52 = 0x08;
         /// All correlation models available
-        const ALL = CorrelationSpec::SQUAREDEXPONENTIAL.bits
-                    | CorrelationSpec::ABSOLUTEEXPONENTIAL.bits
-                    | CorrelationSpec::MATERN32.bits
-                    | CorrelationSpec::MATERN52.bits;
+        const ALL = CorrelationSpec::SQUAREDEXPONENTIAL.bits()
+                    | CorrelationSpec::ABSOLUTEEXPONENTIAL.bits()
+                    | CorrelationSpec::MATERN32.bits()
+                    | CorrelationSpec::MATERN52.bits();
     }
 }
 

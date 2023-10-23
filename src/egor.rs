@@ -132,9 +132,6 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         Random generator seed to allow computation reproducibility.
 ///      
 #[pyclass]
-#[pyo3(
-    text_signature = "(fun, n_cstr=0, n_start=20, n_doe=0, regression_spec=7, correlation_spec=15, infill_strategy=1, q_points=1, par_infill_strategy=1, infill_optimizer=1, n_clusters=1)"
-)]
 pub(crate) struct Egor {
     pub fun: PyObject,
     pub xspecs: PyObject,

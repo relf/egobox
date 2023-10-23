@@ -78,7 +78,6 @@ pub(crate) enum InfillOptimizer {
 
 #[pyclass]
 #[derive(Clone, Copy)]
-#[pyo3(text_signature = "(val, tol=1e-6)")]
 pub(crate) struct ExpectedOptimum {
     #[pyo3(get)]
     pub(crate) val: f64,
