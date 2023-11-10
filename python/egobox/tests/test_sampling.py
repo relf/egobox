@@ -6,10 +6,10 @@ import unittest
 class TestSampling(unittest.TestCase):
     def test_lhs(self):
         xtypes = [
-            egx.XSpec(egx.XType(egx.XType.FLOAT), [-5.0, 5.0]),
-            egx.XSpec(egx.XType(egx.XType.ENUM), tags=["blue", "red", "green"]),
-            egx.XSpec(egx.XType(egx.XType.ENUM), xlimits=[2]),
-            egx.XSpec(egx.XType(egx.XType.ORD), [0, 2, 3]),
+            egx.XSpec(egx.XType.FLOAT, [-5.0, 5.0]),
+            egx.XSpec(egx.XType.ENUM, tags=["blue", "red", "green"]),
+            egx.XSpec(egx.XType.ENUM, xlimits=[2]),
+            egx.XSpec(egx.XType.ORD, [0, 2, 3]),
         ]
 
         actual = egx.lhs(xtypes, 10, seed=42)
@@ -31,8 +31,8 @@ class TestSampling(unittest.TestCase):
 
     def test_ffact(self):
         xtypes = [
-            egx.XSpec(egx.XType(egx.XType.FLOAT), [-5.0, 5.0]),
-            egx.XSpec(egx.XType(egx.XType.INT), [-10, 10]),
+            egx.XSpec(egx.XType.FLOAT, [-5.0, 5.0]),
+            egx.XSpec(egx.XType.INT, [-10, 10]),
         ]
 
         actual = egx.sampling(egx.Sampling.FULL_FACTORIAL, xtypes, 10, seed=42)
@@ -55,10 +55,10 @@ class TestSampling(unittest.TestCase):
 
     def test_random(self):
         xtypes = [
-            egx.XSpec(egx.XType(egx.XType.FLOAT), [-5.0, 5.0]),
-            egx.XSpec(egx.XType(egx.XType.ENUM), tags=["blue", "red", "green"]),
-            egx.XSpec(egx.XType(egx.XType.ENUM), xlimits=[2]),
-            egx.XSpec(egx.XType(egx.XType.ORD), [0, 2, 3]),
+            egx.XSpec(egx.XType.FLOAT, [-5.0, 5.0]),
+            egx.XSpec(egx.XType.ENUM, tags=["blue", "red", "green"]),
+            egx.XSpec(egx.XType.ENUM, xlimits=[2]),
+            egx.XSpec(egx.XType.ORD, [0, 2, 3]),
         ]
 
         actual = egx.sampling(egx.Sampling.RANDOM, xtypes, 10, seed=42)
