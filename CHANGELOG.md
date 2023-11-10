@@ -1,14 +1,22 @@
 Changes
 -------
 
-Version 0.12.0 - unreleased
+Version 0.13.0 - unreleased
 ===========================
 
-* Pure Rust egobox implementation (make nlopt an optional feature)
-* Use Rust edition 2021
-* CI maintainance
+Version 0.12.0 - 10/11/2023
+===========================
 
-Version 0.11.0 - unreleased
+* `gp` uses pure Rust COBYLA by @relf in https://github.com/relf/egobox/pull/110,https://github.com/relf/egobox/pull/113
+* `ego` as pure Rust implementation (`nlopt` is now optional) by @relf in https://github.com/relf/egobox/pull/112
+* `egobox` Python module: Simplify mixed-integer type declaration by @relf in https://github.com/relf/egobox/pull/115
+* Upgrade dependencies by @relf in https://github.com/relf/egobox/pull/114
+* Upgrade edition 2021 by @relf in https://github.com/relf/egobox/pull/109
+* CI maintainance by @relf in https://github.com/relf/egobox/pull/111
+* Bump actions/checkout from 2 to 4 by @dependabot in https://github.com/relf/egobox/pull/107
+* Bump actions/setup-python from 2 to 4 by @dependabot in https://github.com/relf/egobox/pull/108
+
+Version 0.11.0 - 20/09/2023
 ===========================
 
 * Automate Python package build and upload on Pypi from Github CI by @relf in https://github.com/relf/egobox/pull/104
