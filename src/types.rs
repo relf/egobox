@@ -1,16 +1,15 @@
 use pyo3::prelude::*;
 
-#[pyclass]
+#[pyclass(rename_all = "UPPERCASE")]
 #[derive(Clone)]
-#[allow(clippy::upper_case_acronyms)]
 pub enum Recombination {
     /// prediction is taken from the expert with highest responsability
     /// resulting in a model with discontinuities
-    HARD = 0,
+    Hard = 0,
     /// Prediction is a combination experts prediction wrt their responsabilities,
     /// an optional heaviside factor might be used control steepness of the change between
     /// experts regions.
-    SMOOTH = 1,
+    Smooth = 1,
 }
 
 #[pyclass]
@@ -49,31 +48,28 @@ impl CorrelationSpec {
     pub(crate) const MATERN52: u8 = egobox_moe::CorrelationSpec::MATERN52.bits();
 }
 
-#[pyclass]
+#[pyclass(rename_all = "UPPERCASE")]
 #[derive(Debug, Clone, Copy)]
-#[allow(clippy::upper_case_acronyms)]
 pub(crate) enum InfillStrategy {
-    EI = 1,
-    WB2 = 2,
-    WB2S = 3,
+    Ei = 1,
+    Wb2 = 2,
+    Wb2s = 3,
 }
 
-#[pyclass]
+#[pyclass(rename_all = "UPPERCASE")]
 #[derive(Debug, Clone, Copy)]
-#[allow(clippy::upper_case_acronyms)]
 pub(crate) enum ParInfillStrategy {
-    KB = 1,
-    KBLB = 2,
-    KBUB = 3,
-    CLMIN = 4,
+    Kb = 1,
+    Kblb = 2,
+    Kbub = 3,
+    Clmin = 4,
 }
 
-#[pyclass]
+#[pyclass(rename_all = "UPPERCASE")]
 #[derive(Debug, Clone, Copy)]
-#[allow(clippy::upper_case_acronyms)]
 pub(crate) enum InfillOptimizer {
-    COBYLA = 1,
-    SLSQP = 2,
+    Cobyla = 1,
+    Slsqp = 2,
 }
 
 #[pyclass]
@@ -97,27 +93,13 @@ impl ExpectedOptimum {
     }
 }
 
-#[pyclass]
+#[pyclass(rename_all = "UPPERCASE")]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct XType(pub(crate) u8);
-
-#[pymethods]
-impl XType {
-    #[classattr]
-    pub(crate) const FLOAT: u8 = 1;
-    #[classattr]
-    pub(crate) const INT: u8 = 2;
-    #[classattr]
-    pub(crate) const ORD: u8 = 3;
-    #[classattr]
-    pub(crate) const ENUM: u8 = 4;
-    #[new]
-    pub(crate) fn new(xtype: u8) -> Self {
-        XType(xtype)
-    }
-    pub(crate) fn id(&self) -> u8 {
-        self.0
-    }
+pub(crate) enum XType {
+    Float = 1,
+    Int = 2,
+    Ord = 3,
+    Enum = 4,
 }
 
 #[pyclass]

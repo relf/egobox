@@ -35,7 +35,7 @@ def mixobj(X):
 
 class TestMixintEgx(unittest.TestCase):
     def test_int(self):
-        xtypes = [egx.XSpec(egx.XType(egx.XType.INT), [0.0, 25.0])]
+        xtypes = [egx.XSpec(egx.XType.INT, [0.0, 25.0])]
 
         egor = egx.Egor(xsinx, xtypes, seed=42, n_doe=3)
         res = egor.minimize(n_iter=10)
@@ -45,10 +45,10 @@ class TestMixintEgx(unittest.TestCase):
 
     def test_ord_enum(self):
         xtypes = [
-            egx.XSpec(egx.XType(egx.XType.FLOAT), [-5.0, 5.0]),
-            egx.XSpec(egx.XType(egx.XType.ENUM), tags=["blue", "red", "green"]),
-            egx.XSpec(egx.XType(egx.XType.ENUM), xlimits=[2]),
-            egx.XSpec(egx.XType(egx.XType.ORD), [0, 2, 3]),
+            egx.XSpec(egx.XType.FLOAT, [-5.0, 5.0]),
+            egx.XSpec(egx.XType.ENUM, tags=["blue", "red", "green"]),
+            egx.XSpec(egx.XType.ENUM, xlimits=[2]),
+            egx.XSpec(egx.XType.ORD, [0, 2, 3]),
         ]
         egor = egx.Egor(mixobj, xtypes, seed=42)
         res = egor.minimize(n_iter=10)

@@ -33,7 +33,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
     }
     Ok(xlimits
         .iter()
-        .map(|xlimit| XSpec::new(XType(XType::FLOAT), xlimit.clone(), vec![]))
+        .map(|xlimit| XSpec::new(XType::Float, xlimit.clone(), vec![]))
         .collect::<Vec<XSpec>>()
         .into_py(py))
 }
@@ -179,10 +179,10 @@ impl Egor {
         doe = None,
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        infill_strategy = InfillStrategy::WB2,
+        infill_strategy = InfillStrategy::Wb2,
         q_points = 1,
-        par_infill_strategy = ParInfillStrategy::KB,
-        infill_optimizer = InfillOptimizer::COBYLA,
+        par_infill_strategy = ParInfillStrategy::Kb,
+        infill_optimizer = InfillOptimizer::Cobyla,
         kpls_dim = None,
         n_clusters = 1,
         target = f64::NEG_INFINITY,
@@ -261,21 +261,21 @@ impl Egor {
         };
 
         let infill_strategy = match self.infill_strategy {
-            InfillStrategy::EI => egobox_ego::InfillStrategy::EI,
-            InfillStrategy::WB2 => egobox_ego::InfillStrategy::WB2,
-            InfillStrategy::WB2S => egobox_ego::InfillStrategy::WB2S,
+            InfillStrategy::Ei => egobox_ego::InfillStrategy::EI,
+            InfillStrategy::Wb2 => egobox_ego::InfillStrategy::WB2,
+            InfillStrategy::Wb2s => egobox_ego::InfillStrategy::WB2S,
         };
 
         let qei_strategy = match self.par_infill_strategy {
-            ParInfillStrategy::KB => egobox_ego::QEiStrategy::KrigingBeliever,
-            ParInfillStrategy::KBLB => egobox_ego::QEiStrategy::KrigingBelieverLowerBound,
-            ParInfillStrategy::KBUB => egobox_ego::QEiStrategy::KrigingBelieverUpperBound,
-            ParInfillStrategy::CLMIN => egobox_ego::QEiStrategy::ConstantLiarMinimum,
+            ParInfillStrategy::Kb => egobox_ego::QEiStrategy::KrigingBeliever,
+            ParInfillStrategy::Kblb => egobox_ego::QEiStrategy::KrigingBelieverLowerBound,
+            ParInfillStrategy::Kbub => egobox_ego::QEiStrategy::KrigingBelieverUpperBound,
+            ParInfillStrategy::Clmin => egobox_ego::QEiStrategy::ConstantLiarMinimum,
         };
 
         let infill_optimizer = match self.infill_optimizer {
-            InfillOptimizer::COBYLA => egobox_ego::InfillOptimizer::Cobyla,
-            InfillOptimizer::SLSQP => egobox_ego::InfillOptimizer::Slsqp,
+            InfillOptimizer::Cobyla => egobox_ego::InfillOptimizer::Cobyla,
+            InfillOptimizer::Slsqp => egobox_ego::InfillOptimizer::Slsqp,
         };
 
         let xspecs: Vec<XSpec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
@@ -286,26 +286,18 @@ impl Egor {
         let xtypes: Vec<egobox_ego::XType> = xspecs
             .iter()
             .map(|spec| match spec.xtype {
-                XType(XType::FLOAT) => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
-                XType(XType::INT) => {
+                XType::Float => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
+                XType::Int => {
                     egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
                 }
-                XType(XType::ORD) => egobox_ego::XType::Ord(spec.xlimits.clone()),
-                XType(XType::ENUM) => {
+                XType::Ord => egobox_ego::XType::Ord(spec.xlimits.clone()),
+                XType::Enum => {
                     if spec.tags.is_empty() {
                         egobox_ego::XType::Enum(spec.xlimits[0] as usize)
                     } else {
                         egobox_ego::XType::Enum(spec.tags.len())
                     }
-                },
-                XType(i) => panic!(
-                    "Bad variable type: should be either XType.FLOAT {}, XType.INT {}, XType.ORD {}, XType.ENUM {}, got {}",
-                    XType::FLOAT,
-                    XType::INT,
-                    XType::ORD,
-                    XType::ENUM,
-                    i
-                ),
+                }
             })
             .collect();
         println!("{:?}", xtypes);
