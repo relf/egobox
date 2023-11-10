@@ -97,27 +97,13 @@ impl ExpectedOptimum {
     }
 }
 
-#[pyclass]
+#[pyclass(rename_all = "UPPERCASE")]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct XType(pub(crate) u8);
-
-#[pymethods]
-impl XType {
-    #[classattr]
-    pub(crate) const FLOAT: u8 = 1;
-    #[classattr]
-    pub(crate) const INT: u8 = 2;
-    #[classattr]
-    pub(crate) const ORD: u8 = 3;
-    #[classattr]
-    pub(crate) const ENUM: u8 = 4;
-    #[new]
-    pub(crate) fn new(xtype: u8) -> Self {
-        XType(xtype)
-    }
-    pub(crate) fn id(&self) -> u8 {
-        self.0
-    }
+pub(crate) enum XType {
+    Float = 1,
+    Int = 2,
+    Ord = 3,
+    Enum = 4,
 }
 
 #[pyclass]

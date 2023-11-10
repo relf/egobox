@@ -33,7 +33,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
     }
     Ok(xlimits
         .iter()
-        .map(|xlimit| XSpec::new(XType(XType::FLOAT), xlimit.clone(), vec![]))
+        .map(|xlimit| XSpec::new(XType::Float, xlimit.clone(), vec![]))
         .collect::<Vec<XSpec>>()
         .into_py(py))
 }
@@ -286,26 +286,18 @@ impl Egor {
         let xtypes: Vec<egobox_ego::XType> = xspecs
             .iter()
             .map(|spec| match spec.xtype {
-                XType(XType::FLOAT) => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
-                XType(XType::INT) => {
+                XType::Float => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
+                XType::Int => {
                     egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
                 }
-                XType(XType::ORD) => egobox_ego::XType::Ord(spec.xlimits.clone()),
-                XType(XType::ENUM) => {
+                XType::Ord => egobox_ego::XType::Ord(spec.xlimits.clone()),
+                XType::Enum => {
                     if spec.tags.is_empty() {
                         egobox_ego::XType::Enum(spec.xlimits[0] as usize)
                     } else {
                         egobox_ego::XType::Enum(spec.tags.len())
                     }
-                },
-                XType(i) => panic!(
-                    "Bad variable type: should be either XType.FLOAT {}, XType.INT {}, XType.ORD {}, XType.ENUM {}, got {}",
-                    XType::FLOAT,
-                    XType::INT,
-                    XType::ORD,
-                    XType::ENUM,
-                    i
-                ),
+                }
             })
             .collect();
         println!("{:?}", xtypes);
