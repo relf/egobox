@@ -290,6 +290,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// where optimum may occurs regarding the infill criterium.
     /// This function inverse the control of the optimization and can used
     /// ask-and-tell interface to the EGO optimizer.
+    ///
+    #[deprecated(since = "0.13.0", note = "moved in EgorService struct impl")]
     pub fn suggest(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -351,7 +353,6 @@ mod tests {
     use ndarray::{array, s, ArrayView2, Ix1, Zip};
 
     use ndarray_npy::read_npy;
-    use ndarray_stats::QuantileExt;
 
     use serial_test::serial;
     use std::time::Instant;
@@ -439,30 +440,6 @@ mod tests {
             .expect("Egor should minimize xsinx");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
-    }
-
-    #[test]
-    #[serial]
-    fn test_xsinx_suggestions_egor_builder() {
-        let ego = EgorBuilder::optimize(xsinx)
-            .random_seed(42)
-            .min_within(&array![[0., 25.]])
-            .regression_spec(RegressionSpec::ALL)
-            .correlation_spec(CorrelationSpec::ALL)
-            .infill_strategy(InfillStrategy::EI);
-
-        let mut doe = array![[0.], [7.], [20.], [25.]];
-        let mut y_doe = xsinx(&doe.view());
-        for _i in 0..10 {
-            let x_suggested = ego.suggest(&doe, &y_doe);
-
-            doe = concatenate![Axis(0), doe, x_suggested];
-            y_doe = xsinx(&doe.view());
-        }
-
-        let expected = -15.1;
-        let y_opt = y_doe.min().unwrap();
-        assert_abs_diff_eq!(expected, *y_opt, epsilon = 1e-1);
     }
 
     fn rosenb(x: &ArrayView2<f64>) -> Array2<f64> {
