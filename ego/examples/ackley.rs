@@ -14,12 +14,15 @@ fn ackley(x: &ArrayView2<f64>) -> Array2<f64> {
 fn main() {
     let xlimits = array![[-32.768, 32.768], [-32.768, 32.768], [-32.768, 32.768]];
     let res = EgorBuilder::optimize(ackley)
+        .configure(|config| {
+            config
+                .regression_spec(RegressionSpec::CONSTANT)
+                .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
+                .infill_strategy(InfillStrategy::WB2S)
+                .n_iter(200)
+                .target(5e-1)
+        })
         .min_within(&xlimits)
-        .regression_spec(RegressionSpec::CONSTANT)
-        .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
-        .infill_strategy(InfillStrategy::WB2S)
-        .n_iter(200)
-        .target(5e-1)
         .run()
         .expect("Minimize failure");
     println!("Ackley minimum y = {} at x = {}", res.y_opt, res.x_opt);

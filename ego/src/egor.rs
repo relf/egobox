@@ -19,12 +19,13 @@
 //! }
 //!
 //! let xlimits = array![[-2., 2.], [-2., 2.]];
-//! let res = EgorBuilder::optimize(rosenb)
+//! let res = EgorBuilder::optimize(rosenb).configure(|config|
+//!         config
+//!             .infill_strategy(InfillStrategy::EI)
+//!             .n_doe(10)
+//!             .target(1e-1)
+//!             .n_iter(30))
 //!     .min_within(&xlimits)
-//!     .infill_strategy(InfillStrategy::EI)
-//!     .n_doe(10)
-//!     .target(1e-1)
-//!     .n_iter(30)
 //!     .run()
 //!     .expect("Rosenbrock minimization");
 //! println!("Rosenbrock min result = {:?}", res);
@@ -74,27 +75,28 @@
 //!
 //! let xlimits = array![[0., 3.], [0., 4.]];
 //! let doe = Lhs::new(&xlimits).sample(10);
-//! let res = EgorBuilder::optimize(f_g24)
+//! let res = EgorBuilder::optimize(f_g24).configure(|config|
+//!             config
+//!                 .n_cstr(2)
+//!                 .infill_strategy(InfillStrategy::EI)
+//!                 .infill_optimizer(InfillOptimizer::Cobyla)
+//!                 .doe(&doe)
+//!                 .n_iter(40)
+//!                 .target(-5.5080))
 //!            .min_within(&xlimits)
-//!            .n_cstr(2)
-//!            .infill_strategy(InfillStrategy::EI)
-//!            .infill_optimizer(InfillOptimizer::Cobyla)
-//!            .doe(&doe)
-//!            .n_iter(40)
-//!            .target(-5.5080)
 //!            .run()
 //!            .expect("g24 minimized");
 //! println!("G24 min result = {:?}", res);
 //! ```
 //!
+use crate::egor_config::*;
 use crate::egor_solver::*;
 use crate::errors::Result;
 use crate::mixint::*;
 use crate::types::*;
 
-use egobox_moe::{CorrelationSpec, MoeParams, RegressionSpec};
+use egobox_moe::MoeParams;
 use log::info;
-use ndarray::Array1;
 use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
@@ -106,6 +108,7 @@ use argmin::core::{Executor, State};
 ///
 pub struct EgorBuilder<O: GroupFunc> {
     fobj: O,
+    config: EgorConfig,
     seed: Option<u64>,
 }
 
@@ -116,7 +119,16 @@ impl<O: GroupFunc> EgorBuilder<O> {
     /// But function has to be able to evaluate several points in one go
     /// hence take an (p, nx) matrix and return an (p, ny) matrix
     pub fn optimize(fobj: O) -> Self {
-        EgorBuilder { fobj, seed: None }
+        EgorBuilder {
+            fobj,
+            config: EgorConfig::default(),
+            seed: None,
+        }
+    }
+
+    pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
+        self.config = init(self.config);
+        self
     }
 
     /// Allow to specify a seed for random number generator to allow
@@ -141,7 +153,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
         };
         Egor {
             fobj: ObjFunc::new(self.fobj),
-            solver: EgorSolver::new(xlimits, rng),
+            solver: EgorSolver::new(self.config, xlimits, rng),
         }
     }
 
@@ -170,122 +182,6 @@ pub struct Egor<O: GroupFunc, SB: SurrogateBuilder> {
 }
 
 impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
-    /// Sets allowed number of evaluation of the function under optimization
-    pub fn n_iter(mut self, n_iter: usize) -> Self {
-        self.solver = self.solver.n_iter(n_iter);
-        self
-    }
-
-    /// Sets the number of runs of infill strategy optimizations (best result taken)
-    pub fn n_start(mut self, n_start: usize) -> Self {
-        self.solver = self.solver.n_start(n_start);
-        self
-    }
-
-    /// Sets Number of parallel evaluations of the function under optimization
-    pub fn q_points(mut self, q_points: usize) -> Self {
-        self.solver = self.solver.q_points(q_points);
-        self
-    }
-
-    /// Number of samples of initial LHS sampling (used when DOE not provided by the user)
-    ///
-    /// When 0 a number of points is computed automatically regarding the number of input variables
-    /// of the function under optimization.
-    pub fn n_doe(mut self, n_doe: usize) -> Self {
-        self.solver = self.solver.n_doe(n_doe);
-        self
-    }
-
-    /// Sets the number of constraint functions
-    pub fn n_cstr(mut self, n_cstr: usize) -> Self {
-        self.solver = self.solver.n_cstr(n_cstr);
-        self
-    }
-
-    /// Sets the tolerance on constraints violation (cstr < tol)
-    pub fn cstr_tol(mut self, tol: &Array1<f64>) -> Self {
-        self.solver = self.solver.cstr_tol(tol);
-        self
-    }
-
-    /// Sets an initial DOE \['ns', `nt`\] containing `ns` samples.
-    ///
-    /// Either `nt` = `nx` then only `x` input values are specified and `ns` evals are done to get y ouput doe values,
-    /// or `nt = nx + ny` then `x = doe\[:, :nx\]` and `y = doe\[:, nx:\]` are specified
-    pub fn doe(mut self, doe: &Array2<f64>) -> Self {
-        self.solver = self.solver.doe(doe);
-        self
-    }
-
-    /// Sets the parallel infill strategy
-    ///
-    /// Parallel infill criterion to get virtual next promising points in order to allow
-    /// n parallel evaluations of the function under optimization.
-    pub fn qei_strategy(mut self, q_ei: QEiStrategy) -> Self {
-        self.solver = self.solver.qei_strategy(q_ei);
-        self
-    }
-
-    /// Sets the infill strategy
-    pub fn infill_strategy(mut self, infill: InfillStrategy) -> Self {
-        self.solver = self.solver.infill_strategy(infill);
-        self
-    }
-
-    /// Sets the infill optimizer
-    pub fn infill_optimizer(mut self, optimizer: InfillOptimizer) -> Self {
-        self.solver = self.solver.infill_optimizer(optimizer);
-        self
-    }
-
-    /// Sets the allowed regression models used in gaussian processes.
-    pub fn regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
-        self.solver = self.solver.regression_spec(regression_spec);
-        self
-    }
-
-    /// Sets the allowed correlation models used in gaussian processes.
-    pub fn correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
-        self.solver = self.solver.correlation_spec(correlation_spec);
-        self
-    }
-
-    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
-    ///
-    /// This is used to address high-dimensional problems typically when `nx` > 9 wher `nx` is the dimension of `x`.
-    pub fn kpls_dim(mut self, kpls_dim: usize) -> Self {
-        self.solver = self.solver.kpls_dim(kpls_dim);
-        self
-    }
-
-    /// Sets the number of clusters used by the mixture of surrogate experts.
-    ///
-    /// When set to 0, the number of clusters is determined automatically
-    /// (warning in this case the optimizer runs slower)
-    pub fn n_clusters(mut self, n_clusters: usize) -> Self {
-        self.solver = self.solver.n_clusters(n_clusters);
-        self
-    }
-
-    /// Sets a known target minimum to be used as a stopping criterion.
-    pub fn target(mut self, target: f64) -> Self {
-        self.solver = self.solver.target(target);
-        self
-    }
-
-    /// Sets a directory to write optimization history and used as search path for hot start doe
-    pub fn outdir(mut self, outdir: impl Into<String>) -> Self {
-        self.solver = self.solver.outdir(outdir);
-        self
-    }
-
-    /// Whether we start by loading last DOE saved in `outdir` as initial DOE
-    pub fn hot_start(mut self, hot_start: bool) -> Self {
-        self.solver = self.solver.hot_start(hot_start);
-        self
-    }
-
     /// Given an evaluated doe (x, y) data, return the next promising x point
     /// where optimum may occurs regarding the infill criterium.
     /// This function inverse the control of the optimization and can used
@@ -302,8 +198,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
 
     /// Runs the (constrained) optimization of the objective function.
     pub fn run(&self) -> Result<OptimResult<f64>> {
-        let no_discrete = self.solver.no_discrete;
-        let xtypes = self.solver.xtypes.clone();
+        let no_discrete = self.solver.config.no_discrete;
+        let xtypes = self.solver.config.xtypes.clone();
 
         let result = Executor::new(self.fobj.clone(), self.solver.clone()).run()?;
         info!("{}", result);
@@ -371,14 +267,16 @@ mod tests {
     fn test_xsinx_ei_quadratic_egor_builder() {
         let initial_doe = array![[0.], [7.], [25.]];
         let res = EgorBuilder::optimize(xsinx)
+            .configure(|cfg| {
+                cfg.infill_strategy(InfillStrategy::EI)
+                    .regression_spec(RegressionSpec::QUADRATIC)
+                    .correlation_spec(CorrelationSpec::ALL)
+                    .n_iter(30)
+                    .doe(&initial_doe)
+                    .target(-15.1)
+                    .outdir("target/tests")
+            })
             .min_within(&array![[0.0, 25.0]])
-            .infill_strategy(InfillStrategy::EI)
-            .regression_spec(RegressionSpec::QUADRATIC)
-            .correlation_spec(CorrelationSpec::ALL)
-            .n_iter(30)
-            .doe(&initial_doe)
-            .target(-15.1)
-            .outdir("target/tests")
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.1];
@@ -391,10 +289,13 @@ mod tests {
     #[serial]
     fn test_xsinx_wb2_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
+            .configure(|config| {
+                config
+                    .n_iter(20)
+                    .regression_spec(RegressionSpec::ALL)
+                    .correlation_spec(CorrelationSpec::ALL)
+            })
             .min_within(&array![[0.0, 25.0]])
-            .n_iter(20)
-            .regression_spec(RegressionSpec::ALL)
-            .correlation_spec(CorrelationSpec::ALL)
             .run()
             .expect("Egor should minimize");
         let expected = array![18.9];
@@ -405,9 +306,8 @@ mod tests {
     #[serial]
     fn test_xsinx_auto_clustering_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
+            .configure(|config| config.n_clusters(0).n_iter(20))
             .min_within(&array![[0.0, 25.0]])
-            .n_clusters(0)
-            .n_iter(20)
             .run()
             .expect("Egor with auto clustering should minimize xsinx");
         let expected = array![18.9];
@@ -420,22 +320,18 @@ mod tests {
         let xlimits = array![[0.0, 25.0]];
         let doe = Lhs::new(&xlimits).sample(10);
         let res = EgorBuilder::optimize(xsinx)
+            .configure(|config| config.n_iter(15).doe(&doe).outdir("target/tests"))
             .random_seed(42)
             .min_within(&xlimits)
-            .n_iter(15)
-            .doe(&doe)
-            .outdir("target/tests")
             .run()
             .expect("Minimize failure");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
 
         let res = EgorBuilder::optimize(xsinx)
+            .configure(|config| config.n_iter(5).outdir("target/tests").hot_start(true))
             .random_seed(42)
             .min_within(&xlimits)
-            .n_iter(5)
-            .outdir("target/tests")
-            .hot_start(true)
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![18.9];
@@ -459,13 +355,16 @@ mod tests {
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
         let res = EgorBuilder::optimize(rosenb)
+            .configure(|config| {
+                config
+                    .doe(&doe)
+                    .n_iter(100)
+                    .regression_spec(RegressionSpec::ALL)
+                    .correlation_spec(CorrelationSpec::ALL)
+                    .target(1e-2)
+            })
             .random_seed(42)
             .min_within(&xlimits)
-            .doe(&doe)
-            .n_iter(100)
-            .regression_spec(RegressionSpec::ALL)
-            .correlation_spec(CorrelationSpec::ALL)
-            .target(1e-2)
             .run()
             .expect("Minimize failure");
         println!("Rosenbrock optim result = {res:?}");
@@ -508,11 +407,9 @@ mod tests {
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(3);
         let res = EgorBuilder::optimize(f_g24)
+            .configure(|config| config.n_cstr(2).doe(&doe).n_iter(20))
             .random_seed(42)
             .min_within(&xlimits)
-            .n_cstr(2)
-            .doe(&doe)
-            .n_iter(20)
             .run()
             .expect("Minimize failure");
         println!("G24 optim result = {res:?}");
@@ -528,17 +425,20 @@ mod tests {
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
         let res = EgorBuilder::optimize(f_g24)
+            .configure(|config| {
+                config
+                    .regression_spec(RegressionSpec::ALL)
+                    .correlation_spec(CorrelationSpec::ALL)
+                    .n_cstr(2)
+                    .cstr_tol(&array![2e-6, 2e-6])
+                    .q_points(2)
+                    .qei_strategy(QEiStrategy::KrigingBeliever)
+                    .doe(&doe)
+                    .target(-5.5030)
+                    .n_iter(30)
+            })
             .random_seed(42)
             .min_within(&xlimits)
-            .regression_spec(RegressionSpec::ALL)
-            .correlation_spec(CorrelationSpec::ALL)
-            .n_cstr(2)
-            .cstr_tol(&array![2e-6, 2e-6])
-            .q_points(2)
-            .qei_strategy(QEiStrategy::KrigingBeliever)
-            .doe(&doe)
-            .target(-5.5030)
-            .n_iter(30)
             .run()
             .expect("Egor minimization");
         println!("G24 optim result = {res:?}");
@@ -564,12 +464,15 @@ mod tests {
         let xtypes = vec![XType::Int(0, 25)];
 
         let res = EgorBuilder::optimize(mixsinx)
+            .configure(|config| {
+                config
+                    .doe(&doe)
+                    .n_iter(n_iter)
+                    .target(-15.1)
+                    .infill_strategy(InfillStrategy::EI)
+            })
             .random_seed(42)
             .min_within_mixint_space(&xtypes)
-            .doe(&doe)
-            .n_iter(n_iter)
-            .target(-15.1)
-            .infill_strategy(InfillStrategy::EI)
             .run()
             .unwrap();
         assert_abs_diff_eq!(array![18.], res.x_opt, epsilon = 2.);
@@ -583,12 +486,15 @@ mod tests {
         let xtypes = vec![XType::Int(0, 25)];
 
         let res = EgorBuilder::optimize(mixsinx)
+            .configure(|config| {
+                config
+                    .doe(&doe)
+                    .n_iter(n_iter)
+                    .target(-15.1)
+                    .infill_strategy(InfillStrategy::EI)
+            })
             .random_seed(42)
             .min_within_mixint_space(&xtypes)
-            .doe(&doe)
-            .n_iter(n_iter)
-            .target(-15.1)
-            .infill_strategy(InfillStrategy::EI)
             .run()
             .unwrap();
         assert_abs_diff_eq!(array![18.], res.x_opt, epsilon = 2.);
@@ -601,11 +507,14 @@ mod tests {
         let xtypes = vec![XType::Int(0, 25)];
 
         let res = EgorBuilder::optimize(mixsinx)
+            .configure(|config| {
+                config
+                    .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
+                    .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
+                    .n_iter(n_iter)
+            })
             .random_seed(42)
             .min_within_mixint_space(&xtypes)
-            .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
-            .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
-            .n_iter(n_iter)
             .run()
             .unwrap();
         assert_abs_diff_eq!(&array![18.], &res.x_opt, epsilon = 3.);
@@ -649,11 +558,14 @@ mod tests {
         ];
 
         let res = EgorBuilder::optimize(mixobj)
+            .configure(|config| {
+                config
+                    .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
+                    .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
+                    .n_iter(n_iter)
+            })
             .random_seed(42)
             .min_within_mixint_space(&xtypes)
-            .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
-            .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
-            .n_iter(n_iter)
             .run()
             .unwrap();
         println!("res={:?}", res);

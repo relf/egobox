@@ -71,11 +71,12 @@
 //! let xtypes = vec![XType::Int(0, 25)];
 //!
 //! let res = EgorBuilder::optimize(mixsinx)
+//!     .configure(|config|
+//!         config.doe(&doe)  // we pass the initial doe
+//!               .n_iter(n_iter)
+//!               .infill_strategy(InfillStrategy::EI))
 //!     .random_seed(42)
 //!     .min_within_mixint_space(&xtypes)  // We build a mixed-integer optimizer
-//!     .doe(&doe)                         // we pass the initial doe
-//!     .n_iter(n_iter)
-//!     .infill_strategy(InfillStrategy::EI)
 //!     .run()
 //!     .expect("Egor minimization");
 //! println!("min f(x)={} at x={}", res.y_opt, res.x_opt);
@@ -188,6 +189,7 @@
 //!
 mod criteria;
 mod egor;
+mod egor_config;
 mod egor_service;
 mod egor_solver;
 mod egor_state;
@@ -202,6 +204,7 @@ mod utils;
 
 pub use crate::criteria::*;
 pub use crate::egor::*;
+pub use crate::egor_config::*;
 pub use crate::egor_service::*;
 pub use crate::egor_solver::*;
 pub use crate::egor_state::*;

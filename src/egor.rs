@@ -310,35 +310,41 @@ impl Egor {
         let cstr_tol = self.cstr_tol.clone().unwrap_or(vec![0.0; self.n_cstr]);
         let cstr_tol = Array1::from_vec(cstr_tol);
 
-        let mut mixintegor = mixintegor_build
-            .min_within_mixint_space(&xtypes)
-            .n_cstr(self.n_cstr)
-            .n_iter(n_iter)
-            .n_start(self.n_start)
-            .n_doe(self.n_doe)
-            .cstr_tol(&cstr_tol)
-            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-            .correlation_spec(
-                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-            )
-            .infill_strategy(infill_strategy)
-            .q_points(self.q_points)
-            .qei_strategy(qei_strategy)
-            .infill_optimizer(infill_optimizer)
-            .target(self.target)
-            .hot_start(self.hot_start);
-        if let Some(doe) = self.doe.as_ref() {
-            mixintegor = mixintegor.doe(doe);
-        };
-        if let Some(kpls_dim) = self.kpls_dim {
-            mixintegor = mixintegor.kpls_dim(kpls_dim);
-        };
-        if let Some(n_clusters) = self.n_clusters {
-            mixintegor = mixintegor.n_clusters(n_clusters);
-        };
-        if let Some(outdir) = self.outdir.as_ref().cloned() {
-            mixintegor = mixintegor.outdir(outdir);
-        };
+        let mixintegor = mixintegor_build
+            .configure(|config| {
+                let mut config = config
+                    .n_cstr(self.n_cstr)
+                    .n_iter(n_iter)
+                    .n_start(self.n_start)
+                    .n_doe(self.n_doe)
+                    .cstr_tol(&cstr_tol)
+                    .regression_spec(
+                        egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
+                    )
+                    .correlation_spec(
+                        egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+                    )
+                    .infill_strategy(infill_strategy)
+                    .q_points(self.q_points)
+                    .qei_strategy(qei_strategy)
+                    .infill_optimizer(infill_optimizer)
+                    .target(self.target)
+                    .hot_start(self.hot_start);
+                if let Some(doe) = self.doe.as_ref() {
+                    config = config.doe(doe);
+                };
+                if let Some(kpls_dim) = self.kpls_dim {
+                    config = config.kpls_dim(kpls_dim);
+                };
+                if let Some(n_clusters) = self.n_clusters {
+                    config = config.n_clusters(n_clusters);
+                };
+                if let Some(outdir) = self.outdir.as_ref().cloned() {
+                    config = config.outdir(outdir);
+                };
+                config
+            })
+            .min_within_mixint_space(&xtypes);
 
         let res = py.allow_threads(|| {
             mixintegor

@@ -1,4 +1,4 @@
-//! Egor optimizer implements EGO algorithm with basic handling of constraints.
+//! Egor optimizer service implements Egor optimizer with an ask-and-tell interface.
 //!
 //! ```no_run
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
@@ -19,80 +19,24 @@
 //! }
 //!
 //! let xlimits = array![[-2., 2.], [-2., 2.]];
-//! let res = EgorBuilder::optimize(rosenb)
-//!     .min_within(&xlimits)
-//!     .infill_strategy(InfillStrategy::EI)
-//!     .n_doe(10)
-//!     .target(1e-1)
-//!     .n_iter(30)
-//!     .run()
-//!     .expect("Rosenbrock minimization");
-//! println!("Rosenbrock min result = {:?}", res);
+//! // TODO
+//! //let res = EgorBuilder::optimize(rosenb)
+//! //    .min_within(&xlimits)
+//! //    .infill_strategy(InfillStrategy::EI)
+//! //    .n_doe(10)
+//! //    .target(1e-1)
+//! //    .n_iter(30)
+//! //    .run()
+//! //    .expect("Rosenbrock minimization");
+//! //println!("Rosenbrock min result = {:?}", res);
 //! ```
 //!
-//! Constraints are expected to be evaluated with the objective function
-//! meaning that the function passed to the optimizer has to return
-//! a vector consisting of [obj, cstr_1, ..., cstr_n] and the cstr values
-//! are intended to be negative at the end of the optimization.
-//! Constraint number should be declared with `n_cstr` setter.
-//! A tolerance can be adjust with `cstr_tol` setter for relaxing constraint violation
-//! if specified cstr values should be < `cstr_tol` (instead of < 0)
-//!
-//! ```no_run
-//! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
-//! # use egobox_doe::{Lhs, SamplingMethod};
-//! # use egobox_ego::{EgorBuilder, InfillStrategy, InfillOptimizer};
-//! # use rand_xoshiro::Xoshiro256Plus;
-//! # use ndarray_rand::rand::SeedableRng;
-//!
-//! // Function G24: 1 global optimum y_opt = -5.5080 at x_opt =(2.3295, 3.1785)
-//! fn g24(x: &ArrayView1<f64>) -> f64 {
-//!    -x[0] - x[1]
-//! }
-//!
-//! // Constraints < 0
-//! fn g24_c1(x: &ArrayView1<f64>) -> f64 {
-//!     -2.0 * x[0].powf(4.0) + 8.0 * x[0].powf(3.0) - 8.0 * x[0].powf(2.0) + x[1] - 2.0
-//! }
-//!
-//! fn g24_c2(x: &ArrayView1<f64>) -> f64 {
-//!     -4.0 * x[0].powf(4.0) + 32.0 * x[0].powf(3.0)
-//!     - 88.0 * x[0].powf(2.0) + 96.0 * x[0] + x[1]
-//!     - 36.0
-//! }
-//!
-//! // Gouped function : objective + constraints
-//! fn f_g24(x: &ArrayView2<f64>) -> Array2<f64> {
-//!     let mut y = Array2::zeros((x.nrows(), 3));
-//!     Zip::from(y.rows_mut())
-//!         .and(x.rows())
-//!         .for_each(|mut yi, xi| {
-//!             yi.assign(&array![g24(&xi), g24_c1(&xi), g24_c2(&xi)]);
-//!         });
-//!     y
-//! }
-//!
-//! let xlimits = array![[0., 3.], [0., 4.]];
-//! let doe = Lhs::new(&xlimits).sample(10);
-//! let res = EgorBuilder::optimize(f_g24)
-//!            .min_within(&xlimits)
-//!            .n_cstr(2)
-//!            .infill_strategy(InfillStrategy::EI)
-//!            .infill_optimizer(InfillOptimizer::Cobyla)
-//!            .doe(&doe)
-//!            .n_iter(40)
-//!            .target(-5.5080)
-//!            .run()
-//!            .expect("g24 minimized");
-//! println!("G24 min result = {:?}", res);
-//! ```
-//!
+use crate::egor_config::*;
 use crate::egor_solver::*;
 use crate::mixint::*;
 use crate::types::*;
 
-use egobox_moe::{CorrelationSpec, MoeParams, RegressionSpec};
-use ndarray::Array1;
+use egobox_moe::MoeParams;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
@@ -101,6 +45,7 @@ use rand_xoshiro::Xoshiro256Plus;
 /// with an ask-and-tell interface.
 ///
 pub struct EgorServiceBuilder {
+    config: EgorConfig,
     seed: Option<u64>,
 }
 
@@ -111,7 +56,15 @@ impl EgorServiceBuilder {
     /// But function has to be able to evaluate several points in one go
     /// hence take an (p, nx) matrix and return an (p, ny) matrix
     pub fn optimize() -> Self {
-        EgorServiceBuilder { seed: None }
+        EgorServiceBuilder {
+            config: EgorConfig::default(),
+            seed: None,
+        }
+    }
+
+    pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
+        self.config = init(self.config);
+        self
     }
 
     /// Allow to specify a seed for random number generator to allow
@@ -135,7 +88,8 @@ impl EgorServiceBuilder {
             Xoshiro256Plus::from_entropy()
         };
         EgorService {
-            solver: EgorSolver::new(xlimits, rng),
+            config: self.config.clone(),
+            solver: EgorSolver::new(self.config, xlimits, rng),
         }
     }
 
@@ -149,6 +103,7 @@ impl EgorServiceBuilder {
             Xoshiro256Plus::from_entropy()
         };
         EgorService {
+            config: self.config.clone(),
             solver: EgorSolver::new_with_xtypes(xtypes, rng),
         }
     }
@@ -158,123 +113,15 @@ impl EgorServiceBuilder {
 /// and trigger the optimization using `argmin::Executor`.
 #[derive(Clone)]
 pub struct EgorService<SB: SurrogateBuilder> {
+    #[allow(dead_code)]
+    config: EgorConfig,
     solver: EgorSolver<SB>,
 }
 
 impl<SB: SurrogateBuilder> EgorService<SB> {
-    /// Sets allowed number of evaluation of the function under optimization
-    pub fn n_iter(mut self, n_iter: usize) -> Self {
-        self.solver = self.solver.n_iter(n_iter);
-        self
-    }
-
-    /// Sets the number of runs of infill strategy optimizations (best result taken)
-    pub fn n_start(mut self, n_start: usize) -> Self {
-        self.solver = self.solver.n_start(n_start);
-        self
-    }
-
-    /// Sets Number of parallel evaluations of the function under optimization
-    pub fn q_points(mut self, q_points: usize) -> Self {
-        self.solver = self.solver.q_points(q_points);
-        self
-    }
-
-    /// Number of samples of initial LHS sampling (used when DOE not provided by the user)
-    ///
-    /// When 0 a number of points is computed automatically regarding the number of input variables
-    /// of the function under optimization.
-    pub fn n_doe(mut self, n_doe: usize) -> Self {
-        self.solver = self.solver.n_doe(n_doe);
-        self
-    }
-
-    /// Sets the number of constraint functions
-    pub fn n_cstr(mut self, n_cstr: usize) -> Self {
-        self.solver = self.solver.n_cstr(n_cstr);
-        self
-    }
-
-    /// Sets the tolerance on constraints violation (cstr < tol)
-    pub fn cstr_tol(mut self, tol: &Array1<f64>) -> Self {
-        self.solver = self.solver.cstr_tol(tol);
-        self
-    }
-
-    /// Sets an initial DOE \['ns', `nt`\] containing `ns` samples.
-    ///
-    /// Either `nt` = `nx` then only `x` input values are specified and `ns` evals are done to get y ouput doe values,
-    /// or `nt = nx + ny` then `x = doe\[:, :nx\]` and `y = doe\[:, nx:\]` are specified
-    pub fn doe(mut self, doe: &Array2<f64>) -> Self {
-        self.solver = self.solver.doe(doe);
-        self
-    }
-
-    /// Sets the parallel infill strategy
-    ///
-    /// Parallel infill criterion to get virtual next promising points in order to allow
-    /// n parallel evaluations of the function under optimization.
-    pub fn qei_strategy(mut self, q_ei: QEiStrategy) -> Self {
-        self.solver = self.solver.qei_strategy(q_ei);
-        self
-    }
-
-    /// Sets the infill strategy
-    pub fn infill_strategy(mut self, infill: InfillStrategy) -> Self {
-        self.solver = self.solver.infill_strategy(infill);
-        self
-    }
-
-    /// Sets the infill optimizer
-    pub fn infill_optimizer(mut self, optimizer: InfillOptimizer) -> Self {
-        self.solver = self.solver.infill_optimizer(optimizer);
-        self
-    }
-
-    /// Sets the allowed regression models used in gaussian processes.
-    pub fn regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
-        self.solver = self.solver.regression_spec(regression_spec);
-        self
-    }
-
-    /// Sets the allowed correlation models used in gaussian processes.
-    pub fn correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
-        self.solver = self.solver.correlation_spec(correlation_spec);
-        self
-    }
-
-    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
-    ///
-    /// This is used to address high-dimensional problems typically when `nx` > 9 wher `nx` is the dimension of `x`.
-    pub fn kpls_dim(mut self, kpls_dim: usize) -> Self {
-        self.solver = self.solver.kpls_dim(kpls_dim);
-        self
-    }
-
-    /// Sets the number of clusters used by the mixture of surrogate experts.
-    ///
-    /// When set to 0, the number of clusters is determined automatically
-    /// (warning in this case the optimizer runs slower)
-    pub fn n_clusters(mut self, n_clusters: usize) -> Self {
-        self.solver = self.solver.n_clusters(n_clusters);
-        self
-    }
-
-    /// Sets a known target minimum to be used as a stopping criterion.
-    pub fn target(mut self, target: f64) -> Self {
-        self.solver = self.solver.target(target);
-        self
-    }
-
-    /// Sets a directory to write optimization history and used as search path for hot start doe
-    pub fn outdir(mut self, outdir: impl Into<String>) -> Self {
-        self.solver = self.solver.outdir(outdir);
-        self
-    }
-
-    /// Whether we start by loading last DOE saved in `outdir` as initial DOE
-    pub fn hot_start(mut self, hot_start: bool) -> Self {
-        self.solver = self.solver.hot_start(hot_start);
+    #[allow(dead_code)]
+    fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
+        self.config = init(self.config);
         self
     }
 
@@ -299,21 +146,20 @@ mod tests {
 
     use ndarray_stats::QuantileExt;
 
-    use serial_test::serial;
-
     fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
         (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
     }
 
     #[test]
-    #[serial]
     fn test_xsinx_egor_builder() {
         let ego = EgorServiceBuilder::optimize()
+            .configure(|conf| {
+                conf.regression_spec(RegressionSpec::ALL)
+                    .correlation_spec(CorrelationSpec::ALL)
+                    .infill_strategy(InfillStrategy::EI)
+            })
             .random_seed(42)
-            .min_within(&array![[0., 25.]])
-            .regression_spec(RegressionSpec::ALL)
-            .correlation_spec(CorrelationSpec::ALL)
-            .infill_strategy(InfillStrategy::EI);
+            .min_within(&array![[0., 25.]]);
 
         let mut doe = array![[0.], [7.], [20.], [25.]];
         let mut y_doe = xsinx(&doe.view());
