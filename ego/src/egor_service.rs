@@ -1,34 +1,42 @@
-//! Egor optimizer service implements Egor optimizer with an ask-and-tell interface.
+//! Egor optimizer service implements [`Egor`] optimizer with an ask-and-tell interface.
+//! It allows to keep the control on the iteration loop by asking for optimum location
+//! suggestions and telling objective function values at these points.
 //!
 //! ```no_run
-//! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
+//! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip, concatenate, Axis};
 //! # use egobox_doe::{Lhs, SamplingMethod};
-//! # use egobox_ego::{EgorBuilder, InfillStrategy, InfillOptimizer};
+//! # use egobox_ego::{EgorServiceBuilder, InfillStrategy, RegressionSpec, CorrelationSpec};
 //!
 //! # use rand_xoshiro::Xoshiro256Plus;
 //! # use ndarray_rand::rand::SeedableRng;
 //! use argmin_testfunctions::rosenbrock;
 //!
-//! // Rosenbrock test function: minimum y_opt = 0 at x_opt = (1, 1)
-//! fn rosenb(x: &ArrayView2<f64>) -> Array2<f64> {
-//!     let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
-//!     Zip::from(y.rows_mut())
-//!         .and(x.rows())
-//!         .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]));
-//!     y
+//! fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
+//!     (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
 //! }
 //!
-//! let xlimits = array![[-2., 2.], [-2., 2.]];
-//! // TODO
-//! //let res = EgorBuilder::optimize(rosenb)
-//! //    .min_within(&xlimits)
-//! //    .infill_strategy(InfillStrategy::EI)
-//! //    .n_doe(10)
-//! //    .target(1e-1)
-//! //    .n_iter(30)
-//! //    .run()
-//! //    .expect("Rosenbrock minimization");
-//! //println!("Rosenbrock min result = {:?}", res);
+//! let egor = EgorServiceBuilder::optimize()
+//!             .configure(|conf| {
+//!                 conf.regression_spec(RegressionSpec::ALL)
+//!                     .correlation_spec(CorrelationSpec::ALL)
+//!                     .infill_strategy(InfillStrategy::EI)
+//!             })
+//!             .random_seed(42)
+//!             .min_within(&array![[0., 25.]]);
+//!
+//! let mut doe = array![[0.], [7.], [20.], [25.]];
+//! let mut y_doe = xsinx(&doe.view());
+//!
+//! for _i in 0..10 {
+//!     // we tell function values and ask for next suggested optimum location
+//!     let x_suggested = egor.suggest(&doe, &y_doe);
+//!     
+//!     // we update the doe
+//!     doe = concatenate![Axis(0), doe, x_suggested];
+//!     y_doe = xsinx(&doe.view());
+//! }
+//!
+//! println!("Rosenbrock min result = {:?}", doe);
 //! ```
 //!
 use crate::egor_config::*;
@@ -42,7 +50,7 @@ use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
 /// EGO optimizer service builder allowing to use Egor optimizer
-/// with an ask-and-tell interface.
+/// as a service.
 ///
 pub struct EgorServiceBuilder {
     config: EgorConfig,
@@ -104,23 +112,20 @@ impl EgorServiceBuilder {
         };
         EgorService {
             config: self.config.clone(),
-            solver: EgorSolver::new_with_xtypes(xtypes, rng),
+            solver: EgorSolver::new_with_xtypes(self.config, xtypes, rng),
         }
     }
 }
 
-/// Egor optimizer structure used to parameterize the underlying `argmin::Solver`
-/// and trigger the optimization using `argmin::Executor`.
+/// Egor optimizer service.
 #[derive(Clone)]
 pub struct EgorService<SB: SurrogateBuilder> {
-    #[allow(dead_code)]
     config: EgorConfig,
     solver: EgorSolver<SB>,
 }
 
 impl<SB: SurrogateBuilder> EgorService<SB> {
-    #[allow(dead_code)]
-    fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
+    pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
         self.config = init(self.config);
         self
     }

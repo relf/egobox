@@ -168,7 +168,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
         };
         Egor {
             fobj: ObjFunc::new(self.fobj),
-            solver: EgorSolver::new_with_xtypes(xtypes, rng),
+            solver: EgorSolver::new_with_xtypes(self.config, xtypes, rng),
         }
     }
 }

@@ -8,7 +8,7 @@
 //! ```no_run
 //! use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! use egobox_doe::{Lhs, SamplingMethod};
-//! use egobox_ego::{EgorBuilder, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver};
+//! use egobox_ego::{EgorBuilder, EgorConfig, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver};
 //! use egobox_moe::MoeParams;
 //! use rand_xoshiro::Xoshiro256Plus;
 //! use ndarray_rand::rand::SeedableRng;
@@ -27,7 +27,8 @@
 //! let rng = Xoshiro256Plus::seed_from_u64(42);
 //! let xlimits = array![[-2., 2.], [-2., 2.]];
 //! let fobj = ObjFunc::new(rosenb);
-//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> = EgorSolver::new(&xlimits, rng);
+//! let config = EgorConfig::default();
+//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> = EgorSolver::new(config, &xlimits, rng);
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(20))
 //!             .run()
@@ -46,7 +47,7 @@
 //! ```no_run
 //! use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! use egobox_doe::{Lhs, SamplingMethod};
-//! use egobox_ego::{EgorBuilder, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver};
+//! use egobox_ego::{EgorBuilder, EgorConfig, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver};
 //! use egobox_moe::MoeParams;
 //! use rand_xoshiro::Xoshiro256Plus;
 //! use ndarray_rand::rand::SeedableRng;
@@ -84,13 +85,16 @@
 //! let doe = Lhs::new(&xlimits).sample(10);
 //!
 //! let fobj = ObjFunc::new(f_g24);
-//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> =
-//!   EgorSolver::new(&xlimits, rng)             
+//!
+//! let config = EgorConfig::default()
 //!     .n_cstr(2)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .infill_optimizer(InfillOptimizer::Cobyla)
 //!     .doe(&doe)
 //!     .target(-5.5080);
+//!
+//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> =
+//!   EgorSolver::new(config, &xlimits, rng);
 //!
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(40))
@@ -238,7 +242,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     ///
     /// The function `f` should return an objective but also constraint values if any.
     /// Design space is specified by a list of types for input variables `x` of `f` (see [`XType`]).
-    pub fn new_with_xtypes(xtypes: &[XType], rng: Xoshiro256Plus) -> Self {
+    pub fn new_with_xtypes(config: EgorConfig, xtypes: &[XType], rng: Xoshiro256Plus) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
@@ -248,7 +252,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             config: EgorConfig {
                 xtypes: Some(v_xtypes),
                 no_discrete: no_discrete(xtypes),
-                ..EgorConfig::default()
+                ..config
             },
             xlimits: unfold_xtypes_as_continuous_limits(xtypes),
             surrogate_builder: SB::new_with_xtypes_rng(xtypes),
@@ -653,7 +657,6 @@ where
                 lhs_optim,
             ) {
                 Ok(xk) => {
-                    println!(">>>>>>>>>> {}", self.config.n_cstr);
                     match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
                         Ok(yk) => {
                             y_dat = concatenate![
