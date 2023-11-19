@@ -27,10 +27,11 @@ name = "egobox"
 version = "0.12.0"
 description = "Python binding for egobox EGO optimizer written in Rust"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
+packages = [{ include = "egobox", from = "python" }]
 
 [tool.poetry.dependencies]
 numpy = ">=1.18"
-python = ">=3.7"
+python = ">=3.8"
 
 [tool.poetry.dev-dependencies]
-pytest = "^6.2"
+pytest = ">=6"
