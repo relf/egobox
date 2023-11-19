@@ -28,7 +28,7 @@
 //!
 //! // We ask for 10 evaluations of the objective function to get the result
 //! let res = EgorBuilder::optimize(xsinx)
-//!             .configure(|config| config.n_iter(10))
+//!             .configure(|config| config.max_iters(10))
 //!             .min_within(&array![[0.0, 25.0]])
 //!             .run()
 //!             .expect("xsinx minimized");
@@ -64,7 +64,7 @@
 //!     }
 //! }
 //!
-//! let n_iter = 10;
+//! let max_iters = 10;
 //! let doe = array![[0.], [7.], [25.]];   // the initial doe
 //!
 //! // We define input as being integer
@@ -73,7 +73,7 @@
 //! let res = EgorBuilder::optimize(mixsinx)
 //!     .configure(|config|
 //!         config.doe(&doe)  // we pass the initial doe
-//!               .n_iter(n_iter)
+//!               .max_iters(max_iters)
 //!               .infill_strategy(InfillStrategy::EI)
 //!               .random_seed(42))     
 //!     .min_within_mixint_space(&xtypes)  // We build a mixed-integer optimizer

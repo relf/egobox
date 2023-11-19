@@ -24,7 +24,7 @@
 //!             .infill_strategy(InfillStrategy::EI)
 //!             .n_doe(10)
 //!             .target(1e-1)
-//!             .n_iter(30))
+//!             .max_iters(30))
 //!     .min_within(&xlimits)
 //!     .run()
 //!     .expect("Rosenbrock minimization");
@@ -81,7 +81,7 @@
 //!                 .infill_strategy(InfillStrategy::EI)
 //!                 .infill_optimizer(InfillOptimizer::Cobyla)
 //!                 .doe(&doe)
-//!                 .n_iter(40)
+//!                 .max_iters(40)
 //!                 .target(-5.5080))
 //!            .min_within(&xlimits)
 //!            .run()
@@ -262,7 +262,7 @@ mod tests {
                 cfg.infill_strategy(InfillStrategy::EI)
                     .regression_spec(RegressionSpec::QUADRATIC)
                     .correlation_spec(CorrelationSpec::ALL)
-                    .n_iter(30)
+                    .max_iters(30)
                     .doe(&initial_doe)
                     .target(-15.1)
                     .outdir("target/tests")
@@ -282,7 +282,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
-                    .n_iter(20)
+                    .max_iters(20)
                     .regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
             })
@@ -297,7 +297,7 @@ mod tests {
     #[serial]
     fn test_xsinx_auto_clustering_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.n_clusters(0).n_iter(20))
+            .configure(|config| config.n_clusters(0).max_iters(20))
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor with auto clustering should minimize xsinx");
@@ -313,7 +313,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
-                    .n_iter(15)
+                    .max_iters(15)
                     .doe(&doe)
                     .outdir("target/tests")
                     .random_seed(42)
@@ -327,7 +327,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
-                    .n_iter(5)
+                    .max_iters(5)
                     .outdir("target/tests")
                     .hot_start(true)
                     .random_seed(42)
@@ -359,7 +359,7 @@ mod tests {
             .configure(|config| {
                 config
                     .doe(&doe)
-                    .n_iter(100)
+                    .max_iters(100)
                     .regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
                     .target(1e-2)
@@ -408,7 +408,7 @@ mod tests {
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(3);
         let res = EgorBuilder::optimize(f_g24)
-            .configure(|config| config.n_cstr(2).doe(&doe).n_iter(20).random_seed(42))
+            .configure(|config| config.n_cstr(2).doe(&doe).max_iters(20).random_seed(42))
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
@@ -435,7 +435,7 @@ mod tests {
                     .qei_strategy(QEiStrategy::KrigingBeliever)
                     .doe(&doe)
                     .target(-5.5030)
-                    .n_iter(30)
+                    .max_iters(30)
                     .random_seed(42)
             })
             .min_within(&xlimits)
@@ -459,7 +459,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixsinx_ei_mixint_egor_builder() {
-        let n_iter = 30;
+        let max_iters = 30;
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![XType::Int(0, 25)];
 
@@ -467,7 +467,7 @@ mod tests {
             .configure(|config| {
                 config
                     .doe(&doe)
-                    .n_iter(n_iter)
+                    .max_iters(max_iters)
                     .target(-15.1)
                     .infill_strategy(InfillStrategy::EI)
                     .random_seed(42)
@@ -481,7 +481,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixsinx_reclustering_mixint_egor_builder() {
-        let n_iter = 30;
+        let max_iters = 30;
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![XType::Int(0, 25)];
 
@@ -489,7 +489,7 @@ mod tests {
             .configure(|config| {
                 config
                     .doe(&doe)
-                    .n_iter(n_iter)
+                    .max_iters(max_iters)
                     .target(-15.1)
                     .infill_strategy(InfillStrategy::EI)
                     .random_seed(42)
@@ -503,7 +503,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixsinx_wb2_mixint_egor_builder() {
-        let n_iter = 30;
+        let max_iters = 30;
         let xtypes = vec![XType::Int(0, 25)];
 
         let res = EgorBuilder::optimize(mixsinx)
@@ -511,7 +511,7 @@ mod tests {
                 config
                     .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
                     .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
-                    .n_iter(n_iter)
+                    .max_iters(max_iters)
                     .random_seed(42)
             })
             .min_within_mixint_space(&xtypes)
@@ -549,7 +549,7 @@ mod tests {
         let mut builder = env_logger::Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();
-        let n_iter = 10;
+        let max_iters = 10;
         let xtypes = vec![
             XType::Cont(-5., 5.),
             XType::Enum(3),
@@ -562,7 +562,7 @@ mod tests {
                 config
                     .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
                     .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
-                    .n_iter(n_iter)
+                    .max_iters(max_iters)
                     .random_seed(42)
             })
             .min_within_mixint_space(&xtypes)

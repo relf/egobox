@@ -19,7 +19,7 @@ fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
 fn main() {
     let xlimits = array![[-2., 2.], [-2., 2.]];
     let res = EgorBuilder::optimize(rosenbrock)
-        .configure(|config| config.n_iter(100).target(1e-2))
+        .configure(|config| config.max_iters(100).target(1e-2))
         .min_within(&xlimits)
         .run()
         .expect("Minimize failure");

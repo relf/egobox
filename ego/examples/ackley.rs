@@ -19,7 +19,7 @@ fn main() {
                 .regression_spec(RegressionSpec::CONSTANT)
                 .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
                 .infill_strategy(InfillStrategy::WB2S)
-                .n_iter(200)
+                .max_iters(200)
                 .target(5e-1)
         })
         .min_within(&xlimits)

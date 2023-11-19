@@ -10,11 +10,11 @@ use serde::{Deserialize, Serialize};
 /// Egor optimizer configuration
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EgorConfig {
-    /// Number of function iterations allocated to find the optimum (aka iteration budget)
-    /// Note 1 : The number of cost function evaluations is deduced using the following formula (n_doe + n_iter)
-    /// Note 2 : When q_points > 1, the number of cost function evaluations is (n_doe + n_iter * q_points)
+    /// Max number of function iterations allocated to find the optimum (aka iteration budget)
+    /// Note 1 : The number of cost function evaluations is deduced using the following formula (n_doe + max_iters)
+    /// Note 2 : When q_points > 1, the number of cost function evaluations is (n_doe + max_iters * q_points)
     /// is is an upper bounds as some points may be rejected as being to close to previous ones.   
-    pub(crate) n_iter: usize,
+    pub(crate) max_iters: usize,
     /// Number of starts for multistart approach used for hyperparameters optimization
     pub(crate) n_start: usize,
     /// Number of points returned by EGO iteration (aka qEI Multipoint strategy)
@@ -64,7 +64,7 @@ pub struct EgorConfig {
 impl Default for EgorConfig {
     fn default() -> Self {
         EgorConfig {
-            n_iter: 20,
+            max_iters: 20,
             n_start: 20,
             q_points: 1,
             n_doe: 0,
@@ -94,9 +94,9 @@ impl EgorConfig {
         self
     }
 
-    /// Sets allowed number of evaluation of the function under optimization
-    pub fn n_iter(mut self, n_iter: usize) -> Self {
-        self.n_iter = n_iter;
+    /// Sets max number of iterations to optimize the objective function
+    pub fn max_iters(mut self, max_iters: usize) -> Self {
+        self.max_iters = max_iters;
         self
     }
 

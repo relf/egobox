@@ -375,7 +375,7 @@ where
             .clusterings(clusterings)
             .sampling(sampling);
         initial_state.doe_size = doe.nrows();
-        initial_state.max_iters = self.config.n_iter as u64;
+        initial_state.max_iters = self.config.max_iters as u64;
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
         initial_state.cstr_tol = self

@@ -240,16 +240,16 @@ impl Egor {
     /// This function finds the minimum of a given function `fun`
     ///
     /// # Parameters
-    ///     n_iter:
-    ///         the iteration budget, number of fun calls is n_doe + q_points * n_iter.
+    ///     max_iters:
+    ///         the iteration budget, number of fun calls is n_doe + q_points * max_iters.
     ///
     /// # Returns
     ///     optimization result
     ///         x_opt (array[1, nx]): x value  where fun is at its minimum subject to constraint
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
-    #[pyo3(signature = (n_iter = 20))]
-    fn minimize(&self, py: Python, n_iter: usize) -> PyResult<OptimResult> {
+    #[pyo3(signature = (max_iters = 20))]
+    fn minimize(&self, py: Python, max_iters: usize) -> PyResult<OptimResult> {
         let fun = self.fun.to_object(py);
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
             Python::with_gil(|py| {
@@ -309,7 +309,7 @@ impl Egor {
             .configure(|config| {
                 let mut config = config
                     .n_cstr(self.n_cstr)
-                    .n_iter(n_iter)
+                    .max_iters(max_iters)
                     .n_start(self.n_start)
                     .n_doe(self.n_doe)
                     .cstr_tol(&cstr_tol)

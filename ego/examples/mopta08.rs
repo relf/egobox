@@ -253,7 +253,7 @@ fn main() -> anyhow::Result<()> {
     let dim = args.dim;
     let outdir = args.outdir;
     let n_doe = 2 * dim;
-    let n_iter = 2 * dim;
+    let max_iters = 2 * dim;
     const N_CSTR: usize = 68;
     let cstr_tol = Array1::from_elem(N_CSTR, 1e-4);
     let kpls_dim = 3;
@@ -269,7 +269,7 @@ fn main() -> anyhow::Result<()> {
                 .n_clusters(1)
                 .n_start(50)
                 .n_doe(n_doe)
-                .n_iter(n_iter)
+                .max_iters(max_iters)
                 .regression_spec(RegressionSpec::CONSTANT)
                 .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
                 .infill_optimizer(InfillOptimizer::Slsqp)
