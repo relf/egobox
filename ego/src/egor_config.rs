@@ -4,8 +4,6 @@ use crate::types::*;
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::Array1;
 use ndarray::Array2;
-use rand_xoshiro::rand_core::SeedableRng;
-use rand_xoshiro::Xoshiro256Plus;
 
 use serde::{Deserialize, Serialize};
 
@@ -59,9 +57,8 @@ pub struct EgorConfig {
     pub(crate) xtypes: Option<Vec<XType>>,
     /// Flag for discrete handling, true if mixed-integer type present in xtypes, otherwise false
     pub(crate) no_discrete: bool,
-    /// A random generator used to get reproductible results.
-    /// For instance: Xoshiro256Plus::from_u64_seed(42) for reproducibility
-    pub(crate) rng: Xoshiro256Plus,
+    /// A random generator seed used to get reproductible results.
+    pub(crate) seed: Option<u64>,
 }
 
 impl Default for EgorConfig {
@@ -86,7 +83,7 @@ impl Default for EgorConfig {
             hot_start: false,
             xtypes: None,
             no_discrete: true,
-            rng: Xoshiro256Plus::from_entropy(),
+            seed: None,
         }
     }
 }
@@ -231,6 +228,13 @@ impl EgorConfig {
     /// Whether we start by loading last DOE saved in `outdir` as initial DOE
     pub fn hot_start(mut self, hot_start: bool) -> Self {
         self.hot_start = hot_start;
+        self
+    }
+
+    /// Allow to specify a seed for random number generator to allow
+    /// reproducible runs.
+    pub fn random_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
         self
     }
 }

@@ -302,15 +302,10 @@ impl Egor {
             .collect();
         println!("{:?}", xtypes);
 
-        let mut mixintegor_build = egobox_ego::EgorBuilder::optimize(obj);
-        if let Some(seed) = self.seed {
-            mixintegor_build = mixintegor_build.random_seed(seed);
-        };
-
         let cstr_tol = self.cstr_tol.clone().unwrap_or(vec![0.0; self.n_cstr]);
         let cstr_tol = Array1::from_vec(cstr_tol);
 
-        let mixintegor = mixintegor_build
+        let mixintegor = egobox_ego::EgorBuilder::optimize(obj)
             .configure(|config| {
                 let mut config = config
                     .n_cstr(self.n_cstr)
@@ -341,6 +336,9 @@ impl Egor {
                 };
                 if let Some(outdir) = self.outdir.as_ref().cloned() {
                     config = config.outdir(outdir);
+                };
+                if let Some(seed) = self.seed {
+                    config = config.random_seed(seed);
                 };
                 config
             })

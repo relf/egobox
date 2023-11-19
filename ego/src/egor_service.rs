@@ -20,8 +20,8 @@
 //!                 conf.regression_spec(RegressionSpec::ALL)
 //!                     .correlation_spec(CorrelationSpec::ALL)
 //!                     .infill_strategy(InfillStrategy::EI)
+//!                     .random_seed(42)
 //!             })
-//!             .random_seed(42)
 //!             .min_within(&array![[0., 25.]]);
 //!
 //! let mut doe = array![[0.], [7.], [20.], [25.]];
@@ -54,7 +54,6 @@ use rand_xoshiro::Xoshiro256Plus;
 ///
 pub struct EgorServiceBuilder {
     config: EgorConfig,
-    seed: Option<u64>,
 }
 
 impl EgorServiceBuilder {
@@ -66,19 +65,11 @@ impl EgorServiceBuilder {
     pub fn optimize() -> Self {
         EgorServiceBuilder {
             config: EgorConfig::default(),
-            seed: None,
         }
     }
 
     pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
         self.config = init(self.config);
-        self
-    }
-
-    /// Allow to specify a seed for random number generator to allow
-    /// reproducible runs.
-    pub fn random_seed(mut self, seed: u64) -> Self {
-        self.seed = Some(seed);
         self
     }
 
@@ -90,7 +81,7 @@ impl EgorServiceBuilder {
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> EgorService<MoeParams<f64, Xoshiro256Plus>> {
-        let rng = if let Some(seed) = self.seed {
+        let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
@@ -105,7 +96,7 @@ impl EgorServiceBuilder {
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
     pub fn min_within_mixint_space(self, xtypes: &[XType]) -> EgorService<MixintMoeParams> {
-        let rng = if let Some(seed) = self.seed {
+        let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
@@ -162,8 +153,8 @@ mod tests {
                 conf.regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
                     .infill_strategy(InfillStrategy::EI)
+                    .random_seed(42)
             })
-            .random_seed(42)
             .min_within(&array![[0., 25.]]);
 
         let mut doe = array![[0.], [7.], [20.], [25.]];

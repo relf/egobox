@@ -109,7 +109,6 @@ use argmin::core::{Executor, State};
 pub struct EgorBuilder<O: GroupFunc> {
     fobj: O,
     config: EgorConfig,
-    seed: Option<u64>,
 }
 
 impl<O: GroupFunc> EgorBuilder<O> {
@@ -122,19 +121,11 @@ impl<O: GroupFunc> EgorBuilder<O> {
         EgorBuilder {
             fobj,
             config: EgorConfig::default(),
-            seed: None,
         }
     }
 
     pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
         self.config = init(self.config);
-        self
-    }
-
-    /// Allow to specify a seed for random number generator to allow
-    /// reproducible runs.
-    pub fn random_seed(mut self, seed: u64) -> Self {
-        self.seed = Some(seed);
         self
     }
 
@@ -146,7 +137,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Egor<O, MoeParams<f64, Xoshiro256Plus>> {
-        let rng = if let Some(seed) = self.seed {
+        let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
@@ -161,7 +152,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
     pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, MixintMoeParams> {
-        let rng = if let Some(seed) = self.seed {
+        let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
@@ -320,8 +311,13 @@ mod tests {
         let xlimits = array![[0.0, 25.0]];
         let doe = Lhs::new(&xlimits).sample(10);
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.n_iter(15).doe(&doe).outdir("target/tests"))
-            .random_seed(42)
+            .configure(|config| {
+                config
+                    .n_iter(15)
+                    .doe(&doe)
+                    .outdir("target/tests")
+                    .random_seed(42)
+            })
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
@@ -329,8 +325,13 @@ mod tests {
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
 
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.n_iter(5).outdir("target/tests").hot_start(true))
-            .random_seed(42)
+            .configure(|config| {
+                config
+                    .n_iter(5)
+                    .outdir("target/tests")
+                    .hot_start(true)
+                    .random_seed(42)
+            })
             .min_within(&xlimits)
             .run()
             .expect("Egor should minimize xsinx");
@@ -362,8 +363,8 @@ mod tests {
                     .regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
                     .target(1e-2)
+                    .random_seed(42)
             })
-            .random_seed(42)
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
@@ -407,8 +408,7 @@ mod tests {
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(3);
         let res = EgorBuilder::optimize(f_g24)
-            .configure(|config| config.n_cstr(2).doe(&doe).n_iter(20))
-            .random_seed(42)
+            .configure(|config| config.n_cstr(2).doe(&doe).n_iter(20).random_seed(42))
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
@@ -436,8 +436,8 @@ mod tests {
                     .doe(&doe)
                     .target(-5.5030)
                     .n_iter(30)
+                    .random_seed(42)
             })
-            .random_seed(42)
             .min_within(&xlimits)
             .run()
             .expect("Egor minimization");
@@ -470,8 +470,8 @@ mod tests {
                     .n_iter(n_iter)
                     .target(-15.1)
                     .infill_strategy(InfillStrategy::EI)
+                    .random_seed(42)
             })
-            .random_seed(42)
             .min_within_mixint_space(&xtypes)
             .run()
             .unwrap();
@@ -492,8 +492,8 @@ mod tests {
                     .n_iter(n_iter)
                     .target(-15.1)
                     .infill_strategy(InfillStrategy::EI)
+                    .random_seed(42)
             })
-            .random_seed(42)
             .min_within_mixint_space(&xtypes)
             .run()
             .unwrap();
@@ -512,8 +512,8 @@ mod tests {
                     .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
                     .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
                     .n_iter(n_iter)
+                    .random_seed(42)
             })
-            .random_seed(42)
             .min_within_mixint_space(&xtypes)
             .run()
             .unwrap();
@@ -563,8 +563,8 @@ mod tests {
                     .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
                     .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
                     .n_iter(n_iter)
+                    .random_seed(42)
             })
-            .random_seed(42)
             .min_within_mixint_space(&xtypes)
             .run()
             .unwrap();

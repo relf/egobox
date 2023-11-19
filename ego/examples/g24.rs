@@ -34,8 +34,7 @@ fn main() {
 
     // We use Egor optimizer as a service
     let egor = EgorServiceBuilder::optimize()
-        .configure(|config| config.n_cstr(2))
-        .random_seed(42)
+        .configure(|config| config.n_cstr(2).random_seed(42))
         .min_within(&xlimits);
 
     let mut y_doe = f_g24(&doe.view());
