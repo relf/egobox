@@ -81,14 +81,14 @@ def six_humps(x):
 class TestOptimizer(unittest.TestCase):
     def test_xsinx(self):
         egor = egx.Egor(xsinx, egx.to_specs([[0.0, 25.0]]), seed=42)
-        res = egor.minimize(n_iter=20)
+        res = egor.minimize(max_iters=20)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
     def test_xsinx_with_reclustering(self):
         egor = egx.Egor(xsinx, egx.to_specs([[0.0, 25.0]]), seed=42, n_clusters=0)
-        res = egor.minimize(n_iter=20)
+        res = egor.minimize(max_iters=20)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
@@ -101,13 +101,13 @@ class TestOptimizer(unittest.TestCase):
         xlimits = egx.to_specs([[0.0, 25.0]])
         doe = egx.lhs(xlimits, 10)
         egor = egx.Egor(xsinx, xlimits, doe=doe, seed=42, outdir="./test_dir")
-        res = egor.minimize(n_iter=15)
+        res = egor.minimize(max_iters=15)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
         egor = egx.Egor(xsinx, xlimits, outdir="./test_dir", hot_start=True)
-        res = egor.minimize(n_iter=5)
+        res = egor.minimize(max_iters=5)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-2)
@@ -119,7 +119,7 @@ class TestOptimizer(unittest.TestCase):
 
     def test_g24(self):
         n_doe = 5
-        n_iter = 20
+        max_iters = 20
         n_cstr = 2
         egor = egx.Egor(
             g24,
@@ -130,14 +130,14 @@ class TestOptimizer(unittest.TestCase):
             n_doe=n_doe,
         )
         start = time.process_time()
-        res = egor.minimize(n_iter=n_iter)
+        res = egor.minimize(max_iters=max_iters)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(2.3295, res.x_opt[0], delta=1e-2)
         self.assertAlmostEqual(3.1785, res.x_opt[1], delta=1e-2)
-        self.assertEqual((n_doe + n_iter, 2), res.x_hist.shape)
-        self.assertEqual((n_doe + n_iter, 1 + n_cstr), res.y_hist.shape)
+        self.assertEqual((n_doe + max_iters, 2), res.x_hist.shape)
+        self.assertEqual((n_doe + max_iters, 1 + n_cstr), res.y_hist.shape)
 
     def test_g24_kpls(self):
         egor = egx.Egor(
@@ -151,7 +151,7 @@ class TestOptimizer(unittest.TestCase):
             seed=1,
         )
         start = time.process_time()
-        res = egor.minimize(n_iter=20)
+        res = egor.minimize(max_iters=20)
         end = time.process_time()
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=5e-1)
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
@@ -164,7 +164,7 @@ class TestOptimizer(unittest.TestCase):
             seed=42,
         )
         start = time.process_time()
-        res = egor.minimize(n_iter=45)
+        res = egor.minimize(max_iters=45)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
         # 2 global optimum value =-1.0316 located at (0.089842, -0.712656) and  (-0.089842, 0.712656)
