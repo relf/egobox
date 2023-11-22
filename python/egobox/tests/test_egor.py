@@ -174,6 +174,18 @@ class TestOptimizer(unittest.TestCase):
         self.assertRaises(TypeError, egx.Egor)
         egx.Egor(xsinx, egx.to_specs([[0.0, 25.0]]), 22, n_doe=10)
 
+    def test_egor_service(self):
+        xlimits = egx.to_specs([[0.0, 25.0]])
+        egor = egx.Egor(xlimits, seed=42)
+        x_doe = egx.lhs(xlimits, 3, seed=42)
+        print(x_doe)
+        y_doe = xsinx(x_doe)
+        print(y_doe)
+        for _ in range(10):
+            x = egor.suggest(x_doe, y_doe)
+            x_doe = np.concatenate((x_doe, x))
+            y_doe = np.concatenate((y_doe, xsinx(x)))
+
 
 if __name__ == "__main__":
     unittest.main()
