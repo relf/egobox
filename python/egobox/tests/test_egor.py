@@ -80,15 +80,15 @@ def six_humps(x):
 
 class TestOptimizer(unittest.TestCase):
     def test_xsinx(self):
-        egor = egx.Egor(xsinx, egx.to_specs([[0.0, 25.0]]), seed=42)
-        res = egor.minimize(max_iters=20)
+        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), seed=42)
+        res = egor.minimize(xsinx, max_iters=20)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
     def test_xsinx_with_reclustering(self):
-        egor = egx.Egor(xsinx, egx.to_specs([[0.0, 25.0]]), seed=42, n_clusters=0)
-        res = egor.minimize(max_iters=20)
+        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), seed=42, n_clusters=0)
+        res = egor.minimize(xsinx, max_iters=20)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
@@ -100,14 +100,14 @@ class TestOptimizer(unittest.TestCase):
             os.remove("./test_dir/egor_doe.npy")
         xlimits = egx.to_specs([[0.0, 25.0]])
         doe = egx.lhs(xlimits, 10)
-        egor = egx.Egor(xsinx, xlimits, doe=doe, seed=42, outdir="./test_dir")
-        res = egor.minimize(max_iters=15)
+        egor = egx.Egor(xlimits, doe=doe, seed=42, outdir="./test_dir")
+        res = egor.minimize(xsinx, max_iters=15)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
-        egor = egx.Egor(xsinx, xlimits, outdir="./test_dir", hot_start=True)
-        res = egor.minimize(max_iters=5)
+        egor = egx.Egor(xlimits, outdir="./test_dir", hot_start=True)
+        res = egor.minimize(xsinx, max_iters=5)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-2)
@@ -122,7 +122,6 @@ class TestOptimizer(unittest.TestCase):
         max_iters = 20
         n_cstr = 2
         egor = egx.Egor(
-            g24,
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             cstr_tol=np.array([1e-3, 1e-3]),
             n_cstr=n_cstr,
@@ -130,7 +129,7 @@ class TestOptimizer(unittest.TestCase):
             n_doe=n_doe,
         )
         start = time.process_time()
-        res = egor.minimize(max_iters=max_iters)
+        res = egor.minimize(g24, max_iters=max_iters)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=1e-2)
@@ -141,7 +140,6 @@ class TestOptimizer(unittest.TestCase):
 
     def test_g24_kpls(self):
         egor = egx.Egor(
-            g24,
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             n_cstr=2,
             cstr_tol=np.array([1e-3, 1e-3]),
@@ -151,20 +149,19 @@ class TestOptimizer(unittest.TestCase):
             seed=1,
         )
         start = time.process_time()
-        res = egor.minimize(max_iters=20)
+        res = egor.minimize(g24, max_iters=20)
         end = time.process_time()
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=5e-1)
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
 
     def test_six_humps(self):
         egor = egx.Egor(
-            six_humps,
             egx.to_specs([[-3.0, 3.0], [-2.0, 2.0]]),
             infill_strategy=egx.InfillStrategy.WB2,
             seed=42,
         )
         start = time.process_time()
-        res = egor.minimize(max_iters=45)
+        res = egor.minimize(six_humps, max_iters=45)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
         # 2 global optimum value =-1.0316 located at (0.089842, -0.712656) and  (-0.089842, 0.712656)
@@ -172,7 +169,7 @@ class TestOptimizer(unittest.TestCase):
 
     def test_constructor(self):
         self.assertRaises(TypeError, egx.Egor)
-        egx.Egor(xsinx, egx.to_specs([[0.0, 25.0]]), 22, n_doe=10)
+        egx.Egor(egx.to_specs([[0.0, 25.0]]), 22, n_doe=10)
 
     def test_egor_service(self):
         xlimits = egx.to_specs([[0.0, 25.0]])
