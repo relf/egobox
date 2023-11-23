@@ -255,88 +255,10 @@ impl Egor {
                 pyarray.to_owned_array()
             })
         };
-
-        let infill_strategy = match self.infill_strategy {
-            InfillStrategy::Ei => egobox_ego::InfillStrategy::EI,
-            InfillStrategy::Wb2 => egobox_ego::InfillStrategy::WB2,
-            InfillStrategy::Wb2s => egobox_ego::InfillStrategy::WB2S,
-        };
-
-        let qei_strategy = match self.par_infill_strategy {
-            ParInfillStrategy::Kb => egobox_ego::QEiStrategy::KrigingBeliever,
-            ParInfillStrategy::Kblb => egobox_ego::QEiStrategy::KrigingBelieverLowerBound,
-            ParInfillStrategy::Kbub => egobox_ego::QEiStrategy::KrigingBelieverUpperBound,
-            ParInfillStrategy::Clmin => egobox_ego::QEiStrategy::ConstantLiarMinimum,
-        };
-
-        let infill_optimizer = match self.infill_optimizer {
-            InfillOptimizer::Cobyla => egobox_ego::InfillOptimizer::Cobyla,
-            InfillOptimizer::Slsqp => egobox_ego::InfillOptimizer::Slsqp,
-        };
-
-        let xspecs: Vec<XSpec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
-        if xspecs.is_empty() {
-            panic!("Error: xspecs argument cannot be empty")
-        }
-
-        let xtypes: Vec<egobox_ego::XType> = xspecs
-            .iter()
-            .map(|spec| match spec.xtype {
-                XType::Float => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
-                XType::Int => {
-                    egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
-                }
-                XType::Ord => egobox_ego::XType::Ord(spec.xlimits.clone()),
-                XType::Enum => {
-                    if spec.tags.is_empty() {
-                        egobox_ego::XType::Enum(spec.xlimits[0] as usize)
-                    } else {
-                        egobox_ego::XType::Enum(spec.tags.len())
-                    }
-                }
-            })
-            .collect();
-
-        let cstr_tol = self.cstr_tol.clone().unwrap_or(vec![0.0; self.n_cstr]);
-        let cstr_tol = Array1::from_vec(cstr_tol);
+        let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
 
         let mixintegor = egobox_ego::EgorBuilder::optimize(obj)
-            .configure(|config| {
-                let mut config = config
-                    .n_cstr(self.n_cstr)
-                    .max_iters(max_iters)
-                    .n_start(self.n_start)
-                    .n_doe(self.n_doe)
-                    .cstr_tol(&cstr_tol)
-                    .regression_spec(
-                        egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
-                    )
-                    .correlation_spec(
-                        egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-                    )
-                    .infill_strategy(infill_strategy)
-                    .q_points(self.q_points)
-                    .qei_strategy(qei_strategy)
-                    .infill_optimizer(infill_optimizer)
-                    .target(self.target)
-                    .hot_start(self.hot_start);
-                if let Some(doe) = self.doe.as_ref() {
-                    config = config.doe(doe);
-                };
-                if let Some(kpls_dim) = self.kpls_dim {
-                    config = config.kpls_dim(kpls_dim);
-                };
-                if let Some(n_clusters) = self.n_clusters {
-                    config = config.n_clusters(n_clusters);
-                };
-                if let Some(outdir) = self.outdir.as_ref().cloned() {
-                    config = config.outdir(outdir);
-                };
-                if let Some(seed) = self.seed {
-                    config = config.random_seed(seed);
-                };
-                config
-            })
+            .configure(|config| self.apply_config(config, Some(max_iters), self.doe.as_ref()))
             .min_within_mixint_space(&xtypes);
 
         let res = py.allow_threads(|| {
@@ -377,27 +299,44 @@ impl Egor {
     ) -> Py<PyArray2<f64>> {
         let x_doe = x_doe.as_array();
         let y_doe = y_doe.as_array();
-
         let doe = concatenate(Axis(1), &[x_doe.view(), y_doe.view()]).unwrap();
+        let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
 
-        let infill_strategy = match self.infill_strategy {
+        let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
+            .configure(|config| self.apply_config(config, Some(1), Some(&doe)))
+            .min_within_mixint_space(&xtypes);
+
+        let x_suggested = py.allow_threads(|| mixintegor.suggest(&x_doe, &y_doe));
+        x_suggested.into_pyarray(py).to_owned()
+    }
+}
+
+impl Egor {
+    fn infill_strategy(&self) -> egobox_ego::InfillStrategy {
+        match self.infill_strategy {
             InfillStrategy::Ei => egobox_ego::InfillStrategy::EI,
             InfillStrategy::Wb2 => egobox_ego::InfillStrategy::WB2,
             InfillStrategy::Wb2s => egobox_ego::InfillStrategy::WB2S,
-        };
+        }
+    }
 
-        let qei_strategy = match self.par_infill_strategy {
+    fn qei_strategy(&self) -> egobox_ego::QEiStrategy {
+        match self.par_infill_strategy {
             ParInfillStrategy::Kb => egobox_ego::QEiStrategy::KrigingBeliever,
             ParInfillStrategy::Kblb => egobox_ego::QEiStrategy::KrigingBelieverLowerBound,
             ParInfillStrategy::Kbub => egobox_ego::QEiStrategy::KrigingBelieverUpperBound,
             ParInfillStrategy::Clmin => egobox_ego::QEiStrategy::ConstantLiarMinimum,
-        };
+        }
+    }
 
-        let infill_optimizer = match self.infill_optimizer {
+    fn infill_optimizer(&self) -> egobox_ego::InfillOptimizer {
+        match self.infill_optimizer {
             InfillOptimizer::Cobyla => egobox_ego::InfillOptimizer::Cobyla,
             InfillOptimizer::Slsqp => egobox_ego::InfillOptimizer::Slsqp,
-        };
+        }
+    }
 
+    fn xtypes(&self, py: Python) -> Vec<egobox_ego::XType> {
         let xspecs: Vec<XSpec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
         if xspecs.is_empty() {
             panic!("Error: xspecs argument cannot be empty")
@@ -420,49 +359,56 @@ impl Egor {
                 }
             })
             .collect();
+        xtypes
+    }
 
+    fn cstr_tol(&self) -> Array1<f64> {
         let cstr_tol = self.cstr_tol.clone().unwrap_or(vec![0.0; self.n_cstr]);
-        let cstr_tol = Array1::from_vec(cstr_tol);
+        Array1::from_vec(cstr_tol)
+    }
 
-        let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
-            .configure(|config| {
-                let mut config = config
-                    .n_cstr(self.n_cstr)
-                    .n_start(self.n_start)
-                    .doe(&doe)
-                    .cstr_tol(&cstr_tol)
-                    .regression_spec(
-                        egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
-                    )
-                    .correlation_spec(
-                        egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-                    )
-                    .infill_strategy(infill_strategy)
-                    .q_points(self.q_points)
-                    .qei_strategy(qei_strategy)
-                    .infill_optimizer(infill_optimizer)
-                    .target(self.target)
-                    .hot_start(false); // when used as a service no hotstart
-                if let Some(doe) = self.doe.as_ref() {
-                    config = config.doe(doe);
-                };
-                if let Some(kpls_dim) = self.kpls_dim {
-                    config = config.kpls_dim(kpls_dim);
-                };
-                if let Some(n_clusters) = self.n_clusters {
-                    config = config.n_clusters(n_clusters);
-                };
-                if let Some(outdir) = self.outdir.as_ref().cloned() {
-                    config = config.outdir(outdir);
-                };
-                if let Some(seed) = self.seed {
-                    config = config.random_seed(seed);
-                };
-                config
-            })
-            .min_within_mixint_space(&xtypes);
+    fn apply_config(
+        &self,
+        config: egobox_ego::EgorConfig,
+        max_iters: Option<usize>,
+        doe: Option<&Array2<f64>>,
+    ) -> egobox_ego::EgorConfig {
+        let infill_strategy = self.infill_strategy();
+        let qei_strategy = self.qei_strategy();
+        let infill_optimizer = self.infill_optimizer();
+        let cstr_tol = self.cstr_tol();
 
-        let x_suggested = py.allow_threads(|| mixintegor.suggest(&x_doe, &y_doe));
-        x_suggested.into_pyarray(py).to_owned()
+        let mut config = config
+            .n_cstr(self.n_cstr)
+            .max_iters(max_iters.unwrap_or(1))
+            .n_start(self.n_start)
+            .n_doe(self.n_doe)
+            .cstr_tol(&cstr_tol)
+            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+            .correlation_spec(
+                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+            )
+            .infill_strategy(infill_strategy)
+            .q_points(self.q_points)
+            .qei_strategy(qei_strategy)
+            .infill_optimizer(infill_optimizer)
+            .target(self.target)
+            .hot_start(self.hot_start); // when used as a service no hotstart
+        if let Some(doe) = doe {
+            config = config.doe(doe);
+        };
+        if let Some(kpls_dim) = self.kpls_dim {
+            config = config.kpls_dim(kpls_dim);
+        };
+        if let Some(n_clusters) = self.n_clusters {
+            config = config.n_clusters(n_clusters);
+        };
+        if let Some(outdir) = self.outdir.as_ref().cloned() {
+            config = config.outdir(outdir);
+        };
+        if let Some(seed) = self.seed {
+            config = config.random_seed(seed);
+        };
+        config
     }
 }
