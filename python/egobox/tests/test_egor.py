@@ -175,13 +175,14 @@ class TestOptimizer(unittest.TestCase):
         xlimits = egx.to_specs([[0.0, 25.0]])
         egor = egx.Egor(xlimits, seed=42)
         x_doe = egx.lhs(xlimits, 3, seed=42)
-        print(x_doe)
         y_doe = xsinx(x_doe)
-        print(y_doe)
         for _ in range(10):
             x = egor.suggest(x_doe, y_doe)
             x_doe = np.concatenate((x_doe, x))
             y_doe = np.concatenate((y_doe, xsinx(x)))
+        res = egor.get_result(x_doe, y_doe)
+        self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
+        self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
 
 if __name__ == "__main__":

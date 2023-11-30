@@ -11,9 +11,10 @@
 //!
 
 use crate::types::*;
+use egobox_ego::find_best_result_index;
 use ndarray::{concatenate, Array1, Axis};
 use numpy::ndarray::{Array2, ArrayView2};
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -241,7 +242,7 @@ impl Egor {
     ///
     /// # Returns
     ///     optimization result
-    ///         x_opt (array[1, nx]): x value  where fun is at its minimum subject to constraint
+    ///         x_opt (array[1, nx]): x value where fun is at its minimum subject to constraints
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
     #[pyo3(signature = (fun, max_iters = 20))]
@@ -284,7 +285,7 @@ impl Egor {
     ///
     /// # Parameters
     ///     x_doe (array[ns, nx]): ns samples where function has been evaluated
-    ///     y_doe (array[ns, 1 + n_cstr]): ns values of objetcive and constraints
+    ///     y_doe (array[ns, 1 + n_cstr]): ns values of objecctive and constraints
     ///     
     ///
     /// # Returns
@@ -307,7 +308,56 @@ impl Egor {
             .min_within_mixint_space(&xtypes);
 
         let x_suggested = py.allow_threads(|| mixintegor.suggest(&x_doe, &y_doe));
-        x_suggested.into_pyarray(py).to_owned()
+        x_suggested.to_pyarray(py).into()
+    }
+
+    /// This function gives the best evaluation index given the outputs
+    /// of the function (objective wrt constraints) under minimization.
+    ///
+    /// # Parameters
+    ///     y_doe (array[ns, 1 + n_cstr]): ns values of objective and constraints
+    ///     
+    /// # Returns
+    ///     index in y_doe of the best evaluation
+    ///
+    #[pyo3(signature = (y_doe))]
+    fn get_result_index(&self, y_doe: PyReadonlyArray2<f64>) -> usize {
+        let y_doe = y_doe.as_array();
+        find_best_result_index(&y_doe, &self.cstr_tol())
+    }
+
+    /// This function gives the best result given inputs and outputs
+    /// of the function (objective wrt constraints) under minimization.
+    ///
+    /// # Parameters
+    ///     x_doe (array[ns, nx]): ns samples where function has been evaluated
+    ///     y_doe (array[ns, 1 + n_cstr]): ns values of objective and constraints
+    ///     
+    /// # Returns
+    ///     optimization result
+    ///         x_opt (array[1, nx]): x value where fun is at its minimum subject to constraints
+    ///         y_opt (array[1, nx]): fun(x_opt)
+    ///
+    #[pyo3(signature = (x_doe, y_doe))]
+    fn get_result(
+        &self,
+        py: Python,
+        x_doe: PyReadonlyArray2<f64>,
+        y_doe: PyReadonlyArray2<f64>,
+    ) -> OptimResult {
+        let x_doe = x_doe.as_array();
+        let y_doe = y_doe.as_array();
+        let idx = find_best_result_index(&y_doe, &self.cstr_tol());
+        let x_opt = x_doe.row(idx).to_pyarray(py).into();
+        let y_opt = y_doe.row(idx).to_pyarray(py).into();
+        let x_hist = x_doe.to_pyarray(py).into();
+        let y_hist = y_doe.to_pyarray(py).into();
+        OptimResult {
+            x_opt,
+            y_opt,
+            x_hist,
+            y_hist,
+        }
     }
 }
 
