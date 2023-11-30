@@ -1,8 +1,20 @@
 Changes
 -------
 
-Version 0.13.0 - unreleased
+Version 0.14.0 - unreleased
 ===========================
+
+Version 0.13.0 - 30/11/2023
+===========================
+
+* `ego`: API refactoring to enable `ask-and-tell` interface
+  * Configuration of Egor is factorize out in `EgorConfig`
+  * `EgorBuilder` gets a `configure` method to tune the configuration
+  * `EgorService` structure represent `Egor` when used as service 
+  * Python `Egor` API changes:
+    * function under optimization is now given via `minimize(fun, max_iters=...)` method
+    * new method `suggest(xdoe, ydoe)` allows to ask for x suggestion and tell current function evaluations 
+    * new method `get_result(xdoe, ydoe)` to get the best evaluation (ie minimum) from given ones
 
 Version 0.12.0 - 10/11/2023
 ===========================
