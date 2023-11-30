@@ -253,7 +253,7 @@ fn main() -> anyhow::Result<()> {
     let dim = args.dim;
     let outdir = args.outdir;
     let n_doe = 2 * dim;
-    let n_iter = 2 * dim;
+    let max_iters = 2 * dim;
     const N_CSTR: usize = 68;
     let cstr_tol = Array1::from_elem(N_CSTR, 1e-4);
     let kpls_dim = 3;
@@ -262,19 +262,22 @@ fn main() -> anyhow::Result<()> {
     xlimits.column_mut(1).assign(&Array1::ones(dim));
 
     let res = EgorBuilder::optimize(mopta_func(dim))
+        .configure(|config| {
+            config
+                .n_cstr(N_CSTR)
+                .cstr_tol(&cstr_tol)
+                .n_clusters(1)
+                .n_start(50)
+                .n_doe(n_doe)
+                .max_iters(max_iters)
+                .regression_spec(RegressionSpec::CONSTANT)
+                .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+                .infill_optimizer(InfillOptimizer::Slsqp)
+                .kpls_dim(kpls_dim)
+                .outdir(outdir)
+                .hot_start(true)
+        })
         .min_within(&xlimits)
-        .n_cstr(N_CSTR)
-        .cstr_tol(&cstr_tol)
-        .n_clusters(1)
-        .n_start(50)
-        .n_doe(n_doe)
-        .n_iter(n_iter)
-        .regression_spec(RegressionSpec::CONSTANT)
-        .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
-        .infill_optimizer(InfillOptimizer::Slsqp)
-        .kpls_dim(kpls_dim)
-        .outdir(outdir)
-        .hot_start(true)
         .run()
         .expect("Minimize failure");
     println!(

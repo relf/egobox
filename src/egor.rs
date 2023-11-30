@@ -11,9 +11,10 @@
 //!
 
 use crate::types::*;
-use ndarray::Array1;
+use egobox_ego::find_best_result_index;
+use ndarray::{concatenate, Array1, Axis};
 use numpy::ndarray::{Array2, ArrayView2};
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -133,7 +134,6 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///      
 #[pyclass]
 pub(crate) struct Egor {
-    pub fun: PyObject,
     pub xspecs: PyObject,
     pub n_cstr: usize,
     pub cstr_tol: Option<Vec<f64>>,
@@ -170,7 +170,6 @@ pub(crate) struct OptimResult {
 impl Egor {
     #[new]
     #[pyo3(signature = (
-        fun,
         xspecs,
         n_cstr = 0,
         cstr_tol = None,
@@ -192,8 +191,7 @@ impl Egor {
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
-        py: Python,
-        fun: PyObject,
+        _py: Python,
         xspecs: PyObject,
         n_cstr: usize,
         cstr_tol: Option<Vec<f64>>,
@@ -215,7 +213,6 @@ impl Egor {
     ) -> Self {
         let doe = doe.map(|x| x.to_owned_array());
         Egor {
-            fun: fun.to_object(py),
             xspecs,
             n_cstr,
             cstr_tol,
@@ -240,17 +237,17 @@ impl Egor {
     /// This function finds the minimum of a given function `fun`
     ///
     /// # Parameters
-    ///     n_iter:
-    ///         the iteration budget, number of fun calls is n_doe + q_points * n_iter.
+    ///     max_iters:
+    ///         the iteration budget, number of fun calls is n_doe + q_points * max_iters.
     ///
     /// # Returns
     ///     optimization result
-    ///         x_opt (array[1, nx]): x value  where fun is at its minimum subject to constraint
+    ///         x_opt (array[1, nx]): x value where fun is at its minimum subject to constraints
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
-    #[pyo3(signature = (n_iter = 20))]
-    fn minimize(&self, py: Python, n_iter: usize) -> PyResult<OptimResult> {
-        let fun = self.fun.to_object(py);
+    #[pyo3(signature = (fun, max_iters = 20))]
+    fn minimize(&self, py: Python, fun: PyObject, max_iters: usize) -> PyResult<OptimResult> {
+        let fun = fun.to_object(py);
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
             Python::with_gil(|py| {
                 let args = (x.to_owned().into_pyarray(py),);
@@ -259,25 +256,137 @@ impl Egor {
                 pyarray.to_owned_array()
             })
         };
+        let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
 
-        let infill_strategy = match self.infill_strategy {
+        let mixintegor = egobox_ego::EgorBuilder::optimize(obj)
+            .configure(|config| self.apply_config(config, Some(max_iters), self.doe.as_ref()))
+            .min_within_mixint_space(&xtypes);
+
+        let res = py.allow_threads(|| {
+            mixintegor
+                .run()
+                .expect("Egor should optimize the objective function")
+        });
+        let x_opt = res.x_opt.into_pyarray(py).to_owned();
+        let y_opt = res.y_opt.into_pyarray(py).to_owned();
+        let x_hist = res.x_hist.into_pyarray(py).to_owned();
+        let y_hist = res.y_hist.into_pyarray(py).to_owned();
+        Ok(OptimResult {
+            x_opt,
+            y_opt,
+            x_hist,
+            y_hist,
+        })
+    }
+
+    /// This function gives the next best location where to evaluate the function
+    /// under optimization wrt to previous evaluations.
+    /// The function returns several point when multi point qEI strategy is used.
+    ///
+    /// # Parameters
+    ///     x_doe (array[ns, nx]): ns samples where function has been evaluated
+    ///     y_doe (array[ns, 1 + n_cstr]): ns values of objecctive and constraints
+    ///     
+    ///
+    /// # Returns
+    ///     (array[1, nx]): suggested location where to evaluate objective and constraints
+    ///
+    #[pyo3(signature = (x_doe, y_doe))]
+    fn suggest(
+        &self,
+        py: Python,
+        x_doe: PyReadonlyArray2<f64>,
+        y_doe: PyReadonlyArray2<f64>,
+    ) -> Py<PyArray2<f64>> {
+        let x_doe = x_doe.as_array();
+        let y_doe = y_doe.as_array();
+        let doe = concatenate(Axis(1), &[x_doe.view(), y_doe.view()]).unwrap();
+        let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
+
+        let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
+            .configure(|config| self.apply_config(config, Some(1), Some(&doe)))
+            .min_within_mixint_space(&xtypes);
+
+        let x_suggested = py.allow_threads(|| mixintegor.suggest(&x_doe, &y_doe));
+        x_suggested.to_pyarray(py).into()
+    }
+
+    /// This function gives the best evaluation index given the outputs
+    /// of the function (objective wrt constraints) under minimization.
+    ///
+    /// # Parameters
+    ///     y_doe (array[ns, 1 + n_cstr]): ns values of objective and constraints
+    ///     
+    /// # Returns
+    ///     index in y_doe of the best evaluation
+    ///
+    #[pyo3(signature = (y_doe))]
+    fn get_result_index(&self, y_doe: PyReadonlyArray2<f64>) -> usize {
+        let y_doe = y_doe.as_array();
+        find_best_result_index(&y_doe, &self.cstr_tol())
+    }
+
+    /// This function gives the best result given inputs and outputs
+    /// of the function (objective wrt constraints) under minimization.
+    ///
+    /// # Parameters
+    ///     x_doe (array[ns, nx]): ns samples where function has been evaluated
+    ///     y_doe (array[ns, 1 + n_cstr]): ns values of objective and constraints
+    ///     
+    /// # Returns
+    ///     optimization result
+    ///         x_opt (array[1, nx]): x value where fun is at its minimum subject to constraints
+    ///         y_opt (array[1, nx]): fun(x_opt)
+    ///
+    #[pyo3(signature = (x_doe, y_doe))]
+    fn get_result(
+        &self,
+        py: Python,
+        x_doe: PyReadonlyArray2<f64>,
+        y_doe: PyReadonlyArray2<f64>,
+    ) -> OptimResult {
+        let x_doe = x_doe.as_array();
+        let y_doe = y_doe.as_array();
+        let idx = find_best_result_index(&y_doe, &self.cstr_tol());
+        let x_opt = x_doe.row(idx).to_pyarray(py).into();
+        let y_opt = y_doe.row(idx).to_pyarray(py).into();
+        let x_hist = x_doe.to_pyarray(py).into();
+        let y_hist = y_doe.to_pyarray(py).into();
+        OptimResult {
+            x_opt,
+            y_opt,
+            x_hist,
+            y_hist,
+        }
+    }
+}
+
+impl Egor {
+    fn infill_strategy(&self) -> egobox_ego::InfillStrategy {
+        match self.infill_strategy {
             InfillStrategy::Ei => egobox_ego::InfillStrategy::EI,
             InfillStrategy::Wb2 => egobox_ego::InfillStrategy::WB2,
             InfillStrategy::Wb2s => egobox_ego::InfillStrategy::WB2S,
-        };
+        }
+    }
 
-        let qei_strategy = match self.par_infill_strategy {
+    fn qei_strategy(&self) -> egobox_ego::QEiStrategy {
+        match self.par_infill_strategy {
             ParInfillStrategy::Kb => egobox_ego::QEiStrategy::KrigingBeliever,
             ParInfillStrategy::Kblb => egobox_ego::QEiStrategy::KrigingBelieverLowerBound,
             ParInfillStrategy::Kbub => egobox_ego::QEiStrategy::KrigingBelieverUpperBound,
             ParInfillStrategy::Clmin => egobox_ego::QEiStrategy::ConstantLiarMinimum,
-        };
+        }
+    }
 
-        let infill_optimizer = match self.infill_optimizer {
+    fn infill_optimizer(&self) -> egobox_ego::InfillOptimizer {
+        match self.infill_optimizer {
             InfillOptimizer::Cobyla => egobox_ego::InfillOptimizer::Cobyla,
             InfillOptimizer::Slsqp => egobox_ego::InfillOptimizer::Slsqp,
-        };
+        }
+    }
 
+    fn xtypes(&self, py: Python) -> Vec<egobox_ego::XType> {
         let xspecs: Vec<XSpec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
         if xspecs.is_empty() {
             panic!("Error: xspecs argument cannot be empty")
@@ -300,20 +409,28 @@ impl Egor {
                 }
             })
             .collect();
-        println!("{:?}", xtypes);
+        xtypes
+    }
 
-        let mut mixintegor_build = egobox_ego::EgorBuilder::optimize(obj);
-        if let Some(seed) = self.seed {
-            mixintegor_build = mixintegor_build.random_seed(seed);
-        };
-
+    fn cstr_tol(&self) -> Array1<f64> {
         let cstr_tol = self.cstr_tol.clone().unwrap_or(vec![0.0; self.n_cstr]);
-        let cstr_tol = Array1::from_vec(cstr_tol);
+        Array1::from_vec(cstr_tol)
+    }
 
-        let mut mixintegor = mixintegor_build
-            .min_within_mixint_space(&xtypes)
+    fn apply_config(
+        &self,
+        config: egobox_ego::EgorConfig,
+        max_iters: Option<usize>,
+        doe: Option<&Array2<f64>>,
+    ) -> egobox_ego::EgorConfig {
+        let infill_strategy = self.infill_strategy();
+        let qei_strategy = self.qei_strategy();
+        let infill_optimizer = self.infill_optimizer();
+        let cstr_tol = self.cstr_tol();
+
+        let mut config = config
             .n_cstr(self.n_cstr)
-            .n_iter(n_iter)
+            .max_iters(max_iters.unwrap_or(1))
             .n_start(self.n_start)
             .n_doe(self.n_doe)
             .cstr_tol(&cstr_tol)
@@ -326,34 +443,22 @@ impl Egor {
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
             .target(self.target)
-            .hot_start(self.hot_start);
-        if let Some(doe) = self.doe.as_ref() {
-            mixintegor = mixintegor.doe(doe);
+            .hot_start(self.hot_start); // when used as a service no hotstart
+        if let Some(doe) = doe {
+            config = config.doe(doe);
         };
         if let Some(kpls_dim) = self.kpls_dim {
-            mixintegor = mixintegor.kpls_dim(kpls_dim);
+            config = config.kpls_dim(kpls_dim);
         };
         if let Some(n_clusters) = self.n_clusters {
-            mixintegor = mixintegor.n_clusters(n_clusters);
+            config = config.n_clusters(n_clusters);
         };
         if let Some(outdir) = self.outdir.as_ref().cloned() {
-            mixintegor = mixintegor.outdir(outdir);
+            config = config.outdir(outdir);
         };
-
-        let res = py.allow_threads(|| {
-            mixintegor
-                .run()
-                .expect("Egor should optimize the objective function")
-        });
-        let x_opt = res.x_opt.into_pyarray(py).to_owned();
-        let y_opt = res.y_opt.into_pyarray(py).to_owned();
-        let x_hist = res.x_hist.into_pyarray(py).to_owned();
-        let y_hist = res.y_hist.into_pyarray(py).to_owned();
-        Ok(OptimResult {
-            x_opt,
-            y_opt,
-            x_hist,
-            y_hist,
-        })
+        if let Some(seed) = self.seed {
+            config = config.random_seed(seed);
+        };
+        config
     }
 }

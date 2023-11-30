@@ -66,5 +66,5 @@ egor = egx.Egor(
 #                      regr_spec=egx.RegressionSpec.LINEAR,
 #                      corr_spec=egx.CorrelationSpec.MATERN32 | egx.CorrelationSpec.MATERN52)
 
-res = egor.minimize(n_iter=30)
+res = egor.minimize(max_iters=30)
 print(f"Optimization f={res.y_opt} at {res.x_opt}")

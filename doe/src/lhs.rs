@@ -271,10 +271,10 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         lhs.mapv(F::cast)
     }
 
-    fn _maximin_lhs(&self, ns: usize, centered: bool, n_iter: usize) -> Array2<F> {
+    fn _maximin_lhs(&self, ns: usize, centered: bool, max_iters: usize) -> Array2<F> {
         let mut max_dist = F::zero();
         let mut lhs = self._classic_lhs(ns);
-        for _ in 0..n_iter {
+        for _ in 0..max_iters {
             if centered {
                 lhs = self._centered_lhs(ns);
             } else {

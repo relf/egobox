@@ -19,9 +19,8 @@ fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
 fn main() {
     let xlimits = array![[-2., 2.], [-2., 2.]];
     let res = EgorBuilder::optimize(rosenbrock)
+        .configure(|config| config.max_iters(100).target(1e-2))
         .min_within(&xlimits)
-        .n_iter(100)
-        .target(1e-2)
         .run()
         .expect("Minimize failure");
     println!("Rosenbrock minimum y = {} at x = {}", res.y_opt, res.x_opt);
