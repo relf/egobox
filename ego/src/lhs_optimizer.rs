@@ -121,7 +121,7 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
                     err
                 );
                 if values.is_empty() {
-                    log::info!("No valid value maybe due to ill-formed surrogate models");
+                    log::error!("No valid output value maybe due to ill-formed surrogate models.");
                 }
                 panic!("Optimization Aborted!")
             });

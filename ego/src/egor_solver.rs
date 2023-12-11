@@ -165,7 +165,7 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
 impl SurrogateBuilder for MoeParams<f64, Xoshiro256Plus> {
     /// Constructor from domain space specified with types
     /// **panic** if xtypes contains other types than continuous type `Float`
-    fn new_with_xtypes_rng(xtypes: &[XType]) -> Self {
+    fn new_with_xtypes(xtypes: &[XType]) -> Self {
         if !no_discrete(xtypes) {
             panic!("MoeParams cannot be created with discrete types!");
         }
@@ -236,7 +236,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                 ..config
             },
             xlimits: xlimits.to_owned(),
-            surrogate_builder: SB::new_with_xtypes_rng(&continuous_xlimits_to_xtypes(xlimits)),
+            surrogate_builder: SB::new_with_xtypes(&continuous_xlimits_to_xtypes(xlimits)),
             rng,
         }
     }
@@ -260,7 +260,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                 ..config
             },
             xlimits: unfold_xtypes_as_continuous_limits(xtypes),
-            surrogate_builder: SB::new_with_xtypes_rng(xtypes),
+            surrogate_builder: SB::new_with_xtypes(xtypes),
             rng,
         }
     }
@@ -299,7 +299,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 /// Build `xtypes` from simple float bounds of `x` input components when x belongs to R^n.
 /// xlimits are bounds of the x components expressed a matrix (dim, 2) where dim is the dimension of x
 /// the ith row is the bounds interval [lower, upper] of the ith comonent of `x`.  
-fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> {
+pub fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> {
     let mut xtypes: Vec<XType> = vec![];
     Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(XType::Cont(limits[0], limits[1])));
     xtypes
