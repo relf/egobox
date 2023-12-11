@@ -114,7 +114,7 @@ pub fn unfold_with_enum_mask(
 ) -> Array2<f64> {
     let mut xunfold = Array::zeros((x.nrows(), compute_unfolded_dimension(xtypes)));
     let mut unfold_index = 0;
-    xtypes.iter().for_each(|s| match s {
+    xtypes.iter().enumerate().for_each(|(i, s)| match s {
         XType::Cont(_, _) | XType::Int(_, _) | XType::Ord(_) => {
             xunfold
                 .column_mut(unfold_index)
@@ -126,8 +126,8 @@ pub fn unfold_with_enum_mask(
             Zip::from(unfold.rows_mut())
                 .and(x.rows())
                 .for_each(|mut row, xrow| {
-                    let index = xrow[[unfold_index]] as usize;
-                    row[[index]] = 1.;
+                    let index = xrow[i] as usize;
+                    row[index] = 1.;
                 });
             xunfold
                 .slice_mut(s![.., unfold_index..unfold_index + v])
@@ -368,7 +368,7 @@ impl MixintMoeValidParams {
 }
 
 impl SurrogateBuilder for MixintMoeParams {
-    fn new_with_xtypes_rng(xtypes: &[XType]) -> Self {
+    fn new_with_xtypes(xtypes: &[XType]) -> Self {
         MixintMoeParams::new(xtypes, &MoeParams::new())
     }
 
