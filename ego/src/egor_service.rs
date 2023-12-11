@@ -87,7 +87,10 @@ impl EgorServiceBuilder {
             Xoshiro256Plus::from_entropy()
         };
         EgorService {
-            config: self.config.clone(),
+            config: EgorConfig {
+                xtypes: Some(continuous_xlimits_to_xtypes(xlimits)),
+                ..self.config.clone()
+            },
             solver: EgorSolver::new(self.config, xlimits, rng),
         }
     }
@@ -102,7 +105,10 @@ impl EgorServiceBuilder {
             Xoshiro256Plus::from_entropy()
         };
         EgorService {
-            config: self.config.clone(),
+            config: EgorConfig {
+                xtypes: Some(xtypes.to_vec()),
+                ..self.config.clone()
+            },
             solver: EgorSolver::new_with_xtypes(self.config, xtypes, rng),
         }
     }
@@ -130,7 +136,11 @@ impl<SB: SurrogateBuilder> EgorService<SB> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        self.solver.suggest(x_data, y_data)
+        let xtypes = self.config.xtypes.as_ref().unwrap();
+        let x_data = unfold_with_enum_mask(xtypes, x_data);
+        let x = self.solver.suggest(&x_data, y_data);
+        let x = cast_to_discrete_values(xtypes, &x);
+        fold_with_enum_index(xtypes, &x).to_owned()
     }
 }
 
