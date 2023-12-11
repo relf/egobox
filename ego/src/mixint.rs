@@ -108,7 +108,7 @@ fn compute_unfolded_dimension(xtypes: &[XType]) -> usize {
 /// For instance, if an input dimension is typed ["blue", "red", "green"] a sample/row of
 /// the input x may contain [..., 2, ...] which will be expanded in [..., 0, 0, 1, ...].
 /// This function is the opposite of fold_with_enum_index().
-fn unfold_with_enum_mask(
+pub fn unfold_with_enum_mask(
     xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Array2<f64> {
@@ -310,7 +310,7 @@ impl MixintMoeParams {
         self
     }
 
-    /// Sets the specification
+    /// Gets the domain specification
     pub fn xtypes(&self) -> &[XType] {
         &self.0.xtypes
     }
