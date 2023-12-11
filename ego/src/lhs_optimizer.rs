@@ -3,7 +3,7 @@ use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
-use rayon::prelude::*;
+//use rayon::prelude::*;
 
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
@@ -114,9 +114,17 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
                 })
                 .collect();
             let values = Array1::from_vec(vals.iter().map(|(_, y, _)| *y).collect());
-            let index_min = values
-                .argmin()
-                .unwrap_or_else(|err| panic!("Cannot find min in {}: {:?}", values, err));
+            let index_min = values.argmin().unwrap_or_else(|err| {
+                log::error!(
+                    "LHS optimization failed! Cannot find minimum in {} (Error: {})",
+                    values,
+                    err
+                );
+                if values.is_empty() {
+                    log::info!("No valid value maybe due to ill-formed surrogate models");
+                }
+                panic!("Optimization Aborted!")
+            });
             (
                 true,
                 vals[index_min].0.to_owned(),
@@ -142,7 +150,6 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
 
         // Make n_start optim
         let x_optims = (0..self.n_start)
-            .into_par_iter()
             .map(|_| self.find_lhs_min(lhs.clone()))
             .collect::<Vec<_>>();
 
