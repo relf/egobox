@@ -163,7 +163,12 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
 }
 
 impl SurrogateBuilder for MoeParams<f64, Xoshiro256Plus> {
-    fn new_with_xtypes_rng(_xtypes: &[XType]) -> Self {
+    /// Constructor from domain space specified with types
+    /// **panic** if xtypes contains other types than continuous type `Float`
+    fn new_with_xtypes_rng(xtypes: &[XType]) -> Self {
+        if !no_discrete(xtypes) {
+            panic!("MoeParams cannot be created with discrete types!");
+        }
         MoeParams::new()
     }
 
@@ -336,10 +341,19 @@ where
         let doe = hstart_doe.as_ref().or(self.config.doe.as_ref());
 
         let (y_data, x_data) = if let Some(doe) = doe {
+            let doe = if let Some(xtypes) = &self.config.xtypes {
+                // When xtypes is specified, the given DOE is expected to be given
+                // in folded space (enum velues are are indices) hence we have to
+                // unfold it as EgorSolver works in the continuous space
+                unfold_with_enum_mask(xtypes, doe)
+            } else {
+                doe.to_owned()
+            };
+
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
-                (self.eval_obj(problem, doe), doe.to_owned())
+                (self.eval_obj(problem, &doe), doe.to_owned())
             } else {
                 // split doe in x and y
                 info!("Use specified DOE {} samples", doe.nrows());
@@ -992,6 +1006,8 @@ where
         x: &Array2<f64>,
     ) -> Array2<f64> {
         let params = if let Some(xtypes) = &self.config.xtypes {
+            // When xtypes is specified, we have to cast x to folded space
+            // as EgorSolver works internally in the continuous space
             let xcast = cast_to_discrete_values(xtypes, x);
             fold_with_enum_index(xtypes, &xcast.view())
         } else {
