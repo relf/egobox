@@ -1,8 +1,14 @@
 Changes
 -------
 
-Version 0.14.0 - unreleased
+Version 0.15.0 - unreleased
 ===========================
+
+Version 0.14.0 - 13/12/2023
+===========================
+
+* `ego`: Fix ask-and-tell interface suggest method in presence of discrete variable
+A few breaking changes in the API of `Egor`, `EgorService`, `EgorSolver` and `EgorConfig`
 
 Version 0.13.0 - 30/11/2023
 ===========================
