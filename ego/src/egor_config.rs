@@ -54,9 +54,7 @@ pub struct EgorConfig {
     /// If true use `outdir` to retrieve and start from previous results
     pub(crate) hot_start: bool,
     /// List of x types allowing the handling of discrete input variables
-    pub(crate) xtypes: Option<Vec<XType>>,
-    /// Flag for discrete handling, true if mixed-integer type present in xtypes, otherwise false
-    pub(crate) no_discrete: bool,
+    pub(crate) xtypes: Vec<XType>,
     /// A random generator seed used to get reproductible results.
     pub(crate) seed: Option<u64>,
 }
@@ -81,8 +79,7 @@ impl Default for EgorConfig {
             target: f64::NEG_INFINITY,
             outdir: None,
             hot_start: false,
-            xtypes: None,
-            no_discrete: true,
+            xtypes: vec![],
             seed: None,
         }
     }
@@ -236,5 +233,10 @@ impl EgorConfig {
     pub fn random_seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
+    }
+
+    /// Check whether we are in a discrete optimization context
+    pub fn discrete(&self) -> bool {
+        crate::utils::discrete(&self.xtypes)
     }
 }

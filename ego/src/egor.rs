@@ -190,14 +190,13 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
 
     /// Runs the (constrained) optimization of the objective function.
     pub fn run(&self) -> Result<OptimResult<f64>> {
-        let no_discrete = self.solver.config.no_discrete;
         let xtypes = self.solver.config.xtypes.clone();
 
         let result = Executor::new(self.fobj.clone(), self.solver.clone()).run()?;
         info!("{}", result);
         let (x_data, y_data) = result.state().clone().take_data().unwrap();
 
-        let res = if no_discrete {
+        let res = if !self.solver.config.discrete() {
             info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
             OptimResult {
                 x_opt: result.state.get_best_param().unwrap().to_owned(),
@@ -206,7 +205,6 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
                 y_hist: y_data,
             }
         } else {
-            let xtypes = xtypes.unwrap(); // !no_discrete
             let x_data = cast_to_discrete_values(&xtypes, &x_data);
             let x_data = fold_with_enum_index(&xtypes, &x_data.view());
             info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);

@@ -108,12 +108,12 @@ use crate::egor_config::EgorConfig;
 use crate::egor_state::{find_best_result_index, EgorState, MAX_POINT_ADDITION_RETRY};
 use crate::errors::{EgoError, Result};
 
-use crate::mixint::*;
+use crate::{mixint::*, utils};
 
 use crate::optimizer::*;
 
 use crate::types::*;
-use crate::utils::{compute_cstr_scales, no_discrete, update_data};
+use crate::utils::{compute_cstr_scales, update_data};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, MoeParams, RegressionSpec};
@@ -167,7 +167,7 @@ impl SurrogateBuilder for MoeParams<f64, Xoshiro256Plus> {
     /// Constructor from domain space specified with types
     /// **panic** if xtypes contains other types than continuous type `Float`
     fn new_with_xtypes(xtypes: &[XType]) -> Self {
-        if !no_discrete(xtypes) {
+        if utils::discrete(xtypes) {
             panic!("MoeParams cannot be created with discrete types!");
         }
         MoeParams::new()
@@ -229,8 +229,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let v_xtypes = xtypes.to_vec();
         EgorSolver {
             config: EgorConfig {
-                xtypes: Some(v_xtypes),
-                no_discrete: no_discrete(xtypes),
+                xtypes: v_xtypes,
                 ..config
             },
             xlimits: unfold_xtypes_as_continuous_limits(xtypes),
@@ -315,14 +314,7 @@ where
         let doe = hstart_doe.as_ref().or(self.config.doe.as_ref());
 
         let (y_data, x_data) = if let Some(doe) = doe {
-            let doe = if let Some(xtypes) = &self.config.xtypes {
-                // When xtypes is specified, the given DOE is expected to be given
-                // in folded space (enum velues are are indices) hence we have to
-                // unfold it as EgorSolver works in the continuous space
-                unfold_with_enum_mask(xtypes, doe)
-            } else {
-                doe.to_owned()
-            };
+            let doe = unfold_with_enum_mask(&self.config.xtypes, doe);
 
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
@@ -979,11 +971,11 @@ where
         pb: &mut Problem<O>,
         x: &Array2<f64>,
     ) -> Array2<f64> {
-        let params = if let Some(xtypes) = &self.config.xtypes {
+        let params = if self.config.discrete() {
             // When xtypes is specified, we have to cast x to folded space
             // as EgorSolver works internally in the continuous space
-            let xcast = cast_to_discrete_values(xtypes, x);
-            fold_with_enum_index(xtypes, &xcast.view())
+            let xcast = cast_to_discrete_values(&self.config.xtypes, x);
+            fold_with_enum_index(&self.config.xtypes, &xcast.view())
         } else {
             x.to_owned()
         };

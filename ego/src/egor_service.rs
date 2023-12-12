@@ -89,7 +89,7 @@ impl EgorServiceBuilder {
         let xtypes = to_xtypes(xlimits);
         EgorService {
             config: EgorConfig {
-                xtypes: Some(xtypes.clone()),
+                xtypes: xtypes.clone(),
                 ..self.config.clone()
             },
             solver: EgorSolver::new(self.config, &xtypes, rng),
@@ -107,7 +107,7 @@ impl EgorServiceBuilder {
         };
         EgorService {
             config: EgorConfig {
-                xtypes: Some(xtypes.to_vec()),
+                xtypes: xtypes.to_vec(),
                 ..self.config.clone()
             },
             solver: EgorSolver::new(self.config, xtypes, rng),
@@ -137,7 +137,7 @@ impl<SB: SurrogateBuilder> EgorService<SB> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        let xtypes = self.config.xtypes.as_ref().unwrap();
+        let xtypes = &self.config.xtypes;
         let x_data = unfold_with_enum_mask(xtypes, x_data);
         let x = self.solver.suggest(&x_data, y_data);
         let x = cast_to_discrete_values(xtypes, &x);
