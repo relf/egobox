@@ -234,6 +234,7 @@ impl<F: Float, S: egobox_doe::SamplingMethod<F>> MixintSampling<F, S> {
     }
 
     /// Sets whether we want to work in folded space
+    /// If set, sampling data will be provided in folded space
     pub fn work_in_folded_space(&mut self, output_in_folded_space: bool) -> &mut Self {
         self.output_in_folded_space = output_in_folded_space;
         self
@@ -279,7 +280,8 @@ pub struct MixintMoeValidParams {
 }
 
 impl MixintMoeValidParams {
-    /// Sets whether we want to work in folded space
+    /// Sets whether we want to work in folded space that is whether
+    /// If set, input training data has to be given in folded space
     pub fn work_in_folded_space(&self) -> bool {
         self.work_in_folded_space
     }
@@ -478,7 +480,7 @@ pub struct MixintMoe {
     moe: Moe,
     /// The input specifications
     xtypes: Vec<XType>,
-    /// whether data are in given in folded space (enum indexes) or not (enum masks)
+    /// whether training input data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
     work_in_folded_space: bool,
 }
@@ -623,11 +625,13 @@ pub struct MixintContext {
     xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
+    /// For sampling data refers to DOE data. For surrogate data refers to training input data
     work_in_folded_space: bool,
 }
 
 impl MixintContext {
     /// Constructor with given `xtypes` specification
+    /// where working in folded space is the default
     pub fn new(xtypes: &[XType]) -> Self {
         MixintContext {
             xtypes: xtypes.to_vec(),
