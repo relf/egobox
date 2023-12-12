@@ -88,7 +88,7 @@ impl EgorServiceBuilder {
         };
         EgorService {
             config: EgorConfig {
-                xtypes: Some(continuous_xlimits_to_xtypes(xlimits)),
+                xtypes: Some(to_xtypes(xlimits)),
                 ..self.config.clone()
             },
             solver: EgorSolver::new(self.config, xlimits, rng),

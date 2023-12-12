@@ -232,11 +232,11 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         builder.try_init().ok();
         EgorSolver {
             config: EgorConfig {
-                xtypes: Some(continuous_xlimits_to_xtypes(xlimits)), // align xlimits and xtypes
+                xtypes: Some(to_xtypes(xlimits)), // align xlimits and xtypes
                 ..config
             },
             xlimits: xlimits.to_owned(),
-            surrogate_builder: SB::new_with_xtypes(&continuous_xlimits_to_xtypes(xlimits)),
+            surrogate_builder: SB::new_with_xtypes(&to_xtypes(xlimits)),
             rng,
         }
     }
@@ -299,7 +299,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 /// Build `xtypes` from simple float bounds of `x` input components when x belongs to R^n.
 /// xlimits are bounds of the x components expressed a matrix (dim, 2) where dim is the dimension of x
 /// the ith row is the bounds interval [lower, upper] of the ith comonent of `x`.  
-pub fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> {
+pub fn to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> {
     let mut xtypes: Vec<XType> = vec![];
     Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(XType::Cont(limits[0], limits[1])));
     xtypes
