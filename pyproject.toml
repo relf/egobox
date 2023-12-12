@@ -24,7 +24,7 @@ python-source = "python"
 
 [tool.poetry]
 name = "egobox"
-version = "0.13.0"
+version = "0.14.0"
 description = "Python binding for egobox EGO optimizer written in Rust"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 packages = [{ include = "egobox", from = "python" }]
