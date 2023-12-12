@@ -86,12 +86,13 @@ impl EgorServiceBuilder {
         } else {
             Xoshiro256Plus::from_entropy()
         };
+        let xtypes = to_xtypes(xlimits);
         EgorService {
             config: EgorConfig {
-                xtypes: Some(to_xtypes(xlimits)),
+                xtypes: Some(xtypes.clone()),
                 ..self.config.clone()
             },
-            solver: EgorSolver::new(self.config, xlimits, rng),
+            solver: EgorSolver::new(self.config, &xtypes, rng),
         }
     }
 
@@ -109,7 +110,7 @@ impl EgorServiceBuilder {
                 xtypes: Some(xtypes.to_vec()),
                 ..self.config.clone()
             },
-            solver: EgorSolver::new_with_xtypes(self.config, xtypes, rng),
+            solver: EgorSolver::new(self.config, xtypes, rng),
         }
     }
 }
