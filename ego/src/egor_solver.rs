@@ -27,8 +27,8 @@
 //! let rng = Xoshiro256Plus::seed_from_u64(42);
 //! let xtypes = to_xtypes(&array![[-2., 2.], [-2., 2.]]);
 //! let fobj = ObjFunc::new(rosenb);
-//! let config = EgorConfig::default();
-//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> = EgorSolver::new(config, &xtypes, rng);
+//! let config = EgorConfig::default().xtypes(&xtypes);
+//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> = EgorSolver::new(config, rng);
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(20))
 //!             .run()
@@ -88,6 +88,7 @@
 //! let fobj = ObjFunc::new(f_g24);
 //!
 //! let config = EgorConfig::default()
+//!     .xtypes(&xtypes)
 //!     .n_cstr(2)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .infill_optimizer(InfillOptimizer::Cobyla)
@@ -95,7 +96,7 @@
 //!     .target(-5.5080);
 //!
 //! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> =
-//!   EgorSolver::new(config, &xtypes, rng);
+//!   EgorSolver::new(config, rng);
 //!
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(40))
@@ -108,7 +109,7 @@ use crate::egor_config::EgorConfig;
 use crate::egor_state::{find_best_result_index, EgorState, MAX_POINT_ADDITION_RETRY};
 use crate::errors::{EgoError, Result};
 
-use crate::{mixint::*, utils};
+use crate::mixint::*;
 
 use crate::optimizer::*;
 
@@ -167,7 +168,7 @@ impl SurrogateBuilder for MoeParams<f64, Xoshiro256Plus> {
     /// Constructor from domain space specified with types
     /// **panic** if xtypes contains other types than continuous type `Float`
     fn new_with_xtypes(xtypes: &[XType]) -> Self {
-        if utils::discrete(xtypes) {
+        if crate::utils::discrete(xtypes) {
             panic!("MoeParams cannot be created with discrete types!");
         }
         MoeParams::new()
@@ -221,19 +222,16 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     ///
     /// The function `f` should return an objective but also constraint values if any.
     /// Design space is specified by a list of types for input variables `x` of `f` (see [`XType`]).
-    pub fn new(config: EgorConfig, xtypes: &[XType], rng: Xoshiro256Plus) -> Self {
+    pub fn new(config: EgorConfig, rng: Xoshiro256Plus) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();
-        let v_xtypes = xtypes.to_vec();
+        let xtypes = config.xtypes.clone();
         EgorSolver {
-            config: EgorConfig {
-                xtypes: v_xtypes,
-                ..config
-            },
-            xlimits: unfold_xtypes_as_continuous_limits(xtypes),
-            surrogate_builder: SB::new_with_xtypes(xtypes),
+            config,
+            xlimits: unfold_xtypes_as_continuous_limits(&xtypes),
+            surrogate_builder: SB::new_with_xtypes(&xtypes),
             rng,
         }
     }

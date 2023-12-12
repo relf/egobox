@@ -235,6 +235,12 @@ impl EgorConfig {
         self
     }
 
+    /// Define design space with given x types
+    pub fn xtypes(mut self, xtypes: &[XType]) -> Self {
+        self.xtypes = xtypes.into();
+        self
+    }
+
     /// Check whether we are in a discrete optimization context
     pub fn discrete(&self) -> bool {
         crate::utils::discrete(&self.xtypes)

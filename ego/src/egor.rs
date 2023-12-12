@@ -142,10 +142,13 @@ impl<O: GroupFunc> EgorBuilder<O> {
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        let xtypes = to_xtypes(xlimits);
+        let config = EgorConfig {
+            xtypes: to_xtypes(xlimits),
+            ..self.config.clone()
+        };
         Egor {
             fobj: ObjFunc::new(self.fobj),
-            solver: EgorSolver::new(self.config, &xtypes, rng),
+            solver: EgorSolver::new(config, rng),
         }
     }
 
@@ -158,9 +161,13 @@ impl<O: GroupFunc> EgorBuilder<O> {
         } else {
             Xoshiro256Plus::from_entropy()
         };
+        let config = EgorConfig {
+            xtypes: xtypes.into(),
+            ..self.config.clone()
+        };
         Egor {
             fobj: ObjFunc::new(self.fobj),
-            solver: EgorSolver::new(self.config, xtypes, rng),
+            solver: EgorSolver::new(config, rng),
         }
     }
 }
