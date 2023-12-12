@@ -86,9 +86,12 @@ impl EgorServiceBuilder {
         } else {
             Xoshiro256Plus::from_entropy()
         };
+        let config = EgorConfig {
+            xtypes: to_xtypes(xlimits),
+            ..self.config.clone()
+        };
         EgorService {
-            config: self.config.clone(),
-            solver: EgorSolver::new(self.config, xlimits, rng),
+            solver: EgorSolver::new(config, rng),
         }
     }
 
@@ -101,9 +104,12 @@ impl EgorServiceBuilder {
         } else {
             Xoshiro256Plus::from_entropy()
         };
+        let config = EgorConfig {
+            xtypes: xtypes.to_vec(),
+            ..self.config.clone()
+        };
         EgorService {
-            config: self.config.clone(),
-            solver: EgorSolver::new_with_xtypes(self.config, xtypes, rng),
+            solver: EgorSolver::new(config, rng),
         }
     }
 }
@@ -111,16 +117,10 @@ impl EgorServiceBuilder {
 /// Egor optimizer service.
 #[derive(Clone)]
 pub struct EgorService<SB: SurrogateBuilder> {
-    config: EgorConfig,
     solver: EgorSolver<SB>,
 }
 
 impl<SB: SurrogateBuilder> EgorService<SB> {
-    pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
-        self.config = init(self.config);
-        self
-    }
-
     /// Given an evaluated doe (x, y) data, return the next promising x point
     /// where optimum may occurs regarding the infill criterium.
     /// This function inverse the control of the optimization and can used
@@ -130,7 +130,11 @@ impl<SB: SurrogateBuilder> EgorService<SB> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        self.solver.suggest(x_data, y_data)
+        let xtypes = &self.solver.config.xtypes;
+        let x_data = unfold_with_enum_mask(xtypes, x_data);
+        let x = self.solver.suggest(&x_data, y_data);
+        let x = cast_to_discrete_values(xtypes, &x);
+        fold_with_enum_index(xtypes, &x).to_owned()
     }
 }
 

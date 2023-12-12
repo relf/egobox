@@ -108,13 +108,13 @@ fn compute_unfolded_dimension(xtypes: &[XType]) -> usize {
 /// For instance, if an input dimension is typed ["blue", "red", "green"] a sample/row of
 /// the input x may contain [..., 2, ...] which will be expanded in [..., 0, 0, 1, ...].
 /// This function is the opposite of fold_with_enum_index().
-fn unfold_with_enum_mask(
+pub fn unfold_with_enum_mask(
     xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Array2<f64> {
     let mut xunfold = Array::zeros((x.nrows(), compute_unfolded_dimension(xtypes)));
     let mut unfold_index = 0;
-    xtypes.iter().for_each(|s| match s {
+    xtypes.iter().enumerate().for_each(|(i, s)| match s {
         XType::Cont(_, _) | XType::Int(_, _) | XType::Ord(_) => {
             xunfold
                 .column_mut(unfold_index)
@@ -126,8 +126,8 @@ fn unfold_with_enum_mask(
             Zip::from(unfold.rows_mut())
                 .and(x.rows())
                 .for_each(|mut row, xrow| {
-                    let index = xrow[[unfold_index]] as usize;
-                    row[[index]] = 1.;
+                    let index = xrow[i] as usize;
+                    row[index] = 1.;
                 });
             xunfold
                 .slice_mut(s![.., unfold_index..unfold_index + v])
@@ -234,6 +234,7 @@ impl<F: Float, S: egobox_doe::SamplingMethod<F>> MixintSampling<F, S> {
     }
 
     /// Sets whether we want to work in folded space
+    /// If set, sampling data will be provided in folded space
     pub fn work_in_folded_space(&mut self, output_in_folded_space: bool) -> &mut Self {
         self.output_in_folded_space = output_in_folded_space;
         self
@@ -279,7 +280,8 @@ pub struct MixintMoeValidParams {
 }
 
 impl MixintMoeValidParams {
-    /// Sets whether we want to work in folded space
+    /// Sets whether we want to work in folded space that is whether
+    /// If set, input training data has to be given in folded space
     pub fn work_in_folded_space(&self) -> bool {
         self.work_in_folded_space
     }
@@ -310,7 +312,7 @@ impl MixintMoeParams {
         self
     }
 
-    /// Sets the specification
+    /// Gets the domain specification
     pub fn xtypes(&self) -> &[XType] {
         &self.0.xtypes
     }
@@ -368,7 +370,7 @@ impl MixintMoeValidParams {
 }
 
 impl SurrogateBuilder for MixintMoeParams {
-    fn new_with_xtypes_rng(xtypes: &[XType]) -> Self {
+    fn new_with_xtypes(xtypes: &[XType]) -> Self {
         MixintMoeParams::new(xtypes, &MoeParams::new())
     }
 
@@ -478,17 +480,17 @@ pub struct MixintMoe {
     moe: Moe,
     /// The input specifications
     xtypes: Vec<XType>,
-    /// whether data are in given in folded space (enum indexes) or not (enum masks)
+    /// whether training input data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
     work_in_folded_space: bool,
 }
 
 impl std::fmt::Display for MixintMoe {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let prefix = if crate::utils::no_discrete(&self.xtypes) {
-            ""
-        } else {
+        let prefix = if crate::utils::discrete(&self.xtypes) {
             "MixInt"
+        } else {
+            ""
         };
         write!(f, "{}{}", prefix, &self.moe)
     }
@@ -623,11 +625,13 @@ pub struct MixintContext {
     xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
+    /// For sampling data refers to DOE data. For surrogate data refers to training input data
     work_in_folded_space: bool,
 }
 
 impl MixintContext {
     /// Constructor with given `xtypes` specification
+    /// where working in folded space is the default
     pub fn new(xtypes: &[XType]) -> Self {
         MixintContext {
             xtypes: xtypes.to_vec(),

@@ -76,8 +76,8 @@ pub fn update_data(
     appended
 }
 
-pub fn no_discrete(xtypes: &[XType]) -> bool {
-    !xtypes
+pub fn discrete(xtypes: &[XType]) -> bool {
+    xtypes
         .iter()
         .any(|t| matches!(t, &XType::Int(_, _) | &XType::Ord(_) | &XType::Enum(_)))
 }

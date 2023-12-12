@@ -8,7 +8,7 @@
 //! ```no_run
 //! use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! use egobox_doe::{Lhs, SamplingMethod};
-//! use egobox_ego::{EgorBuilder, EgorConfig, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver};
+//! use egobox_ego::{EgorBuilder, EgorConfig, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver, to_xtypes};
 //! use egobox_moe::MoeParams;
 //! use rand_xoshiro::Xoshiro256Plus;
 //! use ndarray_rand::rand::SeedableRng;
@@ -25,10 +25,10 @@
 //!     y
 //! }
 //! let rng = Xoshiro256Plus::seed_from_u64(42);
-//! let xlimits = array![[-2., 2.], [-2., 2.]];
+//! let xtypes = to_xtypes(&array![[-2., 2.], [-2., 2.]]);
 //! let fobj = ObjFunc::new(rosenb);
-//! let config = EgorConfig::default();
-//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> = EgorSolver::new(config, &xlimits, rng);
+//! let config = EgorConfig::default().xtypes(&xtypes);
+//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> = EgorSolver::new(config, rng);
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(20))
 //!             .run()
@@ -47,7 +47,7 @@
 //! ```no_run
 //! use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! use egobox_doe::{Lhs, SamplingMethod};
-//! use egobox_ego::{EgorBuilder, EgorConfig, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver};
+//! use egobox_ego::{EgorBuilder, EgorConfig, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver, to_xtypes};
 //! use egobox_moe::MoeParams;
 //! use rand_xoshiro::Xoshiro256Plus;
 //! use ndarray_rand::rand::SeedableRng;
@@ -83,10 +83,12 @@
 //! let rng = Xoshiro256Plus::seed_from_u64(42);
 //! let xlimits = array![[0., 3.], [0., 4.]];
 //! let doe = Lhs::new(&xlimits).sample(10);
+//! let xtypes = to_xtypes(&xlimits);
 //!
 //! let fobj = ObjFunc::new(f_g24);
 //!
 //! let config = EgorConfig::default()
+//!     .xtypes(&xtypes)
 //!     .n_cstr(2)
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .infill_optimizer(InfillOptimizer::Cobyla)
@@ -94,7 +96,7 @@
 //!     .target(-5.5080);
 //!
 //! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> =
-//!   EgorSolver::new(config, &xlimits, rng);
+//!   EgorSolver::new(config, rng);
 //!
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(40))
@@ -112,7 +114,7 @@ use crate::mixint::*;
 use crate::optimizer::*;
 
 use crate::types::*;
-use crate::utils::{compute_cstr_scales, no_discrete, update_data};
+use crate::utils::{compute_cstr_scales, update_data};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, MoeParams, RegressionSpec};
@@ -163,7 +165,12 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
 }
 
 impl SurrogateBuilder for MoeParams<f64, Xoshiro256Plus> {
-    fn new_with_xtypes_rng(_xtypes: &[XType]) -> Self {
+    /// Constructor from domain space specified with types
+    /// **panic** if xtypes contains other types than continuous type `Float`
+    fn new_with_xtypes(xtypes: &[XType]) -> Self {
+        if crate::utils::discrete(xtypes) {
+            panic!("MoeParams cannot be created with discrete types!");
+        }
         MoeParams::new()
     }
 
@@ -213,49 +220,18 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
     /// Constructor of the optimization of the function `f` with specified random generator
     /// to get reproducibility.
     ///
-    /// The function `f` should return an objective value but also constraint values if any.
-    /// Design space is specified by the matrix `xlimits` which is `[nx, 2]`-shaped
-    /// the ith row contains lower and upper bounds of the ith component of `x`.
-    pub fn new(
-        config: EgorConfig,
-        xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        rng: Xoshiro256Plus,
-    ) -> Self {
-        let env = Env::new().filter_or("EGOBOX_LOG", "info");
-        let mut builder = Builder::from_env(env);
-        let builder = builder.target(env_logger::Target::Stdout);
-        builder.try_init().ok();
-        EgorSolver {
-            config: EgorConfig {
-                xtypes: Some(continuous_xlimits_to_xtypes(xlimits)), // align xlimits and xtypes
-                ..config
-            },
-            xlimits: xlimits.to_owned(),
-            surrogate_builder: SB::new_with_xtypes_rng(&continuous_xlimits_to_xtypes(xlimits)),
-            rng,
-        }
-    }
-
-    /// Constructor of the optimization of the function `f` with specified random generator
-    /// to get reproducibility. This constructor is used  for mixed-integer optimization
-    /// when `f` has discrete inputs to be specified with list of xtypes.
-    ///
     /// The function `f` should return an objective but also constraint values if any.
     /// Design space is specified by a list of types for input variables `x` of `f` (see [`XType`]).
-    pub fn new_with_xtypes(config: EgorConfig, xtypes: &[XType], rng: Xoshiro256Plus) -> Self {
+    pub fn new(config: EgorConfig, rng: Xoshiro256Plus) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();
-        let v_xtypes = xtypes.to_vec();
+        let xtypes = config.xtypes.clone();
         EgorSolver {
-            config: EgorConfig {
-                xtypes: Some(v_xtypes),
-                no_discrete: no_discrete(xtypes),
-                ..config
-            },
-            xlimits: unfold_xtypes_as_continuous_limits(xtypes),
-            surrogate_builder: SB::new_with_xtypes_rng(xtypes),
+            config,
+            xlimits: unfold_xtypes_as_continuous_limits(&xtypes),
+            surrogate_builder: SB::new_with_xtypes(&xtypes),
             rng,
         }
     }
@@ -294,7 +270,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 /// Build `xtypes` from simple float bounds of `x` input components when x belongs to R^n.
 /// xlimits are bounds of the x components expressed a matrix (dim, 2) where dim is the dimension of x
 /// the ith row is the bounds interval [lower, upper] of the ith comonent of `x`.  
-fn continuous_xlimits_to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> {
+pub fn to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> {
     let mut xtypes: Vec<XType> = vec![];
     Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(XType::Cont(limits[0], limits[1])));
     xtypes
@@ -336,10 +312,12 @@ where
         let doe = hstart_doe.as_ref().or(self.config.doe.as_ref());
 
         let (y_data, x_data) = if let Some(doe) = doe {
+            let doe = unfold_with_enum_mask(&self.config.xtypes, doe);
+
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
-                (self.eval_obj(problem, doe), doe.to_owned())
+                (self.eval_obj(problem, &doe), doe.to_owned())
             } else {
                 // split doe in x and y
                 info!("Use specified DOE {} samples", doe.nrows());
@@ -991,9 +969,11 @@ where
         pb: &mut Problem<O>,
         x: &Array2<f64>,
     ) -> Array2<f64> {
-        let params = if let Some(xtypes) = &self.config.xtypes {
-            let xcast = cast_to_discrete_values(xtypes, x);
-            fold_with_enum_index(xtypes, &xcast.view())
+        let params = if self.config.discrete() {
+            // When xtypes is specified, we have to cast x to folded space
+            // as EgorSolver works internally in the continuous space
+            let xcast = cast_to_discrete_values(&self.config.xtypes, x);
+            fold_with_enum_index(&self.config.xtypes, &xcast.view())
         } else {
             x.to_owned()
         };
