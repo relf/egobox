@@ -7,8 +7,13 @@ Version 0.15.0 - unreleased
 Version 0.14.0 - 13/12/2023
 ===========================
 
-* `ego`: Fix ask-and-tell interface suggest method in presence of discrete variable
-A few breaking changes in the API of `Egor`, `EgorService`, `EgorSolver` and `EgorConfig`
+* `ego`: Fix ask-and-tell interface `suggest()` method in presence of discrete variable to work
+in discrete not in continuous space
+A few API breaking changes:
+* `EgorConfig::xtypes` not an option anymore
+* `EgorSolver::new_with_xtypes()` renamed `new` as `new` with xlimits is removed, use `to_xtypes` to convert `xlimits`
+* `EgorConfig::no_discrete` attribute removed, use `EgorConfig::discrete()` method
+* `SurrogateBuilder::new_with_xtypes_rng` renamed `new_with_xtypes` 
 
 Version 0.13.0 - 30/11/2023
 ===========================
