@@ -30,7 +30,7 @@ use std::marker::PhantomData;
 ///
 /// Each level of an enumerate gives a new continuous dimension in [0, 1].
 /// Each integer dimensions are relaxed continuously.
-pub fn unfold_xtypes_as_continuous_limits<F: Float>(xtypes: &[XType]) -> Array2<F> {
+pub fn as_continuous_limits<F: Float>(xtypes: &[XType]) -> Array2<F> {
     let mut xlimits: Vec<F> = vec![];
     let mut dim = 0;
     xtypes.iter().for_each(|xtype| match xtype {
@@ -69,7 +69,7 @@ pub fn unfold_xtypes_as_continuous_limits<F: Float>(xtypes: &[XType]) -> Array2<
 /// the input x may contain the mask [..., 0, 0, 1, ...] which will be contracted in [..., 2, ...]
 /// meaning the "green" value.
 /// This function is the opposite of unfold_with_enum_mask().
-pub fn fold_with_enum_index<F: Float>(
+pub(crate) fn fold_with_enum_index<F: Float>(
     xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = F>, Ix2>,
 ) -> Array2<F> {
@@ -91,7 +91,7 @@ pub fn fold_with_enum_index<F: Float>(
 }
 
 /// Compute dimension when all variables are continuously relaxed
-fn compute_unfolded_dimension(xtypes: &[XType]) -> usize {
+fn compute_continuous_dim(xtypes: &[XType]) -> usize {
     xtypes
         .iter()
         .map(|s| match s {
@@ -108,11 +108,11 @@ fn compute_unfolded_dimension(xtypes: &[XType]) -> usize {
 /// For instance, if an input dimension is typed ["blue", "red", "green"] a sample/row of
 /// the input x may contain [..., 2, ...] which will be expanded in [..., 0, 0, 1, ...].
 /// This function is the opposite of fold_with_enum_index().
-pub fn unfold_with_enum_mask(
+pub(crate) fn unfold_with_enum_mask(
     xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Array2<f64> {
-    let mut xunfold = Array::zeros((x.nrows(), compute_unfolded_dimension(xtypes)));
+    let mut xunfold = Array::zeros((x.nrows(), compute_continuous_dim(xtypes)));
     let mut unfold_index = 0;
     xtypes.iter().enumerate().for_each(|(i, s)| match s {
         XType::Cont(_, _) | XType::Int(_, _) | XType::Ord(_) => {
@@ -138,7 +138,7 @@ pub fn unfold_with_enum_mask(
     xunfold
 }
 
-/// COntinuous relaxation of x given possibly discrete types
+/// Continuous relaxation of x given possibly discrete types
 /// Alias of `unfold_with_enum_mask`
 pub fn to_continuous_space(
     xtypes: &[XType],
@@ -202,7 +202,7 @@ fn cast_to_discrete_values_mut<F: Float>(
 /// For instance, if an input dimension is typed ["blue", "red", "green"] in xlimits a sample/row of
 /// the input x may contain the values (or mask) [..., 0, 0, 1, ...] to specify "green" for
 /// this original dimension.
-pub fn cast_to_discrete_values(
+pub(crate) fn cast_to_discrete_values(
     xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Array2<f64> {
@@ -659,7 +659,7 @@ impl MixintContext {
 
     /// Compute input dim once unfolded due to continupous relaxation
     pub fn get_unfolded_dim(&self) -> usize {
-        compute_unfolded_dimension(&self.xtypes)
+        compute_continuous_dim(&self.xtypes)
     }
 
     /// Create a mixed integer LHS
@@ -667,13 +667,10 @@ impl MixintContext {
         &self,
         seed: Option<u64>,
     ) -> MixintSampling<F, Lhs<F, Xoshiro256Plus>> {
-        let lhs = seed.map_or(
-            Lhs::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)),
-            |seed| {
-                let rng = Xoshiro256Plus::seed_from_u64(seed);
-                Lhs::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)).with_rng(rng)
-            },
-        );
+        let lhs = seed.map_or(Lhs::new(&as_continuous_limits(&self.xtypes)), |seed| {
+            let rng = Xoshiro256Plus::seed_from_u64(seed);
+            Lhs::new(&as_continuous_limits(&self.xtypes)).with_rng(rng)
+        });
         MixintSampling {
             method: lhs,
             xtypes: self.xtypes.clone(),
@@ -685,7 +682,7 @@ impl MixintContext {
     /// Create a mixed integer full factorial
     pub fn create_ffact_sampling<F: Float>(&self) -> MixintSampling<F, FullFactorial<F>> {
         MixintSampling {
-            method: FullFactorial::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)),
+            method: FullFactorial::new(&as_continuous_limits(&self.xtypes)),
             xtypes: self.xtypes.clone(),
             output_in_folded_space: self.work_in_folded_space,
             phantom: PhantomData,
@@ -697,13 +694,10 @@ impl MixintContext {
         &self,
         seed: Option<u64>,
     ) -> MixintSampling<F, Random<F, Xoshiro256Plus>> {
-        let rand = seed.map_or(
-            Random::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)),
-            |seed| {
-                let rng = Xoshiro256Plus::seed_from_u64(seed);
-                Random::new(&unfold_xtypes_as_continuous_limits(&self.xtypes)).with_rng(rng)
-            },
-        );
+        let rand = seed.map_or(Random::new(&as_continuous_limits(&self.xtypes)), |seed| {
+            let rng = Xoshiro256Plus::seed_from_u64(seed);
+            Random::new(&as_continuous_limits(&self.xtypes)).with_rng(rng)
+        });
         MixintSampling {
             method: rand,
             xtypes: self.xtypes.clone(),

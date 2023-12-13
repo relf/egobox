@@ -230,7 +230,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let xtypes = config.xtypes.clone();
         EgorSolver {
             config,
-            xlimits: unfold_xtypes_as_continuous_limits(&xtypes),
+            xlimits: as_continuous_limits(&xtypes),
             surrogate_builder: SB::new_with_xtypes(&xtypes),
             rng,
         }

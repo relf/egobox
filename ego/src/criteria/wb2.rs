@@ -56,7 +56,7 @@ impl InfillCriterion for WB2Criterion {
 }
 
 /// Computes the scaling factor used to scale WB2 infill criteria.
-pub fn compute_wb2s_scale(
+pub(crate) fn compute_wb2s_scale(
     x: &ArrayView2<f64>,
     obj_model: &dyn ClusteredSurrogate,
     f_min: f64,
@@ -78,7 +78,9 @@ pub fn compute_wb2s_scale(
     }
 }
 
+/// WB2 infill criterion
 pub const WB2: WB2Criterion = WB2Criterion(Some(1.0));
+/// WB2 scaled infill criterion
 pub const WB2S: WB2Criterion = WB2Criterion(None);
 
 #[cfg(test)]
