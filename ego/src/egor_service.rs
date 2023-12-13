@@ -131,10 +131,9 @@ impl<SB: SurrogateBuilder> EgorService<SB> {
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
         let xtypes = &self.solver.config.xtypes;
-        let x_data = unfold_with_enum_mask(xtypes, x_data);
+        let x_data = to_continuous_space(xtypes, x_data);
         let x = self.solver.suggest(&x_data, y_data);
-        let x = cast_to_discrete_values(xtypes, &x);
-        fold_with_enum_index(xtypes, &x).to_owned()
+        to_discrete_space(xtypes, &x).to_owned()
     }
 }
 

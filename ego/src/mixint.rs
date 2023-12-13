@@ -138,6 +138,15 @@ pub fn unfold_with_enum_mask(
     xunfold
 }
 
+/// COntinuous relaxation of x given possibly discrete types
+/// Alias of `unfold_with_enum_mask`
+pub fn to_continuous_space(
+    xtypes: &[XType],
+    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) -> Array2<f64> {
+    unfold_with_enum_mask(xtypes, x)
+}
+
 /// Find closest value to `val` in given slice `v`.
 fn take_closest<F: Float>(v: &[F], val: F) -> F {
     let idx = Array::from_vec(v.to_vec())
@@ -200,6 +209,15 @@ pub fn cast_to_discrete_values(
     let mut xcast = x.to_owned();
     cast_to_discrete_values_mut(xtypes, &mut xcast);
     xcast
+}
+
+/// Convenient method to pass from continuous unfolded space to discrete folded space
+pub fn to_discrete_space(
+    xtypes: &[XType],
+    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+) -> Array2<f64> {
+    let x = cast_to_discrete_values(xtypes, x);
+    fold_with_enum_index(xtypes, &x)
 }
 
 enum Method {

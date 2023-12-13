@@ -212,8 +212,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
                 y_hist: y_data,
             }
         } else {
-            let x_data = cast_to_discrete_values(&xtypes, &x_data);
-            let x_data = fold_with_enum_index(&xtypes, &x_data.view());
+            let x_data = to_discrete_space(&xtypes, &x_data.view());
             info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
 
             let x_opt = result
@@ -222,8 +221,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
                 .unwrap()
                 .to_owned()
                 .insert_axis(Axis(0));
-            let x_opt = cast_to_discrete_values(&xtypes, &x_opt);
-            let x_opt = fold_with_enum_index(&xtypes, &x_opt.view());
+            let x_opt = to_discrete_space(&xtypes, &x_opt.view());
             OptimResult {
                 x_opt: x_opt.row(0).to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
