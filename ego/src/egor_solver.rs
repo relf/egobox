@@ -230,7 +230,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let xtypes = config.xtypes.clone();
         EgorSolver {
             config,
-            xlimits: unfold_xtypes_as_continuous_limits(&xtypes),
+            xlimits: as_continuous_limits(&xtypes),
             surrogate_builder: SB::new_with_xtypes(&xtypes),
             rng,
         }
@@ -312,7 +312,7 @@ where
         let doe = hstart_doe.as_ref().or(self.config.doe.as_ref());
 
         let (y_data, x_data) = if let Some(doe) = doe {
-            let doe = unfold_with_enum_mask(&self.config.xtypes, doe);
+            let doe = to_continuous_space(&self.config.xtypes, doe);
 
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
@@ -970,10 +970,9 @@ where
         x: &Array2<f64>,
     ) -> Array2<f64> {
         let params = if self.config.discrete() {
-            // When xtypes is specified, we have to cast x to folded space
-            // as EgorSolver works internally in the continuous space
-            let xcast = cast_to_discrete_values(&self.config.xtypes, x);
-            fold_with_enum_index(&self.config.xtypes, &xcast.view())
+            // We have to cast x to folded space as EgorSolver
+            // works internally in the continuous space
+            to_discrete_space(&self.config.xtypes, x)
         } else {
             x.to_owned()
         };

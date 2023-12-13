@@ -13,7 +13,7 @@ use std::{collections::HashMap, iter::zip};
 /// Max number of retry when adding a new point. Point addition may fail
 /// if new point is too close to a previous point in the growing doe used
 /// to train surrogate models modeling objective and constraints functions.
-pub const MAX_POINT_ADDITION_RETRY: i32 = 3;
+pub(crate) const MAX_POINT_ADDITION_RETRY: i32 = 3;
 
 /// Find best (eg minimal) cost value (y_data\[0\]) with valid constraints (y_data\[1..\] < cstr_tol).
 /// y_data containing ns samples [objective, cstr_1, ... cstr_nc] is given as a matrix (ns, nc + 1)  

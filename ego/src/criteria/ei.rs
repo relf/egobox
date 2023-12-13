@@ -91,4 +91,5 @@ impl InfillCriterion for ExpectedImprovement {
     }
 }
 
+/// Expected Improvement infill criterion
 pub const EI: ExpectedImprovement = ExpectedImprovement {};
