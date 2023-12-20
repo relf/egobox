@@ -3,7 +3,7 @@ use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
-//use rayon::prelude::*;
+use rayon::prelude::*;
 
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
@@ -150,6 +150,7 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
 
         // Make n_start optim
         let x_optims = (0..self.n_start)
+            .into_par_iter()
             .map(|_| self.find_lhs_min(lhs.clone()))
             .collect::<Vec<_>>();
 
