@@ -393,4 +393,18 @@ mod tests {
         let sample2 = lhs.sample(5);
         assert_abs_diff_ne!(sample1, sample2);
     }
+
+    #[test]
+    fn test_lhs_clone_different() {
+        let xlimits = array![[-1., 1.]];
+        let rng = Xoshiro256Plus::seed_from_u64(42);
+        let lhs = Lhs::new(&xlimits)
+            .kind(LhsKind::Classic)
+            .with_rng(rng.clone());
+        let lhs1 = lhs.clone();
+        let s1 = lhs1.sample(10);
+        let lhs2 = lhs.clone();
+        let s2 = lhs2.sample(10);
+        assert_abs_diff_ne!(s1, s2);
+    }
 }
