@@ -7,15 +7,15 @@ use linfa::{Float, ParamGuard};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
-    theta: Option<Vec<F>>,
+    pub(crate) theta: Option<Vec<F>>,
     /// Regression model representing the mean(x)
-    mean: Mean,
+    pub(crate) mean: Mean,
     /// Correlation model representing the spatial correlation between errors at e(x) and e(x')
-    corr: Corr,
+    pub(crate) corr: Corr,
     /// Optionally apply dimension reduction (KPLS) or not
-    kpls_dim: Option<usize>,
+    pub(crate) kpls_dim: Option<usize>,
     /// Parameter to improve numerical stability
-    nugget: F,
+    pub(crate) nugget: F,
 }
 
 impl<F: Float> Default for GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
