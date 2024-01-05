@@ -21,8 +21,9 @@ jobs:
           - 1.70.0
           - stable
         os: 
-          - ubuntu-20.04
-          - windows-2019
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
 
     steps:
       - name: Checkout sources
@@ -53,7 +54,7 @@ jobs:
         toolchain:
           - stable
         os: 
-          - ubuntu-20.04
+          - ubuntu-latest
 
     steps:
       - name: Checkout sources
@@ -84,7 +85,7 @@ jobs:
         toolchain:
           - stable
         os: 
-          - ubuntu-20.04
+          - ubuntu-latest
 
     steps:
       - name: Checkout sources
