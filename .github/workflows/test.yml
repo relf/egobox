@@ -25,7 +25,7 @@ jobs:
           - macos-latest
         include:
           - toolchain: 1.70.0  # test MSRV
-          - os: ubuntu-latest
+            os: ubuntu-latest
 
     steps:
       - name: Checkout sources
