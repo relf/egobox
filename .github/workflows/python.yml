@@ -101,7 +101,6 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
     needs: [linux, windows, macos, sdist]
     steps:
       - uses: actions/download-artifact@v4
