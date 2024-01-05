@@ -101,7 +101,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [linux, windows, macos, sdist]
+    needs: [sdist, macos, linux, windows]
     steps:
       - uses: actions/download-artifact@v4
         with:
