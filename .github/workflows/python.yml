@@ -7,7 +7,6 @@ name: python
 
 on:
   workflow_dispatch:
-  push:
   release:
     types: [published]
 
@@ -101,6 +100,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
     needs: [sdist, linux, windows, macos]
     steps:
       - uses: actions/download-artifact@v3
