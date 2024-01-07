@@ -37,7 +37,7 @@ const N_START: usize = 10; // number of optimization restart (aka multistart)
     derive(Serialize, Deserialize),
     serde(bound(deserialize = "F: Deserialize<'de>"))
 )]
-pub struct GpInnerParams<F: Float> {
+pub(crate) struct GpInnerParams<F: Float> {
     /// Gaussian process variance
     sigma2: Array1<F>,
     /// Generalized least-squares regression weights for Universal Kriging or given beta0 for Ordinary Kriging
@@ -758,31 +758,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             theta: opt_theta.to_owned(),
             mean: *self.mean(),
             corr: *self.corr(),
-            inner_params,
-            w_star,
-            xtrain,
-            ytrain,
-        })
-    }
-}
-
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParams<F, Mean, Corr> {
-    /// Constructor of valid params from values
-    #[doc(hidden)]
-    pub fn from(
-        mean: Mean,
-        corr: Corr,
-        theta: Array1<F>,
-        inner_params: GpInnerParams<F>,
-        w_star: Array2<F>,
-        xtrain: NormalizedMatrix<F>,
-        ytrain: NormalizedMatrix<F>,
-    ) -> Result<GaussianProcess<F, Mean, Corr>> {
-        // TODO: add some consistency checks
-        Ok(GaussianProcess {
-            mean,
-            corr,
-            theta,
             inner_params,
             w_star,
             xtrain,
