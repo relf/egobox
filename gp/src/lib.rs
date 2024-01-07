@@ -94,4 +94,3 @@ mod utils;
 pub use algorithm::*;
 pub use errors::*;
 pub use parameters::*;
-pub use utils::NormalizedMatrix;

@@ -18,11 +18,8 @@ use rand_xoshiro::Xoshiro256Plus;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "persistent")]
 use egobox_moe::MoeError;
-#[cfg(feature = "persistent")]
 use std::fs;
-#[cfg(feature = "persistent")]
 use std::io::Write;
 use std::marker::PhantomData;
 
@@ -582,7 +579,6 @@ impl Surrogate for MixintMoe {
     }
 
     /// Save Moe model in given file.
-    #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> egobox_moe::Result<()> {
         let mut file = fs::File::create(path).unwrap();
         let bytes = match serde_json::to_string(self) {

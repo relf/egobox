@@ -37,7 +37,7 @@ const N_START: usize = 10; // number of optimization restart (aka multistart)
     derive(Serialize, Deserialize),
     serde(bound(deserialize = "F: Deserialize<'de>"))
 )]
-pub struct GpInnerParams<F: Float> {
+pub(crate) struct GpInnerParams<F: Float> {
     /// Gaussian process variance
     sigma2: Array1<F>,
     /// Generalized least-squares regression weights for Universal Kriging or given beta0 for Ordinary Kriging
@@ -176,17 +176,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         Ok(mse.mapv(|v| if v < F::zero() { F::zero() } else { F::cast(v) }))
     }
 
-    /// Compute correlation matrix given x points specified as a (n, nx) matrix
-    fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        // Get pairwise componentwise L1-distances to the input training set
-        let dx = pairwise_differences(xnorm, &self.xtrain.data);
-        // Compute the correlation function
-        let r = self.corr.value(&dx, &self.theta, &self.w_star);
-        let n_obs = xnorm.nrows();
-        let nt = self.xtrain.data.nrows();
-        r.into_shape((n_obs, nt)).unwrap().to_owned()
-    }
-
     /// Compute covariance matrix given x points specified as a (n, nx) matrix
     fn _compute_covariance(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let (rt, u, xnorm) = self._compute_rt_u(x);
@@ -242,6 +231,17 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .solve_triangular(&rhs, UPLO::Lower)
             .unwrap();
         (rt, u, xnorm)
+    }
+
+    /// Compute correlation matrix given x points specified as a (n, nx) matrix
+    fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        // Get pairwise componentwise L1-distances to the input training set
+        let dx = pairwise_differences(xnorm, &self.xtrain.data);
+        // Compute the correlation function
+        let r = self.corr.value(&dx, &self.theta, &self.w_star);
+        let n_obs = xnorm.nrows();
+        let nt = self.xtrain.data.nrows();
+        r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 
     /// Sample the gaussian process for `n_traj` trajectories using cholesky decomposition
@@ -318,7 +318,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Retrieve input dimension before kpls dimension reduction if any
     pub fn input_dim(&self) -> usize {
-        self.ytrain.ncols()
+        self.xtrain.ncols()
     }
 
     /// Retrieve output dimension
@@ -758,31 +758,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             theta: opt_theta.to_owned(),
             mean: *self.mean(),
             corr: *self.corr(),
-            inner_params,
-            w_star,
-            xtrain,
-            ytrain,
-        })
-    }
-}
-
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParams<F, Mean, Corr> {
-    /// Constructor of valid params from values
-    #[doc(hidden)]
-    pub fn from(
-        mean: Mean,
-        corr: Corr,
-        theta: Array1<F>,
-        inner_params: GpInnerParams<F>,
-        w_star: Array2<F>,
-        xtrain: NormalizedMatrix<F>,
-        ytrain: NormalizedMatrix<F>,
-    ) -> Result<GaussianProcess<F, Mean, Corr>> {
-        // TODO: add some consistency checks
-        Ok(GaussianProcess {
-            mean,
-            corr,
-            theta,
             inner_params,
             w_star,
             xtrain,

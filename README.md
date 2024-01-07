@@ -47,13 +47,24 @@ egobox-ego = { version = "0.14.0" }
 ```
 
 ### Features
-#### `serializable-gp` 
 
-The `serializable-gp` feature enables the serialization of GP models using the [serde crate](https://serde.rs/). 
+The table below presents the various features available depending on the subcrate
 
-#### `persistent-moe` 
+| Name         | doe  | gp   | moe  | ego  |
+| :----------- | :--- | :--- | :--- | :--- |
+| serializable | Y    | Y    | Y    |      |
+| persistent   |      |      | Y    |      |
+| blas         |      | Y    | Y    | Y    |
+| nlopt        |      | Y    |      | Y    |
 
-The `persistent-moe` feature enables `save()` and `load()` methods for MoE model to/from a json file using the [serde crate](https://serde.rs/). 
+#### serializable
+When selected, the serialization with [serde crate](https://serde.rs/) is enabled.
+#### persistent
+When selected, the save and load as a json file with [serde_json crate](https://serde.rs/) is enabled. 
+#### blas
+When selected, the usage of BLAS/LAPACK backend is possible, see [below](#blaslapack-backend-optional) for more information.
+#### nlopt
+When selected, the [nlopt crate](https://github.com/adwhit/rust-nlopt) is used to provide optimizer implementations (ie Cobyla, Slsqp)
 
 ### Examples
 
