@@ -176,17 +176,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         Ok(mse.mapv(|v| if v < F::zero() { F::zero() } else { F::cast(v) }))
     }
 
-    /// Compute correlation matrix given x points specified as a (n, nx) matrix
-    fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        // Get pairwise componentwise L1-distances to the input training set
-        let dx = pairwise_differences(xnorm, &self.xtrain.data);
-        // Compute the correlation function
-        let r = self.corr.value(&dx, &self.theta, &self.w_star);
-        let n_obs = xnorm.nrows();
-        let nt = self.xtrain.data.nrows();
-        r.into_shape((n_obs, nt)).unwrap().to_owned()
-    }
-
     /// Compute covariance matrix given x points specified as a (n, nx) matrix
     fn _compute_covariance(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let (rt, u, xnorm) = self._compute_rt_u(x);
@@ -242,6 +231,17 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .solve_triangular(&rhs, UPLO::Lower)
             .unwrap();
         (rt, u, xnorm)
+    }
+
+    /// Compute correlation matrix given x points specified as a (n, nx) matrix
+    fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        // Get pairwise componentwise L1-distances to the input training set
+        let dx = pairwise_differences(xnorm, &self.xtrain.data);
+        // Compute the correlation function
+        let r = self.corr.value(&dx, &self.theta, &self.w_star);
+        let n_obs = xnorm.nrows();
+        let nt = self.xtrain.data.nrows();
+        r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 
     /// Sample the gaussian process for `n_traj` trajectories using cholesky decomposition
