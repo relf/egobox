@@ -3,11 +3,10 @@ use ndarray::{s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
-/// A structure to store data and its mean and standard deviation vectors
-/// Data is a (n, xdim) matrix
+/// A structure to store (n, xdim) matrix data and its mean and standard deviation vectors.
 #[derive(Debug)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct NormalizedMatrix<F: Float> {
+pub(crate) struct NormalizedMatrix<F: Float> {
     /// data
     pub data: Array2<F>,
     /// mean vector computed from data
