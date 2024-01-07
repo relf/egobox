@@ -27,7 +27,6 @@ default = []
 nlopt = ["egobox-ego/nlopt", "egobox-gp/nlopt"]
 serializable-gp = ["egobox-gp/serializable"]
 persistent-moe = ["egobox-moe/persistent"]
-persistent-ego = ["egobox-ego/persistent"]
 blas = ["ndarray/blas", "egobox-gp/blas", "egobox-moe/blas", "egobox-ego/blas"]
 
 [dependencies]

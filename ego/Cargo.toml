@@ -12,7 +12,6 @@ categories = ["algorithms", "mathematics", "science"]
 [features]
 default = []
 
-persistent = ["serde_json"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
