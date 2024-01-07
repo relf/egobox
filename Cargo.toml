@@ -33,7 +33,7 @@ blas = ["ndarray/blas", "egobox-gp/blas", "egobox-moe/blas", "egobox-ego/blas"]
 egobox-doe = { version = "0.14.0", path = "./doe" }
 egobox-gp = { version = "0.14.0", path = "./gp" }
 egobox-moe = { version = "0.14.0", path = "./moe", features = ["persistent"] }
-egobox-ego = { version = "0.14.0", path = "./ego", features = ["persistent"] }
+egobox-ego = { version = "0.14.0", path = "./ego" }
 
 linfa = { version = "0.7", default-features = false }
 
