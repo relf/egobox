@@ -318,7 +318,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Retrieve input dimension before kpls dimension reduction if any
     pub fn input_dim(&self) -> usize {
-        self.ytrain.ncols()
+        self.xtrain.ncols()
     }
 
     /// Retrieve output dimension
