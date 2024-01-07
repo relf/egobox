@@ -47,38 +47,7 @@ jobs:
           command: test
           args: --all --release
 
-  test-nlopt:
-    name: testing-with-nlopt-${{ matrix.toolchain }}-${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        toolchain:
-          - stable
-        os: 
-          - ubuntu-latest
-
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.toolchain }}
-          override: true
-
-      - name: Log active toolchain
-        run: rustup show
-
-      - name: Run cargo test in release mode
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all --release --features nlopt
-
-  test-blas:
+  test-features:
     name: testing-with-blas-${{ matrix.toolchain }}-${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -107,6 +76,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all --release --features blas,linfa/intel-mkl-static
+          args: --all --release --features persistent-moe,nlopt,blas,linfa/intel-mkl-static
 
 
