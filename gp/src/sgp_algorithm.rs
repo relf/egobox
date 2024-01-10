@@ -6,10 +6,10 @@
 /// computational efficiency. With M < N, we get O(NM^2) complexity instead of O(N^3)
 /// in time processing and O(NM) instead of O(N^2) in memory space.
 use crate::errors::{GpError, Result};
-use crate::mean_models::*;
 use crate::sgp_parameters::{SgpParams, SgpValidParams, SparseMethod};
 use crate::utils::pairwise_differences;
 use crate::{correlation_models::*, Inducings};
+use crate::{mean_models::*, VarianceConfig};
 use egobox_doe::{Lhs, SamplingMethod};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
@@ -205,7 +205,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
     }
 
     /// Estimated noise
-    pub fn noise(&self) -> F {
+    pub fn noise_variance(&self) -> F {
         self.noise
     }
 }
@@ -311,14 +311,32 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 Array::from_vec(v)
             });
         let sigma2_0 = F::cast(1e-2);
-        let noise_0 = F::cast(1e-2);
 
-        let n = theta0.len() + 2;
+        // When noise variance constant, it is not part of optimization params
+        let (is_noise_estimated, noise0) = match self.noise_variance() {
+            VarianceConfig::Constant(c) => (false, c),
+            VarianceConfig::Estimated {
+                initial_guess: c,
+                bounds: _,
+            } => (true, c),
+        };
+
+        // Params consist in [theta1, ..., thetap, sigma2, [noise]]
+        // where sigma2 is the variance of the gaussian process
+        // where noise is the variance of the noise when it is estimated
+        let n = theta0.len() + 1 + is_noise_estimated as usize;
         let mut params_0 = Array1::zeros(n);
-        params_0.slice_mut(s![..n - 2]).assign(&theta0);
-        params_0[n - 2] = sigma2_0;
-        params_0[n - 1] = noise_0;
+        params_0
+            .slice_mut(s![..n - 1 - is_noise_estimated as usize])
+            .assign(&theta0);
+        params_0[n - 1 - is_noise_estimated as usize] = sigma2_0;
+        if is_noise_estimated {
+            // noise variance is estimated, noise0 is initial_guess
+            params_0[n - 1] = *noise0;
+        }
 
+        // We prefer optimize variable change log10(theta)
+        // as theta is used as exponent in objective function
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
             for v in x.iter() {
@@ -334,9 +352,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             )
             .unwrap();
 
-            let theta = input.slice(s![..input.len() - 2]);
-            let sigma2 = input[input.len() - 2];
-            let noise = input[input.len() - 1];
+            let theta = input.slice(s![..input.len() - 1 - is_noise_estimated as usize]);
+            let sigma2 = input[input.len() - 1 - is_noise_estimated as usize];
+            let noise = if is_noise_estimated {
+                input[input.len() - 1]
+            } else {
+                F::cast(*noise0)
+            };
 
             let theta = theta.mapv(F::cast);
             match self.reduced_likelihood(
@@ -353,7 +375,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             }
         };
 
-        // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
+        // Multistart: user theta0 + LHS samplings
         let mut params = Array2::zeros((N_START + 1, params_0.len()));
         params.row_mut(0).assign(&params_0.mapv(|v| F::log10(v)));
         let mut xlimits: Array2<F> = Array2::zeros((params_0.len(), 2));
@@ -371,13 +393,34 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             .and(seeds.rows())
             .par_for_each(|mut theta, row| theta.assign(&row));
 
-        let opt_params = params.map_axis(Axis(1), |p| optimize_theta(objfn, &p.to_owned()));
+        let mut bounds = vec![(F::cast(1e-6).log10(), F::cast(1e2).log10()); params.ncols()];
+        if let VarianceConfig::Estimated {
+            initial_guess: _,
+            bounds: (lo, up),
+        } = self.noise_variance()
+        {
+            // Set bounds for noise
+            if let Some(noise_bounds) = bounds.last_mut() {
+                *noise_bounds = (lo.log10(), up.log10());
+            }
+        }
+
+        let opt_params =
+            params.map_axis(Axis(1), |p| optimize_theta(objfn, &p.to_owned(), &bounds));
         let opt_index = opt_params.map(|(_, opt_f)| opt_f).argmin().unwrap();
-        let opt_params = &(opt_params[opt_index]).0.mapv(F::cast);
+        let opt_params = &(opt_params[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
         // println!("opt_theta={}", opt_theta);
-        let opt_theta = opt_params.slice(s![..n - 2]).to_owned();
-        let opt_sigma2 = opt_params[n - 2];
-        let opt_noise = opt_params[n - 1];
+        let opt_theta = opt_params
+            .slice(s![..n - 1 - is_noise_estimated as usize])
+            .to_owned();
+        let opt_sigma2 = opt_params[n - 1 - is_noise_estimated as usize];
+        let opt_noise = if is_noise_estimated {
+            opt_params[n - 1]
+        } else {
+            *noise0
+        };
+
+        // Recompute reduced likelihood with optimized params
         let (_, w_data) = self.reduced_likelihood(
             &opt_theta,
             opt_sigma2,
@@ -533,7 +576,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpValidPara
 
 /// Optimize gp hyper parameter theta given an initial guess `theta0`
 #[cfg(not(feature = "nlopt"))]
-fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
+fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>, bounds: &[(F, F)]) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
     F: Float,
@@ -542,14 +585,16 @@ where
 
     let base: f64 = 10.;
     let cons: Vec<&dyn Func<()>> = vec![];
-    let theta_init = theta0
-        .map(|v| unsafe { *(v as *const F as *const f64) })
-        .into_raw_vec();
+    let theta_init = theta0.map(|v| into_f64(v)).into_raw_vec();
 
     let initial_step = 0.5;
     let ftol_rel = 1e-4;
     let maxeval = 15 * theta0.len();
-    let bounds = vec![(-6., 2.); theta0.len()];
+
+    let bounds: Vec<_> = bounds
+        .iter()
+        .map(|(lo, up)| (into_f64(lo), into_f64(up)))
+        .collect();
 
     match minimize(
         |x, u| objfn(x, None, u),
@@ -565,7 +610,7 @@ where
         }),
     ) {
         Ok((_, x_opt, fval)) => {
-            let thetas_opt = arr1(&x_opt).mapv(|v| base.powf(v));
+            let thetas_opt = arr1(&x_opt);
             let fval = if f64::is_nan(fval) {
                 f64::INFINITY
             } else {
@@ -578,6 +623,11 @@ where
             (arr1(&x_opt).mapv(|v| base.powf(v)), f64::INFINITY)
         }
     }
+}
+
+#[inline(always)]
+fn into_f64<F: Float>(v: &F) -> f64 {
+    unsafe { *(v as *const F as *const f64) }
 }
 
 #[cfg(test)]
@@ -599,31 +649,71 @@ mod tests {
         x.mapv(|v| (3. * PI * v).sin() + 0.3 * (9. * PI * v).cos() + 0.5 * (7. * PI * v).sin())
     }
 
-    #[test]
-    fn test_sgp() {
-        let mut rng = Xoshiro256Plus::seed_from_u64(0);
-        // Generate training data
-        let nt = 200;
-        // Variance of the gaussian noise on our trainingg data
-        let eta2: f64 = 0.01;
+    fn make_test_data(
+        nt: usize,
+        eta2: f64,
+        rng: &mut Xoshiro256Plus,
+    ) -> (Array2<f64>, Array2<f64>) {
         let normal = Normal::new(0., eta2.sqrt()).unwrap();
-        let gaussian_noise = Array::<f64, _>::random_using((nt, 1), normal, &mut rng);
-        let xt = 2. * Array::<f64, _>::random_using((nt, 1), Uniform::new(0., 1.), &mut rng) - 1.;
+        let gaussian_noise = Array::<f64, _>::random_using((nt, 1), normal, rng);
+        let xt = 2. * Array::<f64, _>::random_using((nt, 1), Uniform::new(0., 1.), rng) - 1.;
         let yt = f_obj(&xt) + gaussian_noise;
+        (xt, yt)
+    }
 
-        let test_dir = "target/tests";
-        std::fs::create_dir_all(test_dir).ok();
-
-        let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
-
-        let n_inducing = 30;
-        let mut indices = (0..nt).collect::<Vec<_>>();
-        indices.shuffle(&mut rng);
+    fn make_inducings(
+        n_inducing: usize,
+        xt: &Array2<f64>,
+        rng: &mut Xoshiro256Plus,
+    ) -> Array2<f64> {
+        let mut indices = (0..xt.nrows()).collect::<Vec<_>>();
+        indices.shuffle(rng);
         let mut z = Array2::zeros((n_inducing, xt.ncols()));
         let idx = indices[..n_inducing].to_vec();
         Zip::from(z.rows_mut())
             .and(&Array1::from_vec(idx))
             .for_each(|mut zi, i| zi.assign(&xt.row(*i)));
+        z
+    }
+
+    fn save_data(
+        xt: &Array2<f64>,
+        yt: &Array2<f64>,
+        z: &Array2<f64>,
+        xplot: &Array2<f64>,
+        sgp_vals: &Array2<f64>,
+        sgp_vars: &Array2<f64>,
+    ) {
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+
+        let file_path = format!("{}/sgp_xt.npy", test_dir);
+        write_npy(file_path, xt).expect("xt saved");
+        let file_path = format!("{}/sgp_yt.npy", test_dir);
+        write_npy(file_path, yt).expect("yt saved");
+        let file_path = format!("{}/sgp_z.npy", test_dir);
+        write_npy(file_path, z).expect("z saved");
+        let file_path = format!("{}/sgp_x.npy", test_dir);
+        write_npy(file_path, xplot).expect("x saved");
+        let file_path = format!("{}/sgp_vals.npy", test_dir);
+        write_npy(file_path, sgp_vals).expect("sgp vals saved");
+        let file_path = format!("{}/sgp_vars.npy", test_dir);
+        write_npy(file_path, sgp_vars).expect("sgp vars saved");
+    }
+
+    #[test]
+    fn test_sgp_default() {
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
+        // Generate training data
+        let nt = 200;
+        // Variance of the gaussian noise on our training data
+        let eta2: f64 = 0.01;
+        let (xt, yt) = make_test_data(nt, eta2, &mut rng);
+
+        let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
+        let n_inducing = 30;
+
+        let z = make_inducings(n_inducing, &xt, &mut rng);
 
         let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             ConstantMean::default(),
@@ -634,22 +724,48 @@ mod tests {
         .fit(&Dataset::new(xt.clone(), yt.clone()))
         .expect("GP fit error");
 
-        assert_abs_diff_eq!(eta2, sgp.noise(), epsilon = 0.0015);
+        println!("noise variance={:?}", sgp.noise_variance());
+        assert_abs_diff_eq!(eta2, sgp.noise_variance());
 
         let sgp_vals = sgp.predict_values(&xplot).unwrap();
         let sgp_vars = sgp.predict_variances(&xplot).unwrap();
 
-        let file_path = format!("{}/sgp_xt.npy", test_dir);
-        write_npy(file_path, &xt).expect("xt saved");
-        let file_path = format!("{}/sgp_yt.npy", test_dir);
-        write_npy(file_path, &yt).expect("yt saved");
-        let file_path = format!("{}/sgp_z.npy", test_dir);
-        write_npy(file_path, &z).expect("z saved");
-        let file_path = format!("{}/sgp_x.npy", test_dir);
-        write_npy(file_path, &xplot).expect("x saved");
-        let file_path = format!("{}/sgp_vals.npy", test_dir);
-        write_npy(file_path, &sgp_vals).expect("sgp vals saved");
-        let file_path = format!("{}/sgp_vars.npy", test_dir);
-        write_npy(file_path, &sgp_vars).expect("sgp vars saved");
+        save_data(&xt, &yt, &z, &xplot, &sgp_vals, &sgp_vars);
+    }
+
+    #[test]
+    fn test_sgp_noise_estimation() {
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
+        // Generate training data
+        let nt = 200;
+        // Variance of the gaussian noise on our training data
+        let eta2: f64 = 0.01;
+        let (xt, yt) = make_test_data(nt, eta2, &mut rng);
+
+        let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
+        let n_inducing = 30;
+
+        let z = make_inducings(n_inducing, &xt, &mut rng);
+
+        let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+            ConstantMean::default(),
+            SquaredExponentialCorr::default(),
+        )
+        .inducings(z.clone())
+        .initial_theta(Some(vec![0.1]))
+        .noise_variance(VarianceConfig::Estimated {
+            initial_guess: 0.05,
+            bounds: (1e-3, 1.),
+        })
+        .fit(&Dataset::new(xt.clone(), yt.clone()))
+        .expect("GP fit error");
+
+        println!("noise variance={:?}", sgp.noise_variance());
+        assert_abs_diff_eq!(eta2, sgp.noise_variance());
+
+        let sgp_vals = sgp.predict_values(&xplot).unwrap();
+        let sgp_vars = sgp.predict_variances(&xplot).unwrap();
+
+        save_data(&xt, &yt, &z, &xplot, &sgp_vals, &sgp_vars);
     }
 }

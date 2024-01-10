@@ -8,24 +8,25 @@ use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum NoiseVarianceConfig<F: Float> {
+pub enum VarianceConfig<F: Float> {
+    /// Constant variance
     Constant(F),
-    Estimated {
-        initial_guess: F,
-        lower_bound: F,
-        upper_bound: F,
-    },
+    /// Variance is optimized between given bounds (lower, upper) starting from the inital guess
+    Estimated { initial_guess: F, bounds: (F, F) },
 }
-impl<F: Float> Default for NoiseVarianceConfig<F> {
-    fn default() -> NoiseVarianceConfig<F> {
-        Self::Constant(F::one())
+impl<F: Float> Default for VarianceConfig<F> {
+    fn default() -> VarianceConfig<F> {
+        Self::Constant(F::cast(0.01))
     }
 }
 
+/// SGP inducing points specification
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum Inducings<F: Float> {
+    /// Points are selected randomly
     Randomized(usize),
+    /// Points are given as a (npoints, nx) matrix
     Located(Array2<F>),
 }
 impl<F: Float> Default for Inducings<F> {
@@ -34,11 +35,14 @@ impl<F: Float> Default for Inducings<F> {
     }
 }
 
+/// SGP algorithm method specification
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum SparseMethod {
     #[default]
+    /// Fully Independent Training Conditional method
     Fitc,
+    /// Variational Free Energy method
     Vfe,
 }
 
@@ -48,7 +52,7 @@ pub struct SgpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationM
     /// gp
     gp_params: GpValidParams<F, Mean, Corr>,
     /// Gaussian homeoscedastic noise variance
-    noise: NoiseVarianceConfig<F>,
+    noise: VarianceConfig<F>,
     /// Inducing points
     z: Inducings<F>,
     /// Method
@@ -59,7 +63,7 @@ impl<F: Float> Default for SgpValidParams<F, ConstantMean, SquaredExponentialCor
     fn default() -> SgpValidParams<F, ConstantMean, SquaredExponentialCorr> {
         SgpValidParams {
             gp_params: GpValidParams::default(),
-            noise: NoiseVarianceConfig::default(),
+            noise: VarianceConfig::default(),
             z: Inducings::default(),
             method: SparseMethod::default(),
         }
@@ -101,6 +105,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpValidPara
     pub fn inducings(&self) -> &Inducings<F> {
         &self.z
     }
+
+    /// Get noise variance configuration
+    pub fn noise_variance(&self) -> &VarianceConfig<F> {
+        &self.noise
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -121,7 +130,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpParams<F,
                 kpls_dim: None,
                 nugget: F::cast(1000.0) * F::epsilon(),
             },
-            noise: NoiseVarianceConfig::default(),
+            noise: VarianceConfig::default(),
             z: Inducings::default(),
             method: SparseMethod::default(),
         })
@@ -148,13 +157,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpParams<F,
     }
 
     /// Set number of PLS components.
+    ///
     /// Should be 0 < n < pb size (i.e. x dimension)
     pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.0.gp_params.kpls_dim = kpls_dim;
         self
     }
 
-    /// Set nugget.
+    /// Set nugget value.
     ///
     /// Nugget is used to improve numerical stability
     pub fn nugget(mut self, nugget: F) -> Self {
@@ -162,8 +172,15 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpParams<F,
         self
     }
 
+    /// Specify nz inducing points as (nz, x_dim) matrix.
     pub fn inducings(mut self, z: Array2<F>) -> Self {
         self.0.z = Inducings::Located(z);
+        self
+    }
+
+    /// Set noise variance configuration defining noise handling.
+    pub fn noise_variance(mut self, config: VarianceConfig<F>) -> Self {
+        self.0.noise = config;
         self
     }
 }
