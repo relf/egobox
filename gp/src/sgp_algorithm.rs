@@ -402,7 +402,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 }
 
 impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpValidParams<F, Mean, Corr> {
-
     /// Compute reduced likelihood function
     /// nugget: factor to improve numerical stability  
     #[allow(clippy::too_many_arguments)]
