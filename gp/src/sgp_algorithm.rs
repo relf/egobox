@@ -26,7 +26,7 @@ const N_START: usize = 10; // number of optimization restart (aka multistart)
     serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))
 )]
 #[derive(Debug)]
-pub struct WoodburyData<F: Float> {
+pub(crate) struct WoodburyData<F: Float> {
     vec: Array2<F>,
     inv: Array2<F>,
 }
@@ -402,42 +402,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 }
 
 impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpValidParams<F, Mean, Corr> {
-    /// Constructor of valid params from values
-    #[doc(hidden)]
-    #[allow(clippy::too_many_arguments)]
-    pub fn from(
-        mean: Mean,
-        corr: Corr,
-        method: SparseMethod,
-        theta: Array1<F>,
-        sigma2: F,
-        noise: F,
-        w_star: Array2<F>,
-        xtrain: Array2<F>,
-        ytrain: Array2<F>,
-        inducings: Array2<F>,
-        w_data: WoodburyData<F>,
-    ) -> Result<SparseGaussianProcess<F, Mean, Corr>> {
-        // TODO: add some consistency checks
-        Ok(SparseGaussianProcess {
-            mean,
-            corr,
-            method,
-            theta,
-            sigma2,
-            noise,
-            w_star,
-            xtrain,
-            ytrain,
-            inducings,
-            w_data,
-        })
-    }
 
     /// Compute reduced likelihood function
     /// nugget: factor to improve numerical stability  
     #[allow(clippy::too_many_arguments)]
-    pub fn reduced_likelihood(
+    fn reduced_likelihood(
         &self,
         theta: &Array1<F>,
         sigma2: F,
@@ -475,7 +444,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpValidPara
 
     /// FITC method
     #[allow(clippy::too_many_arguments)]
-    pub fn fitc(
+    fn fitc(
         &self,
         theta: &Array1<F>,
         sigma2: F,
