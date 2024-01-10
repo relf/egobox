@@ -1,3 +1,10 @@
+/// Sparse gaussian process consider a set of M inducing points to approximate the posterior Gaussian distribution
+/// with a low-rank representation, while the variational inference provides a framework for approximating
+/// the posterior distribution directly.
+///
+/// These methods enable accurate modeling with large training datasets of N points while preserving
+/// computational efficiency. With M < N, we get O(NM^2) complexity instead of O(N^3)
+/// in time processing and O(NM) instead of O(N^2) in memory space.
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::sgp_parameters::{SgpParams, SgpValidParams, SparseMethod};
