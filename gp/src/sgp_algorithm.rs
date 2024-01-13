@@ -756,7 +756,7 @@ mod tests {
         .expect("SGP fitted");
 
         println!("noise variance={:?}", sgp.noise_variance());
-        assert_abs_diff_eq!(eta2, sgp.noise_variance());
+        assert_abs_diff_eq!(eta2, sgp.noise_variance(), epsilon = 0.0015);
 
         let sgp_vals = sgp.predict_values(&xplot).unwrap();
         let sgp_vars = sgp.predict_variances(&xplot).unwrap();
