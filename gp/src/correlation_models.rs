@@ -42,7 +42,7 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
 }
 
 /// Squared exponential correlation models
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),
@@ -108,7 +108,7 @@ impl fmt::Display for SquaredExponentialCorr {
 }
 
 /// Absolute exponential correlation models
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),
@@ -175,8 +175,7 @@ impl fmt::Display for AbsoluteExponentialCorr {
 }
 
 /// Matern 3/2 correlation model
-
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),
@@ -315,7 +314,7 @@ impl fmt::Display for Matern32Corr {
 }
 
 /// Matern 5/2 correlation model
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),
