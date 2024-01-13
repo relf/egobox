@@ -87,11 +87,11 @@ pub struct SparseGaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Corre
 }
 
 /// Kriging as GP special case when using constant mean and squared exponential correlation
-pub type SparseKriging<F> = SgpParams<F, ConstantMean, SquaredExponentialCorr>;
+pub type SparseKriging<F> = SgpParams<F, SquaredExponentialCorr>;
 
 impl<F: Float> SparseKriging<F> {
-    pub fn params() -> SgpParams<F, ConstantMean, SquaredExponentialCorr> {
-        SgpParams::new(ConstantMean(), SquaredExponentialCorr())
+    pub fn params() -> SgpParams<F, SquaredExponentialCorr> {
+        SgpParams::new(SquaredExponentialCorr())
     }
 }
 
@@ -127,11 +127,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
     SparseGaussianProcess<F, Mean, Corr>
 {
     /// Gp parameters contructor
-    pub fn params<NewMean: RegressionModel<F>, NewCorr: CorrelationModel<F>>(
-        mean: NewMean,
-        corr: NewCorr,
-    ) -> SgpParams<F, NewMean, NewCorr> {
-        SgpParams::new(mean, corr)
+    pub fn params<NewCorr: CorrelationModel<F>>(corr: NewCorr) -> SgpParams<F, NewCorr> {
+        SgpParams::new(corr)
     }
 
     fn compute_k(
@@ -265,10 +262,10 @@ where
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem = F>>
-    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for SgpValidParams<F, Mean, Corr>
+impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for SgpValidParams<F, Corr>
 {
-    type Object = SparseGaussianProcess<F, Mean, Corr>;
+    type Object = SparseGaussianProcess<F, ConstantMean, Corr>;
 
     /// Fit GP parameters using maximum likelihood
     fn fit(
@@ -436,7 +433,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             Inducings::Located(z) => z,
         };
         Ok(SparseGaussianProcess {
-            mean: *self.mean(),
+            mean: ConstantMean(),
             corr: *self.corr(),
             method: self.method().clone(),
             theta: opt_theta,
@@ -451,7 +448,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpValidParams<F, Mean, Corr> {
+impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     /// Compute reduced likelihood function
     /// nugget: factor to improve numerical stability  
     #[allow(clippy::too_many_arguments)]
@@ -716,13 +713,12 @@ mod tests {
         let z = make_inducings(n_inducing, &xt, &mut rng);
 
         let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
-            ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
         .inducings(z.clone())
         .initial_theta(Some(vec![0.1]))
         .fit(&Dataset::new(xt.clone(), yt.clone()))
-        .expect("GP fit error");
+        .expect("GP fitted");
 
         println!("noise variance={:?}", sgp.noise_variance());
         assert_abs_diff_eq!(eta2, sgp.noise_variance());
@@ -748,7 +744,6 @@ mod tests {
         let z = make_inducings(n_inducing, &xt, &mut rng);
 
         let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
-            ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
         .inducings(z.clone())
@@ -758,7 +753,7 @@ mod tests {
             bounds: (1e-3, 1.),
         })
         .fit(&Dataset::new(xt.clone(), yt.clone()))
-        .expect("GP fit error");
+        .expect("SGP fitted");
 
         println!("noise variance={:?}", sgp.noise_variance());
         assert_abs_diff_eq!(eta2, sgp.noise_variance());

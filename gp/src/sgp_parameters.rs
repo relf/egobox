@@ -1,6 +1,6 @@
 use crate::correlation_models::{CorrelationModel, SquaredExponentialCorr};
 use crate::errors::{GpError, Result};
-use crate::mean_models::{ConstantMean, RegressionModel};
+use crate::mean_models::ConstantMean;
 use crate::parameters::GpValidParams;
 use linfa::{Float, ParamGuard};
 use ndarray::Array2;
@@ -48,9 +48,9 @@ pub enum SparseMethod {
 
 /// A set of validated SGP parameters.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SgpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
+pub struct SgpValidParams<F: Float, Corr: CorrelationModel<F>> {
     /// gp
-    gp_params: GpValidParams<F, Mean, Corr>,
+    gp_params: GpValidParams<F, ConstantMean, Corr>,
     /// Gaussian homeoscedastic noise variance
     noise: VarianceConfig<F>,
     /// Inducing points
@@ -59,8 +59,8 @@ pub struct SgpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationM
     method: SparseMethod,
 }
 
-impl<F: Float> Default for SgpValidParams<F, ConstantMean, SquaredExponentialCorr> {
-    fn default() -> SgpValidParams<F, ConstantMean, SquaredExponentialCorr> {
+impl<F: Float> Default for SgpValidParams<F, SquaredExponentialCorr> {
+    fn default() -> SgpValidParams<F, SquaredExponentialCorr> {
         SgpValidParams {
             gp_params: GpValidParams::default(),
             noise: VarianceConfig::default(),
@@ -70,15 +70,10 @@ impl<F: Float> Default for SgpValidParams<F, ConstantMean, SquaredExponentialCor
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpValidParams<F, Mean, Corr> {
+impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     /// Get starting theta value for optimization
     pub fn initial_theta(&self) -> &Option<Vec<F>> {
         &self.gp_params.theta
-    }
-
-    /// Get mean model  
-    pub fn mean(&self) -> &Mean {
-        &self.gp_params.mean
     }
 
     /// Get correlation corr k(x, x')
@@ -114,18 +109,16 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpValidPara
 
 #[derive(Clone, Debug)]
 /// The set of hyperparameters that can be specified for the execution of
-/// the [GP algorithm](struct.GaussianProcess.html).
-pub struct SgpParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>(
-    SgpValidParams<F, Mean, Corr>,
-);
+/// the [SGP algorithm](struct.SparseGaussianProcess.html).
+pub struct SgpParams<F: Float, Corr: CorrelationModel<F>>(SgpValidParams<F, Corr>);
 
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpParams<F, Mean, Corr> {
-    /// A constructor for GP parameters given mean and correlation models
-    pub fn new(mean: Mean, corr: Corr) -> SgpParams<F, Mean, Corr> {
+impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
+    /// A constructor for SGP parameters given mean and correlation models
+    pub fn new(corr: Corr) -> SgpParams<F, Corr> {
         Self(SgpValidParams {
             gp_params: GpValidParams {
                 theta: None,
-                mean,
+                mean: ConstantMean::default(),
                 corr,
                 kpls_dim: None,
                 nugget: F::cast(1000.0) * F::epsilon(),
@@ -141,12 +134,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpParams<F,
     /// During training process, the internal optimization is started from `initial_theta`.
     pub fn initial_theta(mut self, theta: Option<Vec<F>>) -> Self {
         self.0.gp_params.theta = theta;
-        self
-    }
-
-    /// Set mean model.
-    pub fn mean(mut self, mean: Mean) -> Self {
-        self.0.gp_params.mean = mean;
         self
     }
 
@@ -185,10 +172,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> SgpParams<F,
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> ParamGuard
-    for SgpParams<F, Mean, Corr>
-{
-    type Checked = SgpValidParams<F, Mean, Corr>;
+impl<F: Float, Corr: CorrelationModel<F>> ParamGuard for SgpParams<F, Corr> {
+    type Checked = SgpValidParams<F, Corr>;
     type Error = GpError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {
