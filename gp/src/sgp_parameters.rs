@@ -24,7 +24,7 @@ impl<F: Float> Default for VarianceConfig<F> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum Inducings<F: Float> {
-    /// Points are selected randomly
+    /// usize points are selected randomly in the training dataset
     Randomized(usize),
     /// Points are given as a (npoints, nx) matrix
     Located(Array2<F>),
@@ -57,6 +57,8 @@ pub struct SgpValidParams<F: Float, Corr: CorrelationModel<F>> {
     z: Inducings<F>,
     /// Method
     method: SparseMethod,
+    /// Random generator seed
+    seed: Option<u64>,
 }
 
 impl<F: Float> Default for SgpValidParams<F, SquaredExponentialCorr> {
@@ -66,6 +68,7 @@ impl<F: Float> Default for SgpValidParams<F, SquaredExponentialCorr> {
             noise: VarianceConfig::default(),
             z: Inducings::default(),
             method: SparseMethod::default(),
+            seed: None,
         }
     }
 }
@@ -105,6 +108,11 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     pub fn noise_variance(&self) -> &VarianceConfig<F> {
         &self.noise
     }
+
+    /// Get seed
+    pub fn seed(&self) -> &Option<u64> {
+        &self.seed
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -126,6 +134,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
             noise: VarianceConfig::default(),
             z: Inducings::default(),
             method: SparseMethod::default(),
+            seed: None,
         })
     }
 
@@ -165,9 +174,21 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
         self
     }
 
+    /// Specify nz number of inducing points which will be picked randomly in the input training dataset.
+    pub fn n_inducings(mut self, nz: usize) -> Self {
+        self.0.z = Inducings::Randomized(nz);
+        self
+    }
+
     /// Set noise variance configuration defining noise handling.
     pub fn noise_variance(mut self, config: VarianceConfig<F>) -> Self {
         self.0.noise = config;
+        self
+    }
+
+    /// Set noise variance configuration defining noise handling.
+    pub fn seed(mut self, seed: Option<u64>) -> Self {
+        self.0.seed = seed;
         self
     }
 }

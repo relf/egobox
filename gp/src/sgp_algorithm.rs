@@ -18,8 +18,10 @@ use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_stats::QuantileExt;
 
-use rand_xoshiro::rand_core::SeedableRng;
+use ndarray_rand::rand::seq::SliceRandom;
+use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
+
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -205,6 +207,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
     pub fn noise_variance(&self) -> F {
         self.noise
     }
+
+    /// Inducing points
+    pub fn inducings(&self) -> &Array2<F> {
+        &self.inducings
+    }
 }
 
 impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
@@ -332,6 +339,15 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             params_0[n - 1] = *noise0;
         }
 
+        let mut rng = match self.seed() {
+            Some(seed) => Xoshiro256Plus::seed_from_u64(*seed),
+            None => Xoshiro256Plus::from_entropy(),
+        };
+        let z = match self.inducings() {
+            Inducings::Randomized(n) => make_inducings(*n, &xtrain, &mut rng),
+            Inducings::Located(z) => z.to_owned(),
+        };
+
         // We prefer optimize variable change log10(theta)
         // as theta is used as exponent in objective function
         let base: f64 = 10.;
@@ -365,6 +381,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
                 &w_star,
                 &xtrain,
                 &ytrain,
+                &z,
                 self.nugget(),
             ) {
                 Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
@@ -425,13 +442,9 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             &w_star,
             &xtrain,
             &ytrain,
+            &z,
             self.nugget(),
         )?;
-        let default_z = Array::from_elem((10, xtrain.ncols()), F::one()); // TODO
-        let z = match self.inducings() {
-            Inducings::Randomized(_n) => &default_z,
-            Inducings::Located(z) => z,
-        };
         Ok(SparseGaussianProcess {
             mean: ConstantMean(),
             corr: *self.corr(),
@@ -460,10 +473,13 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         w_star: &Array2<F>,
         xtrain: &Array2<F>,
         ytrain: &Array2<F>,
+        z: &Array2<F>,
         nugget: F,
     ) -> Result<(F, WoodburyData<F>)> {
         let (likelihood, w_data) = match self.method() {
-            SparseMethod::Fitc => self.fitc(theta, sigma2, noise, w_star, xtrain, ytrain, nugget),
+            SparseMethod::Fitc => {
+                self.fitc(theta, sigma2, noise, w_star, xtrain, ytrain, z, nugget)
+            }
             SparseMethod::Vfe => self.vfe(theta, sigma2, noise, nugget),
         };
 
@@ -498,13 +514,9 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         w_star: &Array2<F>,
         xtrain: &Array2<F>,
         ytrain: &Array2<F>,
+        z: &Array2<F>,
         nugget: F,
     ) -> (F, WoodburyData<F>) {
-        let default_z = Array::from_elem((10, xtrain.ncols()), F::one()); // TODO
-        let z = match self.inducings() {
-            Inducings::Randomized(_n) => &default_z,
-            Inducings::Located(z) => z,
-        };
         let nz = z.nrows();
         let knn = Array1::from_elem(xtrain.nrows(), sigma2);
         let kmm = self.compute_k(z, z, w_star, theta, sigma2) + Array::eye(nz) * nugget;
@@ -627,6 +639,22 @@ fn into_f64<F: Float>(v: &F) -> f64 {
     unsafe { *(v as *const F as *const f64) }
 }
 
+fn make_inducings<F: Float>(
+    n_inducing: usize,
+    xt: &Array2<F>,
+    rng: &mut Xoshiro256Plus,
+) -> Array2<F> {
+    let mut indices = (0..xt.nrows()).collect::<Vec<_>>();
+    indices.shuffle(rng);
+    let n = n_inducing.min(xt.nrows());
+    let mut z = Array2::zeros((n, xt.ncols()));
+    let idx = indices[..n].to_vec();
+    Zip::from(z.rows_mut())
+        .and(&Array1::from_vec(idx))
+        .for_each(|mut zi, i| zi.assign(&xt.row(*i)));
+    z
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -634,7 +662,6 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use ndarray::Array;
     use ndarray_npy::write_npy;
-    use ndarray_rand::rand::seq::SliceRandom;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::{Normal, Uniform};
     use ndarray_rand::RandomExt;
@@ -656,21 +683,6 @@ mod tests {
         let xt = 2. * Array::<f64, _>::random_using((nt, 1), Uniform::new(0., 1.), rng) - 1.;
         let yt = f_obj(&xt) + gaussian_noise;
         (xt, yt)
-    }
-
-    fn make_inducings(
-        n_inducing: usize,
-        xt: &Array2<f64>,
-        rng: &mut Xoshiro256Plus,
-    ) -> Array2<f64> {
-        let mut indices = (0..xt.nrows()).collect::<Vec<_>>();
-        indices.shuffle(rng);
-        let mut z = Array2::zeros((n_inducing, xt.ncols()));
-        let idx = indices[..n_inducing].to_vec();
-        Zip::from(z.rows_mut())
-            .and(&Array1::from_vec(idx))
-            .for_each(|mut zi, i| zi.assign(&xt.row(*i)));
-        z
     }
 
     fn save_data(
@@ -708,14 +720,12 @@ mod tests {
         let (xt, yt) = make_test_data(nt, eta2, &mut rng);
 
         let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
-        let n_inducing = 30;
-
-        let z = make_inducings(n_inducing, &xt, &mut rng);
+        let n_inducings = 30;
 
         let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             SquaredExponentialCorr::default(),
         )
-        .inducings(z.clone())
+        .n_inducings(n_inducings)
         .initial_theta(Some(vec![0.1]))
         .fit(&Dataset::new(xt.clone(), yt.clone()))
         .expect("GP fitted");
@@ -726,7 +736,7 @@ mod tests {
         let sgp_vals = sgp.predict_values(&xplot).unwrap();
         let sgp_vars = sgp.predict_variances(&xplot).unwrap();
 
-        save_data(&xt, &yt, &z, &xplot, &sgp_vals, &sgp_vars);
+        save_data(&xt, &yt, sgp.inducings(), &xplot, &sgp_vals, &sgp_vars);
     }
 
     #[test]
@@ -757,6 +767,7 @@ mod tests {
 
         println!("noise variance={:?}", sgp.noise_variance());
         assert_abs_diff_eq!(eta2, sgp.noise_variance(), epsilon = 0.0015);
+        assert_abs_diff_eq!(&z, sgp.inducings(), epsilon = 0.0015);
 
         let sgp_vals = sgp.predict_values(&xplot).unwrap();
         let sgp_vars = sgp.predict_variances(&xplot).unwrap();
