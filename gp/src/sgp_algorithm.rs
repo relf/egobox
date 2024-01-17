@@ -308,15 +308,21 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
                 |v| Ok(v.rotations().0.to_owned()),
             )?;
         };
+
+        // Initial guess for theta
         let theta0: Array1<_> = self
             .initial_theta()
             .clone()
             .map_or(Array1::from_elem(w_star.ncols(), F::cast(1e-2)), |v| {
                 Array::from_vec(v)
             });
-        let sigma2_0 = F::cast(1e-2);
 
-        // When noise variance constant, it is not part of optimization params
+        // Initial guess for variance
+        let y_std = ytrain.std_axis(Axis(0), F::one());
+        let sigma2_0 = y_std[0] * y_std[0];
+        //let sigma2_0 = F::cast(1e-2);
+
+        // Initial guess for noise, when noise variance constant, it is not part of optimization params
         let (is_noise_estimated, noise0) = match self.noise_variance() {
             VarianceConfig::Constant(c) => (false, c),
             VarianceConfig::Estimated {
@@ -407,7 +413,12 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             .and(seeds.rows())
             .par_for_each(|mut theta, row| theta.assign(&row));
 
+        // bounds of theta, variance and optionally noise variance
         let mut bounds = vec![(F::cast(1e-6).log10(), F::cast(1e2).log10()); params.ncols()];
+        // variance bounds
+        bounds[params.ncols() - 1 - is_noise_estimated as usize] =
+            (F::cast(1e-6).log10(), (F::cast(9.) * sigma2_0).log10());
+        // optionally adjust noise variance bounds
         if let VarianceConfig::Estimated {
             initial_guess: _,
             bounds: (lo, up),
@@ -723,7 +734,8 @@ mod tests {
 
     use approx::assert_abs_diff_eq;
     use ndarray::Array;
-    use ndarray_npy::{read_npy, write_npy};
+    // use ndarray_npy::{read_npy, write_npy};
+    use ndarray_npy::write_npy;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::{Normal, Uniform};
     use ndarray_rand::RandomExt;
@@ -844,8 +856,7 @@ mod tests {
 
     #[test]
     fn test_sgp_noise_estimation() {
-        //let mut rng = Xoshiro256Plus::seed_from_u64(0);
-        let mut rng = Xoshiro256Plus::from_entropy();
+        let mut rng = Xoshiro256Plus::seed_from_u64(0);
         // Generate training data
         let nt = 200;
         // Variance of the gaussian noise on our training data
