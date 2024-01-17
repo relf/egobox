@@ -168,6 +168,12 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
         self
     }
 
+    /// Specify the sparse method
+    pub fn sparse_method(mut self, method: SparseMethod) -> Self {
+        self.0.method = method;
+        self
+    }
+
     /// Specify nz inducing points as (nz, x_dim) matrix.
     pub fn inducings(mut self, z: Array2<F>) -> Self {
         self.0.z = Inducings::Located(z);

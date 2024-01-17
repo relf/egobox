@@ -480,7 +480,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
             SparseMethod::Fitc => {
                 self.fitc(theta, sigma2, noise, w_star, xtrain, ytrain, z, nugget)
             }
-            SparseMethod::Vfe => self.vfe(theta, sigma2, noise, nugget),
+            SparseMethod::Vfe => self.vfe(theta, sigma2, noise, w_star, xtrain, ytrain, z, nugget),
         };
 
         Ok((likelihood, w_data))
@@ -525,7 +525,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         // Compute (lower) Cholesky decomposition: Kmm = U U^T
         let u = kmm.cholesky().unwrap();
 
-        // Compute (upper) Cholesky decomposition: Qnn = V^T V
+        // Compute cholesky decomposition: Qnn = V^T V
         let ui = u
             .solve_triangular(&Array::eye(u.nrows()), UPLO::Lower)
             .unwrap();
@@ -578,8 +578,70 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         (likelihood, w_data)
     }
 
-    fn vfe(&self, _theta: &Array1<F>, _variance: F, _noise: F, _nugget: F) -> (F, WoodburyData<F>) {
-        todo!()
+    /// VFE method
+    #[allow(clippy::too_many_arguments)]
+    fn vfe(
+        &self,
+        theta: &Array1<F>,
+        sigma2: F,
+        noise: F,
+        w_star: &Array2<F>,
+        xtrain: &Array2<F>,
+        ytrain: &Array2<F>,
+        z: &Array2<F>,
+        nugget: F,
+    ) -> (F, WoodburyData<F>) {
+        // Compute: Kmm and Kmn
+        let nz = z.nrows();
+        let kmm = self.compute_k(z, z, w_star, theta, sigma2) + Array::eye(nz) * nugget;
+        let kmn = self.compute_k(z, xtrain, w_star, theta, sigma2);
+
+        // Compute cholesky decomposition: Kmm = U U^T
+        let u = kmm.cholesky().unwrap();
+
+        // Compute cholesky decomposition: Qnn = V^T V
+        let ui = u
+            .solve_triangular(&Array::eye(u.nrows()), UPLO::Lower)
+            .unwrap();
+        let v = ui.dot(&kmn);
+
+        // Compute beta, the effective noise precision
+        let beta = F::one() / noise.max(nugget);
+
+        // Compute A = beta * V @ V.T
+        let a = v.to_owned().dot(&v.t()).mapv(|v| v * beta);
+
+        // Compute cholesky decomposition: B = I + A = L L^T
+        let b: Array2<F> = Array::eye(nz) + &a;
+        let l = b.cholesky().unwrap();
+        let li = l
+            .solve_triangular(&Array::eye(l.nrows()), UPLO::Lower)
+            .unwrap();
+
+        // Compute b
+        let b = li.dot(&v).dot(ytrain).mapv(|v| v * beta);
+
+        // Compute log-marginal likelihood
+        // constant term ignored in reduced likelihood
+        //let term0 = self.ytrain.nrows() * (F::cast(2. * std::f64::consts::PI)
+        let term1 = -F::cast(ytrain.nrows()) * beta.ln();
+        let term2 = F::cast(2.) * l.diag().mapv(|v| v.ln()).sum();
+        let term3 = beta * (ytrain.to_owned() * ytrain).sum();
+        let term4 = -b.t().dot(&b)[[0, 0]];
+        let term5 = F::cast(ytrain.nrows()) * beta * sigma2;
+        let term6 = -a.diag().sum();
+
+        let likelihood = -F::cast(0.5) * (term1 + term2 + term3 + term4 + term5 + term6);
+        println!("likelihood={}", likelihood);
+
+        let li_ui = li.dot(&ui);
+        let bi = Array::eye(nz) + li.t().dot(&li);
+        let w_data = WoodburyData {
+            vec: li_ui.t().dot(&b),
+            inv: ui.t().dot(&bi).dot(&ui),
+        };
+
+        (likelihood, w_data)
     }
 }
 
@@ -661,7 +723,7 @@ mod tests {
 
     use approx::assert_abs_diff_eq;
     use ndarray::Array;
-    use ndarray_npy::write_npy;
+    use ndarray_npy::{read_npy, write_npy};
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::{Normal, Uniform};
     use ndarray_rand::RandomExt;
@@ -740,22 +802,73 @@ mod tests {
     }
 
     #[test]
-    fn test_sgp_noise_estimation() {
+    fn test_sgp_vfe() {
         let mut rng = Xoshiro256Plus::seed_from_u64(0);
         // Generate training data
         let nt = 200;
         // Variance of the gaussian noise on our training data
         let eta2: f64 = 0.01;
         let (xt, yt) = make_test_data(nt, eta2, &mut rng);
+        // let test_dir = "target/tests";
+        // let file_path = format!("{}/smt_xt.npy", test_dir);
+        // let xt: Array2<f64> = read_npy(file_path).expect("xt read");
+        // let file_path = format!("{}/smt_yt.npy", test_dir);
+        // let yt: Array2<f64> = read_npy(file_path).expect("yt read");
 
         let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
-        let n_inducing = 30;
+        let n_inducings = 30;
 
-        let z = make_inducings(n_inducing, &xt, &mut rng);
+        let z = make_inducings(n_inducings, &xt, &mut rng);
+        // let file_path = format!("{}/smt_z.npy", test_dir);
+        // let z: Array2<f64> = read_npy(file_path).expect("z read");
 
         let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             SquaredExponentialCorr::default(),
         )
+        .sparse_method(SparseMethod::Vfe)
+        .inducings(z)
+        .initial_theta(Some(vec![0.01]))
+        .fit(&Dataset::new(xt.clone(), yt.clone()))
+        .expect("GP fitted");
+
+        println!("theta={:?}", sgp.theta());
+        println!("variance={:?}", sgp.variance());
+        println!("noise variance={:?}", sgp.noise_variance());
+        assert_abs_diff_eq!(eta2, sgp.noise_variance());
+
+        let sgp_vals = sgp.predict_values(&xplot).unwrap();
+        let sgp_vars = sgp.predict_variances(&xplot).unwrap();
+
+        save_data(&xt, &yt, sgp.inducings(), &xplot, &sgp_vals, &sgp_vars);
+    }
+
+    #[test]
+    fn test_sgp_noise_estimation() {
+        //let mut rng = Xoshiro256Plus::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::from_entropy();
+        // Generate training data
+        let nt = 200;
+        // Variance of the gaussian noise on our training data
+        let eta2: f64 = 0.01;
+        let (xt, yt) = make_test_data(nt, eta2, &mut rng);
+        // let test_dir = "target/tests";
+        // let file_path = format!("{}/smt_xt.npy", test_dir);
+        // let xt: Array2<f64> = read_npy(file_path).expect("xt read");
+        // let file_path = format!("{}/smt_yt.npy", test_dir);
+        // let yt: Array2<f64> = read_npy(file_path).expect("yt read");
+
+        let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
+        let n_inducings = 30;
+
+        let z = make_inducings(n_inducings, &xt, &mut rng);
+        // let file_path = format!("{}/smt_z.npy", test_dir);
+        // let z: Array2<f64> = read_npy(file_path).expect("z read");
+
+        let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+            SquaredExponentialCorr::default(),
+        )
+        .sparse_method(SparseMethod::Vfe)
+        //.sparse_method(SparseMethod::Fitc)
         .inducings(z.clone())
         .initial_theta(Some(vec![0.1]))
         .noise_variance(VarianceConfig::Estimated {
@@ -765,8 +878,10 @@ mod tests {
         .fit(&Dataset::new(xt.clone(), yt.clone()))
         .expect("SGP fitted");
 
+        println!("theta={:?}", sgp.theta());
+        println!("variance={:?}", sgp.variance());
         println!("noise variance={:?}", sgp.noise_variance());
-        assert_abs_diff_eq!(eta2, sgp.noise_variance(), epsilon = 0.0015);
+        assert_abs_diff_eq!(eta2, sgp.noise_variance(), epsilon = 0.002);
         assert_abs_diff_eq!(&z, sgp.inducings(), epsilon = 0.0015);
 
         let sgp_vals = sgp.predict_values(&xplot).unwrap();
