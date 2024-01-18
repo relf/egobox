@@ -107,7 +107,11 @@ impl<F: Float> Clone for GpInnerParams<F> {
 ///
 /// ## serializable
 ///
-/// The `serializable` feature enables the serialization of GP models using the [serde crate](https://serde.rs/).
+/// The `serializable` feature enables the serialization of GP models using the [`serde crate`](https://serde.rs/).
+///
+/// ## blas
+///
+/// The `blas` feature enables the use of BLAS/LAPACK linear algebra backend available with [`ndarray-linalg`](https://github.com/rust-ndarray/ndarray-linalg).
 ///
 /// # Example
 ///

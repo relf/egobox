@@ -2,7 +2,7 @@ use crate::errors::{GpError, Result};
 use crate::sgp_parameters::{SgpParams, SgpValidParams, SparseMethod};
 use crate::utils::pairwise_differences;
 use crate::{correlation_models::*, Inducings};
-use crate::{mean_models::*, VarianceConfig};
+use crate::{mean_models::*, VarianceEstimation};
 use egobox_doe::{Lhs, SamplingMethod};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
@@ -22,6 +22,8 @@ use std::fmt;
 const N_START: usize = 10; // number of optimization restart (aka multistart)
 
 /// Woodbury data computed during training and used for prediction
+///
+/// Name came from [Woodbury matrix identity](https://en.wikipedia.org/wiki/Woodbury_matrix_identity)
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),
@@ -41,13 +43,38 @@ impl<F: Float> Clone for WoodburyData<F> {
     }
 }
 
-/// Sparse gaussian process consider a set of M inducing points to approximate the posterior Gaussian distribution
-/// with a low-rank representation, while the variational inference provides a framework for approximating
-/// the posterior distribution directly.
+/// Sparse gaussian process considers a set of `M` inducing points either to approximate the posterior Gaussian distribution
+/// with a low-rank representation (FITC - Fully Independent Training Conditional method), or to approximate the posterior
+/// distribution directly (VFE - Variational Free Energy method).
 ///
 /// These methods enable accurate modeling with large training datasets of N points while preserving
-/// computational efficiency. With M < N, we get O(NM^2) complexity instead of O(N^3)
-/// in time processing and O(NM) instead of O(N^2) in memory space.
+/// computational efficiency. With `M < N`, we get `O(NM^2)` complexity instead of `O(N^3)`
+/// in time processing and `O(NM)` instead of `O(N^2)` in memory space.
+///
+/// See Reference section for more information.
+///
+/// # Implementation
+///
+/// [SparseGaussianProcess] inducing points definition can be either random or provided by the user through
+/// the [Inducings] specification.
+/// The used sparse method is specified with the [SparseMethod].
+/// Noise variance can be either specified as a known constant or estimated (see [VarianceEstimation]).
+/// Unlike [crate::GaussianProcess] implementation [SparseGaussianProcess] does not allow choosing a trend which
+/// is supposed to be zero.
+///
+/// # Features
+///
+/// ## serializable
+///
+/// The `serializable` feature enables the serialization of GP models using the [`serde crate`](https://serde.rs/).
+///
+///
+///
+/// # Reference
+///
+/// Matthias Bauer, Mark van der Wilk, and Carl Edward Rasmussen.
+/// [Understanding Probabilistic Sparse Gaussian Process Approximations](https://arxiv.org/pdf/1606.04820.pdf).
+/// In: Advances in Neural Information Processing Systems. Ed. by D. Lee et al. Vol. 29. Curran Associates, Inc., 2016
 #[derive(Debug)]
 #[cfg_attr(
     feature = "serializable",
@@ -202,7 +229,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
         self.sigma2
     }
 
-    /// Estimated noise
+    /// Estimated noise variance
     pub fn noise_variance(&self) -> F {
         self.noise
     }
@@ -323,8 +350,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
 
         // Initial guess for noise, when noise variance constant, it is not part of optimization params
         let (is_noise_estimated, noise0) = match self.noise_variance() {
-            VarianceConfig::Constant(c) => (false, c),
-            VarianceConfig::Estimated {
+            VarianceEstimation::Constant(c) => (false, c),
+            VarianceEstimation::Estimated {
                 initial_guess: c,
                 bounds: _,
             } => (true, c),
@@ -418,7 +445,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
         bounds[params.ncols() - 1 - is_noise_estimated as usize] =
             (F::cast(1e-6).log10(), (F::cast(9.) * sigma2_0).log10());
         // optionally adjust noise variance bounds
-        if let VarianceConfig::Estimated {
+        if let VarianceEstimation::Estimated {
             initial_guess: _,
             bounds: (lo, up),
         } = self.noise_variance()
@@ -881,7 +908,7 @@ mod tests {
         //.sparse_method(SparseMethod::Fitc)
         .inducings(z.clone())
         .initial_theta(Some(vec![0.1]))
-        .noise_variance(VarianceConfig::Estimated {
+        .noise_variance(VarianceEstimation::Estimated {
             initial_guess: 0.05,
             bounds: (1e-3, 1.),
         })
