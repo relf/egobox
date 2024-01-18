@@ -1,8 +1,8 @@
 use crate::errors::{GpError, Result};
-use crate::sgp_parameters::{SgpParams, SgpValidParams, SparseMethod};
-use crate::utils::pairwise_differences;
-use crate::{correlation_models::*, Inducings};
-use crate::{mean_models::*, VarianceEstimation};
+use crate::sgp_parameters::{
+    Inducings, SgpParams, SgpValidParams, SparseMethod, VarianceEstimation,
+};
+use crate::{correlation_models::*, utils::pairwise_differences};
 use egobox_doe::{Lhs, SamplingMethod};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
@@ -81,13 +81,7 @@ impl<F: Float> Clone for WoodburyData<F> {
     derive(Serialize, Deserialize),
     serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))
 )]
-pub struct SparseGaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
-    /// Regression model
-    #[cfg_attr(
-        feature = "serializable",
-        serde(bound(serialize = "Mean: Serialize", deserialize = "Mean: Deserialize<'de>"))
-    )]
-    mean: Mean,
+pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
     /// Correlation kernel
     #[cfg_attr(
         feature = "serializable",
@@ -123,12 +117,9 @@ impl<F: Float> SparseKriging<F> {
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
-    for SparseGaussianProcess<F, Mean, Corr>
-{
+impl<F: Float, Corr: CorrelationModel<F>> Clone for SparseGaussianProcess<F, Corr> {
     fn clone(&self) -> Self {
         Self {
-            mean: self.mean,
             corr: self.corr,
             method: self.method.clone(),
             theta: self.theta.to_owned(),
@@ -143,17 +134,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> fmt::Display
-    for SparseGaussianProcess<F, Mean, Corr>
-{
+impl<F: Float, Corr: CorrelationModel<F>> fmt::Display for SparseGaussianProcess<F, Corr> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SGP({}, {})", self.mean, self.corr)
+        write!(f, "SGP({})", self.corr)
     }
 }
 
-impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
-    SparseGaussianProcess<F, Mean, Corr>
-{
+impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
     /// Gp parameters contructor
     pub fn params<NewCorr: CorrelationModel<F>>(corr: NewCorr) -> SgpParams<F, NewCorr> {
         SgpParams::new(corr)
@@ -240,12 +227,10 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
     }
 }
 
-impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
-    for SparseGaussianProcess<F, Mean, Corr>
+impl<F, D, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>> for SparseGaussianProcess<F, Corr>
 where
     F: Float,
     D: Data<Elem = F>,
-    Mean: RegressionModel<F>,
     Corr: CorrelationModel<F>,
 {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<F>) {
@@ -265,18 +250,16 @@ where
 }
 
 /// Gausssian Process adaptator to implement `linfa::Predict` trait for variance prediction.
-struct GpVariancePredictor<'a, F, Mean, Corr>(&'a SparseGaussianProcess<F, Mean, Corr>)
+struct GpVariancePredictor<'a, F, Corr>(&'a SparseGaussianProcess<F, Corr>)
 where
     F: Float,
-    Mean: RegressionModel<F>,
     Corr: CorrelationModel<F>;
 
-impl<'a, F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
-    for GpVariancePredictor<'a, F, Mean, Corr>
+impl<'a, F, D, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
+    for GpVariancePredictor<'a, F, Corr>
 where
     F: Float,
     D: Data<Elem = F>,
-    Mean: RegressionModel<F>,
     Corr: CorrelationModel<F>,
 {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<F>) {
@@ -298,7 +281,7 @@ where
 impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
     Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for SgpValidParams<F, Corr>
 {
-    type Object = SparseGaussianProcess<F, ConstantMean, Corr>;
+    type Object = SparseGaussianProcess<F, Corr>;
 
     /// Fit GP parameters using maximum likelihood
     fn fit(
@@ -483,7 +466,6 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             self.nugget(),
         )?;
         Ok(SparseGaussianProcess {
-            mean: ConstantMean(),
             corr: *self.corr(),
             method: self.method().clone(),
             theta: opt_theta,
@@ -822,7 +804,7 @@ mod tests {
         let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
         let n_inducings = 30;
 
-        let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+        let sgp = SparseGaussianProcess::<f64, SquaredExponentialCorr>::params(
             SquaredExponentialCorr::default(),
         )
         .n_inducings(n_inducings)
@@ -860,7 +842,7 @@ mod tests {
         // let file_path = format!("{}/smt_z.npy", test_dir);
         // let z: Array2<f64> = read_npy(file_path).expect("z read");
 
-        let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+        let sgp = SparseGaussianProcess::<f64, SquaredExponentialCorr>::params(
             SquaredExponentialCorr::default(),
         )
         .sparse_method(SparseMethod::Vfe)
@@ -901,7 +883,7 @@ mod tests {
         // let file_path = format!("{}/smt_z.npy", test_dir);
         // let z: Array2<f64> = read_npy(file_path).expect("z read");
 
-        let sgp = SparseGaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+        let sgp = SparseGaussianProcess::<f64, SquaredExponentialCorr>::params(
             SquaredExponentialCorr::default(),
         )
         .sparse_method(SparseMethod::Vfe)
