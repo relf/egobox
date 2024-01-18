@@ -55,12 +55,13 @@ impl<F: Float> Clone for WoodburyData<F> {
 ///
 /// # Implementation
 ///
-/// [SparseGaussianProcess] inducing points definition can be either random or provided by the user through
-/// the [Inducings] specification.
-/// The used sparse method is specified with the [SparseMethod].
-/// Noise variance can be either specified as a known constant or estimated (see [VarianceEstimation]).
-/// Unlike [crate::GaussianProcess] implementation [SparseGaussianProcess] does not allow choosing a trend which
-/// is supposed to be zero.
+/// [`SparseGaussianProcess`] inducing points definition can be either random or provided by the user through
+/// the [`Inducings`] specification. The used sparse method is specified with the [`SparseMethod`].
+/// Noise variance can be either specified as a known constant or estimated (see [`VarianceEstimation`]).
+/// Unlike [`GaussianProcess`]([crate::GaussianProcess]) implementation [`SparseGaussianProcess`]
+/// does not allow choosing a trend which is supposed to be zero.
+/// The correlation kernel might be selected amongst [available kernels](crate::correlation_models).
+/// When targetting a squared exponential kernel, one can use the [SparseKriging] shortcut.  
 ///
 /// # Features
 ///
@@ -68,13 +69,68 @@ impl<F: Float> Clone for WoodburyData<F> {
 ///
 /// The `serializable` feature enables the serialization of GP models using the [`serde crate`](https://serde.rs/).
 ///
+/// # Example
 ///
+/// ```
+/// use ndarray::{Array, Array2, Axis};
+/// use ndarray_rand::rand;
+/// use ndarray_rand::rand::SeedableRng;
+/// use ndarray_rand::RandomExt;
+/// use ndarray_rand::rand_distr::{Normal, Uniform};
+/// use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
+///
+/// use egobox_gp::SparseKriging;
+///
+/// const PI: f64 = std::f64::consts::PI;
+///
+/// // Let us define a hidden target function for our sparse GP example
+/// fn f_obj(x: &Array2<f64>) -> Array2<f64> {
+///   x.mapv(|v| (3. * PI * v).sin() + 0.3 * (9. * PI * v).cos() + 0.5 * (7. * PI * v).sin())
+/// }
+///
+/// // Then we can define a utility function to generate some noisy data
+/// // nt points with a gaussian noise with a variance eta2.
+/// fn make_test_data(
+///     nt: usize,
+///     eta2: f64,
+/// ) -> (Array2<f64>, Array2<f64>) {
+///     let normal = Normal::new(0., eta2.sqrt()).unwrap();
+///     let mut rng = rand::thread_rng();
+///     let gaussian_noise = Array::<f64, _>::random_using((nt, 1), normal, &mut rng);
+///     let xt = 2. * Array::<f64, _>::random_using((nt, 1), Uniform::new(0., 1.), &mut rng) - 1.;
+///     let yt = f_obj(&xt) + gaussian_noise;
+///     (xt, yt)
+/// }
+///
+/// // Generate training data
+/// let nt = 200;
+/// // Variance of the gaussian noise on our training data
+/// let eta2: f64 = 0.01;
+/// let (xt, yt) = make_test_data(nt, eta2);
+///
+/// // Train our sparse gaussian process with n inducing points taken in the dataset
+/// let n_inducings = 30;
+/// let sgp = SparseKriging::params()
+///     .n_inducings(n_inducings)   
+///     .fit(&Dataset::new(xt, yt))
+///     .expect("SGP fitted");
+///
+/// println!("sgp theta={:?}", sgp.theta());
+/// println!("sgp variance={:?}", sgp.variance());
+/// println!("noise variance={:?}", sgp.noise_variance());
+///
+/// // Predict with our trained SGP
+/// let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
+/// let sgp_vals = sgp.predict_values(&xplot).unwrap();
+/// let sgp_vars = sgp.predict_variances(&xplot).unwrap();
+/// ```
 ///
 /// # Reference
 ///
 /// Matthias Bauer, Mark van der Wilk, and Carl Edward Rasmussen.
 /// [Understanding Probabilistic Sparse Gaussian Process Approximations](https://arxiv.org/pdf/1606.04820.pdf).
 /// In: Advances in Neural Information Processing Systems. Ed. by D. Lee et al. Vol. 29. Curran Associates, Inc., 2016
+///
 #[derive(Debug)]
 #[cfg_attr(
     feature = "serializable",
@@ -108,7 +164,7 @@ pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
     w_data: WoodburyData<F>,
 }
 
-/// Kriging as GP special case when using constant mean and squared exponential correlation
+/// Kriging as sparse GP special case when using squared exponential correlation
 pub type SparseKriging<F> = SgpParams<F, SquaredExponentialCorr>;
 
 impl<F: Float> SparseKriging<F> {
@@ -804,13 +860,11 @@ mod tests {
         let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
         let n_inducings = 30;
 
-        let sgp = SparseGaussianProcess::<f64, SquaredExponentialCorr>::params(
-            SquaredExponentialCorr::default(),
-        )
-        .n_inducings(n_inducings)
-        .initial_theta(Some(vec![0.1]))
-        .fit(&Dataset::new(xt.clone(), yt.clone()))
-        .expect("GP fitted");
+        let sgp = SparseKriging::params()
+            .n_inducings(n_inducings)
+            .initial_theta(Some(vec![0.1]))
+            .fit(&Dataset::new(xt.clone(), yt.clone()))
+            .expect("GP fitted");
 
         println!("noise variance={:?}", sgp.noise_variance());
         assert_abs_diff_eq!(eta2, sgp.noise_variance());

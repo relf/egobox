@@ -66,7 +66,7 @@ impl<F: Float> Clone for GpInnerParams<F> {
 }
 
 /// A GP regression is an interpolation method where the
-/// interpolated values are modeled by a Gaussian process with a mean  
+/// interpolated values are modeled by a Gaussian process with a mean and
 /// governed by a prior covariance kernel, which depends on some
 /// parameters to be determined.
 ///

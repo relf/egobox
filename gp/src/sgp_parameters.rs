@@ -7,11 +7,12 @@ use ndarray::Array2;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
+/// Variance estimation method
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VarianceEstimation<F: Float> {
-    /// Constant variance
+    /// Constant variance (ie given not estimated)
     Constant(F),
-    /// Variance is optimized between given bounds (lower, upper) starting from the inital guess
+    /// Variance is estimated between given bounds (lower, upper) starting from the inital guess
     Estimated { initial_guess: F, bounds: (F, F) },
 }
 impl<F: Float> Default for VarianceEstimation<F> {

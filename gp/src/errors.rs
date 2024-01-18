@@ -3,7 +3,7 @@ use thiserror::Error;
 /// A result type for GP regression algorithm
 pub type Result<T> = std::result::Result<T, GpError>;
 
-/// An error when using [GaussianProcess](crate::GaussianProcess) algorithm
+/// An error when using [`GaussianProcess`](crate::GaussianProcess) or a [`SparseGaussianProcess`](crate::SparseGaussianProcess) algorithm
 #[derive(Error, Debug)]
 pub enum GpError {
     /// When LikelihoodComputation computation fails

@@ -8,6 +8,7 @@
 //! to O(N.M^2) and O(NM) where M is the number of so-called inducing points with M < N.
 //!   
 //! GP methods are implemented by [GaussianProcess] parameterized by [GpParams].
+//!
 //! SGP methods are implemented by [SparseGaussianProcess] parameterized by [SgpParams].
 mod algorithm;
 pub mod correlation_models;
