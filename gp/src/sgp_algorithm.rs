@@ -1,4 +1,4 @@
-use crate::algorithm::optimize_theta;
+use crate::algorithm::optimize_params;
 use crate::errors::{GpError, Result};
 use crate::sgp_parameters::{
     Inducings, SgpParams, SgpValidParams, SparseMethod, VarianceEstimation,
@@ -497,7 +497,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
         }
 
         let opt_params =
-            params.map_axis(Axis(1), |p| optimize_theta(objfn, &p.to_owned(), &bounds));
+            params.map_axis(Axis(1), |p| optimize_params(objfn, &p.to_owned(), &bounds));
         let opt_index = opt_params.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_params = &(opt_params[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
         // println!("opt_theta={}", opt_theta);

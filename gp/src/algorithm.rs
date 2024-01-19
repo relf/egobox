@@ -835,7 +835,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
 
         let opt_thetas = theta0s.map_axis(Axis(1), |theta| {
-            optimize_theta(objfn, &theta.to_owned(), &bounds)
+            optimize_params(objfn, &theta.to_owned(), &bounds)
         });
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
@@ -854,11 +854,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
     }
 }
 
-/// Optimize gp hyper parameter theta given an initial guess `theta0`
+/// Optimize gp hyper parameters given an initial guess and bounds with NLOPT::Cobyla
 #[cfg(feature = "nlopt")]
-pub(crate) fn optimize_theta<ObjF, F>(
+pub(crate) fn optimize_params<ObjF, F>(
     objfn: ObjF,
-    theta0: &Array1<F>,
+    param0: &Array1<F>,
     bounds: &[(F, F)],
 ) -> (Array1<f64>, f64)
 where
@@ -869,8 +869,8 @@ where
 
     let base: f64 = 10.;
     // block to drop optimizer and allow self.corr borrowing after
-    let mut optimizer = Nlopt::new(Algorithm::Cobyla, theta0.len(), objfn, Target::Minimize, ());
-    let mut theta_vec = theta0
+    let mut optimizer = Nlopt::new(Algorithm::Cobyla, param0.len(), objfn, Target::Minimize, ());
+    let mut param = param0
         .map(|v| unsafe { *(v as *const F as *const f64) })
         .into_raw_vec();
 
@@ -880,31 +880,31 @@ where
     optimizer.set_upper_bounds(&upper_bounds).unwrap();
 
     optimizer.set_initial_step1(0.5).unwrap();
-    optimizer.set_maxeval(15 * theta0.len() as u32).unwrap();
+    optimizer.set_maxeval(15 * param0.len() as u32).unwrap();
     optimizer.set_ftol_rel(1e-4).unwrap();
 
-    match optimizer.optimize(&mut theta_vec) {
+    match optimizer.optimize(&mut param) {
         Ok((_, fmin)) => {
-            let thetas_opt = arr1(&theta_vec);
+            let params_opt = arr1(&param);
             let fval = if f64::is_nan(fmin) {
                 f64::INFINITY
             } else {
                 fmin
             };
-            (thetas_opt, fval)
+            (params_opt, fval)
         }
         Err(_e) => {
             // println!("ERROR OPTIM in GP err={:?}", e);
-            (arr1(&theta_vec).mapv(|v| base.powf(v)), f64::INFINITY)
+            (arr1(&param).mapv(|v| base.powf(v)), f64::INFINITY)
         }
     }
 }
 
-/// Optimize gp hyper parameter theta given an initial guess `theta0`
+/// Optimize gp hyper parameters given an initial guess and bounds with cobyla
 #[cfg(not(feature = "nlopt"))]
-pub(crate) fn optimize_theta<ObjF, F>(
+pub(crate) fn optimize_params<ObjF, F>(
     objfn: ObjF,
-    theta0: &Array1<F>,
+    param0: &Array1<F>,
     bounds: &[(F, F)],
 ) -> (Array1<f64>, f64)
 where
@@ -915,11 +915,11 @@ where
 
     let base: f64 = 10.;
     let cons: Vec<&dyn Func<()>> = vec![];
-    let theta_init = theta0.map(|v| into_f64(v)).into_raw_vec();
+    let param0 = param0.map(|v| into_f64(v)).into_raw_vec();
 
     let initial_step = 0.5;
     let ftol_rel = 1e-4;
-    let maxeval = 15 * theta0.len();
+    let maxeval = 15 * param0.len();
 
     let bounds: Vec<_> = bounds
         .iter()
@@ -928,7 +928,7 @@ where
 
     match minimize(
         |x, u| objfn(x, None, u),
-        &theta_init,
+        &param0,
         &bounds,
         &cons,
         (),
@@ -940,13 +940,13 @@ where
         }),
     ) {
         Ok((_, x_opt, fval)) => {
-            let thetas_opt = arr1(&x_opt);
+            let params_opt = arr1(&x_opt);
             let fval = if f64::is_nan(fval) {
                 f64::INFINITY
             } else {
                 fval
             };
-            (thetas_opt, fval)
+            (params_opt, fval)
         }
         Err((status, x_opt, _)) => {
             println!("ERROR Cobyla optimizer in GP status={:?}", status);
