@@ -832,10 +832,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             .and(seeds.rows())
             .par_for_each(|mut theta, row| theta.assign(&row));
 
-        let opt_thetas =
-            theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
+        let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
+
+        let opt_thetas = theta0s.map_axis(Axis(1), |theta| {
+            optimize_theta(objfn, &theta.to_owned(), &bounds)
+        });
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
-        let opt_theta = &(opt_thetas[opt_index]).0.mapv(F::cast);
+        let opt_theta = &(opt_thetas[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
         // println!("opt_theta={}", opt_theta);
         let rxx = self.corr().value(&x_distances.d, opt_theta, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
@@ -853,7 +856,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 
 /// Optimize gp hyper parameter theta given an initial guess `theta0`
 #[cfg(feature = "nlopt")]
-fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
+pub(crate) fn optimize_theta<ObjF, F>(
+    objfn: ObjF,
+    theta0: &Array1<F>,
+    bounds: &[(F, F)],
+) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
     F: Float,
@@ -866,15 +873,19 @@ where
     let mut theta_vec = theta0
         .map(|v| unsafe { *(v as *const F as *const f64) })
         .into_raw_vec();
-    optimizer.set_lower_bound(-6.).unwrap();
-    optimizer.set_upper_bound(2.).unwrap();
+
+    let lower_bounds = bounds.iter().map(|b| into_f64(&b.0)).collect::<Vec<_>>();
+    optimizer.set_lower_bounds(&lower_bounds).unwrap();
+    let upper_bounds = bounds.iter().map(|b| into_f64(&b.1)).collect::<Vec<_>>();
+    optimizer.set_upper_bounds(&upper_bounds).unwrap();
+
     optimizer.set_initial_step1(0.5).unwrap();
     optimizer.set_maxeval(15 * theta0.len() as u32).unwrap();
     optimizer.set_ftol_rel(1e-4).unwrap();
 
     match optimizer.optimize(&mut theta_vec) {
         Ok((_, fmin)) => {
-            let thetas_opt = arr1(&theta_vec).mapv(|v| base.powf(v));
+            let thetas_opt = arr1(&theta_vec);
             let fval = if f64::is_nan(fmin) {
                 f64::INFINITY
             } else {
@@ -891,7 +902,11 @@ where
 
 /// Optimize gp hyper parameter theta given an initial guess `theta0`
 #[cfg(not(feature = "nlopt"))]
-fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
+pub(crate) fn optimize_theta<ObjF, F>(
+    objfn: ObjF,
+    theta0: &Array1<F>,
+    bounds: &[(F, F)],
+) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
     F: Float,
@@ -900,14 +915,16 @@ where
 
     let base: f64 = 10.;
     let cons: Vec<&dyn Func<()>> = vec![];
-    let theta_init = theta0
-        .map(|v| unsafe { *(v as *const F as *const f64) })
-        .into_raw_vec();
+    let theta_init = theta0.map(|v| into_f64(v)).into_raw_vec();
 
     let initial_step = 0.5;
     let ftol_rel = 1e-4;
     let maxeval = 15 * theta0.len();
-    let bounds = vec![(-6., 2.); theta0.len()];
+
+    let bounds: Vec<_> = bounds
+        .iter()
+        .map(|(lo, up)| (into_f64(lo), into_f64(up)))
+        .collect();
 
     match minimize(
         |x, u| objfn(x, None, u),
@@ -923,7 +940,7 @@ where
         }),
     ) {
         Ok((_, x_opt, fval)) => {
-            let thetas_opt = arr1(&x_opt).mapv(|v| base.powf(v));
+            let thetas_opt = arr1(&x_opt);
             let fval = if f64::is_nan(fval) {
                 f64::INFINITY
             } else {
@@ -936,6 +953,11 @@ where
             (arr1(&x_opt).mapv(|v| base.powf(v)), f64::INFINITY)
         }
     }
+}
+
+#[inline(always)]
+fn into_f64<F: Float>(v: &F) -> f64 {
+    unsafe { *(v as *const F as *const f64) }
 }
 
 /// Compute reduced likelihood function

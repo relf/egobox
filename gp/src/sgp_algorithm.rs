@@ -1,3 +1,4 @@
+use crate::algorithm::optimize_theta;
 use crate::errors::{GpError, Result};
 use crate::sgp_parameters::{
     Inducings, SgpParams, SgpValidParams, SparseMethod, VarianceEstimation,
@@ -718,62 +719,6 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
 
         (likelihood, w_data)
     }
-}
-
-/// Optimize gp hyper parameter theta given an initial guess `theta0`
-#[cfg(not(feature = "nlopt"))]
-fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>, bounds: &[(F, F)]) -> (Array1<f64>, f64)
-where
-    ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
-    F: Float,
-{
-    use cobyla::{minimize, Func, StopTols};
-
-    let base: f64 = 10.;
-    let cons: Vec<&dyn Func<()>> = vec![];
-    let theta_init = theta0.map(|v| into_f64(v)).into_raw_vec();
-
-    let initial_step = 0.5;
-    let ftol_rel = 1e-4;
-    let maxeval = 15 * theta0.len();
-
-    let bounds: Vec<_> = bounds
-        .iter()
-        .map(|(lo, up)| (into_f64(lo), into_f64(up)))
-        .collect();
-
-    match minimize(
-        |x, u| objfn(x, None, u),
-        &theta_init,
-        &bounds,
-        &cons,
-        (),
-        maxeval,
-        cobyla::RhoBeg::All(initial_step),
-        Some(StopTols {
-            ftol_rel,
-            ..StopTols::default()
-        }),
-    ) {
-        Ok((_, x_opt, fval)) => {
-            let thetas_opt = arr1(&x_opt);
-            let fval = if f64::is_nan(fval) {
-                f64::INFINITY
-            } else {
-                fval
-            };
-            (thetas_opt, fval)
-        }
-        Err((status, x_opt, _)) => {
-            println!("ERROR Cobyla optimizer in GP status={:?}", status);
-            (arr1(&x_opt).mapv(|v| base.powf(v)), f64::INFINITY)
-        }
-    }
-}
-
-#[inline(always)]
-fn into_f64<F: Float>(v: &F) -> f64 {
-    unsafe { *(v as *const F as *const f64) }
 }
 
 fn make_inducings<F: Float>(
