@@ -27,7 +27,7 @@ pub trait RegressionModel<F: Float>: Clone + Copy + Default + fmt::Display {
 }
 
 /// A constant function as mean of the GP
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),
@@ -53,7 +53,7 @@ impl<F: Float> RegressionModel<F> for ConstantMean {
 }
 
 /// An affine function as mean of the GP
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),
@@ -82,7 +82,7 @@ impl<F: Float> RegressionModel<F> for LinearMean {
 }
 
 /// A 2-degree polynomial as mean of the GP
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),

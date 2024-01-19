@@ -48,7 +48,7 @@ jobs:
           args: --all --release
 
   test-features:
-    name: testing-with-blas-${{ matrix.toolchain }}-${{ matrix.os }}
+    name: testing-features-${{ matrix.toolchain }}-${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

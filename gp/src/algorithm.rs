@@ -65,7 +65,92 @@ impl<F: Float> Clone for GpInnerParams<F> {
     }
 }
 
-/// Structure for trained Gaussian Process model
+/// A GP regression is an interpolation method where the
+/// interpolated values are modeled by a Gaussian process with a mean and
+/// governed by a prior covariance kernel, which depends on some
+/// parameters to be determined.
+///
+/// The interpolated output is modeled as stochastic process as follows:
+///
+/// `Y(x) = mu(x) + Z(x)`
+///
+/// where:
+/// * `mu(x)` is the trend i.e. the mean of the gaussian process
+/// * `Z(x)` the realization of stochastic gaussian process ~ `Normal(0, sigma^2)`
+///
+/// which in turn is written as:
+///
+/// `Y(x) = betas.regr(x) + sigma^2*corr(x, x')`
+///
+/// where:
+/// * `betas` is a vector of linear regression parameters to be determined
+/// * `regr(x)` a vector of polynomial basis functions
+/// * `sigma^2` is the process variance
+/// * `corr(x, x')` is a correlation function which depends on `distance(x, x')`
+/// and a set of unknown parameters `thetas` to be determined.
+///
+/// # Implementation
+///
+/// * Based on [ndarray](https://github.com/rust-ndarray/ndarray)
+/// and [linfa](https://github.com/rust-ml/linfa) and strive to follow [linfa guidelines](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md)
+/// * GP mean model can be constant, linear or quadratic
+/// * GP correlation model can be build the following kernels: squared exponential, absolute exponential, matern 3/2, matern 5/2    
+/// cf. [SMT Kriging](https://smt.readthedocs.io/en/latest/_src_docs/surrogate_models/krg.html)
+/// * For high dimensional problems, the classic GP algorithm does not perform well as
+/// it depends on the inversion of a correlation (n, n) matrix which is an O(n3) operation.
+/// To work around this problem the library implements dimension reduction using
+/// Partial Least Squares method upon Kriging method also known as KPLS algorithm (see Reference)
+/// * GP models can be saved and loaded using [serde](https://serde.rs/).
+/// See `serializable` feature section below.
+///
+/// # Features
+///
+/// ## serializable
+///
+/// The `serializable` feature enables the serialization of GP models using the [`serde crate`](https://serde.rs/).
+///
+/// ## blas
+///
+/// The `blas` feature enables the use of BLAS/LAPACK linear algebra backend available with [`ndarray-linalg`](https://github.com/rust-ndarray/ndarray-linalg).
+///
+/// # Example
+///
+/// ```no_run
+/// use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
+/// use linfa::prelude::*;
+/// use ndarray::{arr2, concatenate, Array, Array2, Axis};
+///
+/// // one-dimensional test function to approximate
+/// fn xsinx(x: &Array2<f64>) -> Array2<f64> {
+///     (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
+/// }
+///
+/// // training data
+/// let xt = arr2(&[[0.0], [5.0], [10.0], [15.0], [18.0], [20.0], [25.0]]);
+/// let yt = xsinx(&xt);
+///
+/// // GP with constant mean model and squared exponential correlation model
+/// // i.e. Oridinary Kriging model
+/// let kriging = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+///                 ConstantMean::default(),
+///                 SquaredExponentialCorr::default())
+///                 .fit(&Dataset::new(xt, yt))
+///                 .expect("Kriging trained");
+///
+/// // Use trained model for making predictions
+/// let xtest = Array::linspace(0., 25., 26).insert_axis(Axis(1));
+/// let ytest = xsinx(&xtest);
+///
+/// let ypred = kriging.predict_values(&xtest).expect("Kriging prediction");
+/// let yvariances = kriging.predict_variances(&xtest).expect("Kriging prediction");  
+///```
+///
+/// # Reference:
+///
+/// Bouhlel, Mohamed Amine, et al. [Improving kriging surrogates of high-dimensional design
+/// models by Partial Least Squares dimension reduction](https://hal.archives-ouvertes.fr/hal-01232938/document)
+/// Structural and Multidisciplinary Optimization 53.5 (2016): 935-952.
+///
 #[derive(Debug)]
 #[cfg_attr(
     feature = "serializable",
@@ -747,10 +832,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             .and(seeds.rows())
             .par_for_each(|mut theta, row| theta.assign(&row));
 
-        let opt_thetas =
-            theta0s.map_axis(Axis(1), |theta| optimize_theta(objfn, &theta.to_owned()));
+        let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
+
+        let opt_thetas = theta0s.map_axis(Axis(1), |theta| {
+            optimize_params(objfn, &theta.to_owned(), &bounds)
+        });
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
-        let opt_theta = &(opt_thetas[opt_index]).0.mapv(F::cast);
+        let opt_theta = &(opt_thetas[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
         // println!("opt_theta={}", opt_theta);
         let rxx = self.corr().value(&x_distances.d, opt_theta, &w_star);
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
@@ -766,9 +854,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
     }
 }
 
-/// Optimize gp hyper parameter theta given an initial guess `theta0`
+/// Optimize gp hyper parameters given an initial guess and bounds with NLOPT::Cobyla
 #[cfg(feature = "nlopt")]
-fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
+pub(crate) fn optimize_params<ObjF, F>(
+    objfn: ObjF,
+    param0: &Array1<F>,
+    bounds: &[(F, F)],
+) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
     F: Float,
@@ -777,36 +869,44 @@ where
 
     let base: f64 = 10.;
     // block to drop optimizer and allow self.corr borrowing after
-    let mut optimizer = Nlopt::new(Algorithm::Cobyla, theta0.len(), objfn, Target::Minimize, ());
-    let mut theta_vec = theta0
+    let mut optimizer = Nlopt::new(Algorithm::Cobyla, param0.len(), objfn, Target::Minimize, ());
+    let mut param = param0
         .map(|v| unsafe { *(v as *const F as *const f64) })
         .into_raw_vec();
-    optimizer.set_lower_bound(-6.).unwrap();
-    optimizer.set_upper_bound(2.).unwrap();
+
+    let lower_bounds = bounds.iter().map(|b| into_f64(&b.0)).collect::<Vec<_>>();
+    optimizer.set_lower_bounds(&lower_bounds).unwrap();
+    let upper_bounds = bounds.iter().map(|b| into_f64(&b.1)).collect::<Vec<_>>();
+    optimizer.set_upper_bounds(&upper_bounds).unwrap();
+
     optimizer.set_initial_step1(0.5).unwrap();
-    optimizer.set_maxeval(15 * theta0.len() as u32).unwrap();
+    optimizer.set_maxeval(15 * param0.len() as u32).unwrap();
     optimizer.set_ftol_rel(1e-4).unwrap();
 
-    match optimizer.optimize(&mut theta_vec) {
+    match optimizer.optimize(&mut param) {
         Ok((_, fmin)) => {
-            let thetas_opt = arr1(&theta_vec).mapv(|v| base.powf(v));
+            let params_opt = arr1(&param);
             let fval = if f64::is_nan(fmin) {
                 f64::INFINITY
             } else {
                 fmin
             };
-            (thetas_opt, fval)
+            (params_opt, fval)
         }
         Err(_e) => {
             // println!("ERROR OPTIM in GP err={:?}", e);
-            (arr1(&theta_vec).mapv(|v| base.powf(v)), f64::INFINITY)
+            (arr1(&param).mapv(|v| base.powf(v)), f64::INFINITY)
         }
     }
 }
 
-/// Optimize gp hyper parameter theta given an initial guess `theta0`
+/// Optimize gp hyper parameters given an initial guess and bounds with cobyla
 #[cfg(not(feature = "nlopt"))]
-fn optimize_theta<ObjF, F>(objfn: ObjF, theta0: &Array1<F>) -> (Array1<f64>, f64)
+pub(crate) fn optimize_params<ObjF, F>(
+    objfn: ObjF,
+    param0: &Array1<F>,
+    bounds: &[(F, F)],
+) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
     F: Float,
@@ -815,18 +915,20 @@ where
 
     let base: f64 = 10.;
     let cons: Vec<&dyn Func<()>> = vec![];
-    let theta_init = theta0
-        .map(|v| unsafe { *(v as *const F as *const f64) })
-        .into_raw_vec();
+    let param0 = param0.map(|v| into_f64(v)).into_raw_vec();
 
     let initial_step = 0.5;
     let ftol_rel = 1e-4;
-    let maxeval = 15 * theta0.len();
-    let bounds = vec![(-6., 2.); theta0.len()];
+    let maxeval = 15 * param0.len();
+
+    let bounds: Vec<_> = bounds
+        .iter()
+        .map(|(lo, up)| (into_f64(lo), into_f64(up)))
+        .collect();
 
     match minimize(
         |x, u| objfn(x, None, u),
-        &theta_init,
+        &param0,
         &bounds,
         &cons,
         (),
@@ -838,19 +940,24 @@ where
         }),
     ) {
         Ok((_, x_opt, fval)) => {
-            let thetas_opt = arr1(&x_opt).mapv(|v| base.powf(v));
+            let params_opt = arr1(&x_opt);
             let fval = if f64::is_nan(fval) {
                 f64::INFINITY
             } else {
                 fval
             };
-            (thetas_opt, fval)
+            (params_opt, fval)
         }
         Err((status, x_opt, _)) => {
             println!("ERROR Cobyla optimizer in GP status={:?}", status);
             (arr1(&x_opt).mapv(|v| base.powf(v)), f64::INFINITY)
         }
     }
+}
+
+#[inline(always)]
+fn into_f64<F: Float>(v: &F) -> f64 {
+    unsafe { *(v as *const F as *const f64) }
 }
 
 /// Compute reduced likelihood function

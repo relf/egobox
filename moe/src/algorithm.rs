@@ -1062,7 +1062,7 @@ mod tests {
     }
 
     #[test]
-    fn test_moe_drv_hard() {
+    fn test_moe_drv_smooth() {
         let rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Lhs::new(&array![[0., 1.]]).sample(100);
         let yt = f_test_1d(&xt);
@@ -1071,7 +1071,7 @@ mod tests {
             .n_clusters(3)
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
-            .recombination(Recombination::Hard)
+            .recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
@@ -1090,32 +1090,25 @@ mod tests {
         for _ in 0..20 {
             let x1: f64 = rng.gen_range(0.0..1.0);
 
-            if (0.39 < x1 && x1 < 0.41) || (0.79 < x1 && x1 < 0.81) {
-                // avoid testing hard on discoontinuity
-                continue;
+            let h = 1e-4;
+            let xtest = array![[x1]];
+
+            let x = array![[x1], [x1 + h], [x1 - h]];
+            let preds = moe.predict_derivatives(&x).unwrap();
+            let fdiff = preds[[1, 0]] - preds[[1, 0]] / 2. * h;
+
+            let drv = moe.predict_derivatives(&xtest).unwrap();
+            let df = df_test_1d(&xtest);
+
+            let err = if drv[[0, 0]] < 0.2 {
+                (drv[[0, 0]] - fdiff).abs()
             } else {
-                let h = 1e-4;
-                let xtest = array![[x1]];
-
-                let x = array![[x1], [x1 + h], [x1 - h]];
-                let preds = moe.predict_derivatives(&x).unwrap();
-                let fdiff = preds[[1, 0]] - preds[[1, 0]] / 2. * h;
-
-                let drv = moe.predict_derivatives(&xtest).unwrap();
-                let df = df_test_1d(&xtest);
-
-                if (df[[0, 0]] - fdiff).abs() > 10.0 {
-                    let err = if drv[[0, 0]] < 0.2 {
-                        (drv[[0, 0]] - fdiff).abs()
-                    } else {
-                        (drv[[0, 0]] - fdiff).abs() / drv[[0, 0]]
-                    };
-                    println!(
-                    "Test predicted derivatives at {xtest}: drv {drv}, true df {df}, fdiff {fdiff}"
-                );
-                    assert_abs_diff_eq!(err, 0.0, epsilon = 2e-1);
-                }
-            }
+                (drv[[0, 0]] - fdiff).abs() / drv[[0, 0]]
+            };
+            println!(
+                "Test predicted derivatives at {xtest}: drv {drv}, true df {df}, fdiff {fdiff}"
+            );
+            assert_abs_diff_eq!(err, 0.0, epsilon = 2e-1);
         }
     }
 
