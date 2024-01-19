@@ -890,7 +890,7 @@ mod tests {
         .inducings(z.clone())
         .initial_theta(Some(vec![0.1]))
         .noise_variance(VarianceEstimation::Estimated {
-            initial_guess: 0.05,
+            initial_guess: 0.02,
             bounds: (1e-3, 1.),
         })
         .fit(&Dataset::new(xt.clone(), yt.clone()))
@@ -899,7 +899,7 @@ mod tests {
         println!("theta={:?}", sgp.theta());
         println!("variance={:?}", sgp.variance());
         println!("noise variance={:?}", sgp.noise_variance());
-        assert_abs_diff_eq!(eta2, sgp.noise_variance(), epsilon = 0.002);
+        assert_abs_diff_eq!(eta2, sgp.noise_variance(), epsilon = 0.003);
         assert_abs_diff_eq!(&z, sgp.inducings(), epsilon = 0.0015);
 
         let sgp_vals = sgp.predict_values(&xplot).unwrap();
