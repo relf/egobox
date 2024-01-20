@@ -24,6 +24,7 @@ impl<F: Float> Default for VarianceEstimation<F> {
 /// SGP inducing points specification
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[non_exhaustive]
 pub enum Inducings<F: Float> {
     /// `usize` points are selected randomly in the training dataset
     Randomized(usize),
