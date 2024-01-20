@@ -24,6 +24,7 @@ impl<F: Float> Default for VarianceEstimation<F> {
 /// SGP inducing points specification
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+#[non_exhaustive]
 pub enum Inducings<F: Float> {
     /// `usize` points are selected randomly in the training dataset
     Randomized(usize),
@@ -123,7 +124,7 @@ pub struct SgpParams<F: Float, Corr: CorrelationModel<F>>(SgpValidParams<F, Corr
 
 impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     /// A constructor for SGP parameters given mean and correlation models
-    pub fn new(corr: Corr) -> SgpParams<F, Corr> {
+    pub fn new(corr: Corr, inducings: Inducings<F>) -> SgpParams<F, Corr> {
         Self(SgpValidParams {
             gp_params: GpValidParams {
                 theta: None,
@@ -133,7 +134,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
                 nugget: F::cast(1000.0) * F::epsilon(),
             },
             noise: VarianceEstimation::default(),
-            z: Inducings::default(),
+            z: inducings,
             method: SparseMethod::default(),
             seed: None,
         })

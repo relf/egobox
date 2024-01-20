@@ -80,7 +80,7 @@ impl<F: Float> Clone for WoodburyData<F> {
 /// use ndarray_rand::rand_distr::{Normal, Uniform};
 /// use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 ///
-/// use egobox_gp::SparseKriging;
+/// use egobox_gp::{SparseKriging, Inducings};
 ///
 /// const PI: f64 = std::f64::consts::PI;
 ///
@@ -111,8 +111,7 @@ impl<F: Float> Clone for WoodburyData<F> {
 ///
 /// // Train our sparse gaussian process with n inducing points taken in the dataset
 /// let n_inducings = 30;
-/// let sgp = SparseKriging::params()
-///     .n_inducings(n_inducings)   
+/// let sgp = SparseKriging::params(Inducings::Randomized(n_inducings))
 ///     .fit(&Dataset::new(xt, yt))
 ///     .expect("SGP fitted");
 ///
@@ -169,8 +168,8 @@ pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
 pub type SparseKriging<F> = SgpParams<F, SquaredExponentialCorr>;
 
 impl<F: Float> SparseKriging<F> {
-    pub fn params() -> SgpParams<F, SquaredExponentialCorr> {
-        SgpParams::new(SquaredExponentialCorr())
+    pub fn params(inducings: Inducings<F>) -> SgpParams<F, SquaredExponentialCorr> {
+        SgpParams::new(SquaredExponentialCorr(), inducings)
     }
 }
 
@@ -199,8 +198,11 @@ impl<F: Float, Corr: CorrelationModel<F>> fmt::Display for SparseGaussianProcess
 
 impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
     /// Gp parameters contructor
-    pub fn params<NewCorr: CorrelationModel<F>>(corr: NewCorr) -> SgpParams<F, NewCorr> {
-        SgpParams::new(corr)
+    pub fn params<NewCorr: CorrelationModel<F>>(
+        corr: NewCorr,
+        inducings: Inducings<F>,
+    ) -> SgpParams<F, NewCorr> {
+        SgpParams::new(corr, inducings)
     }
 
     fn compute_k(
@@ -805,8 +807,7 @@ mod tests {
         let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
         let n_inducings = 30;
 
-        let sgp = SparseKriging::params()
-            .n_inducings(n_inducings)
+        let sgp = SparseKriging::params(Inducings::Randomized(n_inducings))
             .initial_theta(Some(vec![0.1]))
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fitted");
@@ -843,9 +844,9 @@ mod tests {
 
         let sgp = SparseGaussianProcess::<f64, SquaredExponentialCorr>::params(
             SquaredExponentialCorr::default(),
+            Inducings::Located(z),
         )
         .sparse_method(SparseMethod::Vfe)
-        .inducings(z)
         .initial_theta(Some(vec![0.01]))
         .fit(&Dataset::new(xt.clone(), yt.clone()))
         .expect("GP fitted");
@@ -884,10 +885,10 @@ mod tests {
 
         let sgp = SparseGaussianProcess::<f64, SquaredExponentialCorr>::params(
             SquaredExponentialCorr::default(),
+            Inducings::Located(z.clone()),
         )
         .sparse_method(SparseMethod::Vfe)
         //.sparse_method(SparseMethod::Fitc)
-        .inducings(z.clone())
         .initial_theta(Some(vec![0.1]))
         .noise_variance(VarianceEstimation::Estimated {
             initial_guess: 0.02,
