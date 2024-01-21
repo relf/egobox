@@ -59,7 +59,6 @@ pub(crate) struct GpMix {
     pub recombination: Recombination,
     pub kpls_dim: Option<usize>,
     pub seed: Option<u64>,
-    pub training_data: Option<Dataset<f64, f64>>,
 }
 
 #[pymethods]
@@ -89,29 +88,21 @@ impl GpMix {
             recombination,
             kpls_dim,
             seed,
-            training_data: None,
         }
-    }
-
-    /// Set the training dataset (xt, yt) used to train the Gaussian process mixture.
-    ///
-    /// Parameters
-    ///     xt (array[nsamples, nx]): input samples
-    ///     yt (array[nsamples, 1]): output samples
-    ///   
-    fn set_training_values(&mut self, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) {
-        self.training_data = Some(Dataset::new(
-            xt.as_array().to_owned(),
-            yt.as_array().to_owned(),
-        ));
     }
 
     /// Fit the parameters of the model using the training dataset to build a trained model
     ///
+    /// Parameters
+    ///     xt (array[nsamples, nx]): input samples
+    ///     yt (array[nsamples, 1]): output samples
+    ///
     /// Returns Gpx object
     ///     the fitted Gaussian process mixture  
     ///
-    fn train(&mut self) -> Gpx {
+    fn fit(&mut self, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> Gpx {
+        let dataset = Dataset::new(xt.as_array().to_owned(), yt.as_array().to_owned());
+
         let recomb = match self.recombination {
             Recombination::Hard => egobox_moe::Recombination::Hard,
             Recombination::Smooth => egobox_moe::Recombination::Smooth(None),
@@ -130,7 +121,7 @@ impl GpMix {
             )
             .kpls_dim(self.kpls_dim)
             .with_rng(rng)
-            .fit(self.training_data.as_ref().unwrap())
+            .fit(&dataset)
             .expect("MoE model training");
         Gpx(Box::new(moe))
     }
