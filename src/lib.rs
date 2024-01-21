@@ -1,12 +1,12 @@
 #![doc = include_str!("../README.md")]
 
 mod egor;
-mod gpmix;
+mod gp_mix;
 mod sampling;
 pub(crate) mod types;
 
 use egor::*;
-use gpmix::*;
+use gp_mix::*;
 use sampling::*;
 use types::*;
 
