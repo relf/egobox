@@ -6,9 +6,7 @@ import egobox as egx
 xt = np.array([[0.0, 1.0, 1.5, 2.0, 3.0, 4.0]]).T
 yt = np.array([[0.0, 1.0, 1.7, 1.5, 0.9, 1.0]]).T
 
-sm = egx.GpMix()
-sm.set_training_values(xt, yt)
-gpx = sm.train()
+gpx = egx.GpMix().fit(xt, yt)
 
 num = 100
 x = np.linspace(0.0, 4.0, num).reshape((-1, 1))
