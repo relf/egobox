@@ -11,7 +11,7 @@ categories = ["algorithms", "mathematics", "science"]
 
 [features]
 
-default = ["persistent"]
+default = []
 
 serializable = ["serde", "typetag", "linfa/serde"]
 persistent = ["serializable", "serde_json"]

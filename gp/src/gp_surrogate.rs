@@ -1,5 +1,8 @@
 use crate::errors::Result;
-use crate::{correlation_models::*, mean_models::*, GaussianProcess, GpParams};
+use crate::{
+    correlation_models::*, mean_models::*, GaussianProcess, GpParams, SgpParams,
+    SparseGaussianProcess,
+};
 use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array2, ArrayView2};
 use paste::paste;
@@ -13,7 +16,7 @@ use crate::GpError;
 use std::fs;
 #[cfg(feature = "persistent")]
 use std::io::Write;
-/// A trait for surrogate parameters to build surrogate once fitted.
+/// A trait for Gp surrogate parameters to build surrogate once fitted.
 pub trait GpSurrogateParams {
     /// Set initial theta
     fn initial_theta(&mut self, theta: Vec<f64>);
@@ -22,16 +25,34 @@ pub trait GpSurrogateParams {
     /// Set the nugget parameter to improve numerical stability
     fn nugget(&mut self, nugget: f64);
     /// Train the surrogate
-    fn train(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn GpSurrogate>>;
+    fn train(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn FullGpSurrogate>>;
 }
 
-/// A trait for a surrogate used as expert in the mixture.
+/// A trait for sparse GP surrogate parameters to build surrogate once fitted.
+pub trait SgpSurrogateParams {
+    /// Set initial theta
+    fn initial_theta(&mut self, theta: Vec<f64>);
+    /// Set the number of PLS components
+    fn kpls_dim(&mut self, kpls_dim: Option<usize>);
+    /// Train the surrogate
+    fn train(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn SgpSurrogate>>;
+}
+
+/// A trait for a GP surrogate
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
 pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     /// Predict output values at n points given as (n, xdim) matrix.
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
     fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    /// Save model in given file.
+    #[cfg(feature = "persistent")]
+    fn save(&self, path: &str) -> Result<()>;
+}
+
+/// A trait for a GP surrogate with derivatives predictions and sampling
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+pub trait FullGpSurrogate: GpSurrogate {
     /// Predict derivatives at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
@@ -40,10 +61,11 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Sample trajectories
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>>;
-    /// Save model in given file.
-    #[cfg(feature = "persistent")]
-    fn save(&self, path: &str) -> Result<()>;
 }
+
+/// A trait for a Sparse GP surrogate.
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+pub trait SgpSurrogate: GpSurrogate {}
 
 /// A macro to declare GP surrogate using regression model and correlation model names.
 ///
@@ -53,7 +75,8 @@ macro_rules! declare_surrogate {
     ($regr:ident, $corr:ident) => {
         paste! {
 
-            #[doc = "GP surrogate parameters with `" $regr "` regression model and `" $corr "` correlation model. \n\nSee [egobox_gp::GpParams]"]
+            #[doc(hidden)]
+            #[doc = "GP surrogate parameters with `" $regr "` regression model and `" $corr "` correlation model. \n\nSee [GpParams](crate::GpParams)"]
             #[derive(Clone, Debug)]
             pub struct [<Gp $regr $corr SurrogateParams>](
                 GpParams<f64, [<$regr Mean>], [<$corr Corr>]>,
@@ -83,14 +106,15 @@ macro_rules! declare_surrogate {
                     &self,
                     x: &ArrayView2<f64>,
                     y: &ArrayView2<f64>,
-                ) -> Result<Box<dyn GpSurrogate>> {
+                ) -> Result<Box<dyn FullGpSurrogate>> {
                     Ok(Box::new([<Gp $regr $corr Surrogate>](
                         self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,
                     )))
                 }
             }
 
-            #[doc = "GP surrogate with `" $regr "` regression model and `" $corr "` correlation model. \n\nSee [egobox_gp::GaussianProcess]"]
+            #[doc(hidden)]
+            #[doc = "GP surrogate with `" $regr "` regression model and `" $corr "` correlation model. \n\nSee [`GaussianProcess`](crate::GaussianProcess)"]
             #[derive(Clone, Debug)]
             #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
             pub struct [<Gp $regr $corr Surrogate>](
@@ -105,15 +129,6 @@ macro_rules! declare_surrogate {
                 fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     self.0.predict_variances(x)
                 }
-                fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_derivatives(x))
-                }
-                fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_variance_derivatives(x))
-                }
-                fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
-                    Ok(self.0.sample(x, n_traj))
-                }
 
                 #[cfg(feature = "persistent")]
                 fn save(&self, path: &str) -> Result<()> {
@@ -126,6 +141,19 @@ macro_rules! declare_surrogate {
                     Ok(())
                 }
 
+            }
+
+            #[cfg_attr(feature = "serializable", typetag::serde)]
+            impl FullGpSurrogate for [<Gp $regr $corr Surrogate>] {
+                fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_derivatives(x))
+                }
+                fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_variance_derivatives(x))
+                }
+                fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
+                    Ok(self.0.sample(x, n_traj))
+                }
             }
 
             impl std::fmt::Display for [<Gp $regr $corr Surrogate>] {
@@ -154,6 +182,98 @@ declare_surrogate!(Quadratic, SquaredExponential);
 declare_surrogate!(Quadratic, AbsoluteExponential);
 declare_surrogate!(Quadratic, Matern32);
 declare_surrogate!(Quadratic, Matern52);
+
+/// A macro to declare SGP surrogate using correlation model names.
+///
+/// Correlation model is either `SquaredExponential`, `AbsoluteExponential`, `Matern32` or `Matern52`.
+macro_rules! declare_sgp_surrogate {
+    ($corr:ident) => {
+        paste! {
+
+            #[doc(hidden)]
+            #[doc = "SGP surrogate parameters with `" $corr "` correlation model. \n\nSee [SgpParams](crate::SgpParams)"]
+            #[derive(Clone, Debug)]
+            pub struct [<Sgp $corr SurrogateParams>](
+                SgpParams<f64, [<$corr Corr>]>,
+            );
+
+            impl [<Sgp $corr SurrogateParams>] {
+                /// Constructor
+                pub fn new(gp_params: SgpParams<f64, [<$corr Corr>]>) -> [<Sgp $corr SurrogateParams>] {
+                    [<Sgp $corr SurrogateParams>](gp_params)
+                }
+            }
+
+            impl SgpSurrogateParams for [<Sgp $corr SurrogateParams>] {
+                fn initial_theta(&mut self, theta: Vec<f64>) {
+                    self.0 = self.0.clone().initial_theta(Some(theta));
+                }
+
+                fn kpls_dim(&mut self, kpls_dim: Option<usize>) {
+                    self.0 = self.0.clone().kpls_dim(kpls_dim);
+                }
+
+                fn train(
+                    &self,
+                    x: &ArrayView2<f64>,
+                    y: &ArrayView2<f64>,
+                ) -> Result<Box<dyn SgpSurrogate>> {
+                    Ok(Box::new([<Sgp $corr Surrogate>](
+                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,
+                    )))
+                }
+            }
+
+            #[doc(hidden)]
+            #[doc = "SGP surrogate with `" $corr "` correlation model. \n\nSee [`SparseGaussianProcess`](crate::SparseGaussianProcess)"]
+            #[derive(Clone, Debug)]
+            #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+            pub struct [<Sgp $corr Surrogate>](
+                pub SparseGaussianProcess<f64, [<$corr Corr>]>,
+            );
+
+            #[cfg_attr(feature = "serializable", typetag::serde)]
+            impl GpSurrogate for [<Sgp $corr Surrogate>] {
+                fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    self.0.predict_values(x)
+                }
+                fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    self.0.predict_variances(x)
+                }
+
+                #[cfg(feature = "persistent")]
+                fn save(&self, path: &str) -> Result<()> {
+                    let mut file = fs::File::create(path).unwrap();
+                    let bytes = match serde_json::to_string(self as &dyn SgpSurrogate) {
+                        Ok(b) => b,
+                        Err(err) => return Err(GpError::SaveError(err))
+                    };
+                    file.write_all(bytes.as_bytes())?;
+                    Ok(())
+                }
+            }
+
+            #[cfg_attr(feature = "serializable", typetag::serde)]
+            impl SgpSurrogate for [<Sgp $corr Surrogate>] {}
+
+            impl std::fmt::Display for [<Sgp $corr Surrogate>] {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}_{}{}", stringify!($regr), stringify!($corr),
+                        match self.0.kpls_dim() {
+                            None => String::from(""),
+                            Some(dim) => format!("_PLS({})", dim),
+                        }
+                    )
+                }
+            }
+        }
+    };
+}
+
+declare_sgp_surrogate!(SquaredExponential);
+declare_sgp_surrogate!(AbsoluteExponential);
+declare_sgp_surrogate!(Matern32);
+declare_sgp_surrogate!(Matern52);
 
 #[cfg(feature = "persistent")]
 /// Load GP surrogate from given json file.
