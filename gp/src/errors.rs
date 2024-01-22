@@ -27,4 +27,16 @@ pub enum GpError {
     /// When a linfa error occurs
     #[error(transparent)]
     LinfaError(#[from] linfa::error::Error),
+    #[cfg(feature = "persistent")]
+    #[error("Save error: {0}")]
+    SaveError(#[from] serde_json::Error),
+    /// When error during loading
+    #[error("Load IO error")]
+    LoadIoError(#[from] std::io::Error),
+    /// When error during loading
+    #[error("Load error: {0}")]
+    LoadError(String),
+    /// When error during loading
+    #[error("InvalidValue error: {0}")]
+    InvalidValueError(String),
 }

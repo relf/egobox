@@ -20,8 +20,11 @@ mod parameters;
 mod sgp_parameters;
 mod utils;
 
+mod gp_surrogate;
+
 pub use algorithm::*;
 pub use errors::*;
+pub use gp_surrogate::*;
 pub use parameters::*;
 pub use sgp_algorithm::*;
 pub use sgp_parameters::*;
