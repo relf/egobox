@@ -14,6 +14,7 @@ use std::ops::Sub;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
+/// A trait to represent clustered structure
 pub trait Clustered {
     fn n_clusters(&self) -> usize;
     fn recombination(&self) -> Recombination<f64>;
@@ -21,10 +22,13 @@ pub trait Clustered {
     fn to_clustering(&self) -> Clustering;
 }
 
+/// A structure for clustering
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct Clustering {
+    /// Recombination between the clusters
     pub(crate) recombination: Recombination<f64>,
+    /// Clusters
     pub(crate) gmx: GaussianMixture<f64>,
 }
 

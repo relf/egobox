@@ -198,7 +198,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         &self,
         nx: usize,
         data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Box<dyn Surrogate>> {
+    ) -> Result<Box<dyn FullGpSurrogate>> {
         let xtrain = data.slice(s![.., ..nx]).to_owned();
         let ytrain = data.slice(s![.., nx..]).to_owned();
         let mut dataset = Dataset::from((xtrain.clone(), ytrain.clone()));
@@ -241,32 +241,34 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             (map_error[argmin].0.clone(), Some(map_error[argmin].1))
         };
         debug!("after Find best expert");
-        let best_expert_params: std::result::Result<Box<dyn SurrogateParams>, MoeError> = match best
-            .0
-            .as_str()
-        {
-            "Constant_SquaredExponential" => {
-                Ok(make_surrogate_params!(Constant, SquaredExponential))
-            }
-            "Constant_AbsoluteExponential" => {
-                Ok(make_surrogate_params!(Constant, AbsoluteExponential))
-            }
-            "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
-            "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
-            "Linear_SquaredExponential" => Ok(make_surrogate_params!(Linear, SquaredExponential)),
-            "Linear_AbsoluteExponential" => Ok(make_surrogate_params!(Linear, AbsoluteExponential)),
-            "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
-            "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
-            "Quadratic_SquaredExponential" => {
-                Ok(make_surrogate_params!(Quadratic, SquaredExponential))
-            }
-            "Quadratic_AbsoluteExponential" => {
-                Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
-            }
-            "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
-            "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
-            _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
-        };
+        let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
+            match best.0.as_str() {
+                "Constant_SquaredExponential" => {
+                    Ok(make_surrogate_params!(Constant, SquaredExponential))
+                }
+                "Constant_AbsoluteExponential" => {
+                    Ok(make_surrogate_params!(Constant, AbsoluteExponential))
+                }
+                "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
+                "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
+                "Linear_SquaredExponential" => {
+                    Ok(make_surrogate_params!(Linear, SquaredExponential))
+                }
+                "Linear_AbsoluteExponential" => {
+                    Ok(make_surrogate_params!(Linear, AbsoluteExponential))
+                }
+                "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
+                "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
+                "Quadratic_SquaredExponential" => {
+                    Ok(make_surrogate_params!(Quadratic, SquaredExponential))
+                }
+                "Quadratic_AbsoluteExponential" => {
+                    Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
+                }
+                "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
+                "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
+                _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
+            };
         let mut expert_params = best_expert_params?;
         expert_params.kpls_dim(self.kpls_dim());
         let expert = expert_params.train(&xtrain.view(), &ytrain.view());
@@ -282,7 +284,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
     /// Used only in case of smooth recombination
     fn optimize_heaviside_factor(
         &self,
-        experts: &[Box<dyn Surrogate>],
+        experts: &[Box<dyn FullGpSurrogate>],
         gmx: &GaussianMixture<f64>,
         xtest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         ytest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -332,7 +334,7 @@ fn check_number_of_points<F>(
 /// or another (ie responsabilities). Those responsabilities are used to combine
 /// output values predict by each cluster experts.
 fn predict_values_smooth(
-    experts: &[Box<dyn Surrogate>],
+    experts: &[Box<dyn FullGpSurrogate>],
     gmx: &GaussianMixture<f64>,
     points: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Result<Array2<f64>> {
@@ -359,7 +361,7 @@ pub struct Moe {
     /// The mode of recombination to get the output prediction from experts prediction
     recombination: Recombination<f64>,
     /// The list of the best experts trained on each cluster
-    experts: Vec<Box<dyn Surrogate>>,
+    experts: Vec<Box<dyn FullGpSurrogate>>,
     /// The gaussian mixture allowing to predict cluster responsabilities for a given point
     gmx: GaussianMixture<f64>,
     /// The dimension of the predicted output
@@ -404,7 +406,7 @@ impl Clustered for Moe {
 }
 
 #[cfg_attr(feature = "serializable", typetag::serde)]
-impl Surrogate for Moe {
+impl GpSurrogate for Moe {
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_values_hard(x),
@@ -418,7 +420,21 @@ impl Surrogate for Moe {
             Recombination::Smooth(_) => self.predict_variances_smooth(x),
         }
     }
+    /// Save Moe model in given file.
+    #[cfg(feature = "persistent")]
+    fn save(&self, path: &str) -> Result<()> {
+        let mut file = fs::File::create(path).unwrap();
+        let bytes = match serde_json::to_string(self) {
+            Ok(b) => b,
+            Err(err) => return Err(MoeError::SaveError(err)),
+        };
+        file.write_all(bytes.as_bytes())?;
+        Ok(())
+    }
+}
 
+#[cfg_attr(feature = "serializable", typetag::serde)]
+impl FullGpSurrogate for Moe {
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_derivatives_hard(x),
@@ -442,22 +458,10 @@ impl Surrogate for Moe {
         }
         self.sample_expert(0, x, n_traj)
     }
-
-    /// Save Moe model in given file.
-    #[cfg(feature = "persistent")]
-    fn save(&self, path: &str) -> Result<()> {
-        let mut file = fs::File::create(path).unwrap();
-        let bytes = match serde_json::to_string(self) {
-            Ok(b) => b,
-            Err(err) => return Err(MoeError::SaveError(err)),
-        };
-        file.write_all(bytes.as_bytes())?;
-        Ok(())
-    }
 }
 
 /// A trait for surrogates using clustering
-pub trait ClusteredSurrogate: Clustered + Surrogate {}
+pub trait ClusteredSurrogate: Clustered + FullGpSurrogate {}
 
 impl ClusteredSurrogate for Moe {}
 
@@ -744,28 +748,28 @@ impl Moe {
     }
 
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
-        <Moe as Surrogate>::predict_values(self, &x.view())
+        <Moe as GpSurrogate>::predict_values(self, &x.view())
     }
 
     pub fn predict_variances(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as Surrogate>::predict_variances(self, &x.view())
+        <Moe as GpSurrogate>::predict_variances(self, &x.view())
     }
 
     pub fn predict_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as Surrogate>::predict_derivatives(self, &x.view())
+        <Moe as FullGpSurrogate>::predict_derivatives(self, &x.view())
     }
 
     pub fn predict_variance_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as Surrogate>::predict_variance_derivatives(self, &x.view())
+        <Moe as FullGpSurrogate>::predict_variance_derivatives(self, &x.view())
     }
 
     #[cfg(feature = "persistent")]
@@ -782,7 +786,7 @@ impl Moe {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         n_traj: usize,
     ) -> Result<Array2<f64>> {
-        <Moe as Surrogate>::sample(self, &x.view(), n_traj)
+        <Moe as FullGpSurrogate>::sample(self, &x.view(), n_traj)
     }
 }
 

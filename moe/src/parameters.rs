@@ -42,7 +42,7 @@ impl<F: Float> Display for Recombination<F> {
 }
 
 bitflags! {
-    /// Flags to specify tested regression models during experts selection (see [MoeParams::regression_spec]).
+    /// Flags to specify tested regression models during experts selection (see [`regression_spec()`](MoeParams::regression_spec)).
     ///
     /// Flags can be combine with bit-wise `or` operator to select two or more models.
     /// ```ignore
@@ -67,7 +67,7 @@ bitflags! {
 }
 
 bitflags! {
-    /// Flags to specify tested correlation models during experts selection (see [MoeParams]).
+    /// Flags to specify tested correlation models during experts selection (see [`correlation_spec()`](MoeParams::correlation_spec)).
     ///
     /// Flags can be combine with bit-wise `or` operator to select two or more models.
     /// ```ignore

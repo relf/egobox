@@ -6,8 +6,8 @@ use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, Random};
 use egobox_moe::{
-    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec,
-    Surrogate,
+    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, FullGpSurrogate, GpSurrogate, Moe,
+    MoeParams, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -527,7 +527,7 @@ impl Clustered for MixintMoe {
 }
 
 #[typetag::serde]
-impl Surrogate for MixintMoe {
+impl GpSurrogate for MixintMoe {
     fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
@@ -548,6 +548,20 @@ impl Surrogate for MixintMoe {
         self.moe.predict_variances(&xcast)
     }
 
+    /// Save Moe model in given file.
+    fn save(&self, path: &str) -> egobox_moe::Result<()> {
+        let mut file = fs::File::create(path).unwrap();
+        let bytes = match serde_json::to_string(self) {
+            Ok(b) => b,
+            Err(err) => return Err(MoeError::SaveError(err)),
+        };
+        file.write_all(bytes.as_bytes())?;
+        Ok(())
+    }
+}
+
+#[typetag::serde]
+impl FullGpSurrogate for MixintMoe {
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
@@ -576,17 +590,6 @@ impl Surrogate for MixintMoe {
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
         self.moe.sample(&xcast.view(), n_traj)
-    }
-
-    /// Save Moe model in given file.
-    fn save(&self, path: &str) -> egobox_moe::Result<()> {
-        let mut file = fs::File::create(path).unwrap();
-        let bytes = match serde_json::to_string(self) {
-            Ok(b) => b,
-            Err(err) => return Err(MoeError::SaveError(err)),
-        };
-        file.write_all(bytes.as_bytes())?;
-        Ok(())
     }
 }
 
