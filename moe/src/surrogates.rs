@@ -4,7 +4,7 @@ use egobox_gp::{
     SparseGaussianProcess,
 };
 use linfa::prelude::{Dataset, Fit};
-use ndarray::{Array2, ArrayView2};
+use ndarray::{Array1, Array2, ArrayView2};
 use paste::paste;
 
 #[cfg(feature = "serializable")]
@@ -34,6 +34,8 @@ pub trait SgpSurrogateParams {
     fn initial_theta(&mut self, theta: Vec<f64>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
+    /// Set random generator seed
+    fn seed(&mut self, seed: Option<u64>);
     /// Train the surrogate
     fn train(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn SgpSurrogate>>;
 }
@@ -65,7 +67,11 @@ pub trait FullGpSurrogate: GpSurrogate {
 
 /// A trait for a Sparse GP surrogate.
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
-pub trait SgpSurrogate: GpSurrogate {}
+pub trait SgpSurrogate: GpSurrogate {
+    fn theta(&self) -> &Array1<f64>;
+    fn variance(&self) -> f64;
+    fn noise_variance(&self) -> f64;
+}
 
 /// A macro to declare GP surrogate using regression model and correlation model names.
 ///
@@ -212,6 +218,10 @@ macro_rules! declare_sgp_surrogate {
                     self.0 = self.0.clone().kpls_dim(kpls_dim);
                 }
 
+                fn seed(&mut self, seed: Option<u64>) {
+                    self.0 = self.0.clone().seed(seed);
+                }
+
                 fn train(
                     &self,
                     x: &ArrayView2<f64>,
@@ -252,7 +262,20 @@ macro_rules! declare_sgp_surrogate {
             }
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
-            impl SgpSurrogate for [<Sgp $corr Surrogate>] {}
+            impl SgpSurrogate for [<Sgp $corr Surrogate>] {
+
+                fn theta(&self) -> &Array1<f64> {
+                    self.0.theta()
+                }
+
+                fn variance(&self) -> f64 {
+                    self.0.variance()
+                }
+
+                fn noise_variance(&self) -> f64 {
+                    self.0.noise_variance()
+                }
+            }
 
             impl std::fmt::Display for [<Sgp $corr Surrogate>] {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -297,6 +320,23 @@ macro_rules! make_surrogate_params {
     };
 }
 
+#[doc(hidden)]
+// Create GP surrogate parameters with given regression and correlation models.
+macro_rules! make_sgp_surrogate_params {
+    ($corr:ident, $inducings:ident) => {
+        paste! {
+            #[allow(unused_allocation)]
+            Box::new([<Sgp $corr SurrogateParams>]::new(
+                SparseGaussianProcess::<f64, [<$corr Corr>] >::params(
+                    [<$corr Corr>]::default(),
+                    $inducings
+                )
+            ))
+        }
+    };
+}
+
+pub(crate) use make_sgp_surrogate_params;
 pub(crate) use make_surrogate_params;
 
 #[cfg(feature = "persistent")]

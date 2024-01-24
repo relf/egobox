@@ -1,4 +1,3 @@
-import os
 import unittest
 import numpy as np
 import egobox as egx
@@ -33,11 +32,7 @@ class TestSgp(unittest.TestCase):
         random_idx = rng.permutation(nt)[:n_inducing]
         Z = xt[random_idx].copy()
 
-        sgp = SGP()
-        sgp.set_training_values(xt, yt)
-        sgp.set_inducing_inputs(Z=Z)
-        # sgp.set_inducing_inputs()  # When Z not specified n_inducing points are picked randomly in traing data
-        sgp.train()
+        sgp = egx.Sgp(z=Z).fit(xt, yt)
 
 
 if __name__ == "__main__":

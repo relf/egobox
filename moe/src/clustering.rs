@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-use crate::gaussian_mixture::GaussianMixture;
-use crate::parameters::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
+use crate::parameters::MoeParams;
+use crate::types::*;
 use log::{debug, info};
 
 use linfa::dataset::{Dataset, DatasetView};
@@ -10,40 +10,6 @@ use linfa_clustering::GaussianMixtureModel;
 use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::Rng;
 use std::ops::Sub;
-
-#[cfg(feature = "serializable")]
-use serde::{Deserialize, Serialize};
-
-/// A trait to represent clustered structure
-pub trait Clustered {
-    fn n_clusters(&self) -> usize;
-    fn recombination(&self) -> Recombination<f64>;
-
-    fn to_clustering(&self) -> Clustering;
-}
-
-/// A structure for clustering
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct Clustering {
-    /// Recombination between the clusters
-    pub(crate) recombination: Recombination<f64>,
-    /// Clusters
-    pub(crate) gmx: GaussianMixture<f64>,
-}
-
-impl Clustering {
-    pub fn new(gmx: GaussianMixture<f64>, recombination: Recombination<f64>) -> Self {
-        Clustering { gmx, recombination }
-    }
-
-    pub fn recombination(&self) -> Recombination<f64> {
-        self.recombination
-    }
-    pub fn gmx(&self) -> &GaussianMixture<f64> {
-        &self.gmx
-    }
-}
 
 fn mean(list: &[f64]) -> f64 {
     let sum: f64 = Iterator::sum(list.iter());

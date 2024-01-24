@@ -8,6 +8,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
+use egobox_gp::Inducings;
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -20,7 +21,7 @@ use serde::{Deserialize, Serialize};
 /// Mixture of experts checked parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct MoeValidParams<F: Float, R: Rng + Clone> {
+pub struct SgpValidParams<F: Float, R: Rng + Clone> {
     /// Number of clusters (i.e. number of experts)
     n_clusters: usize,
     /// [Recombination] mode
@@ -32,6 +33,8 @@ pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
+    /// Inducings
+    inducings: Inducings<F>,
     /// Gaussian Mixture model used to cluster
     gmm: Option<Box<GaussianMixtureModel<F>>>,
     /// GaussianMixture preset
@@ -40,14 +43,15 @@ pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float, R: Rng + SeedableRng + Clone> Default for MoeValidParams<F, R> {
-    fn default() -> MoeValidParams<F, R> {
-        MoeValidParams {
+impl<F: Float, R: Rng + SeedableRng + Clone> Default for SgpValidParams<F, R> {
+    fn default() -> SgpValidParams<F, R> {
+        SgpValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
-            regression_spec: RegressionSpec::ALL,
-            correlation_spec: CorrelationSpec::ALL,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
+            inducings: Inducings::default(),
             gmm: None,
             gmx: None,
             rng: R::from_entropy(),
@@ -55,7 +59,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for MoeValidParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
+impl<F: Float, R: Rng + Clone> SgpValidParams<F, R> {
     /// The number of clusters, hence the number of experts of the mixture.
     pub fn n_clusters(&self) -> usize {
         self.n_clusters
@@ -81,6 +85,11 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
         self.kpls_dim
     }
 
+    /// Inducings points specification
+    pub fn inducings(&self) -> &Inducings<F> {
+        &self.inducings
+    }
+
     /// An optional gaussian mixture to be fitted to generate multivariate normal
     /// in turns used to cluster
     pub fn gmm(&self) -> &Option<Box<GaussianMixtureModel<F>>> {
@@ -101,40 +110,40 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
 /// Mixture of experts parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct MoeParams<F: Float, R: Rng + Clone>(MoeValidParams<F, R>);
+pub struct SgpParams<F: Float, R: Rng + Clone>(SgpValidParams<F, R>);
 
-impl<F: Float> Default for MoeParams<F, Xoshiro256Plus> {
-    fn default() -> MoeParams<F, Xoshiro256Plus> {
-        MoeParams(MoeValidParams::default())
+impl<F: Float> Default for SgpParams<F, Xoshiro256Plus> {
+    fn default() -> SgpParams<F, Xoshiro256Plus> {
+        SgpParams(SgpValidParams::default())
     }
 }
 
-impl<F: Float> MoeParams<F, Xoshiro256Plus> {
-    /// Constructor of Moe parameters with `n_clusters`.
+impl<F: Float> SgpParams<F, Xoshiro256Plus> {
+    /// Constructor of Sgp parameters with `n_clusters`.
     ///
     /// Default values are provided as follows:
     ///
     /// * recombination: `Smooth`
-    /// * regression_spec: `ALL`
     /// * correlation_spec: `ALL`
     /// * kpls_dim: `None`
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> MoeParams<F, Xoshiro256Plus> {
-        Self::new_with_rng(Xoshiro256Plus::from_entropy())
+    pub fn new(inducings: Inducings<F>) -> SgpParams<F, Xoshiro256Plus> {
+        Self::new_with_rng(inducings, Xoshiro256Plus::from_entropy())
     }
 }
 
-impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
-    /// Constructor of Moe parameters specifying randon number generator for reproducibility
+impl<F: Float, R: Rng + Clone> SgpParams<F, R> {
+    /// Constructor of Sgp parameters specifying randon number generator for reproducibility
     ///
-    /// See [MoeParams::new] for default parameters.
-    pub fn new_with_rng(rng: R) -> MoeParams<F, R> {
-        Self(MoeValidParams {
+    /// See [SgpParams::new] for default parameters.
+    pub fn new_with_rng(inducings: Inducings<F>, rng: R) -> SgpParams<F, R> {
+        Self(SgpValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
-            regression_spec: RegressionSpec::ALL,
-            correlation_spec: CorrelationSpec::ALL,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
+            inducings,
             gmm: None,
             gmx: None,
             rng,
@@ -150,15 +159,6 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// Sets the recombination mode
     pub fn recombination(mut self, recombination: Recombination<F>) -> Self {
         self.0.recombination = recombination;
-        self
-    }
-
-    /// Sets the regression models used in the mixture.
-    ///
-    /// Only GP models with regression models allowed by this specification
-    /// will be used in the mixture.  
-    pub fn regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
-        self.0.regression_spec = regression_spec;
         self
     }
 
@@ -179,12 +179,20 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self
     }
 
-    #[doc(hidden)]
-    /// Sets the gaussian mixture (used to find the optimal number of clusters)
-    pub(crate) fn gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
-        self.0.gmm = gmm;
+    /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
+    ///
+    /// None means no PLS dimension reduction applied.
+    pub fn inducings(mut self, inducings: Inducings<F>) -> Self {
+        self.0.inducings = inducings;
         self
     }
+
+    // #[doc(hidden)]
+    // /// Sets the gaussian mixture (used to find the optimal number of clusters)
+    // pub(crate) fn gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
+    //     self.0.gmm = gmm;
+    //     self
+    // }
 
     #[doc(hidden)]
     /// Sets the gaussian mixture (used to find the optimal number of clusters)
@@ -198,13 +206,14 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     }
 
     /// Sets the random number generator for reproducibility
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<F, R2> {
-        MoeParams(MoeValidParams {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> SgpParams<F, R2> {
+        SgpParams(SgpValidParams {
             n_clusters: self.0.n_clusters(),
             recombination: self.0.recombination(),
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
             kpls_dim: self.0.kpls_dim(),
+            inducings: self.0.inducings().clone(),
             gmm: self.0.gmm().clone(),
             gmx: self.0.gmx().clone(),
             rng,
@@ -212,8 +221,8 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> ParamGuard for MoeParams<F, R> {
-    type Checked = MoeValidParams<F, R>;
+impl<F: Float, R: Rng + Clone> ParamGuard for SgpParams<F, R> {
+    type Checked = SgpValidParams<F, R>;
     type Error = MoeError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {
@@ -233,8 +242,8 @@ impl<F: Float, R: Rng + Clone> ParamGuard for MoeParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> From<MoeValidParams<F, R>> for MoeParams<F, R> {
-    fn from(item: MoeValidParams<F, R>) -> Self {
-        MoeParams(item)
+impl<F: Float, R: Rng + Clone> From<SgpValidParams<F, R>> for SgpParams<F, R> {
+    fn from(item: SgpValidParams<F, R>) -> Self {
+        SgpParams(item)
     }
 }

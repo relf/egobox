@@ -93,9 +93,17 @@ mod gaussian_mixture;
 mod parameters;
 mod surrogates;
 
+mod sgp_algorithm;
+mod sgp_parameters;
+mod types;
+
 pub use algorithm::*;
 pub use clustering::*;
 pub use errors::*;
 pub use gaussian_mixture::*;
 pub use parameters::*;
 pub use surrogates::*;
+
+pub use sgp_algorithm::*;
+pub use sgp_parameters::*;
+pub use types::*;

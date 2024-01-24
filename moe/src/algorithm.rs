@@ -1,13 +1,13 @@
 //use super::gaussian_mixture::GaussianMixture;
 use super::gaussian_mixture::GaussianMixture;
-use crate::clustering::{find_best_number_of_clusters, sort_by_cluster, Clustered, Clustering};
+use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
-use crate::parameters::{
-    CorrelationSpec, MoeParams, MoeValidParams, Recombination, RegressionSpec,
-};
+use crate::parameters::{MoeParams, MoeValidParams};
 use crate::surrogates::*;
+use crate::types::*;
+
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict, PredictInplace};
@@ -460,9 +460,6 @@ impl FullGpSurrogate for Moe {
     }
 }
 
-/// A trait for surrogates using clustering
-pub trait ClusteredSurrogate: Clustered + FullGpSurrogate {}
-
 impl ClusteredSurrogate for Moe {}
 
 impl Moe {
@@ -822,7 +819,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Moe
 }
 
 /// Adaptator to implement `linfa::Predict` for variance prediction
-struct MoeVariancePredictor<'a>(&'a Moe);
+pub struct MoeVariancePredictor<'a>(&'a Moe);
 impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     for MoeVariancePredictor<'a>
 {
