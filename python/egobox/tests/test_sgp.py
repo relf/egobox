@@ -15,7 +15,7 @@ def f_obj(x):
 
 
 class TestSgp(unittest.TestCase):
-    def setUp(self):
+    def test_sgp(self):
         # random generator for reproducibility
         rng = np.random.RandomState(0)
 
@@ -32,7 +32,7 @@ class TestSgp(unittest.TestCase):
         random_idx = rng.permutation(nt)[:n_inducing]
         Z = xt[random_idx].copy()
 
-        sgp = egx.Sgp(z=Z).fit(xt, yt)
+        egx.GpSparse(z=Z).fit(xt, yt)
 
 
 if __name__ == "__main__":

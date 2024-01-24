@@ -1,4 +1,3 @@
-//use super::gaussian_mixture::GaussianMixture;
 use super::gaussian_mixture::GaussianMixture;
 use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
