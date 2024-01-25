@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 /// Mixture of experts checked parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct SgpValidParams<F: Float, R: Rng + Clone> {
+pub struct SparseGpMixValidParams<F: Float, R: Rng + Clone> {
     /// Number of clusters (i.e. number of experts)
     n_clusters: usize,
     /// [Recombination] mode
@@ -43,9 +43,9 @@ pub struct SgpValidParams<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float, R: Rng + SeedableRng + Clone> Default for SgpValidParams<F, R> {
-    fn default() -> SgpValidParams<F, R> {
-        SgpValidParams {
+impl<F: Float, R: Rng + SeedableRng + Clone> Default for SparseGpMixValidParams<F, R> {
+    fn default() -> SparseGpMixValidParams<F, R> {
+        SparseGpMixValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::CONSTANT,
@@ -59,7 +59,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for SgpValidParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> SgpValidParams<F, R> {
+impl<F: Float, R: Rng + Clone> SparseGpMixValidParams<F, R> {
     /// The number of clusters, hence the number of experts of the mixture.
     pub fn n_clusters(&self) -> usize {
         self.n_clusters
@@ -110,15 +110,15 @@ impl<F: Float, R: Rng + Clone> SgpValidParams<F, R> {
 /// Mixture of experts parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct SgpParams<F: Float, R: Rng + Clone>(SgpValidParams<F, R>);
+pub struct SparseGpMixParams<F: Float, R: Rng + Clone>(SparseGpMixValidParams<F, R>);
 
-impl<F: Float> Default for SgpParams<F, Xoshiro256Plus> {
-    fn default() -> SgpParams<F, Xoshiro256Plus> {
-        SgpParams(SgpValidParams::default())
+impl<F: Float> Default for SparseGpMixParams<F, Xoshiro256Plus> {
+    fn default() -> SparseGpMixParams<F, Xoshiro256Plus> {
+        SparseGpMixParams(SparseGpMixValidParams::default())
     }
 }
 
-impl<F: Float> SgpParams<F, Xoshiro256Plus> {
+impl<F: Float> SparseGpMixParams<F, Xoshiro256Plus> {
     /// Constructor of Sgp parameters with `n_clusters`.
     ///
     /// Default values are provided as follows:
@@ -127,17 +127,17 @@ impl<F: Float> SgpParams<F, Xoshiro256Plus> {
     /// * correlation_spec: `ALL`
     /// * kpls_dim: `None`
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(inducings: Inducings<F>) -> SgpParams<F, Xoshiro256Plus> {
+    pub fn new(inducings: Inducings<F>) -> SparseGpMixParams<F, Xoshiro256Plus> {
         Self::new_with_rng(inducings, Xoshiro256Plus::from_entropy())
     }
 }
 
-impl<F: Float, R: Rng + Clone> SgpParams<F, R> {
+impl<F: Float, R: Rng + Clone> SparseGpMixParams<F, R> {
     /// Constructor of Sgp parameters specifying randon number generator for reproducibility
     ///
     /// See [SgpParams::new] for default parameters.
-    pub fn new_with_rng(inducings: Inducings<F>, rng: R) -> SgpParams<F, R> {
-        Self(SgpValidParams {
+    pub fn new_with_rng(inducings: Inducings<F>, rng: R) -> SparseGpMixParams<F, R> {
+        Self(SparseGpMixValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::CONSTANT,
@@ -206,8 +206,8 @@ impl<F: Float, R: Rng + Clone> SgpParams<F, R> {
     }
 
     /// Sets the random number generator for reproducibility
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> SgpParams<F, R2> {
-        SgpParams(SgpValidParams {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> SparseGpMixParams<F, R2> {
+        SparseGpMixParams(SparseGpMixValidParams {
             n_clusters: self.0.n_clusters(),
             recombination: self.0.recombination(),
             regression_spec: self.0.regression_spec(),
@@ -221,8 +221,8 @@ impl<F: Float, R: Rng + Clone> SgpParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> ParamGuard for SgpParams<F, R> {
-    type Checked = SgpValidParams<F, R>;
+impl<F: Float, R: Rng + Clone> ParamGuard for SparseGpMixParams<F, R> {
+    type Checked = SparseGpMixValidParams<F, R>;
     type Error = MoeError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {
@@ -242,8 +242,8 @@ impl<F: Float, R: Rng + Clone> ParamGuard for SgpParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> From<SgpValidParams<F, R>> for SgpParams<F, R> {
-    fn from(item: SgpValidParams<F, R>) -> Self {
-        SgpParams(item)
+impl<F: Float, R: Rng + Clone> From<SparseGpMixValidParams<F, R>> for SparseGpMixParams<F, R> {
+    fn from(item: SparseGpMixValidParams<F, R>) -> Self {
+        SparseGpMixParams(item)
     }
 }
