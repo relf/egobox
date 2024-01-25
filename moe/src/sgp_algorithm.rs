@@ -3,7 +3,7 @@ use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
-use crate::sgp_parameters::{SparseGpMixParams, SparseGpMixValidParams};
+use crate::sgp_parameters::{SparseGpMixtureParams, SparseGpMixtureValidParams};
 use crate::surrogates::*;
 use crate::types::*;
 use egobox_gp::{
@@ -48,7 +48,7 @@ macro_rules! check_allowed {
 }
 
 impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
-    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for SparseGpMixValidParams<f64, R>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for SparseGpMixtureValidParams<f64, R>
 {
     type Object = SparseGpMixture;
 
@@ -69,7 +69,7 @@ impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
     }
 }
 
-impl<R: Rng + SeedableRng + Clone> SparseGpMixValidParams<f64, R> {
+impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
     pub fn train(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -175,7 +175,7 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixValidParams<f64, R> {
             let ytest = test.slice(s![.., nx..]).to_owned();
             let factor = self.optimize_heaviside_factor(&experts, gmx, &xtest, &ytest);
             info!("Retrain mixture with optimized heaviside factor={}", factor);
-            let sgp = SparseGpMixParams::from(self.clone())
+            let sgp = SparseGpMixtureParams::from(self.clone())
                 .n_clusters(gmx.n_clusters())
                 .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
@@ -424,8 +424,8 @@ impl ClusteredGpSurrogate for SparseGpMixture {}
 
 impl SparseGpMixture {
     /// Constructor of mixture of experts parameters
-    pub fn params(inducings: Inducings<f64>) -> SparseGpMixParams<f64, Xoshiro256Plus> {
-        SparseGpMixParams::new(inducings)
+    pub fn params(inducings: Inducings<f64>) -> SparseGpMixtureParams<f64, Xoshiro256Plus> {
+        SparseGpMixtureParams::new(inducings)
     }
 
     /// Recombination mode
