@@ -10,7 +10,8 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
 //!
 use crate::types::*;
-use egobox_moe::{GpMixture, GpSurrogate};
+#[allow(unused_imports)] // Avoid linting problem
+use egobox_moe::{FullGpSurrogate, GpMixture, GpSurrogate};
 use linfa::{traits::Fit, Dataset};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
