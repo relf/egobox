@@ -472,6 +472,11 @@ impl GpMixture {
         self.recombination
     }
 
+    /// Experts
+    pub fn experts(&self) -> &[Box<dyn FullGpSurrogate>] {
+        &self.experts
+    }
+
     /// Gaussian mixture
     pub fn gmx(&self) -> &GaussianMixture<f64> {
         &self.gmx
