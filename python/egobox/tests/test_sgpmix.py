@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 import egobox as egx
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO)
 
@@ -32,7 +33,11 @@ class TestSgp(unittest.TestCase):
         random_idx = rng.permutation(nt)[:n_inducing]
         Z = xt[random_idx].copy()
 
-        egx.GpSparse(z=Z).fit(xt, yt)
+        start = time.time()
+        sgp = egx.GpSparse(z=Z).fit(xt, yt)
+        elapsed = time.time() - start
+        print(elapsed)
+        sgp.save("sgp.json")
 
 
 if __name__ == "__main__":

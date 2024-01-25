@@ -54,7 +54,7 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         Random generator seed to allow computation reproducibility.
 ///         
 #[pyclass]
-pub(crate) struct GpSparse {
+pub(crate) struct SparseGpMix {
     pub correlation_spec: CorrelationSpec,
     pub kpls_dim: Option<usize>,
     pub nz: Option<usize>,
@@ -63,7 +63,7 @@ pub(crate) struct GpSparse {
 }
 
 #[pymethods]
-impl GpSparse {
+impl SparseGpMix {
     #[new]
     #[pyo3(signature = (
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
@@ -80,7 +80,7 @@ impl GpSparse {
         z: Option<PyReadonlyArray2<f64>>,
         seed: Option<u64>,
     ) -> Self {
-        GpSparse {
+        SparseGpMix {
             correlation_spec: CorrelationSpec(corr_spec),
             kpls_dim,
             nz,
@@ -154,8 +154,8 @@ impl Gps {
         nz: Option<usize>,
         z: Option<PyReadonlyArray2<f64>>,
         seed: Option<u64>,
-    ) -> GpSparse {
-        GpSparse::new(corr_spec, kpls_dim, nz, z, seed)
+    ) -> SparseGpMix {
+        SparseGpMix::new(corr_spec, kpls_dim, nz, z, seed)
     }
 
     /// Returns the String representation from serde json serializer
