@@ -135,7 +135,7 @@ impl<F: Float> SparseGpMixParams<F, Xoshiro256Plus> {
 impl<F: Float, R: Rng + Clone> SparseGpMixParams<F, R> {
     /// Constructor of Sgp parameters specifying randon number generator for reproducibility
     ///
-    /// See [SgpParams::new] for default parameters.
+    /// See [`new`](SparseGpMixParams::new) for default parameters.
     pub fn new_with_rng(inducings: Inducings<F>, rng: R) -> SparseGpMixParams<F, R> {
         Self(SparseGpMixValidParams {
             n_clusters: 1,

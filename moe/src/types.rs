@@ -121,6 +121,8 @@ impl Clustering {
     }
 }
 
-/// A trait for surrogates using clustering
-pub trait ClusteredSurrogate: Clustered + FullGpSurrogate {}
+/// A trait for Gp surrogates using clustering
 pub trait ClusteredGpSurrogate: Clustered + GpSurrogate {}
+
+/// A trait for Gp surrogates with derivatives using clustering
+pub trait ClusteredSurrogate: Clustered + FullGpSurrogate {}
