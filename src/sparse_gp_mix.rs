@@ -11,7 +11,7 @@
 //!
 use crate::types::*;
 use egobox_gp::Inducings;
-use egobox_moe::{GpSurrogate, Sgp};
+use egobox_moe::{GpSurrogate, SparseGpMixture};
 use linfa::{traits::Fit, Dataset};
 use ndarray::Array2;
 use ndarray_rand::rand::SeedableRng;
@@ -115,7 +115,7 @@ impl SparseGpMix {
             panic!("You must specify inducing points")
         };
 
-        let sgp = Sgp::params(inducings)
+        let sgp = SparseGpMixture::params(inducings)
             // .n_clusters(self.n_clusters)
             // .recombination(recomb)
             // .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
@@ -133,7 +133,7 @@ impl SparseGpMix {
 
 /// A trained Gaussian processes mixture
 #[pyclass]
-pub(crate) struct Gps(Box<Sgp>);
+pub(crate) struct Gps(Box<SparseGpMixture>);
 
 #[pymethods]
 impl Gps {
@@ -186,7 +186,7 @@ impl Gps {
     ///
     #[staticmethod]
     fn load(filename: String) -> Gps {
-        Gps(Sgp::load(&filename).unwrap())
+        Gps(SparseGpMixture::load(&filename).unwrap())
     }
 
     /// Predict output values at nsamples points.

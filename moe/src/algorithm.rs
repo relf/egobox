@@ -1,4 +1,3 @@
-//use super::gaussian_mixture::GaussianMixture;
 use super::gaussian_mixture::GaussianMixture;
 use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
@@ -50,7 +49,7 @@ macro_rules! check_allowed {
 impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
     Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for MoeValidParams<f64, R>
 {
-    type Object = Moe;
+    type Object = GpMixture;
 
     /// Fit Moe parameters using maximum likelihood
     ///
@@ -74,7 +73,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Moe> {
+    ) -> Result<GpMixture> {
         trace!("Moe training...");
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
@@ -142,7 +141,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         clustering: &Clustering,
-    ) -> Result<Moe> {
+    ) -> Result<GpMixture> {
         let gmx = clustering.gmx();
         let recomb = clustering.recombination();
         let nx = xt.ncols();
@@ -183,7 +182,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
                                  // previously trained on data excluding test data (see train method)
             Ok(moe)
         } else {
-            Ok(Moe {
+            Ok(GpMixture {
                 recombination: recomb,
                 experts,
                 gmx: gmx.clone(),
@@ -357,7 +356,7 @@ fn predict_values_smooth(
 
 /// Mixture of gaussian process experts
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct Moe {
+pub struct GpMixture {
     /// The mode of recombination to get the output prediction from experts prediction
     recombination: Recombination<f64>,
     /// The list of the best experts trained on each cluster
@@ -368,7 +367,7 @@ pub struct Moe {
     output_dim: usize,
 }
 
-impl std::fmt::Display for Moe {
+impl std::fmt::Display for GpMixture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let recomb = match self.recombination() {
             Recombination::Hard => "Hard".to_string(),
@@ -385,7 +384,7 @@ impl std::fmt::Display for Moe {
     }
 }
 
-impl Clustered for Moe {
+impl Clustered for GpMixture {
     /// Number of clusters
     fn n_clusters(&self) -> usize {
         self.gmx.n_clusters()
@@ -406,7 +405,7 @@ impl Clustered for Moe {
 }
 
 #[cfg_attr(feature = "serializable", typetag::serde)]
-impl GpSurrogate for Moe {
+impl GpSurrogate for GpMixture {
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_values_hard(x),
@@ -434,7 +433,7 @@ impl GpSurrogate for Moe {
 }
 
 #[cfg_attr(feature = "serializable", typetag::serde)]
-impl FullGpSurrogate for Moe {
+impl FullGpSurrogate for GpMixture {
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_derivatives_hard(x),
@@ -460,9 +459,9 @@ impl FullGpSurrogate for Moe {
     }
 }
 
-impl ClusteredSurrogate for Moe {}
+impl ClusteredSurrogate for GpMixture {}
 
-impl Moe {
+impl GpMixture {
     /// Constructor of mixture of experts parameters
     pub fn params() -> MoeParams<f64, Xoshiro256Plus> {
         MoeParams::new()
@@ -745,35 +744,35 @@ impl Moe {
     }
 
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
-        <Moe as GpSurrogate>::predict_values(self, &x.view())
+        <GpMixture as GpSurrogate>::predict_values(self, &x.view())
     }
 
     pub fn predict_variances(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as GpSurrogate>::predict_variances(self, &x.view())
+        <GpMixture as GpSurrogate>::predict_variances(self, &x.view())
     }
 
     pub fn predict_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as FullGpSurrogate>::predict_derivatives(self, &x.view())
+        <GpMixture as FullGpSurrogate>::predict_derivatives(self, &x.view())
     }
 
     pub fn predict_variance_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Moe as FullGpSurrogate>::predict_variance_derivatives(self, &x.view())
+        <GpMixture as FullGpSurrogate>::predict_variance_derivatives(self, &x.view())
     }
 
     #[cfg(feature = "persistent")]
     /// Load Moe from given json file.
-    pub fn load(path: &str) -> Result<Box<Moe>> {
+    pub fn load(path: &str) -> Result<Box<GpMixture>> {
         let data = fs::read_to_string(path)?;
-        let moe: Moe = serde_json::from_str(&data).unwrap();
+        let moe: GpMixture = serde_json::from_str(&data).unwrap();
         Ok(Box::new(moe))
     }
 
@@ -783,7 +782,7 @@ impl Moe {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         n_traj: usize,
     ) -> Result<Array2<f64>> {
-        <Moe as FullGpSurrogate>::sample(self, &x.view(), n_traj)
+        <GpMixture as FullGpSurrogate>::sample(self, &x.view(), n_traj)
     }
 }
 
@@ -801,7 +800,7 @@ fn extract_part<F: Float>(
     (data_test, data_train)
 }
 
-impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Moe {
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for GpMixture {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
         assert_eq!(
             x.nrows(),
@@ -819,7 +818,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Moe
 }
 
 /// Adaptator to implement `linfa::Predict` for variance prediction
-pub struct MoeVariancePredictor<'a>(&'a Moe);
+pub struct MoeVariancePredictor<'a>(&'a GpMixture);
 impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     for MoeVariancePredictor<'a>
 {
@@ -888,7 +887,7 @@ mod tests {
         let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(3)
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
@@ -924,7 +923,7 @@ mod tests {
         let xt = Array2::random_using((60, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt.to_owned(), yt.to_owned());
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng.clone())
@@ -946,7 +945,7 @@ mod tests {
         );
 
         // Predict with smooth adjusted automatically which is better
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(None))
             .with_rng(rng.clone())
@@ -972,7 +971,7 @@ mod tests {
         let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(0)
             .with_rng(rng.clone())
             .fit(&ds)
@@ -994,7 +993,7 @@ mod tests {
         let mut rng = Xoshiro256Plus::seed_from_u64(42);
         let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(None))
             .regression_spec(RegressionSpec::CONSTANT)
@@ -1018,7 +1017,7 @@ mod tests {
         let xt = Array2::random_using((10, 1), Uniform::new(0., 1.), &mut rng);
         let yt = xt.mapv(|x| xsinx(&[x]));
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-        let moe = Moe::params().with_rng(rng).check_unwrap();
+        let moe = GpMixture::params().with_rng(rng).check_unwrap();
         let best_expert = &moe.find_best_expert(1, &data).unwrap();
         println!("Best expert {best_expert}");
     }
@@ -1028,7 +1027,7 @@ mod tests {
         let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
-        let _moe = Moe::params()
+        let _moe = GpMixture::params()
             .n_clusters(3)
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
@@ -1045,7 +1044,7 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(3)
             .with_rng(rng)
             .fit(&ds)
@@ -1054,7 +1053,7 @@ mod tests {
         let y_expected = moe.predict_values(&xtest).unwrap();
         let filename = format!("{test_dir}/saved_moe.json");
         moe.save(&filename).expect("MoE saving");
-        let new_moe = Moe::load(&filename).expect("MoE loading");
+        let new_moe = GpMixture::load(&filename).expect("MoE loading");
         assert_abs_diff_eq!(
             y_expected,
             new_moe.predict_values(&xtest).unwrap(),
@@ -1068,7 +1067,7 @@ mod tests {
         let xt = Lhs::new(&array![[0., 1.]]).sample(100);
         let yt = f_test_1d(&xt);
 
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(3)
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
@@ -1134,7 +1133,7 @@ mod tests {
         let xt = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]).sample(100);
         let yt = f(&xt);
 
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(2)
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
@@ -1204,7 +1203,7 @@ mod tests {
         let xt = Lhs::new(&array![[0., 1.]]).sample(100);
         let yt = f_test_1d(&xt);
 
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(3)
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)

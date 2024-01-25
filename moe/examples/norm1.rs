@@ -1,5 +1,5 @@
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_moe::{Moe, Recombination};
+use egobox_moe::{GpMixture, Recombination};
 use linfa::{traits::Fit, Dataset};
 use ndarray::{arr2, Array2, Axis};
 use std::error::Error;
@@ -12,8 +12,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let xtrain = Lhs::new(&arr2(&[[-1., 1.], [-1., 1.]])).sample(200);
     let ytrain = norm1(&xtrain);
     let ds = Dataset::new(xtrain, ytrain);
-    let moe1 = Moe::params().fit(&ds)?;
-    let moe5 = Moe::params()
+    let moe1 = GpMixture::params().fit(&ds)?;
+    let moe5 = GpMixture::params()
         .n_clusters(6)
         .recombination(Recombination::Hard)
         .fit(&ds)?;

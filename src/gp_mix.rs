@@ -10,7 +10,7 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
 //!
 use crate::types::*;
-use egobox_moe::{GpSurrogate, Moe};
+use egobox_moe::{GpMixture, GpSurrogate};
 use linfa::{traits::Fit, Dataset};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
@@ -112,7 +112,7 @@ impl GpMix {
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(self.n_clusters)
             .recombination(recomb)
             .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
@@ -129,7 +129,7 @@ impl GpMix {
 
 /// A trained Gaussian processes mixture
 #[pyclass]
-pub(crate) struct Gpx(Box<Moe>);
+pub(crate) struct Gpx(Box<GpMixture>);
 
 #[pymethods]
 impl Gpx {
@@ -191,7 +191,7 @@ impl Gpx {
     ///
     #[staticmethod]
     fn load(filename: String) -> Gpx {
-        Gpx(Moe::load(&filename).unwrap())
+        Gpx(GpMixture::load(&filename).unwrap())
     }
 
     /// Predict output values at nsamples points.

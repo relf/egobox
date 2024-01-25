@@ -50,7 +50,7 @@ macro_rules! check_allowed {
 impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
     Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for SgpValidParams<f64, R>
 {
-    type Object = Sgp;
+    type Object = SparseGpMixture;
 
     /// Fit Sgp parameters using maximum likelihood
     ///
@@ -74,7 +74,7 @@ impl<R: Rng + SeedableRng + Clone> SgpValidParams<f64, R> {
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Sgp> {
+    ) -> Result<SparseGpMixture> {
         trace!("Sgp training...");
         let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
@@ -142,7 +142,7 @@ impl<R: Rng + SeedableRng + Clone> SgpValidParams<f64, R> {
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         clustering: &Clustering,
-    ) -> Result<Sgp> {
+    ) -> Result<SparseGpMixture> {
         let gmx = clustering.gmx();
         let recomb = clustering.recombination();
         let nx = xt.ncols();
@@ -183,7 +183,7 @@ impl<R: Rng + SeedableRng + Clone> SgpValidParams<f64, R> {
                                  // previously trained on data excluding test data (see train method)
             Ok(sgp)
         } else {
-            Ok(Sgp {
+            Ok(SparseGpMixture {
                 recombination: recomb,
                 experts,
                 gmx: gmx.clone(),
@@ -344,7 +344,7 @@ fn predict_values_smooth(
 
 /// Mixture of gaussian process experts
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct Sgp {
+pub struct SparseGpMixture {
     /// The mode of recombination to get the output prediction from experts prediction
     recombination: Recombination<f64>,
     /// The list of the best experts trained on each cluster
@@ -355,7 +355,7 @@ pub struct Sgp {
     output_dim: usize,
 }
 
-impl std::fmt::Display for Sgp {
+impl std::fmt::Display for SparseGpMixture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let recomb = match self.recombination() {
             Recombination::Hard => "Hard".to_string(),
@@ -372,7 +372,7 @@ impl std::fmt::Display for Sgp {
     }
 }
 
-impl Clustered for Sgp {
+impl Clustered for SparseGpMixture {
     /// Number of clusters
     fn n_clusters(&self) -> usize {
         self.gmx.n_clusters()
@@ -393,7 +393,7 @@ impl Clustered for Sgp {
 }
 
 #[cfg_attr(feature = "serializable", typetag::serde)]
-impl GpSurrogate for Sgp {
+impl GpSurrogate for SparseGpMixture {
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_values_hard(x),
@@ -420,9 +420,9 @@ impl GpSurrogate for Sgp {
     }
 }
 
-impl ClusteredGpSurrogate for Sgp {}
+impl ClusteredGpSurrogate for SparseGpMixture {}
 
-impl Sgp {
+impl SparseGpMixture {
     /// Constructor of mixture of experts parameters
     pub fn params(inducings: Inducings<f64>) -> SgpParams<f64, Xoshiro256Plus> {
         SgpParams::new(inducings)
@@ -559,21 +559,21 @@ impl Sgp {
     }
 
     pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
-        <Sgp as GpSurrogate>::predict_values(self, &x.view())
+        <SparseGpMixture as GpSurrogate>::predict_values(self, &x.view())
     }
 
     pub fn predict_variances(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <Sgp as GpSurrogate>::predict_variances(self, &x.view())
+        <SparseGpMixture as GpSurrogate>::predict_variances(self, &x.view())
     }
 
     #[cfg(feature = "persistent")]
     /// Load Sgp from given json file.
-    pub fn load(path: &str) -> Result<Box<Sgp>> {
+    pub fn load(path: &str) -> Result<Box<SparseGpMixture>> {
         let data = fs::read_to_string(path)?;
-        let sgp: Sgp = serde_json::from_str(&data).unwrap();
+        let sgp: SparseGpMixture = serde_json::from_str(&data).unwrap();
         Ok(Box::new(sgp))
     }
 }
@@ -592,7 +592,7 @@ fn extract_part<F: Float>(
     (data_test, data_train)
 }
 
-impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Sgp {
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for SparseGpMixture {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
         assert_eq!(
             x.nrows(),
@@ -610,7 +610,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Sgp
 }
 
 /// Adaptator to implement `linfa::Predict` for variance prediction
-pub struct SgpVariancePredictor<'a>(&'a Sgp);
+pub struct SgpVariancePredictor<'a>(&'a SparseGpMixture);
 impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     for SgpVariancePredictor<'a>
 {
@@ -674,7 +674,7 @@ mod tests {
         let xplot = Array::linspace(-0.5, 0.5, 50).insert_axis(Axis(1));
         let n_inducings = 30;
 
-        let sgp = Sgp::params(Inducings::Randomized(n_inducings))
+        let sgp = SparseGpMixture::params(Inducings::Randomized(n_inducings))
             .with_rng(rng)
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fitted");

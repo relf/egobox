@@ -6,8 +6,8 @@ use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, Random};
 use egobox_moe::{
-    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, FullGpSurrogate, GpSurrogate, Moe,
-    MoeParams, RegressionSpec,
+    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture,
+    GpSurrogate, MoeParams, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -492,7 +492,7 @@ impl From<MixintMoeValidParams> for MixintMoeParams {
 #[derive(Serialize, Deserialize)]
 pub struct MixintMoe {
     /// the decorated Moe
-    moe: Moe,
+    moe: GpMixture,
     /// The input specifications
     xtypes: Vec<XType>,
     /// whether training input data are in given in folded space (enum indexes) or not (enum masks)
@@ -612,7 +612,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Mix
     }
 }
 
-struct MoeVariancePredictor<'a>(&'a Moe);
+struct MoeVariancePredictor<'a>(&'a GpMixture);
 impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     for MoeVariancePredictor<'a>
 {

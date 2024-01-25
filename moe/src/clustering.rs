@@ -346,7 +346,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::algorithm::Moe;
+    use crate::algorithm::GpMixture;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
     use env_logger::{Builder, Env};
@@ -396,7 +396,7 @@ mod tests {
             CorrelationSpec::ALL,
             rng.clone(),
         );
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(nb_clusters)
             .recombination(recombination)
             .with_rng(rng)
@@ -434,7 +434,7 @@ mod tests {
         let valid = FullFactorial::new(&array![[-1., 1.], [-1., 1.]]);
         let xvalid = valid.sample(100);
         let yvalid = l1norm(&xvalid);
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(n_clusters)
             .recombination(recomb)
             .regression_spec(RegressionSpec::LINEAR)
