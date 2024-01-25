@@ -1,8 +1,8 @@
-import os
 import unittest
 import numpy as np
 import egobox as egx
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,7 +16,7 @@ def f_obj(x):
 
 
 class TestSgp(unittest.TestCase):
-    def setUp(self):
+    def test_sgp(self):
         # random generator for reproducibility
         rng = np.random.RandomState(0)
 
@@ -33,11 +33,11 @@ class TestSgp(unittest.TestCase):
         random_idx = rng.permutation(nt)[:n_inducing]
         Z = xt[random_idx].copy()
 
-        sgp = SGP()
-        sgp.set_training_values(xt, yt)
-        sgp.set_inducing_inputs(Z=Z)
-        # sgp.set_inducing_inputs()  # When Z not specified n_inducing points are picked randomly in traing data
-        sgp.train()
+        start = time.time()
+        sgp = egx.SparseGpMix(z=Z).fit(xt, yt)
+        elapsed = time.time() - start
+        print(elapsed)
+        sgp.save("sgp.json")
 
 
 if __name__ == "__main__":

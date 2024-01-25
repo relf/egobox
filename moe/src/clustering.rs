@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-use crate::gaussian_mixture::GaussianMixture;
-use crate::parameters::{CorrelationSpec, MoeParams, Recombination, RegressionSpec};
+use crate::gp_parameters::GpMixParams;
+use crate::types::*;
 use log::{debug, info};
 
 use linfa::dataset::{Dataset, DatasetView};
@@ -10,36 +10,6 @@ use linfa_clustering::GaussianMixtureModel;
 use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
 use ndarray_rand::rand::Rng;
 use std::ops::Sub;
-
-#[cfg(feature = "serializable")]
-use serde::{Deserialize, Serialize};
-
-pub trait Clustered {
-    fn n_clusters(&self) -> usize;
-    fn recombination(&self) -> Recombination<f64>;
-
-    fn to_clustering(&self) -> Clustering;
-}
-
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct Clustering {
-    pub(crate) recombination: Recombination<f64>,
-    pub(crate) gmx: GaussianMixture<f64>,
-}
-
-impl Clustering {
-    pub fn new(gmx: GaussianMixture<f64>, recombination: Recombination<f64>) -> Self {
-        Clustering { gmx, recombination }
-    }
-
-    pub fn recombination(&self) -> Recombination<f64> {
-        self.recombination
-    }
-    pub fn gmx(&self) -> &GaussianMixture<f64> {
-        &self.gmx
-    }
-}
 
 fn mean(list: &[f64]) -> f64 {
     let sum: f64 = Iterator::sum(list.iter());
@@ -152,7 +122,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                 let gmm = Box::new(gmm);
                 // Cross Validation
                 for (train, valid) in dataset.fold(5).into_iter() {
-                    if let Ok(mixture) = MoeParams::default()
+                    if let Ok(mixture) = GpMixParams::default()
                         .n_clusters(n_clusters)
                         .regression_spec(regression_spec)
                         .correlation_spec(correlation_spec)
@@ -376,7 +346,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::algorithm::Moe;
+    use crate::gp_algorithm::GpMixture;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
     use env_logger::{Builder, Env};
@@ -426,7 +396,7 @@ mod tests {
             CorrelationSpec::ALL,
             rng.clone(),
         );
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(nb_clusters)
             .recombination(recombination)
             .with_rng(rng)
@@ -464,7 +434,7 @@ mod tests {
         let valid = FullFactorial::new(&array![[-1., 1.], [-1., 1.]]);
         let xvalid = valid.sample(100);
         let yvalid = l1norm(&xvalid);
-        let moe = Moe::params()
+        let moe = GpMixture::params()
             .n_clusters(n_clusters)
             .recombination(recomb)
             .regression_spec(RegressionSpec::LINEAR)

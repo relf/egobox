@@ -804,10 +804,11 @@ mod tests {
         let eta2: f64 = 0.01;
         let (xt, yt) = make_test_data(nt, eta2, &mut rng);
 
-        let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
+        let xplot = Array::linspace(-0.5, 0.5, 100).insert_axis(Axis(1));
         let n_inducings = 30;
 
         let sgp = SparseKriging::params(Inducings::Randomized(n_inducings))
+            .seed(Some(42))
             .initial_theta(Some(vec![0.1]))
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fitted");
@@ -816,7 +817,12 @@ mod tests {
         assert_abs_diff_eq!(eta2, sgp.noise_variance());
 
         let sgp_vals = sgp.predict_values(&xplot).unwrap();
+        let yplot = f_obj(&xplot);
+        let errvals = (yplot - &sgp_vals).mapv(|v| v.abs());
+        assert_abs_diff_eq!(errvals, Array2::zeros((xplot.nrows(), 1)), epsilon = 1.0);
         let sgp_vars = sgp.predict_variances(&xplot).unwrap();
+        let errvars = (&sgp_vars - Array2::from_elem((xplot.nrows(), 1), 0.01)).mapv(|v| v.abs());
+        assert_abs_diff_eq!(errvars, Array2::zeros((xplot.nrows(), 1)), epsilon = 0.05);
 
         save_data(&xt, &yt, sgp.inducings(), &xplot, &sgp_vals, &sgp_vars);
     }

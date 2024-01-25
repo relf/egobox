@@ -13,7 +13,8 @@ categories = ["algorithms", "mathematics", "science"]
 
 default = []
 
-serializable = ["serde", "linfa/serde"]
+serializable = ["serde", "typetag", "linfa/serde"]
+persistent = ["serializable", "serde_json"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
@@ -37,12 +38,9 @@ num-traits = "0.2"
 thiserror = "1"
 log = "0.4"
 
-[dependencies.serde]
-package = "serde"
-version = "1.0"
-default-features = false
-features = ["std", "derive"]
-optional = true
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+typetag = { version = "0.1", optional = true }
 
 [dev-dependencies]
 criterion = "0.4.0"

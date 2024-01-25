@@ -7,12 +7,13 @@
 //! pip install egobox
 //! ```
 //!
-//! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
+//! See the [tutorial notebook](https://github.com/relf/egobox/doc/Sgp_Tutorial.ipynb) for usage.
 //!
 use crate::types::*;
-#[allow(unused_imports)] // Avoid linting problem
-use egobox_moe::{FullGpSurrogate, GpMixture, GpSurrogate};
+use egobox_gp::Inducings;
+use egobox_moe::{GpSurrogate, SparseGpMixture};
 use linfa::{traits::Fit, Dataset};
+use ndarray::Array2;
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
@@ -53,41 +54,37 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         Random generator seed to allow computation reproducibility.
 ///         
 #[pyclass]
-pub(crate) struct GpMix {
-    pub n_clusters: usize,
-    pub regression_spec: RegressionSpec,
+pub(crate) struct SparseGpMix {
     pub correlation_spec: CorrelationSpec,
-    pub recombination: Recombination,
     pub kpls_dim: Option<usize>,
+    pub nz: Option<usize>,
+    pub z: Option<Array2<f64>>,
     pub seed: Option<u64>,
 }
 
 #[pymethods]
-impl GpMix {
+impl SparseGpMix {
     #[new]
     #[pyo3(signature = (
-        n_clusters = 1,
-        regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        recombination = Recombination::Smooth,
         kpls_dim = None,
+        nz = None,
+        z = None,
         seed = None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
-        n_clusters: usize,
-        regr_spec: u8,
         corr_spec: u8,
-        recombination: Recombination,
         kpls_dim: Option<usize>,
+        nz: Option<usize>,
+        z: Option<PyReadonlyArray2<f64>>,
         seed: Option<u64>,
     ) -> Self {
-        GpMix {
-            n_clusters,
-            regression_spec: RegressionSpec(regr_spec),
+        SparseGpMix {
             correlation_spec: CorrelationSpec(corr_spec),
-            recombination,
             kpls_dim,
+            nz,
+            z: z.map(|z| z.as_array().to_owned()),
             seed,
         }
     }
@@ -98,70 +95,67 @@ impl GpMix {
     ///     xt (array[nsamples, nx]): input samples
     ///     yt (array[nsamples, 1]): output samples
     ///
-    /// Returns Gpx object
+    /// Returns Sgp object
     ///     the fitted Gaussian process mixture  
     ///
-    fn fit(&mut self, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> Gpx {
+    fn fit(&mut self, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> SparseGpx {
         let dataset = Dataset::new(xt.as_array().to_owned(), yt.as_array().to_owned());
 
-        let recomb = match self.recombination {
-            Recombination::Hard => egobox_moe::Recombination::Hard,
-            Recombination::Smooth => egobox_moe::Recombination::Smooth(None),
-        };
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        let moe = GpMixture::params()
-            .n_clusters(self.n_clusters)
-            .recombination(recomb)
-            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+
+        let inducings = if let Some(z) = self.z.as_ref() {
+            Inducings::Located(z.clone())
+        } else if let Some(nz) = self.nz {
+            Inducings::Randomized(nz)
+        } else {
+            panic!("You must specify inducing points")
+        };
+
+        let sgp = SparseGpMixture::params(inducings)
+            // .n_clusters(self.n_clusters)
+            // .recombination(recomb)
+            // .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
             .correlation_spec(
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             )
             .kpls_dim(self.kpls_dim)
             .with_rng(rng)
             .fit(&dataset)
-            .expect("MoE model training");
-        Gpx(Box::new(moe))
+            .expect("Sgp model training");
+
+        SparseGpx(Box::new(sgp))
     }
 }
 
 /// A trained Gaussian processes mixture
 #[pyclass]
-pub(crate) struct Gpx(Box<GpMixture>);
+pub(crate) struct SparseGpx(Box<SparseGpMixture>);
 
 #[pymethods]
-impl Gpx {
-    /// Get Gaussian processes mixture builder aka `GpMix`
+impl SparseGpx {
+    /// Get Gaussian processes mixture builder aka `GpSparse`
     ///
-    /// See `GpMix` constructor
+    /// See `GpSparse` constructor
     #[staticmethod]
     #[pyo3(signature = (
-        n_clusters = 1,
-        regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        recombination = Recombination::Smooth,
         kpls_dim = None,
+        nz = None,
+        z = None,
         seed = None
     ))]
     fn builder(
-        n_clusters: usize,
-        regr_spec: u8,
         corr_spec: u8,
-        recombination: Recombination,
         kpls_dim: Option<usize>,
+        nz: Option<usize>,
+        z: Option<PyReadonlyArray2<f64>>,
         seed: Option<u64>,
-    ) -> GpMix {
-        GpMix::new(
-            n_clusters,
-            regr_spec,
-            corr_spec,
-            recombination,
-            kpls_dim,
-            seed,
-        )
+    ) -> SparseGpMix {
+        SparseGpMix::new(corr_spec, kpls_dim, nz, z, seed)
     }
 
     /// Returns the String representation from serde json serializer
@@ -191,8 +185,8 @@ impl Gpx {
     ///         json filepath generated by saving a trained Gaussian processes mixture
     ///
     #[staticmethod]
-    fn load(filename: String) -> Gpx {
-        Gpx(GpMixture::load(&filename).unwrap())
+    fn load(filename: String) -> SparseGpx {
+        SparseGpx(SparseGpMixture::load(&filename).unwrap())
     }
 
     /// Predict output values at nsamples points.
@@ -227,28 +221,6 @@ impl Gpx {
     ) -> &'py PyArray2<f64> {
         self.0
             .predict_variances(&x.as_array().to_owned())
-            .unwrap()
-            .into_pyarray(py)
-    }
-
-    /// Sample gaussian process trajectories.
-    ///
-    /// Parameters
-    ///     x (array[nsamples, nx])
-    ///         locations of the sampled trajectories
-    ///     n_traj number of trajectories to generate
-    ///
-    /// Returns
-    ///     the trajectories as an array[nsamples, n_traj]
-    ///
-    fn sample<'py>(
-        &self,
-        py: Python<'py>,
-        x: PyReadonlyArray2<f64>,
-        n_traj: usize,
-    ) -> &'py PyArray2<f64> {
-        self.0
-            .sample(&x.as_array(), n_traj)
             .unwrap()
             .into_pyarray(py)
     }

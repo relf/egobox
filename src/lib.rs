@@ -3,11 +3,13 @@
 mod egor;
 mod gp_mix;
 mod sampling;
+mod sparse_gp_mix;
 pub(crate) mod types;
 
 use egor::*;
 use gp_mix::*;
 use sampling::*;
+use sparse_gp_mix::*;
 use types::*;
 
 use pyo3::prelude::*;
@@ -38,6 +40,8 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     // Surrogate Model
     m.add_class::<GpMix>()?;
     m.add_class::<Gpx>()?;
+    m.add_class::<SparseGpMix>()?;
+    m.add_class::<SparseGpx>()?;
 
     // Optimizer
     m.add_class::<Egor>()?;

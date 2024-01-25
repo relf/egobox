@@ -42,7 +42,7 @@
 //!
 //! ```no_run
 //! use ndarray::{Array2, Array1, Zip, Axis};
-//! use egobox_moe::{Moe, Recombination};
+//! use egobox_moe::{GpMixture, Recombination};
 //! use ndarray_rand::{RandomExt, rand::SeedableRng, rand_distr::Uniform};
 //! use rand_xoshiro::Xoshiro256Plus;
 //! use linfa::{traits::Fit, ParamGuard, Dataset};
@@ -70,7 +70,7 @@
 //!
 //! // Predictions
 //! let observations = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-//! let predictions = Moe::params()
+//! let predictions = GpMixture::params()
 //!                     .n_clusters(3)
 //!                     .recombination(Recombination::Hard)
 //!                     .fit(&ds)
@@ -85,17 +85,27 @@
 //! experts based on EM joint estimation](https://hal.archives-ouvertes.fr/hal-01852300/document)
 //! Structural and multidisciplinary optimization 43.2 (2011): 243-259.
 //!
-mod algorithm;
 mod clustering;
 mod errors;
 mod expertise_macros;
 mod gaussian_mixture;
-mod parameters;
 mod surrogates;
+mod types;
 
-pub use algorithm::*;
+mod gp_algorithm;
+mod gp_parameters;
+
+mod sgp_algorithm;
+mod sgp_parameters;
+
 pub use clustering::*;
 pub use errors::*;
 pub use gaussian_mixture::*;
-pub use parameters::*;
 pub use surrogates::*;
+pub use types::*;
+
+pub use gp_algorithm::*;
+pub use gp_parameters::*;
+
+pub use sgp_algorithm::*;
+pub use sgp_parameters::*;

@@ -1,103 +1,27 @@
 use crate::errors::{MoeError, Result};
 use crate::gaussian_mixture::GaussianMixture;
-use bitflags::bitflags;
+use crate::types::*;
+
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
     AbsoluteExponentialCorr, Matern32Corr, Matern52Corr, SquaredExponentialCorr,
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
+use egobox_gp::Inducings;
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
-use std::fmt::Display;
 
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
-/// Enumeration of recombination modes handled by the mixture
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub enum Recombination<F: Float> {
-    /// prediction is taken from the expert with highest responsability
-    /// resulting in a model with discontinuities
-    Hard,
-    /// Prediction is a combination experts prediction wrt their responsabilities,
-    /// an optional heaviside factor might be used control steepness of the change between
-    /// experts regions.
-    Smooth(Option<F>),
-}
-
-impl<F: Float> Display for Recombination<F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let recomb = match self {
-            Recombination::Hard => "Hard".to_string(),
-            Recombination::Smooth(Some(f)) => format!("Smooth({f})"),
-            Recombination::Smooth(None) => "Smooth".to_string(),
-        };
-        write!(f, "Mixture[{}]", &recomb)
-    }
-}
-
-bitflags! {
-    /// Flags to specify tested regression models during experts selection (see [MoeParams::regression_spec]).
-    ///
-    /// Flags can be combine with bit-wise `or` operator to select two or more models.
-    /// ```ignore
-    /// let spec = RegressionSpec::CONSTANT | RegressionSpec::LINEAR;
-    /// ```
-    ///
-    /// See [bitflags::bitflags]
-    #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
-    #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-    pub struct RegressionSpec: u8 {
-        /// Constant regression
-        const CONSTANT = 0x01;
-        /// Linear regression
-        const LINEAR = 0x02;
-        /// 2-degree polynomial regression
-        const QUADRATIC = 0x04;
-        /// All regression models available
-        const ALL = RegressionSpec::CONSTANT.bits()
-                    | RegressionSpec::LINEAR.bits()
-                    | RegressionSpec::QUADRATIC.bits();
-    }
-}
-
-bitflags! {
-    /// Flags to specify tested correlation models during experts selection (see [MoeParams]).
-    ///
-    /// Flags can be combine with bit-wise `or` operator to select two or more models.
-    /// ```ignore
-    /// let spec = CorrelationSpec::MATERN32 | CorrelationSpec::Matern52;
-    /// ```
-    ///
-    /// See [bitflags::bitflags]
-    #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
-    #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize), serde(transparent))]
-    pub struct CorrelationSpec: u8 {
-        /// Squared exponential correlation model
-        const SQUAREDEXPONENTIAL = 0x01;
-        /// Absolute exponential correlation model
-        const ABSOLUTEEXPONENTIAL = 0x02;
-        /// Matern 3/2 correlation model
-        const MATERN32 = 0x04;
-        /// Matern 5/2 correlation model
-        const MATERN52 = 0x08;
-        /// All correlation models available
-        const ALL = CorrelationSpec::SQUAREDEXPONENTIAL.bits()
-                    | CorrelationSpec::ABSOLUTEEXPONENTIAL.bits()
-                    | CorrelationSpec::MATERN32.bits()
-                    | CorrelationSpec::MATERN52.bits();
-    }
-}
-
 /// Mixture of experts checked parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct MoeValidParams<F: Float, R: Rng + Clone> {
+pub struct SparseGpMixtureValidParams<F: Float, R: Rng + Clone> {
     /// Number of clusters (i.e. number of experts)
     n_clusters: usize,
     /// [Recombination] mode
@@ -109,6 +33,8 @@ pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
+    /// Inducings
+    inducings: Inducings<F>,
     /// Gaussian Mixture model used to cluster
     gmm: Option<Box<GaussianMixtureModel<F>>>,
     /// GaussianMixture preset
@@ -117,14 +43,15 @@ pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float, R: Rng + SeedableRng + Clone> Default for MoeValidParams<F, R> {
-    fn default() -> MoeValidParams<F, R> {
-        MoeValidParams {
+impl<F: Float, R: Rng + SeedableRng + Clone> Default for SparseGpMixtureValidParams<F, R> {
+    fn default() -> SparseGpMixtureValidParams<F, R> {
+        SparseGpMixtureValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
-            regression_spec: RegressionSpec::ALL,
-            correlation_spec: CorrelationSpec::ALL,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
+            inducings: Inducings::default(),
             gmm: None,
             gmx: None,
             rng: R::from_entropy(),
@@ -132,7 +59,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for MoeValidParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
+impl<F: Float, R: Rng + Clone> SparseGpMixtureValidParams<F, R> {
     /// The number of clusters, hence the number of experts of the mixture.
     pub fn n_clusters(&self) -> usize {
         self.n_clusters
@@ -158,6 +85,11 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
         self.kpls_dim
     }
 
+    /// Inducings points specification
+    pub fn inducings(&self) -> &Inducings<F> {
+        &self.inducings
+    }
+
     /// An optional gaussian mixture to be fitted to generate multivariate normal
     /// in turns used to cluster
     pub fn gmm(&self) -> &Option<Box<GaussianMixtureModel<F>>> {
@@ -178,40 +110,40 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
 /// Mixture of experts parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct MoeParams<F: Float, R: Rng + Clone>(MoeValidParams<F, R>);
+pub struct SparseGpMixtureParams<F: Float, R: Rng + Clone>(SparseGpMixtureValidParams<F, R>);
 
-impl<F: Float> Default for MoeParams<F, Xoshiro256Plus> {
-    fn default() -> MoeParams<F, Xoshiro256Plus> {
-        MoeParams(MoeValidParams::default())
+impl<F: Float> Default for SparseGpMixtureParams<F, Xoshiro256Plus> {
+    fn default() -> SparseGpMixtureParams<F, Xoshiro256Plus> {
+        SparseGpMixtureParams(SparseGpMixtureValidParams::default())
     }
 }
 
-impl<F: Float> MoeParams<F, Xoshiro256Plus> {
-    /// Constructor of Moe parameters with `n_clusters`.
+impl<F: Float> SparseGpMixtureParams<F, Xoshiro256Plus> {
+    /// Constructor of Sgp parameters with `n_clusters`.
     ///
     /// Default values are provided as follows:
     ///
     /// * recombination: `Smooth`
-    /// * regression_spec: `ALL`
     /// * correlation_spec: `ALL`
     /// * kpls_dim: `None`
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> MoeParams<F, Xoshiro256Plus> {
-        Self::new_with_rng(Xoshiro256Plus::from_entropy())
+    pub fn new(inducings: Inducings<F>) -> SparseGpMixtureParams<F, Xoshiro256Plus> {
+        Self::new_with_rng(inducings, Xoshiro256Plus::from_entropy())
     }
 }
 
-impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
-    /// Constructor of Moe parameters specifying randon number generator for reproducibility
+impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
+    /// Constructor of Sgp parameters specifying randon number generator for reproducibility
     ///
-    /// See [MoeParams::new] for default parameters.
-    pub fn new_with_rng(rng: R) -> MoeParams<F, R> {
-        Self(MoeValidParams {
+    /// See [`new`](SparseGpMixParams::new) for default parameters.
+    pub fn new_with_rng(inducings: Inducings<F>, rng: R) -> SparseGpMixtureParams<F, R> {
+        Self(SparseGpMixtureValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
-            regression_spec: RegressionSpec::ALL,
-            correlation_spec: CorrelationSpec::ALL,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
+            inducings,
             gmm: None,
             gmx: None,
             rng,
@@ -227,15 +159,6 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     /// Sets the recombination mode
     pub fn recombination(mut self, recombination: Recombination<F>) -> Self {
         self.0.recombination = recombination;
-        self
-    }
-
-    /// Sets the regression models used in the mixture.
-    ///
-    /// Only GP models with regression models allowed by this specification
-    /// will be used in the mixture.  
-    pub fn regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
-        self.0.regression_spec = regression_spec;
         self
     }
 
@@ -256,12 +179,20 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
         self
     }
 
-    #[doc(hidden)]
-    /// Sets the gaussian mixture (used to find the optimal number of clusters)
-    pub(crate) fn gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
-        self.0.gmm = gmm;
+    /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
+    ///
+    /// None means no PLS dimension reduction applied.
+    pub fn inducings(mut self, inducings: Inducings<F>) -> Self {
+        self.0.inducings = inducings;
         self
     }
+
+    // #[doc(hidden)]
+    // /// Sets the gaussian mixture (used to find the optimal number of clusters)
+    // pub(crate) fn gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
+    //     self.0.gmm = gmm;
+    //     self
+    // }
 
     #[doc(hidden)]
     /// Sets the gaussian mixture (used to find the optimal number of clusters)
@@ -275,13 +206,14 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     }
 
     /// Sets the random number generator for reproducibility
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<F, R2> {
-        MoeParams(MoeValidParams {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> SparseGpMixtureParams<F, R2> {
+        SparseGpMixtureParams(SparseGpMixtureValidParams {
             n_clusters: self.0.n_clusters(),
             recombination: self.0.recombination(),
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
             kpls_dim: self.0.kpls_dim(),
+            inducings: self.0.inducings().clone(),
             gmm: self.0.gmm().clone(),
             gmx: self.0.gmx().clone(),
             rng,
@@ -289,8 +221,8 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> ParamGuard for MoeParams<F, R> {
-    type Checked = MoeValidParams<F, R>;
+impl<F: Float, R: Rng + Clone> ParamGuard for SparseGpMixtureParams<F, R> {
+    type Checked = SparseGpMixtureValidParams<F, R>;
     type Error = MoeError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {
@@ -310,8 +242,10 @@ impl<F: Float, R: Rng + Clone> ParamGuard for MoeParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> From<MoeValidParams<F, R>> for MoeParams<F, R> {
-    fn from(item: MoeValidParams<F, R>) -> Self {
-        MoeParams(item)
+impl<F: Float, R: Rng + Clone> From<SparseGpMixtureValidParams<F, R>>
+    for SparseGpMixtureParams<F, R>
+{
+    fn from(item: SparseGpMixtureValidParams<F, R>) -> Self {
+        SparseGpMixtureParams(item)
     }
 }

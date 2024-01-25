@@ -6,8 +6,8 @@ use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, Random};
 use egobox_moe::{
-    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, Moe, MoeParams, RegressionSpec,
-    Surrogate,
+    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, FullGpSurrogate, GpMixParams,
+    GpMixture, GpSurrogate, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -279,14 +279,14 @@ impl<F: Float, S: egobox_doe::SamplingMethod<F>> egobox_doe::SamplingMethod<F>
 }
 
 /// Moe type builder for mixed-integer Egor optimizer
-pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
+pub type MoeBuilder = GpMixParams<f64, Xoshiro256Plus>;
 /// A decorator of Moe surrogate builder that takes into account XType specifications
 ///
 /// It allows to implement continuous relaxation over continuous Moe builder.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MixintMoeValidParams {
     /// The surrogate factory
-    surrogate_builder: MoeParams<f64, Xoshiro256Plus>,
+    surrogate_builder: GpMixParams<f64, Xoshiro256Plus>,
     /// The input specifications
     xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
@@ -309,12 +309,12 @@ impl MixintMoeValidParams {
 
 /// Parameters for mixture of experts surrogate model
 #[derive(Clone, Serialize, Deserialize)]
-pub struct MixintMoeParams(MixintMoeValidParams);
+pub struct MixintGpMixParams(MixintMoeValidParams);
 
-impl MixintMoeParams {
+impl MixintGpMixParams {
     /// Constructor given  `xtypes` specifications and given surrogate builder
     pub fn new(xtypes: &[XType], surrogate_builder: &MoeBuilder) -> Self {
-        MixintMoeParams(MixintMoeValidParams {
+        MixintGpMixParams(MixintMoeValidParams {
             surrogate_builder: surrogate_builder.clone(),
             xtypes: xtypes.to_vec(),
             work_in_folded_space: false,
@@ -384,9 +384,9 @@ impl MixintMoeValidParams {
     }
 }
 
-impl SurrogateBuilder for MixintMoeParams {
+impl SurrogateBuilder for MixintGpMixParams {
     fn new_with_xtypes(xtypes: &[XType]) -> Self {
-        MixintMoeParams::new(xtypes, &MoeParams::new())
+        MixintGpMixParams::new(xtypes, &GpMixParams::new())
     }
 
     /// Sets the allowed regression models used in gaussian processes.
@@ -468,7 +468,7 @@ impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, EgoError>
     }
 }
 
-impl ParamGuard for MixintMoeParams {
+impl ParamGuard for MixintGpMixParams {
     type Checked = MixintMoeValidParams;
     type Error = EgoError;
 
@@ -482,9 +482,9 @@ impl ParamGuard for MixintMoeParams {
     }
 }
 
-impl From<MixintMoeValidParams> for MixintMoeParams {
+impl From<MixintMoeValidParams> for MixintGpMixParams {
     fn from(item: MixintMoeValidParams) -> Self {
-        MixintMoeParams(item)
+        MixintGpMixParams(item)
     }
 }
 
@@ -492,7 +492,7 @@ impl From<MixintMoeValidParams> for MixintMoeParams {
 #[derive(Serialize, Deserialize)]
 pub struct MixintMoe {
     /// the decorated Moe
-    moe: Moe,
+    moe: GpMixture,
     /// The input specifications
     xtypes: Vec<XType>,
     /// whether training input data are in given in folded space (enum indexes) or not (enum masks)
@@ -527,7 +527,7 @@ impl Clustered for MixintMoe {
 }
 
 #[typetag::serde]
-impl Surrogate for MixintMoe {
+impl GpSurrogate for MixintMoe {
     fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
@@ -548,6 +548,20 @@ impl Surrogate for MixintMoe {
         self.moe.predict_variances(&xcast)
     }
 
+    /// Save Moe model in given file.
+    fn save(&self, path: &str) -> egobox_moe::Result<()> {
+        let mut file = fs::File::create(path).unwrap();
+        let bytes = match serde_json::to_string(self) {
+            Ok(b) => b,
+            Err(err) => return Err(MoeError::SaveError(err)),
+        };
+        file.write_all(bytes.as_bytes())?;
+        Ok(())
+    }
+}
+
+#[typetag::serde]
+impl FullGpSurrogate for MixintMoe {
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
@@ -577,17 +591,6 @@ impl Surrogate for MixintMoe {
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
         self.moe.sample(&xcast.view(), n_traj)
     }
-
-    /// Save Moe model in given file.
-    fn save(&self, path: &str) -> egobox_moe::Result<()> {
-        let mut file = fs::File::create(path).unwrap();
-        let bytes = match serde_json::to_string(self) {
-            Ok(b) => b,
-            Err(err) => return Err(MoeError::SaveError(err)),
-        };
-        file.write_all(bytes.as_bytes())?;
-        Ok(())
-    }
 }
 
 impl ClusteredSurrogate for MixintMoe {}
@@ -609,7 +612,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Mix
     }
 }
 
-struct MoeVariancePredictor<'a>(&'a Moe);
+struct MoeVariancePredictor<'a>(&'a GpMixture);
 impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     for MoeVariancePredictor<'a>
 {
@@ -708,7 +711,7 @@ impl MixintContext {
         surrogate_builder: &MoeBuilder,
         dataset: &DatasetBase<Array2<f64>, Array2<f64>>,
     ) -> Result<MixintMoe> {
-        let mut params = MixintMoeParams::new(&self.xtypes, surrogate_builder);
+        let mut params = MixintGpMixParams::new(&self.xtypes, surrogate_builder);
         let params = params.work_in_folded_space(self.work_in_folded_space);
         params.fit(dataset)
     }

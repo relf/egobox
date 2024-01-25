@@ -100,7 +100,7 @@ mod tests {
     fn test_grad_wbs2() {
         let xt = egobox_doe::Lhs::new(&array![[-10., 10.], [-10., 10.]]).sample(10);
         let yt = sphere(&xt);
-        let gp = Moe::params()
+        let gp = GpMixture::params()
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Hard)
