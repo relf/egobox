@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::parameters::GpMixParams;
+use crate::gp_parameters::GpMixParams;
 use crate::types::*;
 use log::{debug, info};
 
@@ -346,7 +346,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::algorithm::GpMixture;
+    use crate::gp_algorithm::GpMixture;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
     use env_logger::{Builder, Env};

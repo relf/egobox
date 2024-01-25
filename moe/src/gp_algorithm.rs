@@ -3,7 +3,7 @@ use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
-use crate::parameters::{GpMixParams, GpMixValidParams};
+use crate::gp_parameters::{GpMixParams, GpMixValidParams};
 use crate::surrogates::*;
 use crate::types::*;
 

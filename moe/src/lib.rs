@@ -85,25 +85,27 @@
 //! experts based on EM joint estimation](https://hal.archives-ouvertes.fr/hal-01852300/document)
 //! Structural and multidisciplinary optimization 43.2 (2011): 243-259.
 //!
-mod algorithm;
 mod clustering;
 mod errors;
 mod expertise_macros;
 mod gaussian_mixture;
-mod parameters;
 mod surrogates;
+mod types;
+
+mod gp_algorithm;
+mod gp_parameters;
 
 mod sgp_algorithm;
 mod sgp_parameters;
-mod types;
 
-pub use algorithm::*;
 pub use clustering::*;
 pub use errors::*;
 pub use gaussian_mixture::*;
-pub use parameters::*;
 pub use surrogates::*;
+pub use types::*;
+
+pub use gp_algorithm::*;
+pub use gp_parameters::*;
 
 pub use sgp_algorithm::*;
 pub use sgp_parameters::*;
-pub use types::*;
