@@ -34,7 +34,7 @@ class TestSgp(unittest.TestCase):
         Z = xt[random_idx].copy()
 
         start = time.time()
-        sgp = egx.GpSparse(z=Z).fit(xt, yt)
+        sgp = egx.SparseGpMix(z=Z).fit(xt, yt)
         elapsed = time.time() - start
         print(elapsed)
         sgp.save("sgp.json")
