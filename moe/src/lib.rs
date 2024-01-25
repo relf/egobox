@@ -42,7 +42,7 @@
 //!
 //! ```no_run
 //! use ndarray::{Array2, Array1, Zip, Axis};
-//! use egobox_moe::{Moe, Recombination};
+//! use egobox_moe::{GpMixture, Recombination};
 //! use ndarray_rand::{RandomExt, rand::SeedableRng, rand_distr::Uniform};
 //! use rand_xoshiro::Xoshiro256Plus;
 //! use linfa::{traits::Fit, ParamGuard, Dataset};
@@ -70,7 +70,7 @@
 //!
 //! // Predictions
 //! let observations = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-//! let predictions = Moe::params()
+//! let predictions = GpMixture::params()
 //!                     .n_clusters(3)
 //!                     .recombination(Recombination::Hard)
 //!                     .fit(&ds)

@@ -95,7 +95,7 @@ use crate::errors::Result;
 use crate::mixint::*;
 use crate::types::*;
 
-use egobox_moe::MoeParams;
+use egobox_moe::GpMixParams;
 use log::info;
 use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
@@ -136,7 +136,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Egor<O, MoeParams<f64, Xoshiro256Plus>> {
+    ) -> Egor<O, GpMixParams<f64, Xoshiro256Plus>> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
@@ -155,7 +155,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
-    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, MixintMoeParams> {
+    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, MixintGpMixParams> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {

@@ -3,7 +3,7 @@ use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::expertise_macros::*;
-use crate::parameters::{MoeParams, MoeValidParams};
+use crate::parameters::{GpMixParams, GpMixValidParams};
 use crate::surrogates::*;
 use crate::types::*;
 
@@ -47,7 +47,7 @@ macro_rules! check_allowed {
 }
 
 impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
-    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for MoeValidParams<f64, R>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for GpMixValidParams<f64, R>
 {
     type Object = GpMixture;
 
@@ -68,7 +68,7 @@ impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
     }
 }
 
-impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
+impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
     pub fn train(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -174,7 +174,7 @@ impl<R: Rng + SeedableRng + Clone> MoeValidParams<f64, R> {
             let ytest = test.slice(s![.., nx..]).to_owned();
             let factor = self.optimize_heaviside_factor(&experts, gmx, &xtest, &ytest);
             info!("Retrain mixture with optimized heaviside factor={}", factor);
-            let moe = MoeParams::from(self.clone())
+            let moe = GpMixParams::from(self.clone())
                 .n_clusters(gmx.n_clusters())
                 .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
@@ -463,8 +463,8 @@ impl ClusteredSurrogate for GpMixture {}
 
 impl GpMixture {
     /// Constructor of mixture of experts parameters
-    pub fn params() -> MoeParams<f64, Xoshiro256Plus> {
-        MoeParams::new()
+    pub fn params() -> GpMixParams<f64, Xoshiro256Plus> {
+        GpMixParams::new()
     }
 
     /// Recombination mode

@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::parameters::MoeParams;
+use crate::parameters::GpMixParams;
 use crate::types::*;
 use log::{debug, info};
 
@@ -122,7 +122,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                 let gmm = Box::new(gmm);
                 // Cross Validation
                 for (train, valid) in dataset.fold(5).into_iter() {
-                    if let Ok(mixture) = MoeParams::default()
+                    if let Ok(mixture) = GpMixParams::default()
                         .n_clusters(n_clusters)
                         .regression_spec(regression_spec)
                         .correlation_spec(correlation_spec)

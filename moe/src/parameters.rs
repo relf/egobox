@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 /// Mixture of experts checked parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct MoeValidParams<F: Float, R: Rng + Clone> {
+pub struct GpMixValidParams<F: Float, R: Rng + Clone> {
     /// Number of clusters (i.e. number of experts)
     n_clusters: usize,
     /// [Recombination] mode
@@ -40,9 +40,9 @@ pub struct MoeValidParams<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float, R: Rng + SeedableRng + Clone> Default for MoeValidParams<F, R> {
-    fn default() -> MoeValidParams<F, R> {
-        MoeValidParams {
+impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixValidParams<F, R> {
+    fn default() -> GpMixValidParams<F, R> {
+        GpMixValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::ALL,
@@ -55,7 +55,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for MoeValidParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
+impl<F: Float, R: Rng + Clone> GpMixValidParams<F, R> {
     /// The number of clusters, hence the number of experts of the mixture.
     pub fn n_clusters(&self) -> usize {
         self.n_clusters
@@ -101,15 +101,15 @@ impl<F: Float, R: Rng + Clone> MoeValidParams<F, R> {
 /// Mixture of experts parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct MoeParams<F: Float, R: Rng + Clone>(MoeValidParams<F, R>);
+pub struct GpMixParams<F: Float, R: Rng + Clone>(GpMixValidParams<F, R>);
 
-impl<F: Float> Default for MoeParams<F, Xoshiro256Plus> {
-    fn default() -> MoeParams<F, Xoshiro256Plus> {
-        MoeParams(MoeValidParams::default())
+impl<F: Float> Default for GpMixParams<F, Xoshiro256Plus> {
+    fn default() -> GpMixParams<F, Xoshiro256Plus> {
+        GpMixParams(GpMixValidParams::default())
     }
 }
 
-impl<F: Float> MoeParams<F, Xoshiro256Plus> {
+impl<F: Float> GpMixParams<F, Xoshiro256Plus> {
     /// Constructor of Moe parameters with `n_clusters`.
     ///
     /// Default values are provided as follows:
@@ -119,17 +119,17 @@ impl<F: Float> MoeParams<F, Xoshiro256Plus> {
     /// * correlation_spec: `ALL`
     /// * kpls_dim: `None`
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> MoeParams<F, Xoshiro256Plus> {
+    pub fn new() -> GpMixParams<F, Xoshiro256Plus> {
         Self::new_with_rng(Xoshiro256Plus::from_entropy())
     }
 }
 
-impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
+impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
     /// Constructor of Moe parameters specifying randon number generator for reproducibility
     ///
-    /// See [MoeParams::new] for default parameters.
-    pub fn new_with_rng(rng: R) -> MoeParams<F, R> {
-        Self(MoeValidParams {
+    /// See [GpMixParams::new] for default parameters.
+    pub fn new_with_rng(rng: R) -> GpMixParams<F, R> {
+        Self(GpMixValidParams {
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::ALL,
@@ -198,8 +198,8 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     }
 
     /// Sets the random number generator for reproducibility
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> MoeParams<F, R2> {
-        MoeParams(MoeValidParams {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> GpMixParams<F, R2> {
+        GpMixParams(GpMixValidParams {
             n_clusters: self.0.n_clusters(),
             recombination: self.0.recombination(),
             regression_spec: self.0.regression_spec(),
@@ -212,8 +212,8 @@ impl<F: Float, R: Rng + Clone> MoeParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> ParamGuard for MoeParams<F, R> {
-    type Checked = MoeValidParams<F, R>;
+impl<F: Float, R: Rng + Clone> ParamGuard for GpMixParams<F, R> {
+    type Checked = GpMixValidParams<F, R>;
     type Error = MoeError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {
@@ -233,8 +233,8 @@ impl<F: Float, R: Rng + Clone> ParamGuard for MoeParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> From<MoeValidParams<F, R>> for MoeParams<F, R> {
-    fn from(item: MoeValidParams<F, R>) -> Self {
-        MoeParams(item)
+impl<F: Float, R: Rng + Clone> From<GpMixValidParams<F, R>> for GpMixParams<F, R> {
+    fn from(item: GpMixValidParams<F, R>) -> Self {
+        GpMixParams(item)
     }
 }

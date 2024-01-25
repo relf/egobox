@@ -9,7 +9,7 @@
 //! use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! use egobox_doe::{Lhs, SamplingMethod};
 //! use egobox_ego::{EgorBuilder, EgorConfig, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver, to_xtypes};
-//! use egobox_moe::MoeParams;
+//! use egobox_moe::GpMixParams;
 //! use rand_xoshiro::Xoshiro256Plus;
 //! use ndarray_rand::rand::SeedableRng;
 //! use argmin::core::Executor;
@@ -28,7 +28,7 @@
 //! let xtypes = to_xtypes(&array![[-2., 2.], [-2., 2.]]);
 //! let fobj = ObjFunc::new(rosenb);
 //! let config = EgorConfig::default().xtypes(&xtypes);
-//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> = EgorSolver::new(config, rng);
+//! let solver: EgorSolver<GpMixParams<f64, Xoshiro256Plus>> = EgorSolver::new(config, rng);
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(20))
 //!             .run()
@@ -48,7 +48,7 @@
 //! use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
 //! use egobox_doe::{Lhs, SamplingMethod};
 //! use egobox_ego::{EgorBuilder, EgorConfig, InfillStrategy, InfillOptimizer, ObjFunc, EgorSolver, to_xtypes};
-//! use egobox_moe::MoeParams;
+//! use egobox_moe::GpMixParams;
 //! use rand_xoshiro::Xoshiro256Plus;
 //! use ndarray_rand::rand::SeedableRng;
 //! use argmin::core::Executor;
@@ -95,7 +95,7 @@
 //!     .doe(&doe)
 //!     .target(-5.5080);
 //!
-//! let solver: EgorSolver<MoeParams<f64, Xoshiro256Plus>> =
+//! let solver: EgorSolver<GpMixParams<f64, Xoshiro256Plus>> =
 //!   EgorSolver::new(config, rng);
 //!
 //! let res = Executor::new(fobj, solver)
@@ -117,7 +117,7 @@ use crate::types::*;
 use crate::utils::{compute_cstr_scales, update_data};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
-use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, MoeParams, RegressionSpec};
+use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, GpMixParams, RegressionSpec};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
 use linfa::ParamGuard;
@@ -164,14 +164,14 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     pub(crate) rng: Xoshiro256Plus,
 }
 
-impl SurrogateBuilder for MoeParams<f64, Xoshiro256Plus> {
+impl SurrogateBuilder for GpMixParams<f64, Xoshiro256Plus> {
     /// Constructor from domain space specified with types
     /// **panic** if xtypes contains other types than continuous type `Float`
     fn new_with_xtypes(xtypes: &[XType]) -> Self {
         if crate::utils::discrete(xtypes) {
-            panic!("MoeParams cannot be created with discrete types!");
+            panic!("GpMixParams cannot be created with discrete types!");
         }
-        MoeParams::new()
+        GpMixParams::new()
     }
 
     /// Sets the allowed regression models used in gaussian processes.

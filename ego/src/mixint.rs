@@ -6,8 +6,8 @@ use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, Random};
 use egobox_moe::{
-    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture,
-    GpSurrogate, MoeParams, RegressionSpec,
+    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, FullGpSurrogate, GpMixParams,
+    GpMixture, GpSurrogate, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -279,14 +279,14 @@ impl<F: Float, S: egobox_doe::SamplingMethod<F>> egobox_doe::SamplingMethod<F>
 }
 
 /// Moe type builder for mixed-integer Egor optimizer
-pub type MoeBuilder = MoeParams<f64, Xoshiro256Plus>;
+pub type MoeBuilder = GpMixParams<f64, Xoshiro256Plus>;
 /// A decorator of Moe surrogate builder that takes into account XType specifications
 ///
 /// It allows to implement continuous relaxation over continuous Moe builder.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MixintMoeValidParams {
     /// The surrogate factory
-    surrogate_builder: MoeParams<f64, Xoshiro256Plus>,
+    surrogate_builder: GpMixParams<f64, Xoshiro256Plus>,
     /// The input specifications
     xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
@@ -309,12 +309,12 @@ impl MixintMoeValidParams {
 
 /// Parameters for mixture of experts surrogate model
 #[derive(Clone, Serialize, Deserialize)]
-pub struct MixintMoeParams(MixintMoeValidParams);
+pub struct MixintGpMixParams(MixintMoeValidParams);
 
-impl MixintMoeParams {
+impl MixintGpMixParams {
     /// Constructor given  `xtypes` specifications and given surrogate builder
     pub fn new(xtypes: &[XType], surrogate_builder: &MoeBuilder) -> Self {
-        MixintMoeParams(MixintMoeValidParams {
+        MixintGpMixParams(MixintMoeValidParams {
             surrogate_builder: surrogate_builder.clone(),
             xtypes: xtypes.to_vec(),
             work_in_folded_space: false,
@@ -384,9 +384,9 @@ impl MixintMoeValidParams {
     }
 }
 
-impl SurrogateBuilder for MixintMoeParams {
+impl SurrogateBuilder for MixintGpMixParams {
     fn new_with_xtypes(xtypes: &[XType]) -> Self {
-        MixintMoeParams::new(xtypes, &MoeParams::new())
+        MixintGpMixParams::new(xtypes, &GpMixParams::new())
     }
 
     /// Sets the allowed regression models used in gaussian processes.
@@ -468,7 +468,7 @@ impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, EgoError>
     }
 }
 
-impl ParamGuard for MixintMoeParams {
+impl ParamGuard for MixintGpMixParams {
     type Checked = MixintMoeValidParams;
     type Error = EgoError;
 
@@ -482,9 +482,9 @@ impl ParamGuard for MixintMoeParams {
     }
 }
 
-impl From<MixintMoeValidParams> for MixintMoeParams {
+impl From<MixintMoeValidParams> for MixintGpMixParams {
     fn from(item: MixintMoeValidParams) -> Self {
-        MixintMoeParams(item)
+        MixintGpMixParams(item)
     }
 }
 
@@ -711,7 +711,7 @@ impl MixintContext {
         surrogate_builder: &MoeBuilder,
         dataset: &DatasetBase<Array2<f64>, Array2<f64>>,
     ) -> Result<MixintMoe> {
-        let mut params = MixintMoeParams::new(&self.xtypes, surrogate_builder);
+        let mut params = MixintGpMixParams::new(&self.xtypes, surrogate_builder);
         let params = params.work_in_folded_space(self.work_in_folded_space);
         params.fit(dataset)
     }
