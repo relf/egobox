@@ -472,7 +472,7 @@ impl GpMixture {
         self.recombination
     }
 
-    /// Experts
+    /// Selected experts in the mixture
     pub fn experts(&self) -> &[Box<dyn FullGpSurrogate>] {
         &self.experts
     }

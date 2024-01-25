@@ -433,18 +433,9 @@ impl SparseGpMixture {
         self.recombination
     }
 
+    /// Selected experts in the mixture
     pub fn experts(&self) -> &[Box<dyn SgpSurrogate>] {
         &self.experts
-    }
-
-    /// Clustering Recombination
-    pub fn noise_variance(&self) -> Vec<f64> {
-        self.experts.iter().map(|e| e.noise_variance()).collect()
-    }
-
-    /// Clustering Recombination
-    pub fn variance(&self) -> Vec<f64> {
-        self.experts.iter().map(|e| e.variance()).collect()
     }
 
     /// Gaussian mixture
