@@ -8,7 +8,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
-use egobox_gp::Inducings;
+use egobox_gp::{Inducings, SparseMethod};
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -33,6 +33,8 @@ pub struct SparseGpMixtureValidParams<F: Float, R: Rng + Clone> {
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
+    /// Used sparse method
+    sparse_method: SparseMethod,
     /// Inducings
     inducings: Inducings<F>,
     /// Gaussian Mixture model used to cluster
@@ -51,6 +53,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for SparseGpMixtureValidPar
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
+            sparse_method: SparseMethod::default(),
             inducings: Inducings::default(),
             gmm: None,
             gmx: None,
@@ -83,6 +86,11 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureValidParams<F, R> {
     /// The optional number of PLS components
     pub fn kpls_dim(&self) -> Option<usize> {
         self.kpls_dim
+    }
+
+    /// The sparse method used
+    pub fn sparse_method(&self) -> SparseMethod {
+        self.sparse_method
     }
 
     /// Inducings points specification
@@ -143,6 +151,7 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
+            sparse_method: SparseMethod::default(),
             inducings,
             gmm: None,
             gmx: None,
@@ -176,6 +185,14 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
     /// None means no PLS dimension reduction applied.
     pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.0.kpls_dim = kpls_dim;
+        self
+    }
+
+    /// Sets
+    ///
+    /// None means no PLS dimension reduction applied.
+    pub fn sparse_method(mut self, sparse_method: SparseMethod) -> Self {
+        self.0.sparse_method = sparse_method;
         self
     }
 
@@ -213,6 +230,7 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
             kpls_dim: self.0.kpls_dim(),
+            sparse_method: self.0.sparse_method(),
             inducings: self.0.inducings().clone(),
             gmm: self.0.gmm().clone(),
             gmx: self.0.gmx().clone(),

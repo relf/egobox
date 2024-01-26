@@ -42,6 +42,7 @@ fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Gpx>()?;
     m.add_class::<SparseGpMix>()?;
     m.add_class::<SparseGpx>()?;
+    m.add_class::<SparseMethod>()?;
 
     // Optimizer
     m.add_class::<Egor>()?;

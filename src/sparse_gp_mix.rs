@@ -19,18 +19,13 @@ use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use rand_xoshiro::Xoshiro256Plus;
 
-/// Gaussian processes mixture builder
+/// Sparse Gaussian processes mixture builder
 ///
 ///     n_clusters (int >= 0)
 ///         Number of clusters used by the mixture of surrogate experts.
 ///         When set to 0, the number of cluster is determined automatically and refreshed every
 ///         10-points addition (should say 'tentative addition' because addition may fail for some points
 ///         but failures are counted anyway).
-///
-///     regr_spec (RegressionSpec flags, an int in [1, 7]):
-///         Specification of regression models used in mixture.
-///         Can be RegressionSpec.CONSTANT (1), RegressionSpec.LINEAR (2), RegressionSpec.QUADRATIC (4) or
-///         any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
 ///
 ///     corr_spec (CorrelationSpec flags, an int in [1, 15]):
 ///         Specification of correlation models used in mixture.
@@ -50,6 +45,9 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
+///     method (SparseMethod.FITC or SparseMethod.VFE)
+///         Sparse method to be used (default is FITC)
+///
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///         
@@ -59,6 +57,7 @@ pub(crate) struct SparseGpMix {
     pub kpls_dim: Option<usize>,
     pub nz: Option<usize>,
     pub z: Option<Array2<f64>>,
+    pub method: SparseMethod,
     pub seed: Option<u64>,
 }
 
@@ -70,6 +69,7 @@ impl SparseGpMix {
         kpls_dim = None,
         nz = None,
         z = None,
+        method = SparseMethod::Fitc,
         seed = None
     ))]
     #[allow(clippy::too_many_arguments)]
@@ -78,6 +78,7 @@ impl SparseGpMix {
         kpls_dim: Option<usize>,
         nz: Option<usize>,
         z: Option<PyReadonlyArray2<f64>>,
+        method: SparseMethod,
         seed: Option<u64>,
     ) -> Self {
         SparseGpMix {
@@ -85,6 +86,7 @@ impl SparseGpMix {
             kpls_dim,
             nz,
             z: z.map(|z| z.as_array().to_owned()),
+            method,
             seed,
         }
     }
@@ -115,6 +117,11 @@ impl SparseGpMix {
             panic!("You must specify inducing points")
         };
 
+        let method = match self.method {
+            SparseMethod::Fitc => egobox_gp::SparseMethod::Fitc,
+            SparseMethod::Vfe => egobox_gp::SparseMethod::Vfe,
+        };
+
         let sgp = SparseGpMixture::params(inducings)
             // .n_clusters(self.n_clusters)
             // .recombination(recomb)
@@ -123,6 +130,7 @@ impl SparseGpMix {
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             )
             .kpls_dim(self.kpls_dim)
+            .sparse_method(method)
             .with_rng(rng)
             .fit(&dataset)
             .expect("Sgp model training");
@@ -146,6 +154,7 @@ impl SparseGpx {
         kpls_dim = None,
         nz = None,
         z = None,
+        method = SparseMethod::Fitc,
         seed = None
     ))]
     fn builder(
@@ -153,9 +162,10 @@ impl SparseGpx {
         kpls_dim: Option<usize>,
         nz: Option<usize>,
         z: Option<PyReadonlyArray2<f64>>,
+        method: SparseMethod,
         seed: Option<u64>,
     ) -> SparseGpMix {
-        SparseGpMix::new(corr_spec, kpls_dim, nz, z, seed)
+        SparseGpMix::new(corr_spec, kpls_dim, nz, z, method, seed)
     }
 
     /// Returns the String representation from serde json serializer

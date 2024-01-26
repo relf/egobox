@@ -38,7 +38,7 @@ impl<F: Float> Default for Inducings<F> {
 }
 
 /// SGP algorithm method specification
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum SparseMethod {
     #[default]
@@ -97,8 +97,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     }
 
     /// Get used sparse method
-    pub fn method(&self) -> &SparseMethod {
-        &self.method
+    pub fn method(&self) -> SparseMethod {
+        self.method
     }
 
     /// Get inducing points

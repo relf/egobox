@@ -20,7 +20,7 @@ use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-const N_START: usize = 10; // number of optimization restart (aka multistart)
+const N_START: usize = 2; // number of optimization restart (aka multistart)
 
 /// Woodbury data computed during training and used for prediction
 ///
@@ -177,7 +177,7 @@ impl<F: Float, Corr: CorrelationModel<F>> Clone for SparseGaussianProcess<F, Cor
     fn clone(&self) -> Self {
         Self {
             corr: self.corr,
-            method: self.method.clone(),
+            method: self.method,
             theta: self.theta.to_owned(),
             sigma2: self.sigma2,
             noise: self.noise,
@@ -526,7 +526,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
         )?;
         Ok(SparseGaussianProcess {
             corr: *self.corr(),
-            method: self.method().clone(),
+            method: self.method(),
             theta: opt_theta,
             sigma2: opt_sigma2,
             noise: opt_noise,
