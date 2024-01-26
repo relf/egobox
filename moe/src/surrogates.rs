@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use egobox_gp::{
     correlation_models::*, mean_models::*, GaussianProcess, GpParams, SgpParams,
-    SparseGaussianProcess,
+    SparseGaussianProcess, SparseMethod,
 };
 use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array1, Array2, ArrayView2};
@@ -19,7 +19,7 @@ use std::io::Write;
 /// A trait for Gp surrogate parameters to build surrogate once fitted.
 pub trait GpSurrogateParams {
     /// Set initial theta
-    fn initial_theta(&mut self, theta: Vec<f64>);
+    fn initial_theta(&mut self, theta: Option<Vec<f64>>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
     /// Set the nugget parameter to improve numerical stability
@@ -31,9 +31,11 @@ pub trait GpSurrogateParams {
 /// A trait for sparse GP surrogate parameters to build surrogate once fitted.
 pub trait SgpSurrogateParams {
     /// Set initial theta
-    fn initial_theta(&mut self, theta: Vec<f64>);
+    fn initial_theta(&mut self, theta: Option<Vec<f64>>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
+    /// Set the sparse method
+    fn sparse_method(&mut self, method: SparseMethod);
     /// Set random generator seed
     fn seed(&mut self, seed: Option<u64>);
     /// Train the surrogate
@@ -96,8 +98,8 @@ macro_rules! declare_surrogate {
             }
 
             impl GpSurrogateParams for [<Gp $regr $corr SurrogateParams>] {
-                fn initial_theta(&mut self, theta: Vec<f64>) {
-                    self.0 = self.0.clone().initial_theta(Some(theta));
+                fn initial_theta(&mut self, theta: Option<Vec<f64>>) {
+                    self.0 = self.0.clone().initial_theta(theta);
                 }
 
                 fn kpls_dim(&mut self, kpls_dim: Option<usize>) {
@@ -210,8 +212,12 @@ macro_rules! declare_sgp_surrogate {
             }
 
             impl SgpSurrogateParams for [<Sgp $corr SurrogateParams>] {
-                fn initial_theta(&mut self, theta: Vec<f64>) {
-                    self.0 = self.0.clone().initial_theta(Some(theta));
+                fn initial_theta(&mut self, theta: Option<Vec<f64>>) {
+                    self.0 = self.0.clone().initial_theta(theta);
+                }
+
+                fn sparse_method(&mut self, method: SparseMethod) {
+                    self.0 = self.0.clone().sparse_method(method);
                 }
 
                 fn kpls_dim(&mut self, kpls_dim: Option<usize>) {

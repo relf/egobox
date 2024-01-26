@@ -30,6 +30,8 @@ pub struct SparseGpMixtureValidParams<F: Float, R: Rng + Clone> {
     regression_spec: RegressionSpec,
     /// Specification of GP correlation models to be used
     correlation_spec: CorrelationSpec,
+    /// Initial Guess for GP theta hyperparameters
+    initial_theta: Option<Vec<F>>,
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
@@ -53,6 +55,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for SparseGpMixtureValidPar
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
+            initial_theta: None,
             sparse_method: SparseMethod::default(),
             inducings: Inducings::default(),
             gmm: None,
@@ -86,6 +89,11 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureValidParams<F, R> {
     /// The optional number of PLS components
     pub fn kpls_dim(&self) -> Option<usize> {
         self.kpls_dim
+    }
+
+    /// The optional initial guess for GP theta hyperparameters
+    pub fn initial_theta(&self) -> Option<Vec<F>> {
+        self.initial_theta.clone()
     }
 
     /// The sparse method used
@@ -151,6 +159,7 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
+            initial_theta: None,
             sparse_method: SparseMethod::default(),
             inducings,
             gmm: None,
@@ -177,6 +186,14 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
     /// will be used in the mixture.  
     pub fn correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
         self.0.correlation_spec = correlation_spec;
+        self
+    }
+
+    /// Sets the initial guess for GP theta hyperparameters
+    ///
+    /// Default is 1e-2 for all components
+    pub fn initial_theta(mut self, initial_theta: Option<Vec<F>>) -> Self {
+        self.0.initial_theta = initial_theta;
         self
     }
 
@@ -230,6 +247,7 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
             kpls_dim: self.0.kpls_dim(),
+            initial_theta: self.0.initial_theta(),
             sparse_method: self.0.sparse_method(),
             inducings: self.0.inducings().clone(),
             gmm: self.0.gmm().clone(),

@@ -4,7 +4,7 @@ import egobox as egx
 import logging
 import time
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 def f_obj(x):
@@ -41,4 +41,8 @@ class TestSgp(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    import logging
+
+    logging.basicConfig(level=logging.DEBUG)
+
     unittest.main()

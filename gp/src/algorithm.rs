@@ -23,11 +23,11 @@ use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use ndarray_rand::rand_distr::Normal;
+use ndarray_rand::rand_distr::{Normal, Uniform};
 use ndarray_rand::RandomExt;
 
 // const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
-const N_START: usize = 10; // number of optimization restart (aka multistart)
+const N_START: usize = 1; // number of optimization restart (aka multistart)
 
 /// Internal parameters computed Gp during training
 /// used later on in prediction computations
@@ -793,7 +793,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 Array::from_vec(v)
             });
         let fx = self.mean().value(&xtrain.data);
-        let y_t = ytrain.clone();
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
             let theta =
@@ -808,31 +807,48 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             }
             let theta = theta.mapv(F::cast);
             let rxx = self.corr().value(&x_distances.d, &theta, &w_star);
-            match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
+            match reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget()) {
                 Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
                 Err(_) => f64::INFINITY,
             }
         };
 
-        // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
-        let mut theta0s = Array2::zeros((N_START + 1, theta0.len()));
-        theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
-        let mut xlimits: Array2<F> = Array2::zeros((theta0.len(), 2));
-        for mut row in xlimits.rows_mut() {
-            row.assign(&arr1(&[F::cast(-6), F::cast(2)]));
-        }
-        // Use a seed here for reproducibility. Do we need to make it truly random
-        // Probably no, as it is just to get init values spread over
-        // [1e-6, 20] for multistart thanks to LHS method.
-        let seeds = Lhs::new(&xlimits)
-            .kind(egobox_doe::LhsKind::Maximin)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
-            .sample(N_START);
-        Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
-            .and(seeds.rows())
-            .par_for_each(|mut theta, row| theta.assign(&row));
+        // // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
+        // let mut theta0s = Array2::zeros((N_START + 1, theta0.len()));
+        // theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
 
-        let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
+        // match N_START.cmp(&1) {
+        //     std::cmp::Ordering::Equal => {
+        //         let mut rng = Xoshiro256Plus::seed_from_u64(42);
+        //         theta0s.row_mut(0).assign(&Array::random_using(
+        //             theta0.len(),
+        //             Uniform::new(F::cast(-6), F::cast(2)),
+        //             &mut rng,
+        //         ))
+        //     }
+        //     std::cmp::Ordering::Greater => {
+        //         let mut xlimits: Array2<F> = Array2::zeros((theta0.len(), 2));
+        //         for mut row in xlimits.rows_mut() {
+        //             row.assign(&arr1(&[F::cast(-6), F::cast(2)]));
+        //         }
+        //         // Use a seed here for reproducibility. Do we need to make it truly random
+        //         // Probably no, as it is just to get init values spread over
+        //         // [1e-6, 20] for multistart thanks to LHS method.
+
+        //         let seeds = Lhs::new(&xlimits)
+        //             .kind(egobox_doe::LhsKind::Maximin)
+        //             .with_rng(Xoshiro256Plus::seed_from_u64(42))
+        //             .sample(N_START);
+        //         Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
+        //             .and(seeds.rows())
+        //             .par_for_each(|mut theta, row| theta.assign(&row));
+        //     }
+        //     std::cmp::Ordering::Less => (),
+        // };
+
+        // let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
+
+        let (theta0s, bounds) = prepare_multistart(&theta0);
 
         let opt_thetas = theta0s.map_axis(Axis(1), |theta| {
             optimize_params(objfn, &theta.to_owned(), &bounds)
@@ -852,6 +868,49 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             ytrain,
         })
     }
+}
+
+pub(crate) fn prepare_multistart<F: Float>(theta0: &Array1<F>) -> (Array2<F>, Vec<(F, F)>) {
+    let limits = (F::cast(-6.), F::cast(2.));
+    // let mut bounds = vec![(F::cast(1e-16).log10(), F::cast(1.).log10()); params.ncols()];
+    // let limits = (F::cast(-16), F::cast(0.));
+    let bounds = vec![limits; theta0.len()];
+
+    // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
+    let mut theta0s = Array2::zeros((N_START + 1, theta0.len()));
+    theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
+
+    match N_START.cmp(&1) {
+        std::cmp::Ordering::Equal => {
+            //let mut rng = Xoshiro256Plus::seed_from_u64(42);
+            let mut rng = Xoshiro256Plus::from_entropy();
+            theta0s.row_mut(1).assign(&Array::random_using(
+                theta0.len(),
+                Uniform::new(limits.0, limits.1),
+                &mut rng,
+            ))
+        }
+        std::cmp::Ordering::Greater => {
+            let mut xlimits: Array2<F> = Array2::zeros((theta0.len(), 2));
+            for mut row in xlimits.rows_mut() {
+                row.assign(&arr1(&[limits.0, limits.1]));
+            }
+            // Use a seed here for reproducibility. Do we need to make it truly random
+            // Probably no, as it is just to get init values spread over
+            // [1e-6, 20] for multistart thanks to LHS method.
+
+            let seeds = Lhs::new(&xlimits)
+                .kind(egobox_doe::LhsKind::Maximin)
+                .with_rng(Xoshiro256Plus::seed_from_u64(42))
+                .sample(N_START);
+            Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
+                .and(seeds.rows())
+                .par_for_each(|mut theta, row| theta.assign(&row));
+        }
+        std::cmp::Ordering::Less => (),
+    };
+
+    (theta0s, bounds)
 }
 
 /// Optimize gp hyper parameters given an initial guess and bounds with NLOPT::Cobyla
@@ -919,7 +978,7 @@ where
 
     let initial_step = 0.5;
     let ftol_rel = 1e-4;
-    let maxeval = 15 * param0.len();
+    let maxeval = 10 * param0.len();
 
     let bounds: Vec<_> = bounds
         .iter()

@@ -12,12 +12,18 @@ use sampling::*;
 use sparse_gp_mix::*;
 use types::*;
 
+use env_logger::{Builder, Env};
 use pyo3::prelude::*;
 
 #[doc(hidden)]
 #[pymodule]
 fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
+
+    let env = Env::new().filter_or("EGOBOX_LOG", "info");
+    let mut builder = Builder::from_env(env);
+    let builder = builder.target(env_logger::Target::Stdout);
+    builder.try_init().ok();
 
     // utils
     m.add_function(wrap_pyfunction!(to_specs, m)?)?;

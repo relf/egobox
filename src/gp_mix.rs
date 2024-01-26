@@ -101,7 +101,7 @@ impl GpMix {
     /// Returns Gpx object
     ///     the fitted Gaussian process mixture  
     ///
-    fn fit(&mut self, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> Gpx {
+    fn fit(&mut self, py: Python, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> Gpx {
         let dataset = Dataset::new(xt.as_array().to_owned(), yt.as_array().to_owned());
 
         let recomb = match self.recombination {
@@ -113,17 +113,22 @@ impl GpMix {
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        let moe = GpMixture::params()
-            .n_clusters(self.n_clusters)
-            .recombination(recomb)
-            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-            .correlation_spec(
-                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-            )
-            .kpls_dim(self.kpls_dim)
-            .with_rng(rng)
-            .fit(&dataset)
-            .expect("MoE model training");
+        let moe = py.allow_threads(|| {
+            GpMixture::params()
+                .n_clusters(self.n_clusters)
+                .recombination(recomb)
+                .regression_spec(
+                    egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
+                )
+                .correlation_spec(
+                    egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+                )
+                .kpls_dim(self.kpls_dim)
+                .with_rng(rng)
+                .fit(&dataset)
+                .expect("MoE model training")
+        });
+
         Gpx(Box::new(moe))
     }
 }

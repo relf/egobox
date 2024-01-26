@@ -45,6 +45,10 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
+///     initial_theta ([nx] where nx is the dimension of inputs x)
+///         Initial guess for GP theta hyperparameters.
+///         When None the default is 1e-2 for all components
+///
 ///     method (SparseMethod.FITC or SparseMethod.VFE)
 ///         Sparse method to be used (default is FITC)
 ///
@@ -55,6 +59,7 @@ use rand_xoshiro::Xoshiro256Plus;
 pub(crate) struct SparseGpMix {
     pub correlation_spec: CorrelationSpec,
     pub kpls_dim: Option<usize>,
+    pub initial_theta: Option<Vec<f64>>,
     pub nz: Option<usize>,
     pub z: Option<Array2<f64>>,
     pub method: SparseMethod,
@@ -67,6 +72,7 @@ impl SparseGpMix {
     #[pyo3(signature = (
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         kpls_dim = None,
+        initial_theta = None,
         nz = None,
         z = None,
         method = SparseMethod::Fitc,
@@ -76,6 +82,7 @@ impl SparseGpMix {
     fn new(
         corr_spec: u8,
         kpls_dim: Option<usize>,
+        initial_theta: Option<Vec<f64>>,
         nz: Option<usize>,
         z: Option<PyReadonlyArray2<f64>>,
         method: SparseMethod,
@@ -84,6 +91,7 @@ impl SparseGpMix {
         SparseGpMix {
             correlation_spec: CorrelationSpec(corr_spec),
             kpls_dim,
+            initial_theta,
             nz,
             z: z.map(|z| z.as_array().to_owned()),
             method,
@@ -100,7 +108,12 @@ impl SparseGpMix {
     /// Returns Sgp object
     ///     the fitted Gaussian process mixture  
     ///
-    fn fit(&mut self, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> SparseGpx {
+    fn fit(
+        &mut self,
+        py: Python,
+        xt: PyReadonlyArray2<f64>,
+        yt: PyReadonlyArray2<f64>,
+    ) -> SparseGpx {
         let dataset = Dataset::new(xt.as_array().to_owned(), yt.as_array().to_owned());
 
         let rng = if let Some(seed) = self.seed {
@@ -122,19 +135,21 @@ impl SparseGpMix {
             SparseMethod::Vfe => egobox_gp::SparseMethod::Vfe,
         };
 
-        let sgp = SparseGpMixture::params(inducings)
-            // .n_clusters(self.n_clusters)
-            // .recombination(recomb)
-            // .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-            .correlation_spec(
-                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-            )
-            .kpls_dim(self.kpls_dim)
-            .sparse_method(method)
-            .with_rng(rng)
-            .fit(&dataset)
-            .expect("Sgp model training");
-
+        let sgp = py.allow_threads(|| {
+            SparseGpMixture::params(inducings)
+                // .n_clusters(self.n_clusters)
+                // .recombination(recomb)
+                // .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
+                .correlation_spec(
+                    egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+                )
+                .kpls_dim(self.kpls_dim)
+                .initial_theta(self.initial_theta.clone())
+                .sparse_method(method)
+                .with_rng(rng)
+                .fit(&dataset)
+                .expect("Sgp model training")
+        });
         SparseGpx(Box::new(sgp))
     }
 }
@@ -152,6 +167,7 @@ impl SparseGpx {
     #[pyo3(signature = (
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         kpls_dim = None,
+        initial_theta = None,
         nz = None,
         z = None,
         method = SparseMethod::Fitc,
@@ -160,12 +176,13 @@ impl SparseGpx {
     fn builder(
         corr_spec: u8,
         kpls_dim: Option<usize>,
+        initial_theta: Option<Vec<f64>>,
         nz: Option<usize>,
         z: Option<PyReadonlyArray2<f64>>,
         method: SparseMethod,
         seed: Option<u64>,
     ) -> SparseGpMix {
-        SparseGpMix::new(corr_spec, kpls_dim, nz, z, method, seed)
+        SparseGpMix::new(corr_spec, kpls_dim, initial_theta, nz, z, method, seed)
     }
 
     /// Returns the String representation from serde json serializer

@@ -1,14 +1,15 @@
 use crate::algorithm::optimize_params;
 use crate::errors::{GpError, Result};
+use crate::prepare_multistart;
 use crate::sgp_parameters::{
     Inducings, SgpParams, SgpValidParams, SparseMethod, VarianceEstimation,
 };
 use crate::{correlation_models::*, utils::pairwise_differences};
-use egobox_doe::{Lhs, SamplingMethod};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
-use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use log::info;
+use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_stats::QuantileExt;
 
@@ -19,8 +20,6 @@ use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-const N_START: usize = 2; // number of optimization restart (aka multistart)
 
 /// Woodbury data computed during training and used for prediction
 ///
@@ -347,6 +346,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
         &self,
         dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
     ) -> Result<Self::Object> {
+        info!("SGP fit with {:?}", self.method());
         let x = dataset.records();
         let y = dataset.targets();
         if let Some(d) = self.kpls_dim() {
@@ -360,8 +360,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             };
         }
 
-        let xtrain = x.to_owned();
-        let ytrain = y.to_owned();
+        let xtrain = x;
+        let ytrain = y;
 
         let mut w_star = Array2::eye(x.ncols());
         if let Some(n_components) = self.kpls_dim() {
@@ -388,7 +388,6 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
         // Initial guess for variance
         let y_std = ytrain.std_axis(Axis(0), F::one());
         let sigma2_0 = y_std[0] * y_std[0];
-        //let sigma2_0 = F::cast(1e-2);
 
         // Initial guess for noise, when noise variance constant, it is not part of optimization params
         let (is_noise_estimated, noise0) = match self.noise_variance() {
@@ -418,7 +417,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             None => Xoshiro256Plus::from_entropy(),
         };
         let z = match self.inducings() {
-            Inducings::Randomized(n) => make_inducings(*n, &xtrain, &mut rng),
+            Inducings::Randomized(n) => make_inducings(*n, &xtrain.view(), &mut rng),
             Inducings::Located(z) => z.to_owned(),
         };
 
@@ -453,8 +452,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
                 sigma2,
                 noise,
                 &w_star,
-                &xtrain,
-                &ytrain,
+                &xtrain.view(),
+                &ytrain.view(),
                 &z,
                 self.nugget(),
             ) {
@@ -463,26 +462,29 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             }
         };
 
-        // Multistart: user theta0 + LHS samplings
-        let mut params = Array2::zeros((N_START + 1, params_0.len()));
-        params.row_mut(0).assign(&params_0.mapv(|v| F::log10(v)));
-        let mut xlimits: Array2<F> = Array2::zeros((params_0.len(), 2));
-        for mut row in xlimits.rows_mut() {
-            row.assign(&arr1(&[F::cast(-6), F::cast(2)]));
-        }
-        // Use a seed here for reproducibility. Do we need to make it truly random
-        // Probably no, as it is just to get init values spread over
-        // [1e-6, 20] for multistart thanks to LHS method.
-        let seeds = Lhs::new(&xlimits)
-            .kind(egobox_doe::LhsKind::Maximin)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
-            .sample(N_START);
-        Zip::from(params.slice_mut(s![1.., ..]).rows_mut())
-            .and(seeds.rows())
-            .par_for_each(|mut theta, row| theta.assign(&row));
+        // // Multistart: user theta0 + LHS samplings
+        // let mut params = Array2::zeros((N_START + 1, params_0.len()));
+        // params.row_mut(0).assign(&params_0.mapv(|v| F::log10(v)));
+        // let mut xlimits: Array2<F> = Array2::zeros((params_0.len(), 2));
+        // for mut row in xlimits.rows_mut() {
+        //     row.assign(&arr1(&[F::cast(-6), F::cast(2)]));
+        // }
+        // // Use a seed here for reproducibility. Do we need to make it truly random
+        // // Probably no, as it is just to get init values spread over
+        // // [1e-6, 20] for multistart thanks to LHS method.
+        // let seeds = Lhs::new(&xlimits)
+        //     .kind(egobox_doe::LhsKind::Maximin)
+        //     .with_rng(Xoshiro256Plus::seed_from_u64(42))
+        //     .sample(N_START);
+        // Zip::from(params.slice_mut(s![1.., ..]).rows_mut())
+        //     .and(seeds.rows())
+        //     .par_for_each(|mut theta, row| theta.assign(&row));
 
-        // bounds of theta, variance and optionally noise variance
-        let mut bounds = vec![(F::cast(1e-6).log10(), F::cast(1e2).log10()); params.ncols()];
+        // // bounds of theta, variance and optionally noise variance
+        // let mut bounds = vec![(F::cast(1e-16).log10(), F::cast(1.).log10()); params.ncols()];
+
+        let (params, mut bounds) = prepare_multistart(&params_0);
+
         // variance bounds
         bounds[params.ncols() - 1 - is_noise_estimated as usize] =
             (F::cast(1e-6).log10(), (F::cast(9.) * sigma2_0).log10());
@@ -498,8 +500,11 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             }
         }
 
+        info!("OPTIMIZE hyper params0={:?}", params);
         let opt_params =
             params.map_axis(Axis(1), |p| optimize_params(objfn, &p.to_owned(), &bounds));
+        info!("END OPTIMIZE hyper parms");
+
         let opt_index = opt_params.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_params = &(opt_params[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
         // println!("opt_theta={}", opt_theta);
@@ -519,8 +524,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             opt_sigma2,
             opt_noise,
             &w_star,
-            &xtrain,
-            &ytrain,
+            &xtrain.view(),
+            &ytrain.view(),
             &z,
             self.nugget(),
         )?;
@@ -549,8 +554,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         sigma2: F,
         noise: F,
         w_star: &Array2<F>,
-        xtrain: &Array2<F>,
-        ytrain: &Array2<F>,
+        xtrain: &ArrayView2<F>,
+        ytrain: &ArrayView2<F>,
         z: &Array2<F>,
         nugget: F,
     ) -> Result<(F, WoodburyData<F>)> {
@@ -590,8 +595,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         sigma2: F,
         noise: F,
         w_star: &Array2<F>,
-        xtrain: &Array2<F>,
-        ytrain: &Array2<F>,
+        xtrain: &ArrayView2<F>,
+        ytrain: &ArrayView2<F>,
         z: &Array2<F>,
         nugget: F,
     ) -> (F, WoodburyData<F>) {
@@ -664,8 +669,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         sigma2: F,
         noise: F,
         w_star: &Array2<F>,
-        xtrain: &Array2<F>,
-        ytrain: &Array2<F>,
+        xtrain: &ArrayView2<F>,
+        ytrain: &ArrayView2<F>,
         z: &Array2<F>,
         nugget: F,
     ) -> (F, WoodburyData<F>) {
@@ -710,7 +715,6 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         let term6 = -a.diag().sum();
 
         let likelihood = -F::cast(0.5) * (term1 + term2 + term3 + term4 + term5 + term6);
-        println!("likelihood={}", likelihood);
 
         let li_ui = li.dot(&ui);
         let bi = Array::eye(nz) + li.t().dot(&li);
@@ -725,7 +729,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
 
 fn make_inducings<F: Float>(
     n_inducing: usize,
-    xt: &Array2<F>,
+    xt: &ArrayView2<F>,
     rng: &mut Xoshiro256Plus,
 ) -> Array2<F> {
     let mut indices = (0..xt.nrows()).collect::<Vec<_>>();
@@ -844,7 +848,7 @@ mod tests {
         let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
         let n_inducings = 30;
 
-        let z = make_inducings(n_inducings, &xt, &mut rng);
+        let z = make_inducings(n_inducings, &xt.view(), &mut rng);
         // let file_path = format!("{}/smt_z.npy", test_dir);
         // let z: Array2<f64> = read_npy(file_path).expect("z read");
 
@@ -885,7 +889,7 @@ mod tests {
         let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
         let n_inducings = 30;
 
-        let z = make_inducings(n_inducings, &xt, &mut rng);
+        let z = make_inducings(n_inducings, &xt.view(), &mut rng);
         // let file_path = format!("{}/smt_z.npy", test_dir);
         // let z: Array2<f64> = read_npy(file_path).expect("z read");
 
