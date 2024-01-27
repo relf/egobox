@@ -270,6 +270,7 @@ impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
             };
         let mut expert_params = best_expert_params?;
         expert_params.kpls_dim(self.kpls_dim());
+        expert_params.n_start(self.n_start());
         let expert = expert_params.train(&xtrain.view(), &ytrain.view());
         if let Some(v) = best.1 {
             info!("Best expert {} accuracy={}", best.0, v);

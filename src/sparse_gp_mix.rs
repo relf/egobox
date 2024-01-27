@@ -41,13 +41,16 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         * Hard: prediction is taken from the expert with highest responsability
 ///         resulting in a model with discontinuities.
 ///
+///     initial_theta ([nx] where nx is the dimension of inputs x)
+///         Initial guess for GP theta hyperparameters.
+///         When None the default is 1e-2 for all components
+///
 ///     kpls_dim (0 < int < nx where nx is the dimension of inputs x)
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
-///     initial_theta ([nx] where nx is the dimension of inputs x)
-///         Initial guess for GP theta hyperparameters.
-///         When None the default is 1e-2 for all components
+///     n_start (int >= 0)
+///         Number of internal GP hyperpameters optimization restart (multistart)
 ///
 ///     method (SparseMethod.FITC or SparseMethod.VFE)
 ///         Sparse method to be used (default is FITC)
@@ -58,8 +61,9 @@ use rand_xoshiro::Xoshiro256Plus;
 #[pyclass]
 pub(crate) struct SparseGpMix {
     pub correlation_spec: CorrelationSpec,
-    pub kpls_dim: Option<usize>,
     pub initial_theta: Option<Vec<f64>>,
+    pub kpls_dim: Option<usize>,
+    pub n_start: usize,
     pub nz: Option<usize>,
     pub z: Option<Array2<f64>>,
     pub method: SparseMethod,
@@ -71,8 +75,9 @@ impl SparseGpMix {
     #[new]
     #[pyo3(signature = (
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        kpls_dim = None,
         initial_theta = None,
+        kpls_dim = None,
+        n_start = 10,
         nz = None,
         z = None,
         method = SparseMethod::Fitc,
@@ -81,8 +86,9 @@ impl SparseGpMix {
     #[allow(clippy::too_many_arguments)]
     fn new(
         corr_spec: u8,
-        kpls_dim: Option<usize>,
         initial_theta: Option<Vec<f64>>,
+        kpls_dim: Option<usize>,
+        n_start: usize,
         nz: Option<usize>,
         z: Option<PyReadonlyArray2<f64>>,
         method: SparseMethod,
@@ -90,8 +96,9 @@ impl SparseGpMix {
     ) -> Self {
         SparseGpMix {
             correlation_spec: CorrelationSpec(corr_spec),
-            kpls_dim,
             initial_theta,
+            kpls_dim,
+            n_start,
             nz,
             z: z.map(|z| z.as_array().to_owned()),
             method,
@@ -143,8 +150,9 @@ impl SparseGpMix {
                 .correlation_spec(
                     egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
                 )
-                .kpls_dim(self.kpls_dim)
                 .initial_theta(self.initial_theta.clone())
+                .kpls_dim(self.kpls_dim)
+                .n_start(self.n_start)
                 .sparse_method(method)
                 .with_rng(rng)
                 .fit(&dataset)
@@ -166,23 +174,35 @@ impl SparseGpx {
     #[staticmethod]
     #[pyo3(signature = (
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        kpls_dim = None,
         initial_theta = None,
+        kpls_dim = None,
+        n_start = 10,
         nz = None,
         z = None,
         method = SparseMethod::Fitc,
         seed = None
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn builder(
         corr_spec: u8,
-        kpls_dim: Option<usize>,
         initial_theta: Option<Vec<f64>>,
+        kpls_dim: Option<usize>,
+        n_start: usize,
         nz: Option<usize>,
         z: Option<PyReadonlyArray2<f64>>,
         method: SparseMethod,
         seed: Option<u64>,
     ) -> SparseGpMix {
-        SparseGpMix::new(corr_spec, kpls_dim, initial_theta, nz, z, method, seed)
+        SparseGpMix::new(
+            corr_spec,
+            initial_theta,
+            kpls_dim,
+            n_start,
+            nz,
+            z,
+            method,
+            seed,
+        )
     }
 
     /// Returns the String representation from serde json serializer

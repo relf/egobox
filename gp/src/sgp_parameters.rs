@@ -168,6 +168,12 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
         self
     }
 
+    /// Set the number of internal hyperparameters optimization restarts
+    pub fn n_start(mut self, n_start: usize) -> Self {
+        self.0.gp_params.n_start = n_start;
+        self
+    }
+
     /// Set nugget value.
     ///
     /// Nugget is used to improve numerical stability

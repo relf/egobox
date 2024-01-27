@@ -16,24 +16,28 @@ use crate::MoeError;
 use std::fs;
 #[cfg(feature = "persistent")]
 use std::io::Write;
-/// A trait for Gp surrogate parameters to build surrogate once fitted.
+/// A trait for Gp surrogate parameters to build surrogate.
 pub trait GpSurrogateParams {
     /// Set initial theta
     fn initial_theta(&mut self, theta: Option<Vec<f64>>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
+    /// Set the nuber of internal optimization restarts
+    fn n_start(&mut self, n_start: usize);
     /// Set the nugget parameter to improve numerical stability
     fn nugget(&mut self, nugget: f64);
     /// Train the surrogate
     fn train(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn FullGpSurrogate>>;
 }
 
-/// A trait for sparse GP surrogate parameters to build surrogate once fitted.
+/// A trait for sparse GP surrogate parameters to build surrogate.
 pub trait SgpSurrogateParams {
     /// Set initial theta
     fn initial_theta(&mut self, theta: Option<Vec<f64>>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
+    /// Set the nuber of internal optimization restarts
+    fn n_start(&mut self, n_start: usize);
     /// Set the sparse method
     fn sparse_method(&mut self, method: SparseMethod);
     /// Set random generator seed
@@ -104,6 +108,10 @@ macro_rules! declare_surrogate {
 
                 fn kpls_dim(&mut self, kpls_dim: Option<usize>) {
                     self.0 = self.0.clone().kpls_dim(kpls_dim);
+                }
+
+                fn n_start(&mut self, n_start: usize) {
+                    self.0 = self.0.clone().n_start(n_start);
                 }
 
                 fn nugget(&mut self, nugget: f64) {
@@ -216,12 +224,16 @@ macro_rules! declare_sgp_surrogate {
                     self.0 = self.0.clone().initial_theta(theta);
                 }
 
-                fn sparse_method(&mut self, method: SparseMethod) {
-                    self.0 = self.0.clone().sparse_method(method);
-                }
-
                 fn kpls_dim(&mut self, kpls_dim: Option<usize>) {
                     self.0 = self.0.clone().kpls_dim(kpls_dim);
+                }
+
+                fn n_start(&mut self, n_start: usize) {
+                    self.0 = self.0.clone().n_start(n_start);
+                }
+
+                fn sparse_method(&mut self, method: SparseMethod) {
+                    self.0 = self.0.clone().sparse_method(method);
                 }
 
                 fn seed(&mut self, seed: Option<u64>) {

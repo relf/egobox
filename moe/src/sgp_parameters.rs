@@ -35,6 +35,8 @@ pub struct SparseGpMixtureValidParams<F: Float, R: Rng + Clone> {
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
+    /// Number of GP hyperparameters optimization restarts
+    n_start: usize,
     /// Used sparse method
     sparse_method: SparseMethod,
     /// Inducings
@@ -54,8 +56,9 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for SparseGpMixtureValidPar
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
-            kpls_dim: None,
             initial_theta: None,
+            kpls_dim: None,
+            n_start: 10,
             sparse_method: SparseMethod::default(),
             inducings: Inducings::default(),
             gmm: None,
@@ -86,14 +89,19 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureValidParams<F, R> {
         self.correlation_spec
     }
 
+    /// The optional initial guess for GP theta hyperparameters
+    pub fn initial_theta(&self) -> Option<Vec<F>> {
+        self.initial_theta.clone()
+    }
+
     /// The optional number of PLS components
     pub fn kpls_dim(&self) -> Option<usize> {
         self.kpls_dim
     }
 
-    /// The optional initial guess for GP theta hyperparameters
-    pub fn initial_theta(&self) -> Option<Vec<F>> {
-        self.initial_theta.clone()
+    /// The number of hypermarameters optimization restarts
+    pub fn n_start(&self) -> usize {
+        self.n_start
     }
 
     /// The sparse method used
@@ -158,8 +166,9 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
-            kpls_dim: None,
             initial_theta: None,
+            kpls_dim: None,
+            n_start: 10,
             sparse_method: SparseMethod::default(),
             inducings,
             gmm: None,
@@ -205,6 +214,12 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
         self
     }
 
+    /// Sets the number of hyperparameters optimization restarts
+    pub fn n_start(mut self, n_start: usize) -> Self {
+        self.0.n_start = n_start;
+        self
+    }
+
     /// Sets
     ///
     /// None means no PLS dimension reduction applied.
@@ -246,8 +261,9 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             recombination: self.0.recombination(),
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
-            kpls_dim: self.0.kpls_dim(),
             initial_theta: self.0.initial_theta(),
+            kpls_dim: self.0.kpls_dim(),
+            n_start: self.0.n_start(),
             sparse_method: self.0.sparse_method(),
             inducings: self.0.inducings().clone(),
             gmm: self.0.gmm().clone(),

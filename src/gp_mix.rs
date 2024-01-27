@@ -49,6 +49,9 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
+///     n_start (int >= 0)
+///         Number of internal GP hyperpameters optimization restart (multistart)
+///
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///         
@@ -59,6 +62,7 @@ pub(crate) struct GpMix {
     pub correlation_spec: CorrelationSpec,
     pub recombination: Recombination,
     pub kpls_dim: Option<usize>,
+    pub n_start: usize,
     pub seed: Option<u64>,
 }
 
@@ -71,6 +75,7 @@ impl GpMix {
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         recombination = Recombination::Smooth,
         kpls_dim = None,
+        n_start = 10,
         seed = None
     ))]
     #[allow(clippy::too_many_arguments)]
@@ -80,6 +85,7 @@ impl GpMix {
         corr_spec: u8,
         recombination: Recombination,
         kpls_dim: Option<usize>,
+        n_start: usize,
         seed: Option<u64>,
     ) -> Self {
         GpMix {
@@ -88,6 +94,7 @@ impl GpMix {
             correlation_spec: CorrelationSpec(corr_spec),
             recombination,
             kpls_dim,
+            n_start,
             seed,
         }
     }
@@ -124,6 +131,7 @@ impl GpMix {
                     egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
                 )
                 .kpls_dim(self.kpls_dim)
+                .n_start(self.n_start)
                 .with_rng(rng)
                 .fit(&dataset)
                 .expect("MoE model training")
@@ -149,6 +157,7 @@ impl Gpx {
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         recombination = Recombination::Smooth,
         kpls_dim = None,
+        n_start = 10,
         seed = None
     ))]
     fn builder(
@@ -157,6 +166,7 @@ impl Gpx {
         corr_spec: u8,
         recombination: Recombination,
         kpls_dim: Option<usize>,
+        n_start: usize,
         seed: Option<u64>,
     ) -> GpMix {
         GpMix::new(
@@ -165,6 +175,7 @@ impl Gpx {
             corr_spec,
             recombination,
             kpls_dim,
+            n_start,
             seed,
         )
     }

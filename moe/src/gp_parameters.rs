@@ -32,6 +32,8 @@ pub struct GpMixValidParams<F: Float, R: Rng + Clone> {
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
+    /// Number of GP hyperparameters optimization restarts
+    n_start: usize,
     /// Gaussian Mixture model used to cluster
     gmm: Option<Box<GaussianMixtureModel<F>>>,
     /// GaussianMixture preset
@@ -48,6 +50,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixValidParams<F, R> 
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
+            n_start: 10,
             gmm: None,
             gmx: None,
             rng: R::from_entropy(),
@@ -79,6 +82,11 @@ impl<F: Float, R: Rng + Clone> GpMixValidParams<F, R> {
     /// The optional number of PLS components
     pub fn kpls_dim(&self) -> Option<usize> {
         self.kpls_dim
+    }
+
+    /// The number of hypermarameters optimization restarts
+    pub fn n_start(&self) -> usize {
+        self.n_start
     }
 
     /// An optional gaussian mixture to be fitted to generate multivariate normal
@@ -135,6 +143,7 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
+            n_start: 10,
             gmm: None,
             gmx: None,
             rng,
@@ -179,6 +188,12 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
         self
     }
 
+    /// Sets the number of hyperparameters optimization restarts
+    pub fn n_start(mut self, n_start: usize) -> Self {
+        self.0.n_start = n_start;
+        self
+    }
+
     #[doc(hidden)]
     /// Sets the gaussian mixture (used to find the optimal number of clusters)
     pub(crate) fn gmm(mut self, gmm: Option<Box<GaussianMixtureModel<F>>>) -> Self {
@@ -205,6 +220,7 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
             kpls_dim: self.0.kpls_dim(),
+            n_start: self.0.n_start(),
             gmm: self.0.gmm().clone(),
             gmx: self.0.gmx().clone(),
             rng,

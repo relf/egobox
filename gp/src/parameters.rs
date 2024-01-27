@@ -112,7 +112,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
         self
     }
 
-    /// Set the number of internal GP hyperparameter theta optimization restart
+    /// Set the number of internal GP hyperparameter theta optimization restarts
     pub fn n_start(mut self, n_start: usize) -> Self {
         self.0.n_start = n_start;
         self
