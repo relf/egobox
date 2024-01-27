@@ -14,6 +14,8 @@ pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationMo
     pub(crate) corr: Corr,
     /// Optionally apply dimension reduction (KPLS) or not
     pub(crate) kpls_dim: Option<usize>,
+    /// Number of optimization restart
+    pub(crate) n_start: usize,
     /// Parameter to improve numerical stability
     pub(crate) nugget: F,
 }
@@ -25,6 +27,7 @@ impl<F: Float> Default for GpValidParams<F, ConstantMean, SquaredExponentialCorr
             mean: ConstantMean(),
             corr: SquaredExponentialCorr(),
             kpls_dim: None,
+            n_start: 10,
             nugget: F::cast(100.0) * F::epsilon(),
         }
     }
@@ -51,6 +54,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParam
         &self.kpls_dim
     }
 
+    /// Get the number of internal optimization restart
+    pub fn n_start(&self) -> usize {
+        self.n_start
+    }
+
     /// Get number of components used by PLS
     pub fn nugget(&self) -> F {
         self.nugget
@@ -72,6 +80,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
             mean,
             corr,
             kpls_dim: None,
+            n_start: 10,
             nugget: F::cast(100.0) * F::epsilon(),
         })
     }
@@ -96,10 +105,16 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
         self
     }
 
-    /// Set number of PLS components.
+    /// Set the number of PLS components.
     /// Should be 0 < n < pb size (i.e. x dimension)
     pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.0.kpls_dim = kpls_dim;
+        self
+    }
+
+    /// Set the number of internal GP hyperparameter theta optimization restart
+    pub fn n_start(mut self, n_start: usize) -> Self {
+        self.0.n_start = n_start;
         self
     }
 

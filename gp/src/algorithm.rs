@@ -27,7 +27,7 @@ use ndarray_rand::rand_distr::{Normal, Uniform};
 use ndarray_rand::RandomExt;
 
 // const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
-const N_START: usize = 1; // number of optimization restart (aka multistart)
+//const N_START: usize = 0; // number of optimization restart (aka multistart)
 
 /// Internal parameters computed Gp during training
 /// used later on in prediction computations
@@ -813,42 +813,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             }
         };
 
-        // // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
-        // let mut theta0s = Array2::zeros((N_START + 1, theta0.len()));
-        // theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
-
-        // match N_START.cmp(&1) {
-        //     std::cmp::Ordering::Equal => {
-        //         let mut rng = Xoshiro256Plus::seed_from_u64(42);
-        //         theta0s.row_mut(0).assign(&Array::random_using(
-        //             theta0.len(),
-        //             Uniform::new(F::cast(-6), F::cast(2)),
-        //             &mut rng,
-        //         ))
-        //     }
-        //     std::cmp::Ordering::Greater => {
-        //         let mut xlimits: Array2<F> = Array2::zeros((theta0.len(), 2));
-        //         for mut row in xlimits.rows_mut() {
-        //             row.assign(&arr1(&[F::cast(-6), F::cast(2)]));
-        //         }
-        //         // Use a seed here for reproducibility. Do we need to make it truly random
-        //         // Probably no, as it is just to get init values spread over
-        //         // [1e-6, 20] for multistart thanks to LHS method.
-
-        //         let seeds = Lhs::new(&xlimits)
-        //             .kind(egobox_doe::LhsKind::Maximin)
-        //             .with_rng(Xoshiro256Plus::seed_from_u64(42))
-        //             .sample(N_START);
-        //         Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
-        //             .and(seeds.rows())
-        //             .par_for_each(|mut theta, row| theta.assign(&row));
-        //     }
-        //     std::cmp::Ordering::Less => (),
-        // };
-
+        // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
         // let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
-
-        let (theta0s, bounds) = prepare_multistart(&theta0);
+        let (theta0s, bounds) = prepare_multistart(self.n_start(), &theta0);
 
         let opt_thetas = theta0s.map_axis(Axis(1), |theta| {
             optimize_params(objfn, &theta.to_owned(), &bounds)
@@ -870,17 +837,20 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
     }
 }
 
-pub(crate) fn prepare_multistart<F: Float>(theta0: &Array1<F>) -> (Array2<F>, Vec<(F, F)>) {
+pub(crate) fn prepare_multistart<F: Float>(
+    n_start: usize,
+    theta0: &Array1<F>,
+) -> (Array2<F>, Vec<(F, F)>) {
     let limits = (F::cast(-6.), F::cast(2.));
     // let mut bounds = vec![(F::cast(1e-16).log10(), F::cast(1.).log10()); params.ncols()];
-    // let limits = (F::cast(-16), F::cast(0.));
+    //let limits = (F::cast(-16), F::cast(0.));
     let bounds = vec![limits; theta0.len()];
 
     // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
-    let mut theta0s = Array2::zeros((N_START + 1, theta0.len()));
+    let mut theta0s = Array2::zeros((n_start + 1, theta0.len()));
     theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
 
-    match N_START.cmp(&1) {
+    match n_start.cmp(&1) {
         std::cmp::Ordering::Equal => {
             //let mut rng = Xoshiro256Plus::seed_from_u64(42);
             let mut rng = Xoshiro256Plus::from_entropy();
@@ -902,7 +872,7 @@ pub(crate) fn prepare_multistart<F: Float>(theta0: &Array1<F>) -> (Array2<F>, Ve
             let seeds = Lhs::new(&xlimits)
                 .kind(egobox_doe::LhsKind::Maximin)
                 .with_rng(Xoshiro256Plus::seed_from_u64(42))
-                .sample(N_START);
+                .sample(n_start);
             Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
                 .and(seeds.rows())
                 .par_for_each(|mut theta, row| theta.assign(&row));

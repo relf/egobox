@@ -483,7 +483,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
         // // bounds of theta, variance and optionally noise variance
         // let mut bounds = vec![(F::cast(1e-16).log10(), F::cast(1.).log10()); params.ncols()];
 
-        let (params, mut bounds) = prepare_multistart(&params_0);
+        let (params, mut bounds) = prepare_multistart(self.n_start(), &params_0);
 
         // variance bounds
         bounds[params.ncols() - 1 - is_noise_estimated as usize] =

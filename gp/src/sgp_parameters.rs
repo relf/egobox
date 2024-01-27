@@ -86,9 +86,14 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         &self.gp_params.corr
     }
 
-    /// Get number of components used by PLS
+    /// Get the number of components used by PLS
     pub fn kpls_dim(&self) -> &Option<usize> {
         &self.gp_params.kpls_dim
+    }
+
+    /// Get the number of internal GP hyperparameters optimization restart
+    pub fn n_start(&self) -> usize {
+        self.gp_params.n_start
     }
 
     /// Get number of components used by PLS
@@ -131,6 +136,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
                 mean: ConstantMean::default(),
                 corr,
                 kpls_dim: None,
+                n_start: 10,
                 nugget: F::cast(1000.0) * F::epsilon(),
             },
             noise: VarianceEstimation::default(),
