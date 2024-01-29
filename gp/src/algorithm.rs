@@ -15,7 +15,7 @@ use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Z
 use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
-use ndarray_rand::rand::SeedableRng;
+use ndarray_rand::rand::{Rng, SeedableRng};
 use ndarray_stats::QuantileExt;
 
 use rand_xoshiro::Xoshiro256Plus;
@@ -23,7 +23,7 @@ use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use ndarray_rand::rand_distr::{Normal, Uniform};
+use ndarray_rand::rand_distr::Normal;
 use ndarray_rand::RandomExt;
 
 // const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
@@ -751,7 +751,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let y = dataset.targets();
         if let Some(d) = self.kpls_dim() {
             if *d > x.ncols() {
-                return Err(GpError::InvalidValue(format!(
+                return Err(GpError::InvalidValueError(format!(
                     "Dimension reduction {} should be smaller than actual \
                     training input dimensions {}",
                     d,
@@ -786,12 +786,17 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 "Warning: multiple x input features have the same value (at least same row twice)."
             );
         }
-        let theta0 = self
-            .initial_theta()
-            .clone()
-            .map_or(Array1::from_elem(w_star.ncols(), F::cast(1e-2)), |v| {
-                Array::from_vec(v)
-            });
+
+        // Initial guess for theta
+        let theta0_dim = self.theta_tuning().theta0().len();
+        let theta0 = if theta0_dim == 1 {
+            Array1::from_elem(w_star.ncols(), self.theta_tuning().theta0()[0])
+        } else if theta0_dim == w_star.ncols() {
+            Array::from_vec(self.theta_tuning().theta0().to_vec())
+        } else {
+            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+        };
+
         let fx = self.mean().value(&xtrain.data);
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
@@ -815,7 +820,20 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 
         // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
         // let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
-        let (theta0s, bounds) = prepare_multistart(self.n_start(), &theta0);
+        let bounds_dim = self.theta_tuning().bounds().len();
+        let bounds = if bounds_dim == 1 {
+            vec![self.theta_tuning().bounds()[0]; w_star.ncols()]
+        } else if theta0_dim == w_star.ncols() {
+            self.theta_tuning().bounds().to_vec()
+        } else {
+            panic!(
+                "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
+                w_star.ncols(),
+                theta0_dim
+            )
+        };
+
+        let (theta0s, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
 
         let opt_thetas = theta0s.map_axis(Axis(1), |theta| {
             optimize_params(objfn, &theta.to_owned(), &bounds)
@@ -840,11 +858,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 pub(crate) fn prepare_multistart<F: Float>(
     n_start: usize,
     theta0: &Array1<F>,
+    bounds: &[(F, F)],
 ) -> (Array2<F>, Vec<(F, F)>) {
-    let limits = (F::cast(-6.), F::cast(2.));
-    // let mut bounds = vec![(F::cast(1e-16).log10(), F::cast(1.).log10()); params.ncols()];
-    //let limits = (F::cast(-16), F::cast(0.));
-    let bounds = vec![limits; theta0.len()];
+    // Use log10 theta as optimization parameter
+    let bounds: Vec<(F, F)> = bounds
+        .iter()
+        .map(|(lo, up)| (lo.log10(), up.log10()))
+        .collect();
 
     // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
     let mut theta0s = Array2::zeros((n_start + 1, theta0.len()));
@@ -854,17 +874,17 @@ pub(crate) fn prepare_multistart<F: Float>(
         std::cmp::Ordering::Equal => {
             //let mut rng = Xoshiro256Plus::seed_from_u64(42);
             let mut rng = Xoshiro256Plus::from_entropy();
-            theta0s.row_mut(1).assign(&Array::random_using(
-                theta0.len(),
-                Uniform::new(limits.0, limits.1),
-                &mut rng,
-            ))
+            let vals = bounds.iter().map(|(a, b)| rng.gen_range(*a..*b)).collect();
+            theta0s.row_mut(1).assign(&Array::from_vec(vals))
         }
         std::cmp::Ordering::Greater => {
-            let mut xlimits: Array2<F> = Array2::zeros((theta0.len(), 2));
-            for mut row in xlimits.rows_mut() {
-                row.assign(&arr1(&[limits.0, limits.1]));
-            }
+            let mut xlimits: Array2<F> = Array2::zeros((bounds.len(), 2));
+            // for mut row in xlimits.rows_mut() {
+            //     row.assign(&arr1(&[limits.0, limits.1]));
+            // }
+            Zip::from(xlimits.rows_mut())
+                .and(&bounds)
+                .for_each(|mut row, limits| row.assign(&arr1(&[limits.0, limits.1])));
             // Use a seed here for reproducibility. Do we need to make it truly random
             // Probably no, as it is just to get init values spread over
             // [1e-6, 20] for multistart thanks to LHS method.
@@ -1187,7 +1207,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
-        .initial_theta(Some(vec![0.1]))
+        .theta_guess(vec![0.1])
         .kpls_dim(Some(1))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fit error");
@@ -1210,7 +1230,7 @@ mod tests {
                         [<$regr Mean>]::default(),
                         [<$corr Corr>]::default(),
                     )
-                    .initial_theta(Some(vec![0.1]))
+                    .theta_guess(vec![0.1])
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fit error");
                     let yvals = gp

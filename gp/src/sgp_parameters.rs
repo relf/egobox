@@ -2,6 +2,7 @@ use crate::correlation_models::{CorrelationModel, SquaredExponentialCorr};
 use crate::errors::{GpError, Result};
 use crate::mean_models::ConstantMean;
 use crate::parameters::GpValidParams;
+use crate::{ParamTuning, ThetaTuning};
 use linfa::{Float, ParamGuard};
 use ndarray::Array2;
 #[cfg(feature = "serializable")]
@@ -76,11 +77,6 @@ impl<F: Float> Default for SgpValidParams<F, SquaredExponentialCorr> {
 }
 
 impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
-    /// Get starting theta value for optimization
-    pub fn initial_theta(&self) -> &Option<Vec<F>> {
-        &self.gp_params.theta
-    }
-
     /// Get correlation corr k(x, x')
     pub fn corr(&self) -> &Corr {
         &self.gp_params.corr
@@ -89,6 +85,11 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     /// Get the number of components used by PLS
     pub fn kpls_dim(&self) -> &Option<usize> {
         &self.gp_params.kpls_dim
+    }
+
+    /// Get starting theta value for optimization
+    pub fn theta_tuning(&self) -> &ThetaTuning<F> {
+        &self.gp_params.theta_tuning
     }
 
     /// Get the number of internal GP hyperparameters optimization restart
@@ -133,6 +134,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
         Self(SgpValidParams {
             gp_params: GpValidParams {
                 theta: None,
+                theta_tuning: ThetaTuning::default(),
                 mean: ConstantMean::default(),
                 corr,
                 kpls_dim: None,
@@ -146,17 +148,39 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
         })
     }
 
-    /// Set initial value for theta hyper parameter.
-    ///
-    /// During training process, the internal optimization is started from `initial_theta`.
-    pub fn initial_theta(mut self, theta: Option<Vec<F>>) -> Self {
-        self.0.gp_params.theta = theta;
-        self
-    }
-
     /// Set correlation model.
     pub fn corr(mut self, corr: Corr) -> Self {
         self.0.gp_params.corr = corr;
+        self
+    }
+
+    /// Set initial value for theta hyper parameter.
+    ///
+    /// During training process, the internal optimization is started from `theta_guess`.
+    pub fn theta_guess(mut self, theta_guess: Vec<F>) -> Self {
+        self.0.gp_params.theta_tuning = ParamTuning {
+            guess: theta_guess,
+            ..(self.0.gp_params.theta_tuning().clone()).into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Set theta hyper parameter search space.
+    pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
+        self.0.gp_params.theta_tuning = ParamTuning {
+            bounds: theta_bounds,
+            ..(self.0.gp_params.theta_tuning()).clone().into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Get starting theta value for optimization
+    pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<F>) -> Self {
+        self.0.gp_params.theta_tuning = theta_tuning;
         self
     }
 
@@ -220,18 +244,19 @@ impl<F: Float, Corr: CorrelationModel<F>> ParamGuard for SgpParams<F, Corr> {
     fn check_ref(&self) -> Result<&Self::Checked> {
         if let Some(d) = self.0.gp_params.kpls_dim {
             if d == 0 {
-                return Err(GpError::InvalidValue("`kpls_dim` canot be 0!".to_string()));
+                return Err(GpError::InvalidValueError(
+                    "`kpls_dim` canot be 0!".to_string(),
+                ));
             }
-            if let Some(theta) = self.0.initial_theta() {
-                if theta.len() > 1 && d > theta.len() {
-                    return Err(GpError::InvalidValue(format!(
-                        "Dimension reduction ({}) should be smaller than expected
+            let theta = self.0.theta_tuning().theta0();
+            if theta.len() > 1 && d > theta.len() {
+                return Err(GpError::InvalidValueError(format!(
+                    "Dimension reduction ({}) should be smaller than expected
                         training input size infered from given initial theta length ({})",
-                        d,
-                        theta.len()
-                    )));
-                };
-            }
+                    d,
+                    theta.len()
+                )));
+            };
         }
         Ok(&self.0)
     }

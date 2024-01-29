@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use egobox_gp::{
     correlation_models::*, mean_models::*, GaussianProcess, GpParams, SgpParams,
-    SparseGaussianProcess, SparseMethod,
+    SparseGaussianProcess, SparseMethod, ThetaTuning,
 };
 use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array1, Array2, ArrayView2};
@@ -18,8 +18,8 @@ use std::fs;
 use std::io::Write;
 /// A trait for Gp surrogate parameters to build surrogate.
 pub trait GpSurrogateParams {
-    /// Set initial theta
-    fn initial_theta(&mut self, theta: Option<Vec<f64>>);
+    /// Set theta
+    fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
     /// Set the nuber of internal optimization restarts
@@ -32,8 +32,8 @@ pub trait GpSurrogateParams {
 
 /// A trait for sparse GP surrogate parameters to build surrogate.
 pub trait SgpSurrogateParams {
-    /// Set initial theta
-    fn initial_theta(&mut self, theta: Option<Vec<f64>>);
+    /// Set theta
+    fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
     /// Set the nuber of internal optimization restarts
@@ -102,8 +102,8 @@ macro_rules! declare_surrogate {
             }
 
             impl GpSurrogateParams for [<Gp $regr $corr SurrogateParams>] {
-                fn initial_theta(&mut self, theta: Option<Vec<f64>>) {
-                    self.0 = self.0.clone().initial_theta(theta);
+                fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>) {
+                    self.0 = self.0.clone().theta_tuning(theta_tuning);
                 }
 
                 fn kpls_dim(&mut self, kpls_dim: Option<usize>) {
@@ -220,8 +220,8 @@ macro_rules! declare_sgp_surrogate {
             }
 
             impl SgpSurrogateParams for [<Sgp $corr SurrogateParams>] {
-                fn initial_theta(&mut self, theta: Option<Vec<f64>>) {
-                    self.0 = self.0.clone().initial_theta(theta);
+                fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>) {
+                    self.0 = self.0.clone().theta_tuning(theta_tuning);
                 }
 
                 fn kpls_dim(&mut self, kpls_dim: Option<usize>) {

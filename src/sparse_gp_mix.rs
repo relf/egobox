@@ -10,7 +10,7 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Sgp_Tutorial.ipynb) for usage.
 //!
 use crate::types::*;
-use egobox_gp::Inducings;
+use egobox_gp::{Inducings, ParamTuning, ThetaTuning};
 use egobox_moe::{GpSurrogate, SparseGpMixture};
 use linfa::{traits::Fit, Dataset};
 use ndarray::Array2;
@@ -41,9 +41,13 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         * Hard: prediction is taken from the expert with highest responsability
 ///         resulting in a model with discontinuities.
 ///
-///     initial_theta ([nx] where nx is the dimension of inputs x)
+///     theta0 ([nx] where nx is the dimension of inputs x)
 ///         Initial guess for GP theta hyperparameters.
 ///         When None the default is 1e-2 for all components
+///
+///     theta_bounds ([[lower_1, upper_1], ..., [lower_nx, upper_nx]] where nx is the dimension of inputs x)
+///         Space search when optimizing theta GP hyperparameters
+///         When None the default is [1e-6, 1e2] for all components
 ///
 ///     kpls_dim (0 < int < nx where nx is the dimension of inputs x)
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
@@ -61,7 +65,8 @@ use rand_xoshiro::Xoshiro256Plus;
 #[pyclass]
 pub(crate) struct SparseGpMix {
     pub correlation_spec: CorrelationSpec,
-    pub initial_theta: Option<Vec<f64>>,
+    pub theta0: Option<Vec<f64>>,
+    pub theta_bounds: Option<Vec<Vec<f64>>>,
     pub kpls_dim: Option<usize>,
     pub n_start: usize,
     pub nz: Option<usize>,
@@ -75,7 +80,8 @@ impl SparseGpMix {
     #[new]
     #[pyo3(signature = (
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        initial_theta = None,
+        theta0 = None,
+        theta_bounds = None,
         kpls_dim = None,
         n_start = 10,
         nz = None,
@@ -86,7 +92,8 @@ impl SparseGpMix {
     #[allow(clippy::too_many_arguments)]
     fn new(
         corr_spec: u8,
-        initial_theta: Option<Vec<f64>>,
+        theta0: Option<Vec<f64>>,
+        theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
         n_start: usize,
         nz: Option<usize>,
@@ -96,7 +103,8 @@ impl SparseGpMix {
     ) -> Self {
         SparseGpMix {
             correlation_spec: CorrelationSpec(corr_spec),
-            initial_theta,
+            theta0,
+            theta_bounds,
             kpls_dim,
             n_start,
             nz,
@@ -142,6 +150,24 @@ impl SparseGpMix {
             SparseMethod::Vfe => egobox_gp::SparseMethod::Vfe,
         };
 
+        let mut theta_tuning = ThetaTuning::default();
+        if let Some(guess) = self.theta0.as_ref() {
+            theta_tuning = ParamTuning {
+                guess: guess.to_vec(),
+                ..ThetaTuning::default().into()
+            }
+            .try_into()
+            .expect("Theta tuning initial guess");
+        }
+        if let Some(bounds) = self.theta_bounds.as_ref() {
+            theta_tuning = ParamTuning {
+                bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
+                ..ThetaTuning::default().into()
+            }
+            .try_into()
+            .expect("Theta tuning bounds");
+        }
+
         let sgp = py.allow_threads(|| {
             SparseGpMixture::params(inducings)
                 // .n_clusters(self.n_clusters)
@@ -150,7 +176,7 @@ impl SparseGpMix {
                 .correlation_spec(
                     egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
                 )
-                .initial_theta(self.initial_theta.clone())
+                .theta_tuning(theta_tuning)
                 .kpls_dim(self.kpls_dim)
                 .n_start(self.n_start)
                 .sparse_method(method)
@@ -174,7 +200,8 @@ impl SparseGpx {
     #[staticmethod]
     #[pyo3(signature = (
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        initial_theta = None,
+        theta0 = None,
+        theta_bounds = None,
         kpls_dim = None,
         n_start = 10,
         nz = None,
@@ -185,7 +212,8 @@ impl SparseGpx {
     #[allow(clippy::too_many_arguments)]
     fn builder(
         corr_spec: u8,
-        initial_theta: Option<Vec<f64>>,
+        theta0: Option<Vec<f64>>,
+        theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
         n_start: usize,
         nz: Option<usize>,
@@ -195,7 +223,8 @@ impl SparseGpx {
     ) -> SparseGpMix {
         SparseGpMix::new(
             corr_spec,
-            initial_theta,
+            theta0,
+            theta_bounds,
             kpls_dim,
             n_start,
             nz,

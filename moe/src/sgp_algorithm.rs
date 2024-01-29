@@ -258,7 +258,7 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
             };
         let mut expert_params = best_expert_params?;
         let seed = self.rng().gen();
-        expert_params.initial_theta(self.initial_theta());
+        expert_params.theta_tuning(self.theta_tuning().clone());
         expert_params.kpls_dim(self.kpls_dim());
         expert_params.n_start(self.n_start());
         expert_params.sparse_method(self.sparse_method());

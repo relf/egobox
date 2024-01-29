@@ -8,7 +8,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
-use egobox_gp::{Inducings, SparseMethod};
+use egobox_gp::{Inducings, ParamTuning, SparseMethod, ThetaTuning};
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -30,11 +30,11 @@ pub struct SparseGpMixtureValidParams<F: Float, R: Rng + Clone> {
     regression_spec: RegressionSpec,
     /// Specification of GP correlation models to be used
     correlation_spec: CorrelationSpec,
-    /// Initial Guess for GP theta hyperparameters
-    initial_theta: Option<Vec<F>>,
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
+    /// Theta hyperparameter tuning
+    theta_tuning: ThetaTuning<F>,
     /// Number of GP hyperparameters optimization restarts
     n_start: usize,
     /// Used sparse method
@@ -56,8 +56,8 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for SparseGpMixtureValidPar
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
-            initial_theta: None,
             kpls_dim: None,
+            theta_tuning: ThetaTuning::default(),
             n_start: 10,
             sparse_method: SparseMethod::default(),
             inducings: Inducings::default(),
@@ -89,14 +89,14 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureValidParams<F, R> {
         self.correlation_spec
     }
 
-    /// The optional initial guess for GP theta hyperparameters
-    pub fn initial_theta(&self) -> Option<Vec<F>> {
-        self.initial_theta.clone()
-    }
-
     /// The optional number of PLS components
     pub fn kpls_dim(&self) -> Option<usize> {
         self.kpls_dim
+    }
+
+    /// The speified tuning of theta hyperparameter
+    pub fn theta_tuning(&self) -> &ThetaTuning<F> {
+        &self.theta_tuning
     }
 
     /// The number of hypermarameters optimization restarts
@@ -156,7 +156,7 @@ impl<F: Float> SparseGpMixtureParams<F, Xoshiro256Plus> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
+impl<F: Float, R: Rng + SeedableRng + Clone> SparseGpMixtureParams<F, R> {
     /// Constructor of Sgp parameters specifying randon number generator for reproducibility
     ///
     /// See [`new`](SparseGpMixParams::new) for default parameters.
@@ -166,7 +166,7 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
-            initial_theta: None,
+            theta_tuning: ThetaTuning::default(),
             kpls_dim: None,
             n_start: 10,
             sparse_method: SparseMethod::default(),
@@ -198,19 +198,41 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
         self
     }
 
-    /// Sets the initial guess for GP theta hyperparameters
-    ///
-    /// Default is 1e-2 for all components
-    pub fn initial_theta(mut self, initial_theta: Option<Vec<F>>) -> Self {
-        self.0.initial_theta = initial_theta;
-        self
-    }
-
     /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
     ///
     /// None means no PLS dimension reduction applied.
     pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.0.kpls_dim = kpls_dim;
+        self
+    }
+
+    /// Set initial value for theta hyper parameter.
+    ///
+    /// During training process, the internal optimization is started from `theta_guess`.
+    pub fn theta_guess(mut self, theta_guess: Vec<F>) -> Self {
+        self.0.theta_tuning = ParamTuning {
+            guess: theta_guess,
+            ..ThetaTuning::default().into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Set theta hyper parameter search space.
+    pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
+        self.0.theta_tuning = ParamTuning {
+            bounds: theta_bounds,
+            ..ThetaTuning::default().into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Set theta hyper parameter tuning
+    pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<F>) -> Self {
+        self.0.theta_tuning = theta_tuning;
         self
     }
 
@@ -261,8 +283,8 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             recombination: self.0.recombination(),
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
-            initial_theta: self.0.initial_theta(),
             kpls_dim: self.0.kpls_dim(),
+            theta_tuning: self.0.theta_tuning().clone(),
             n_start: self.0.n_start(),
             sparse_method: self.0.sparse_method(),
             inducings: self.0.inducings().clone(),

@@ -58,7 +58,7 @@ fn criterion_gp(c: &mut Criterion) {
                         SquaredExponentialCorr::default(),
                     )
                     .kpls_dim(Some(1))
-                    .initial_theta(Some(vec![1.0]))
+                    .theta_guess(vec![1.0])
                     .fit(&Dataset::new(xt.to_owned(), yt.to_owned()))
                     .expect("GP fit error"),
                 )
