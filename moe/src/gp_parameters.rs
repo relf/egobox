@@ -30,11 +30,11 @@ pub struct GpMixValidParams<F: Float, R: Rng + Clone> {
     regression_spec: RegressionSpec,
     /// Specification of GP correlation models to be used
     correlation_spec: CorrelationSpec,
+    /// Theta hyperparameter tuning
+    theta_tuning: ThetaTuning<F>,
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
-    /// Theta hyperparameter tuning
-    theta_tuning: ThetaTuning<F>,
     /// Number of GP hyperparameters optimization restarts
     n_start: usize,
     /// Gaussian Mixture model used to cluster
@@ -52,8 +52,8 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixValidParams<F, R> 
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
-            kpls_dim: None,
             theta_tuning: ThetaTuning::default(),
+            kpls_dim: None,
             n_start: 10,
             gmm: None,
             gmx: None,
@@ -190,20 +190,12 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
         self
     }
 
-    /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
-    ///
-    /// None means no PLS dimension reduction applied.
-    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
-        self.0.kpls_dim = kpls_dim;
-        self
-    }
-
     /// Set initial value for theta hyper parameter.
     ///
-    /// During training process, the internal optimization is started from `theta_guess`.
-    pub fn theta_guess(mut self, theta_guess: Vec<F>) -> Self {
+    /// During training process, the internal optimization is started from `theta_init`.
+    pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.theta_tuning = ParamTuning {
-            guess: theta_guess,
+            guess: theta_init,
             ..self.0.theta_tuning.into()
         }
         .try_into()
@@ -225,6 +217,14 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
     /// Set theta hyper parameter tuning
     pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<F>) -> Self {
         self.0.theta_tuning = theta_tuning;
+        self
+    }
+
+    /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
+    ///
+    /// None means no PLS dimension reduction applied.
+    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
+        self.0.kpls_dim = kpls_dim;
         self
     }
 

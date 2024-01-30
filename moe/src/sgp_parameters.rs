@@ -198,20 +198,12 @@ impl<F: Float, R: Rng + SeedableRng + Clone> SparseGpMixtureParams<F, R> {
         self
     }
 
-    /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
-    ///
-    /// None means no PLS dimension reduction applied.
-    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
-        self.0.kpls_dim = kpls_dim;
-        self
-    }
-
     /// Set initial value for theta hyper parameter.
     ///
-    /// During training process, the internal optimization is started from `theta_guess`.
-    pub fn theta_guess(mut self, theta_guess: Vec<F>) -> Self {
+    /// During training process, the internal optimization is started from `theta_init`.
+    pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.theta_tuning = ParamTuning {
-            guess: theta_guess,
+            guess: theta_init,
             ..self.0.theta_tuning.into()
         }
         .try_into()
@@ -233,6 +225,14 @@ impl<F: Float, R: Rng + SeedableRng + Clone> SparseGpMixtureParams<F, R> {
     /// Set theta hyper parameter tuning
     pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<F>) -> Self {
         self.0.theta_tuning = theta_tuning;
+        self
+    }
+
+    /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
+    ///
+    /// None means no PLS dimension reduction applied.
+    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
+        self.0.kpls_dim = kpls_dim;
         self
     }
 

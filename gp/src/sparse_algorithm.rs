@@ -824,7 +824,7 @@ mod tests {
 
         let sgp = SparseKriging::params(Inducings::Randomized(n_inducings))
             .seed(Some(42))
-            .theta_guess(vec![0.1])
+            .theta_init(vec![0.1])
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fitted");
 
@@ -868,7 +868,7 @@ mod tests {
             Inducings::Located(z),
         )
         .sparse_method(SparseMethod::Vfe)
-        .theta_guess(vec![0.01])
+        .theta_init(vec![0.01])
         .fit(&Dataset::new(xt.clone(), yt.clone()))
         .expect("GP fitted");
 
@@ -910,7 +910,7 @@ mod tests {
         )
         .sparse_method(SparseMethod::Vfe)
         //.sparse_method(SparseMethod::Fitc)
-        .theta_guess(vec![0.1])
+        .theta_init(vec![0.1])
         .noise_variance(VarianceEstimation::Estimated {
             initial_guess: 0.02,
             bounds: (1e-3, 1.),

@@ -136,10 +136,9 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     pub fn new(corr: Corr, inducings: Inducings<F>) -> SgpParams<F, Corr> {
         Self(SgpValidParams {
             gp_params: GpValidParams {
-                theta: None,
-                theta_tuning: ThetaTuning::default(),
                 mean: ConstantMean::default(),
                 corr,
+                theta_tuning: ThetaTuning::default(),
                 kpls_dim: None,
                 n_start: 10,
                 nugget: F::cast(1000.0) * F::epsilon(),
@@ -159,10 +158,10 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
 
     /// Set initial value for theta hyper parameter.
     ///
-    /// During training process, the internal optimization is started from `theta_guess`.
-    pub fn theta_guess(mut self, theta_guess: Vec<F>) -> Self {
+    /// During training process, the internal optimization is started from `theta_init`.
+    pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.gp_params.theta_tuning = ParamTuning {
-            guess: theta_guess,
+            guess: theta_init,
             ..(self.0.gp_params.theta_tuning().clone()).into()
         }
         .try_into()

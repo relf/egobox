@@ -1228,7 +1228,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
-        .theta_guess(vec![0.1])
+        .theta_init(vec![0.1])
         .kpls_dim(Some(1))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fit error");
@@ -1251,7 +1251,7 @@ mod tests {
                         [<$regr Mean>]::default(),
                         [<$corr Corr>]::default(),
                     )
-                    .theta_guess(vec![0.1])
+                    .theta_init(vec![0.1])
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fit error");
                     let yvals = gp

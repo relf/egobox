@@ -65,8 +65,6 @@ impl<F: Float> ThetaTuning<F> {
 /// A set of validated GP parameters.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
-    /// Parameter of the autocorrelation model
-    pub(crate) theta: Option<Vec<F>>,
     /// Parameter guess of the autocorrelation model
     pub(crate) theta_tuning: ThetaTuning<F>,
     /// Regression model representing the mean(x)
@@ -84,7 +82,6 @@ pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationMo
 impl<F: Float> Default for GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
     fn default() -> GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
         GpValidParams {
-            theta: None,
             theta_tuning: ThetaTuning::default(),
             mean: ConstantMean(),
             corr: SquaredExponentialCorr(),
@@ -138,7 +135,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     /// A constructor for GP parameters given mean and correlation models
     pub fn new(mean: Mean, corr: Corr) -> GpParams<F, Mean, Corr> {
         Self(GpValidParams {
-            theta: None,
             theta_tuning: ThetaTuning::default(),
             mean,
             corr,
@@ -169,10 +165,10 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
 
     /// Set initial value for theta hyper parameter.
     ///
-    /// During training process, the internal optimization is started from `theta_guess`.
-    pub fn theta_guess(mut self, theta_guess: Vec<F>) -> Self {
+    /// During training process, the internal optimization is started from `theta_init`.
+    pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.theta_tuning = ParamTuning {
-            guess: theta_guess,
+            guess: theta_init,
             ..ThetaTuning::default().into()
         }
         .try_into()
