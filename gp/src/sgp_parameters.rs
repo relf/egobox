@@ -18,7 +18,10 @@ pub enum VarianceEstimation<F: Float> {
 }
 impl<F: Float> Default for VarianceEstimation<F> {
     fn default() -> VarianceEstimation<F> {
-        Self::Constant(F::cast(0.01))
+        Self::Estimated {
+            initial_guess: F::cast(1e-2),
+            bounds: (F::cast(100.0) * F::epsilon(), F::cast(1e10)),
+        }
     }
 }
 

@@ -26,6 +26,22 @@ use std::fmt;
 use ndarray_rand::rand_distr::Normal;
 use ndarray_rand::RandomExt;
 
+pub(crate) struct CobylaParams {
+    pub rhobeg: f64,
+    pub ftol_rel: f64,
+    pub maxeval: usize,
+}
+
+impl Default for CobylaParams {
+    fn default() -> Self {
+        CobylaParams {
+            rhobeg: 0.5,
+            ftol_rel: 1e-4,
+            maxeval: 25,
+        }
+    }
+}
+
 // const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 //const N_START: usize = 0; // number of optimization restart (aka multistart)
 
@@ -836,7 +852,15 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let (theta0s, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
 
         let opt_thetas = theta0s.map_axis(Axis(1), |theta| {
-            optimize_params(objfn, &theta.to_owned(), &bounds)
+            optimize_params(
+                objfn,
+                &theta.to_owned(),
+                &bounds,
+                CobylaParams {
+                    maxeval: 10 * theta0_dim,
+                    ..CobylaParams::default()
+                },
+            )
         });
         let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
@@ -899,7 +923,6 @@ pub(crate) fn prepare_multistart<F: Float>(
         }
         std::cmp::Ordering::Less => (),
     };
-
     (theta0s, bounds)
 }
 
@@ -909,6 +932,7 @@ pub(crate) fn optimize_params<ObjF, F>(
     objfn: ObjF,
     param0: &Array1<F>,
     bounds: &[(F, F)],
+    cobyla: CobylaParams,
 ) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
@@ -928,9 +952,9 @@ where
     let upper_bounds = bounds.iter().map(|b| into_f64(&b.1)).collect::<Vec<_>>();
     optimizer.set_upper_bounds(&upper_bounds).unwrap();
 
-    optimizer.set_initial_step1(0.5).unwrap();
-    optimizer.set_maxeval(15 * param0.len() as u32).unwrap();
-    optimizer.set_ftol_rel(1e-4).unwrap();
+    optimizer.set_initial_step1(cobyla.rhobeg).unwrap();
+    optimizer.set_maxeval(cobyla.maxeval as u32).unwrap();
+    optimizer.set_ftol_rel(cobyla.ftol_rel).unwrap();
 
     match optimizer.optimize(&mut param) {
         Ok((_, fmin)) => {
@@ -955,6 +979,7 @@ pub(crate) fn optimize_params<ObjF, F>(
     objfn: ObjF,
     param0: &Array1<F>,
     bounds: &[(F, F)],
+    cobyla: CobylaParams,
 ) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
@@ -965,10 +990,6 @@ where
     let base: f64 = 10.;
     let cons: Vec<&dyn Func<()>> = vec![];
     let param0 = param0.map(|v| into_f64(v)).into_raw_vec();
-
-    let initial_step = 0.5;
-    let ftol_rel = 1e-4;
-    let maxeval = 10 * param0.len();
 
     let bounds: Vec<_> = bounds
         .iter()
@@ -981,10 +1002,10 @@ where
         &bounds,
         &cons,
         (),
-        maxeval,
-        cobyla::RhoBeg::All(initial_step),
+        cobyla.maxeval,
+        cobyla::RhoBeg::All(cobyla.rhobeg),
         Some(StopTols {
-            ftol_rel,
+            ftol_rel: cobyla.ftol_rel,
             ..StopTols::default()
         }),
     ) {

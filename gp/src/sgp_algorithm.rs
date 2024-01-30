@@ -1,10 +1,10 @@
 use crate::algorithm::optimize_params;
 use crate::errors::{GpError, Result};
-use crate::prepare_multistart;
 use crate::sgp_parameters::{
     Inducings, SgpParams, SgpValidParams, SparseMethod, VarianceEstimation,
 };
 use crate::{correlation_models::*, utils::pairwise_differences};
+use crate::{prepare_multistart, CobylaParams};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
@@ -20,6 +20,7 @@ use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::time::Instant;
 
 /// Woodbury data computed during training and used for prediction
 ///
@@ -497,9 +498,23 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             }
         }
 
-        info!("Optimize with multistart = {:?}", params);
-        let opt_params =
-            params.map_axis(Axis(1), |p| optimize_params(objfn, &p.to_owned(), &bounds));
+        info!(
+            "Optimize with multistart theta = {:?} and bounds = {:?}",
+            params, bounds
+        );
+        let now = Instant::now();
+        let opt_params = params.map_axis(Axis(1), |p| {
+            optimize_params(
+                objfn,
+                &p.to_owned(),
+                &bounds,
+                CobylaParams {
+                    maxeval: 10 * theta0_dim,
+                    ..CobylaParams::default()
+                },
+            )
+        });
+        info!("elapsed optim = {:?}", now.elapsed().as_millis());
 
         let opt_index = opt_params.map(|(_, opt_f)| opt_f).argmin().unwrap();
         let opt_params = &(opt_params[opt_index]).0.mapv(|v| F::cast(base.powf(v)));

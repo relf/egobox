@@ -154,7 +154,7 @@ impl SparseGpMix {
         if let Some(guess) = self.theta0.as_ref() {
             theta_tuning = ParamTuning {
                 guess: guess.to_vec(),
-                ..ThetaTuning::default().into()
+                ..theta_tuning.into()
             }
             .try_into()
             .expect("Theta tuning initial guess");
@@ -162,7 +162,7 @@ impl SparseGpMix {
         if let Some(bounds) = self.theta_bounds.as_ref() {
             theta_tuning = ParamTuning {
                 bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
-                ..ThetaTuning::default().into()
+                ..theta_tuning.into()
             }
             .try_into()
             .expect("Theta tuning bounds");

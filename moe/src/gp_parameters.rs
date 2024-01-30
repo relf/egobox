@@ -8,6 +8,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
+use egobox_gp::{ParamTuning, ThetaTuning};
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -32,6 +33,8 @@ pub struct GpMixValidParams<F: Float, R: Rng + Clone> {
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
+    /// Theta hyperparameter tuning
+    theta_tuning: ThetaTuning<F>,
     /// Number of GP hyperparameters optimization restarts
     n_start: usize,
     /// Gaussian Mixture model used to cluster
@@ -50,6 +53,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixValidParams<F, R> 
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
             kpls_dim: None,
+            theta_tuning: ThetaTuning::default(),
             n_start: 10,
             gmm: None,
             gmx: None,
@@ -82,6 +86,11 @@ impl<F: Float, R: Rng + Clone> GpMixValidParams<F, R> {
     /// The optional number of PLS components
     pub fn kpls_dim(&self) -> Option<usize> {
         self.kpls_dim
+    }
+
+    /// The speified tuning of theta hyperparameter
+    pub fn theta_tuning(&self) -> &ThetaTuning<F> {
+        &self.theta_tuning
     }
 
     /// The number of hypermarameters optimization restarts
@@ -142,6 +151,7 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
+            theta_tuning: ThetaTuning::default(),
             kpls_dim: None,
             n_start: 10,
             gmm: None,
@@ -188,6 +198,36 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
         self
     }
 
+    /// Set initial value for theta hyper parameter.
+    ///
+    /// During training process, the internal optimization is started from `theta_guess`.
+    pub fn theta_guess(mut self, theta_guess: Vec<F>) -> Self {
+        self.0.theta_tuning = ParamTuning {
+            guess: theta_guess,
+            ..self.0.theta_tuning.into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Set theta hyper parameter search space.
+    pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
+        self.0.theta_tuning = ParamTuning {
+            bounds: theta_bounds,
+            ..self.0.theta_tuning.into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Set theta hyper parameter tuning
+    pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<F>) -> Self {
+        self.0.theta_tuning = theta_tuning;
+        self
+    }
+
     /// Sets the number of hyperparameters optimization restarts
     pub fn n_start(mut self, n_start: usize) -> Self {
         self.0.n_start = n_start;
@@ -220,6 +260,7 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
             kpls_dim: self.0.kpls_dim(),
+            theta_tuning: self.0.theta_tuning().clone(),
             n_start: self.0.n_start(),
             gmm: self.0.gmm().clone(),
             gmx: self.0.gmx().clone(),

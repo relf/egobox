@@ -212,7 +212,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> SparseGpMixtureParams<F, R> {
     pub fn theta_guess(mut self, theta_guess: Vec<F>) -> Self {
         self.0.theta_tuning = ParamTuning {
             guess: theta_guess,
-            ..ThetaTuning::default().into()
+            ..self.0.theta_tuning.into()
         }
         .try_into()
         .unwrap();
@@ -223,7 +223,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> SparseGpMixtureParams<F, R> {
     pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
         self.0.theta_tuning = ParamTuning {
             bounds: theta_bounds,
-            ..ThetaTuning::default().into()
+            ..self.0.theta_tuning.into()
         }
         .try_into()
         .unwrap();

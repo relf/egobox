@@ -18,10 +18,12 @@ pub struct ParamTuning<F: Float> {
 impl<F: Float> TryFrom<ParamTuning<F>> for ThetaTuning<F> {
     type Error = GpError;
     fn try_from(pt: ParamTuning<F>) -> Result<ThetaTuning<F>> {
-        if pt.guess.len() != pt.bounds.len() && (pt.guess.len() != 1 || pt.bounds.len() != 1) {
-            return Err(GpError::InvalidValueError(
-                "Bad theta tuning specification".to_string(),
-            ));
+        if pt.guess.len() != pt.bounds.len() && (pt.guess.len() != 1 && pt.bounds.len() != 1) {
+            return Err(GpError::InvalidValueError(format!(
+                "Bad theta tuning specification {} {}",
+                pt.guess.len(),
+                pt.bounds.len()
+            )));
         }
         // TODO: check if guess in bounds
         Ok(ThetaTuning(pt))
