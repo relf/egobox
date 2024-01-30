@@ -269,6 +269,7 @@ impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
                 _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
             };
         let mut expert_params = best_expert_params?;
+        expert_params.theta_tuning(self.theta_tuning().clone());
         expert_params.kpls_dim(self.kpls_dim());
         expert_params.n_start(self.n_start());
         let expert = expert_params.train(&xtrain.view(), &ytrain.view());

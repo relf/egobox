@@ -41,14 +41,6 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         * Hard: prediction is taken from the expert with highest responsability
 ///         resulting in a model with discontinuities.
 ///
-///     theta_init ([nx] where nx is the dimension of inputs x)
-///         Initial guess for GP theta hyperparameters.
-///         When None the default is 1e-2 for all components
-///
-///     theta_bounds ([[lower_1, upper_1], ..., [lower_nx, upper_nx]] where nx is the dimension of inputs x)
-///         Space search when optimizing theta GP hyperparameters
-///         When None the default is [1e-6, 1e2] for all components
-///
 ///     kpls_dim (0 < int < nx where nx is the dimension of inputs x)
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
