@@ -11,21 +11,21 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct ParamTuning<F: Float> {
-    pub guess: Vec<F>,
+    pub init: Vec<F>,
     pub bounds: Vec<(F, F)>,
 }
 
 impl<F: Float> TryFrom<ParamTuning<F>> for ThetaTuning<F> {
     type Error = GpError;
     fn try_from(pt: ParamTuning<F>) -> Result<ThetaTuning<F>> {
-        if pt.guess.len() != pt.bounds.len() && (pt.guess.len() != 1 && pt.bounds.len() != 1) {
+        if pt.init.len() != pt.bounds.len() && (pt.init.len() != 1 && pt.bounds.len() != 1) {
             return Err(GpError::InvalidValueError(format!(
                 "Bad theta tuning specification {} {}",
-                pt.guess.len(),
+                pt.init.len(),
                 pt.bounds.len()
             )));
         }
-        // TODO: check if guess in bounds
+        // TODO: check if init in bounds
         Ok(ThetaTuning(pt))
     }
 }
@@ -38,7 +38,7 @@ pub struct ThetaTuning<F: Float>(ParamTuning<F>);
 impl<F: Float> Default for ThetaTuning<F> {
     fn default() -> ThetaTuning<F> {
         ThetaTuning(ParamTuning {
-            guess: vec![F::cast(0.01)],
+            init: vec![F::cast(0.01)],
             bounds: vec![(F::cast(1e-6), F::cast(1e2))],
         })
     }
@@ -47,7 +47,7 @@ impl<F: Float> Default for ThetaTuning<F> {
 impl<F: Float> From<ThetaTuning<F>> for ParamTuning<F> {
     fn from(tt: ThetaTuning<F>) -> ParamTuning<F> {
         ParamTuning {
-            guess: tt.0.guess,
+            init: tt.0.init,
             bounds: tt.0.bounds,
         }
     }
@@ -55,7 +55,7 @@ impl<F: Float> From<ThetaTuning<F>> for ParamTuning<F> {
 
 impl<F: Float> ThetaTuning<F> {
     pub fn theta0(&self) -> &[F] {
-        &self.0.guess
+        &self.0.init
     }
     pub fn bounds(&self) -> &[(F, F)] {
         &self.0.bounds
@@ -168,7 +168,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     /// During training process, the internal optimization is started from `theta_init`.
     pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.theta_tuning = ParamTuning {
-            guess: theta_init,
+            init: theta_init,
             ..ThetaTuning::default().into()
         }
         .try_into()

@@ -161,7 +161,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     /// During training process, the internal optimization is started from `theta_init`.
     pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.gp_params.theta_tuning = ParamTuning {
-            guess: theta_init,
+            init: theta_init,
             ..(self.0.gp_params.theta_tuning().clone()).into()
         }
         .try_into()

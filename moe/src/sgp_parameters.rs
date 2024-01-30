@@ -203,7 +203,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> SparseGpMixtureParams<F, R> {
     /// During training process, the internal optimization is started from `theta_init`.
     pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.theta_tuning = ParamTuning {
-            guess: theta_init,
+            init: theta_init,
             ..self.0.theta_tuning.into()
         }
         .try_into()
