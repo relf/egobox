@@ -1,6 +1,6 @@
 use crate::algorithm::optimize_params;
 use crate::errors::{GpError, Result};
-use crate::sgp_parameters::{
+use crate::sparse_parameters::{
     Inducings, SgpParams, SgpValidParams, SparseMethod, VarianceEstimation,
 };
 use crate::{correlation_models::*, utils::pairwise_differences};
