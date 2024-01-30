@@ -61,6 +61,8 @@ pub(crate) struct GpMix {
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub recombination: Recombination,
+    pub theta_init: Option<Vec<f64>>,
+    pub theta_bounds: Option<Vec<Vec<f64>>>,
     pub kpls_dim: Option<usize>,
     pub n_start: usize,
     pub seed: Option<u64>,
@@ -74,6 +76,8 @@ impl GpMix {
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         recombination = Recombination::Smooth,
+        theta_init = None,
+        theta_bounds = None,
         kpls_dim = None,
         n_start = 10,
         seed = None
@@ -84,6 +88,8 @@ impl GpMix {
         regr_spec: u8,
         corr_spec: u8,
         recombination: Recombination,
+        theta_init: Option<Vec<f64>>,
+        theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
         n_start: usize,
         seed: Option<u64>,
@@ -93,6 +99,8 @@ impl GpMix {
             regression_spec: RegressionSpec(regr_spec),
             correlation_spec: CorrelationSpec(corr_spec),
             recombination,
+            theta_init,
+            theta_bounds,
             kpls_dim,
             n_start,
             seed,
@@ -120,6 +128,25 @@ impl GpMix {
         } else {
             Xoshiro256Plus::from_entropy()
         };
+
+        let mut theta_tuning = ThetaTuning::default();
+        if let Some(init) = self.theta_init.as_ref() {
+            theta_tuning = ParamTuning {
+                init: init.to_vec(),
+                ..theta_tuning.into()
+            }
+            .try_into()
+            .expect("Theta tuning initial init");
+        }
+        if let Some(bounds) = self.theta_bounds.as_ref() {
+            theta_tuning = ParamTuning {
+                bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
+                ..theta_tuning.into()
+            }
+            .try_into()
+            .expect("Theta tuning bounds");
+        }
+
         let moe = py.allow_threads(|| {
             GpMixture::params()
                 .n_clusters(self.n_clusters)
@@ -130,6 +157,7 @@ impl GpMix {
                 .correlation_spec(
                     egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
                 )
+                .theta_tuning(theta_tuning)
                 .kpls_dim(self.kpls_dim)
                 .n_start(self.n_start)
                 .with_rng(rng)
@@ -156,15 +184,20 @@ impl Gpx {
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         recombination = Recombination::Smooth,
+        theta_init = None,
+        theta_bounds = None,
         kpls_dim = None,
         n_start = 10,
         seed = None
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn builder(
         n_clusters: usize,
         regr_spec: u8,
         corr_spec: u8,
         recombination: Recombination,
+        theta_init: Option<Vec<f64>>,
+        theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
         n_start: usize,
         seed: Option<u64>,
@@ -174,6 +207,8 @@ impl Gpx {
             regr_spec,
             corr_spec,
             recombination,
+            theta_init,
+            theta_bounds,
             kpls_dim,
             n_start,
             seed,

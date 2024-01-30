@@ -170,9 +170,6 @@ impl SparseGpMix {
 
         let sgp = py.allow_threads(|| {
             SparseGpMixture::params(inducings)
-                // .n_clusters(self.n_clusters)
-                // .recombination(recomb)
-                // .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
                 .correlation_spec(
                     egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
                 )
