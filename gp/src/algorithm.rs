@@ -176,6 +176,9 @@ impl<F: Float> Clone for GpInnerParams<F> {
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Array1<F>,
+    /// Reduced likelihood value (result from internal optimization)
+    /// Maybe used to compare different trained models
+    likelihood: F,
     /// Regression model
     #[cfg_attr(
         feature = "serializable",
@@ -218,6 +221,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
     fn clone(&self) -> Self {
         Self {
             theta: self.theta.to_owned(),
+            likelihood: self.likelihood,
             mean: self.mean,
             corr: self.corr,
             inner_params: self.inner_params.clone(),
@@ -232,7 +236,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> fmt::Display
     for GaussianProcess<F, Mean, Corr>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "GP({}, {})", self.mean, self.corr)
+        write!(
+            f,
+            "GP(mean={}, corr={}, theta={}, variance={})",
+            self.mean, self.corr, self.theta, self.inner_params.sigma2
+        )
     }
 }
 
@@ -866,9 +874,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let opt_theta = &(opt_thetas[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
         // println!("opt_theta={}", opt_theta);
         let rxx = self.corr().value(&x_distances.d, opt_theta, &w_star);
-        let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
+        let (lkh, inner_params) =
+            reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
             theta: opt_theta.to_owned(),
+            likelihood: lkh,
             mean: *self.mean(),
             corr: *self.corr(),
             inner_params,

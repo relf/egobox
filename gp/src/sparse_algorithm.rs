@@ -151,6 +151,9 @@ pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
     sigma2: F,
     /// Gaussian noise variance
     noise: F,
+    /// Reduced likelihood value (result from internal optimization)
+    /// Maybe used to compare different trained models
+    likelihood: F,
     /// Weights in case of KPLS dimension reduction coming from PLS regression (orig_dim, kpls_dim)
     w_star: Array2<F>,
     /// Training inputs
@@ -180,6 +183,7 @@ impl<F: Float, Corr: CorrelationModel<F>> Clone for SparseGaussianProcess<F, Cor
             theta: self.theta.to_owned(),
             sigma2: self.sigma2,
             noise: self.noise,
+            likelihood: self.likelihood,
             w_star: self.w_star.to_owned(),
             xtrain: self.xtrain.clone(),
             ytrain: self.xtrain.clone(),
@@ -556,7 +560,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         };
 
         // Recompute reduced likelihood with optimized params
-        let (_, w_data) = self.reduced_likelihood(
+        let (lkh, w_data) = self.reduced_likelihood(
             &opt_theta,
             opt_sigma2,
             opt_noise,
@@ -572,6 +576,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             theta: opt_theta,
             sigma2: opt_sigma2,
             noise: opt_noise,
+            likelihood: lkh,
             w_data,
             w_star,
             xtrain: xtrain.to_owned(),
