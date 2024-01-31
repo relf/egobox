@@ -1207,7 +1207,9 @@ mod tests {
     #[test]
     fn test_moe_display() {
         let rng = Xoshiro256Plus::seed_from_u64(0);
-        let xt = Lhs::new(&array![[0., 1.]]).sample(100);
+        let xt = Lhs::new(&array![[0., 1.]])
+            .with_rng(rng.clone())
+            .sample(100);
         let yt = f_test_1d(&xt);
 
         let moe = GpMixture::params()
@@ -1218,6 +1220,6 @@ mod tests {
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
-        assert_eq!("Mixture[Hard](Constant_SquaredExponential, Constant_SquaredExponential, Constant_SquaredExponential)", moe.to_string());
+        assert_eq!("Mixture[Hard](Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.03871601282054056], variance=[0.276011431746834], likelihood=454.17113736397033), Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.07903503494417609], variance=[0.0077182164672893756], likelihood=436.39615700140183), Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.050821466014058826], variance=[0.32824998062969973], likelihood=193.19339252734846))", moe.to_string());
     }
 }
