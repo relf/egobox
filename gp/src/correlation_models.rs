@@ -16,7 +16,7 @@ use std::convert::TryFrom;
 use std::fmt;
 
 /// A trait for using a correlation model in GP regression
-pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display {
+pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display + Sync {
     /// Compute correlation function matrix r(x, x') given distances `d` between x and x',
     /// `theta` parameters, and PLS `weights`, where:
     /// `theta`   : hyperparameters (1xd)

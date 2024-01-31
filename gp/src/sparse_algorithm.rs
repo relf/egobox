@@ -11,12 +11,11 @@ use linfa_pls::PlsRegression;
 use log::info;
 use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
-use ndarray_stats::QuantileExt;
-
 use ndarray_rand::rand::seq::SliceRandom;
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
+use rayon::prelude::*;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -337,7 +336,7 @@ where
     }
 }
 
-impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
+impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
     Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for SgpValidParams<F, Corr>
 {
     type Object = SparseGaussianProcess<F, Corr>;
@@ -505,23 +504,47 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             "Optimize with multistart theta = {:?} and bounds = {:?}",
             params, bounds
         );
-        let now = Instant::now();
-        let opt_params = params.map_axis(Axis(1), |p| {
-            optimize_params(
-                objfn,
-                &p.to_owned(),
-                &bounds,
-                CobylaParams {
-                    maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
-                    ..CobylaParams::default()
-                },
-            )
-        });
-        info!("elapsed optim = {:?}", now.elapsed().as_millis());
 
-        let opt_index = opt_params.map(|(_, opt_f)| opt_f).argmin().unwrap();
-        let opt_params = &(opt_params[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
-        // println!("opt_theta={}", opt_theta);
+        // let opt_params = params.map_axis(Axis(1), |p| {
+        //     let now = Instant::now();
+        //     let opt_res = optimize_params(
+        //         objfn,
+        //         &p.to_owned(),
+        //         &bounds,
+        //         CobylaParams {
+        //             maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+        //             ..CobylaParams::default()
+        //         },
+        //     );
+        //     info!("elapsed optim = {:?}", now.elapsed().as_millis());
+        //     opt_res
+        // });
+        // let opt_index = opt_params.map(|(_, opt_f)| opt_f).argmin().unwrap();
+        // let opt_params = &(opt_params[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
+        // println!("Normal opt_params={:?}", opt_params);
+        let now = Instant::now();
+        let opt_params = (0..params.nrows())
+            .into_par_iter()
+            .map(|i| {
+                let opt_res = optimize_params(
+                    objfn,
+                    &params.row(i).to_owned(),
+                    &bounds,
+                    CobylaParams {
+                        maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+                        ..CobylaParams::default()
+                    },
+                );
+
+                opt_res
+            })
+            .reduce(
+                || (Array::ones((params.ncols(),)), f64::INFINITY),
+                |a, b| if b.1 < a.1 { b } else { a },
+            );
+        info!("elapsed optim = {:?}", now.elapsed().as_millis());
+        let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
+        println!("Parallel opt_params={:?}", opt_params);
         let opt_theta = opt_params
             .slice(s![..n - 1 - is_noise_estimated as usize])
             .to_owned();
