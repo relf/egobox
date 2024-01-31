@@ -238,8 +238,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> fmt::Display
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "GP(mean={}, corr={}, theta={}, variance={})",
-            self.mean, self.corr, self.theta, self.inner_params.sigma2
+            "GP(mean={}, corr={}, theta={}, variance={}, likelihood={})",
+            self.mean, self.corr, self.theta, self.inner_params.sigma2, self.likelihood,
         )
     }
 }

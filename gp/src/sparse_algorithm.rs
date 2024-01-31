@@ -195,7 +195,11 @@ impl<F: Float, Corr: CorrelationModel<F>> Clone for SparseGaussianProcess<F, Cor
 
 impl<F: Float, Corr: CorrelationModel<F>> fmt::Display for SparseGaussianProcess<F, Corr> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SGP({})", self.corr)
+        write!(
+            f,
+            "SGP(corr={}, theta={}, variance={}, noise variance={}, likelihood={})",
+            self.corr, self.theta, self.sigma2, self.noise, self.likelihood
+        )
     }
 }
 
@@ -426,6 +430,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             Inducings::Randomized(n) => make_inducings(*n, &xtrain.view(), &mut rng),
             Inducings::Located(z) => z.to_owned(),
         };
+        info!("{}", z);
 
         // We prefer optimize variable change log10(theta)
         // as theta is used as exponent in objective function

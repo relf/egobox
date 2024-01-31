@@ -173,11 +173,12 @@ macro_rules! declare_surrogate {
 
             impl std::fmt::Display for [<Gp $regr $corr Surrogate>] {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}_{}{}", stringify!($regr), stringify!($corr),
+                    write!(f, "{}_{}{}{}", stringify!($regr), stringify!($corr),
                         match self.0.kpls_dim() {
                             None => String::from(""),
                             Some(dim) => format!("_PLS({})", dim),
-                        }
+                        },
+                        self.0.to_string()
                     )
                 }
             }
@@ -297,11 +298,12 @@ macro_rules! declare_sgp_surrogate {
 
             impl std::fmt::Display for [<Sgp $corr Surrogate>] {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}_{}{}", stringify!($regr), stringify!($corr),
+                    write!(f, "{}{}{}", stringify!($corr),
                         match self.0.kpls_dim() {
                             None => String::from(""),
                             Some(dim) => format!("_PLS({})", dim),
-                        }
+                        },
+                        self.0.to_string()
                     )
                 }
             }
