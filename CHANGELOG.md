@@ -1,8 +1,18 @@
 Changes
 -------
 
-Version 0.15.0 - unreleased
+Version 0.16.0 - unreleased
 ===========================
+
+Version 0.15.0 - 02/01/2023
+===========================
+
+* `gp`: Implement sparse gaussian process methods (cf. `SparseGaussianProcess`)
+* Python binding: `SparseGpMix`, see doc/tutorial
+* GP/SGP API
+  * hyperparameter tuning : initial theta guess and bounds can be specified (`theta_init`, `theta_bounds`)
+  * `n_start` controls the number of optimization multistart
+* In GP/SGP `rayon` is used to make parallel optimization multistart
 
 Version 0.14.0 - 13/12/2023
 ===========================

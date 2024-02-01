@@ -40,10 +40,10 @@ Depending on the sub-packages you want to use, you have to add following declara
 
 ```text
 [dependencies]
-egobox-doe = { version = "0.14.0" }
-egobox-gp  = { version = "0.14.0" }
-egobox-moe = { version = "0.14.0" }
-egobox-ego = { version = "0.14.0" }
+egobox-doe = { version = "0.15.0" }
+egobox-gp  = { version = "0.15.0" }
+egobox-moe = { version = "0.15.0" }
+egobox-ego = { version = "0.15.0" }
 ```
 
 ### Features
@@ -52,10 +52,10 @@ The table below presents the various features available depending on the subcrat
 
 | Name         | doe  | gp   | moe  | ego  |
 | :----------- | :--- | :--- | :--- | :--- |
-| serializable | Y    | Y    | Y    |      |
-| persistent   |      |      | Y    |      |
-| blas         |      | Y    | Y    | Y    |
-| nlopt        |      | Y    |      | Y    |
+| serializable | ✔️    | ✔️    | ✔️    |      |
+| persistent   |      |      | ✔️    |      |
+| blas         |      | ✔️    | ✔️    | ✔️    |
+| nlopt        |      | ✔️    |      | ✔️    |
 
 #### serializable
 When selected, the serialization with [serde crate](https://serde.rs/) is enabled.
@@ -97,7 +97,7 @@ Otherwise, you can choose an external BLAS/LAPACK backend available through the 
 Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you could specify in your `Cargo.toml` the following features:
 ```text
 [dependencies]
-egobox-gp = { version = "0.14.0", features = ["blas", "linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.15.0", features = ["blas", "linfa/intel-mkl-static"] }
 ```
 or you could run the `gp` example as follows:
 ``` bash
