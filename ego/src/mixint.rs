@@ -15,13 +15,16 @@ use ndarray::{s, Array, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2,
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
+use std::marker::PhantomData;
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "persistent")]
 use egobox_moe::MoeError;
+#[cfg(feature = "persistent")]
 use std::fs;
+#[cfg(feature = "persistent")]
 use std::io::Write;
-use std::marker::PhantomData;
 
 /// Expand xlimits to add continuous dimensions for enumeration x features.
 ///
@@ -549,6 +552,7 @@ impl GpSurrogate for MixintMoe {
     }
 
     /// Save Moe model in given file.
+    #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> egobox_moe::Result<()> {
         let mut file = fs::File::create(path).unwrap();
         let bytes = match serde_json::to_string(self) {

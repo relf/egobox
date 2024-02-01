@@ -12,6 +12,7 @@ categories = ["algorithms", "mathematics", "science"]
 [features]
 default = []
 
+persistent = ["egobox-moe/persistent"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
