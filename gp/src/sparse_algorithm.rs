@@ -430,7 +430,6 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             Inducings::Randomized(n) => make_inducings(*n, &xtrain.view(), &mut rng),
             Inducings::Located(z) => z.to_owned(),
         };
-        info!("{}", z);
 
         // We prefer optimize variable change log10(theta)
         // as theta is used as exponent in objective function
@@ -509,28 +508,6 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             "Optimize with multistart theta = {:?} and bounds = {:?}",
             params, bounds
         );
-        println!(
-            "Optimize with multistart theta = {:?} and bounds = {:?}",
-            params, bounds
-        );
-
-        // let opt_params = params.map_axis(Axis(1), |p| {
-        //     let now = Instant::now();
-        //     let opt_res = optimize_params(
-        //         objfn,
-        //         &p.to_owned(),
-        //         &bounds,
-        //         CobylaParams {
-        //             maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
-        //             ..CobylaParams::default()
-        //         },
-        //     );
-        //     info!("elapsed optim = {:?}", now.elapsed().as_millis());
-        //     opt_res
-        // });
-        // let opt_index = opt_params.map(|(_, opt_f)| opt_f).argmin().unwrap();
-        // let opt_params = &(opt_params[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
-        // println!("Normal opt_params={:?}", opt_params);
         let now = Instant::now();
         let opt_params = (0..params.nrows())
             .into_par_iter()
