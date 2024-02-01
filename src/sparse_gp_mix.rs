@@ -160,6 +160,7 @@ impl SparseGpMix {
             .expect("Theta tuning bounds");
         }
 
+        ctrlc::set_handler(|| std::process::exit(2)).unwrap();
         let sgp = py.allow_threads(|| {
             SparseGpMixture::params(inducings)
                 .correlation_spec(

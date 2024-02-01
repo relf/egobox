@@ -156,6 +156,7 @@ impl GpMix {
             .expect("Theta tuning bounds");
         }
 
+        ctrlc::set_handler(|| std::process::exit(2)).unwrap();
         let moe = py.allow_threads(|| {
             GpMixture::params()
                 .n_clusters(self.n_clusters)
