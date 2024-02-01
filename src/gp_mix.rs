@@ -156,7 +156,9 @@ impl GpMix {
             .expect("Theta tuning bounds");
         }
 
-        ctrlc::set_handler(|| std::process::exit(2)).unwrap();
+        if let Err(ctrlc::Error::MultipleHandlers) = ctrlc::set_handler(|| std::process::exit(2)) {
+            // ignore multiple handlers error
+        };
         let moe = py.allow_threads(|| {
             GpMixture::params()
                 .n_clusters(self.n_clusters)
