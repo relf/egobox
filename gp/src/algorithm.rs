@@ -16,15 +16,17 @@ use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray_rand::rand_distr::Normal;
+use ndarray_rand::RandomExt;
 use ndarray_stats::QuantileExt;
 
+use log::debug;
 use rand_xoshiro::Xoshiro256Plus;
+use rayon::prelude::*;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-use ndarray_rand::rand_distr::Normal;
-use ndarray_rand::RandomExt;
+use std::time::Instant;
 
 pub(crate) struct CobylaParams {
     pub rhobeg: f64,
@@ -857,27 +859,38 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             )
         };
 
-        let (theta0s, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
+        let (params, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
+        debug!(
+            "Optimize with multistart theta = {:?} and bounds = {:?}",
+            params, bounds
+        );
+        let now = Instant::now();
+        let opt_params = (0..params.nrows())
+            .into_par_iter()
+            .map(|i| {
+                let opt_res = optimize_params(
+                    objfn,
+                    &params.row(i).to_owned(),
+                    &bounds,
+                    CobylaParams {
+                        maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+                        ..CobylaParams::default()
+                    },
+                );
 
-        let opt_thetas = theta0s.map_axis(Axis(1), |theta| {
-            optimize_params(
-                objfn,
-                &theta.to_owned(),
-                &bounds,
-                CobylaParams {
-                    maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
-                    ..CobylaParams::default()
-                },
-            )
-        });
-        let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
-        let opt_theta = &(opt_thetas[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
-        // println!("opt_theta={}", opt_theta);
-        let rxx = self.corr().value(&x_distances.d, opt_theta, &w_star);
+                opt_res
+            })
+            .reduce(
+                || (Array::ones((params.ncols(),)), f64::INFINITY),
+                |a, b| if b.1 < a.1 { b } else { a },
+            );
+        debug!("elapsed optim = {:?}", now.elapsed().as_millis());
+        let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
+        let rxx = self.corr().value(&x_distances.d, &opt_params, &w_star);
         let (lkh, inner_params) =
             reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
-            theta: opt_theta.to_owned(),
+            theta: opt_params,
             likelihood: lkh,
             mean: *self.mean(),
             corr: *self.corr(),

@@ -8,13 +8,13 @@ use crate::{prepare_multistart, CobylaParams};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
-use log::info;
 use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_rand::rand::seq::SliceRandom;
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
+use log::debug;
 use rayon::prelude::*;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
@@ -354,7 +354,6 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         &self,
         dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
     ) -> Result<Self::Object> {
-        info!("SGP fit with {:?}", self.method());
         let x = dataset.records();
         let y = dataset.targets();
         if let Some(d) = self.kpls_dim() {
@@ -504,7 +503,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                 *noise_bounds = (lo.log10(), up.log10());
             }
         }
-        info!(
+        debug!(
             "Optimize with multistart theta = {:?} and bounds = {:?}",
             params, bounds
         );
@@ -528,9 +527,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                 || (Array::ones((params.ncols(),)), f64::INFINITY),
                 |a, b| if b.1 < a.1 { b } else { a },
             );
-        info!("elapsed optim = {:?}", now.elapsed().as_millis());
+        debug!("elapsed optim = {:?}", now.elapsed().as_millis());
         let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
-        println!("Parallel opt_params={:?}", opt_params);
         let opt_theta = opt_params
             .slice(s![..n - 1 - is_noise_estimated as usize])
             .to_owned();
