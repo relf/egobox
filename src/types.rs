@@ -125,3 +125,10 @@ impl XSpec {
         }
     }
 }
+
+#[pyclass(rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SparseMethod {
+    Fitc = 1,
+    Vfe = 2,
+}

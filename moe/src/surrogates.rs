@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use egobox_gp::{
     correlation_models::*, mean_models::*, GaussianProcess, GpParams, SgpParams,
-    SparseGaussianProcess,
+    SparseGaussianProcess, SparseMethod, ThetaTuning,
 };
 use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array1, Array2, ArrayView2};
@@ -16,24 +16,30 @@ use crate::MoeError;
 use std::fs;
 #[cfg(feature = "persistent")]
 use std::io::Write;
-/// A trait for Gp surrogate parameters to build surrogate once fitted.
+/// A trait for Gp surrogate parameters to build surrogate.
 pub trait GpSurrogateParams {
-    /// Set initial theta
-    fn initial_theta(&mut self, theta: Vec<f64>);
+    /// Set theta
+    fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
+    /// Set the nuber of internal optimization restarts
+    fn n_start(&mut self, n_start: usize);
     /// Set the nugget parameter to improve numerical stability
     fn nugget(&mut self, nugget: f64);
     /// Train the surrogate
     fn train(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn FullGpSurrogate>>;
 }
 
-/// A trait for sparse GP surrogate parameters to build surrogate once fitted.
+/// A trait for sparse GP surrogate parameters to build surrogate.
 pub trait SgpSurrogateParams {
-    /// Set initial theta
-    fn initial_theta(&mut self, theta: Vec<f64>);
+    /// Set theta
+    fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
+    /// Set the nuber of internal optimization restarts
+    fn n_start(&mut self, n_start: usize);
+    /// Set the sparse method
+    fn sparse_method(&mut self, method: SparseMethod);
     /// Set random generator seed
     fn seed(&mut self, seed: Option<u64>);
     /// Train the surrogate
@@ -96,12 +102,16 @@ macro_rules! declare_surrogate {
             }
 
             impl GpSurrogateParams for [<Gp $regr $corr SurrogateParams>] {
-                fn initial_theta(&mut self, theta: Vec<f64>) {
-                    self.0 = self.0.clone().initial_theta(Some(theta));
+                fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>) {
+                    self.0 = self.0.clone().theta_tuning(theta_tuning);
                 }
 
                 fn kpls_dim(&mut self, kpls_dim: Option<usize>) {
                     self.0 = self.0.clone().kpls_dim(kpls_dim);
+                }
+
+                fn n_start(&mut self, n_start: usize) {
+                    self.0 = self.0.clone().n_start(n_start);
                 }
 
                 fn nugget(&mut self, nugget: f64) {
@@ -163,11 +173,12 @@ macro_rules! declare_surrogate {
 
             impl std::fmt::Display for [<Gp $regr $corr Surrogate>] {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}_{}{}", stringify!($regr), stringify!($corr),
+                    write!(f, "{}_{}{}{}", stringify!($regr), stringify!($corr),
                         match self.0.kpls_dim() {
                             None => String::from(""),
                             Some(dim) => format!("_PLS({})", dim),
-                        }
+                        },
+                        self.0.to_string()
                     )
                 }
             }
@@ -210,12 +221,20 @@ macro_rules! declare_sgp_surrogate {
             }
 
             impl SgpSurrogateParams for [<Sgp $corr SurrogateParams>] {
-                fn initial_theta(&mut self, theta: Vec<f64>) {
-                    self.0 = self.0.clone().initial_theta(Some(theta));
+                fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>) {
+                    self.0 = self.0.clone().theta_tuning(theta_tuning);
                 }
 
                 fn kpls_dim(&mut self, kpls_dim: Option<usize>) {
                     self.0 = self.0.clone().kpls_dim(kpls_dim);
+                }
+
+                fn n_start(&mut self, n_start: usize) {
+                    self.0 = self.0.clone().n_start(n_start);
+                }
+
+                fn sparse_method(&mut self, method: SparseMethod) {
+                    self.0 = self.0.clone().sparse_method(method);
                 }
 
                 fn seed(&mut self, seed: Option<u64>) {
@@ -279,11 +298,12 @@ macro_rules! declare_sgp_surrogate {
 
             impl std::fmt::Display for [<Sgp $corr Surrogate>] {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}_{}{}", stringify!($regr), stringify!($corr),
+                    write!(f, "{}{}{}", stringify!($corr),
                         match self.0.kpls_dim() {
                             None => String::from(""),
                             Some(dim) => format!("_PLS({})", dim),
-                        }
+                        },
+                        self.0.to_string()
                     )
                 }
             }

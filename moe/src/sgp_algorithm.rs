@@ -112,7 +112,7 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
         let gmx = if self.gmx().is_some() {
             *self.gmx().as_ref().unwrap().clone()
         } else {
-            trace!("GMM training...");
+            debug!("GMM training...");
             let gmm = GaussianMixtureModel::params(n_clusters)
                 .n_runs(20)
                 .with_rng(self.rng())
@@ -130,7 +130,7 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
             GaussianMixture::new(weights, means, covariances)?.heaviside_factor(factor)
         };
 
-        trace!("Train on clusters...");
+        debug!("Train on clusters...");
         let clustering = Clustering::new(gmx, recomb);
         self.train_on_clusters(&xt.view(), &yt.view(), &clustering)
     }
@@ -143,13 +143,14 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         clustering: &Clustering,
     ) -> Result<SparseGpMixture> {
+        debug!("Clustering prediction");
         let gmx = clustering.gmx();
         let recomb = clustering.recombination();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
-
         let dataset_clustering = gmx.predict(xt);
         let clusters = sort_by_cluster(gmx.n_clusters(), &data, &dataset_clustering);
+        debug!("... end Clustering");
 
         check_number_of_points(&clusters, xt.ncols())?;
 
@@ -183,6 +184,7 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
                                  // previously trained on data excluding test data (see train method)
             Ok(sgp)
         } else {
+            info!("SparseGpMixture trained");
             Ok(SparseGpMixture {
                 recombination: recomb,
                 experts,
@@ -224,7 +226,7 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
         check_allowed!(correlation_spec, Correlation, Matern32, allowed_corrs);
         check_allowed!(correlation_spec, Correlation, Matern52, allowed_corrs);
 
-        debug!("Find best expert");
+        debug!("Find best expert...");
         let best = if allowed_means.len() == 1 && allowed_corrs.len() == 1 {
             (format!("{}_{}", allowed_means[0], allowed_corrs[0]), None) // shortcut
         } else {
@@ -240,7 +242,7 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
                 .unwrap();
             (map_error[argmin].0.clone(), Some(map_error[argmin].1))
         };
-        debug!("after Find best expert");
+        debug!("...after Find best expert");
         let inducings = self.inducings().clone();
         let best_expert_params: std::result::Result<Box<dyn SgpSurrogateParams>, MoeError> =
             match best.0.as_str() {
@@ -256,9 +258,15 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
             };
         let mut expert_params = best_expert_params?;
         let seed = self.rng().gen();
+        expert_params.theta_tuning(self.theta_tuning().clone());
+        debug!("Theta tuning = {:?}", self.theta_tuning());
         expert_params.kpls_dim(self.kpls_dim());
+        expert_params.n_start(self.n_start());
+        expert_params.sparse_method(self.sparse_method());
         expert_params.seed(seed);
+        debug!("Train best expert...");
         let expert = expert_params.train(&xtrain.view(), &ytrain.view());
+        debug!("...after best expert training");
         if let Some(v) = best.1 {
             info!("Best expert {} accuracy={}", best.0, v);
         }
@@ -433,18 +441,9 @@ impl SparseGpMixture {
         self.recombination
     }
 
+    /// Selected experts in the mixture
     pub fn experts(&self) -> &[Box<dyn SgpSurrogate>] {
         &self.experts
-    }
-
-    /// Clustering Recombination
-    pub fn noise_variance(&self) -> Vec<f64> {
-        self.experts.iter().map(|e| e.noise_variance()).collect()
-    }
-
-    /// Clustering Recombination
-    pub fn variance(&self) -> Vec<f64> {
-        self.experts.iter().map(|e| e.variance()).collect()
     }
 
     /// Gaussian mixture

@@ -8,7 +8,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
-use egobox_gp::Inducings;
+use egobox_gp::{Inducings, ParamTuning, SparseMethod, ThetaTuning};
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -33,6 +33,12 @@ pub struct SparseGpMixtureValidParams<F: Float, R: Rng + Clone> {
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
+    /// Theta hyperparameter tuning
+    theta_tuning: ThetaTuning<F>,
+    /// Number of GP hyperparameters optimization restarts
+    n_start: usize,
+    /// Used sparse method
+    sparse_method: SparseMethod,
     /// Inducings
     inducings: Inducings<F>,
     /// Gaussian Mixture model used to cluster
@@ -51,6 +57,9 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for SparseGpMixtureValidPar
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
+            theta_tuning: ThetaTuning::default(),
+            n_start: 10,
+            sparse_method: SparseMethod::default(),
             inducings: Inducings::default(),
             gmm: None,
             gmx: None,
@@ -83,6 +92,21 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureValidParams<F, R> {
     /// The optional number of PLS components
     pub fn kpls_dim(&self) -> Option<usize> {
         self.kpls_dim
+    }
+
+    /// The speified tuning of theta hyperparameter
+    pub fn theta_tuning(&self) -> &ThetaTuning<F> {
+        &self.theta_tuning
+    }
+
+    /// The number of hypermarameters optimization restarts
+    pub fn n_start(&self) -> usize {
+        self.n_start
+    }
+
+    /// The sparse method used
+    pub fn sparse_method(&self) -> SparseMethod {
+        self.sparse_method
     }
 
     /// Inducings points specification
@@ -132,7 +156,7 @@ impl<F: Float> SparseGpMixtureParams<F, Xoshiro256Plus> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
+impl<F: Float, R: Rng + SeedableRng + Clone> SparseGpMixtureParams<F, R> {
     /// Constructor of Sgp parameters specifying randon number generator for reproducibility
     ///
     /// See [`new`](SparseGpMixParams::new) for default parameters.
@@ -142,7 +166,10 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
+            theta_tuning: ThetaTuning::default(),
             kpls_dim: None,
+            n_start: 10,
+            sparse_method: SparseMethod::default(),
             inducings,
             gmm: None,
             gmx: None,
@@ -171,11 +198,55 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
         self
     }
 
+    /// Set initial value for theta hyper parameter.
+    ///
+    /// During training process, the internal optimization is started from `theta_init`.
+    pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
+        self.0.theta_tuning = ParamTuning {
+            init: theta_init,
+            ..self.0.theta_tuning.into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Set theta hyper parameter search space.
+    pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
+        self.0.theta_tuning = ParamTuning {
+            bounds: theta_bounds,
+            ..self.0.theta_tuning.into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Set theta hyper parameter tuning
+    pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<F>) -> Self {
+        self.0.theta_tuning = theta_tuning;
+        self
+    }
+
     /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
     ///
     /// None means no PLS dimension reduction applied.
     pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.0.kpls_dim = kpls_dim;
+        self
+    }
+
+    /// Sets the number of hyperparameters optimization restarts
+    pub fn n_start(mut self, n_start: usize) -> Self {
+        self.0.n_start = n_start;
+        self
+    }
+
+    /// Sets
+    ///
+    /// None means no PLS dimension reduction applied.
+    pub fn sparse_method(mut self, sparse_method: SparseMethod) -> Self {
+        self.0.sparse_method = sparse_method;
         self
     }
 
@@ -213,6 +284,9 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureParams<F, R> {
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
             kpls_dim: self.0.kpls_dim(),
+            theta_tuning: self.0.theta_tuning().clone(),
+            n_start: self.0.n_start(),
+            sparse_method: self.0.sparse_method(),
             inducings: self.0.inducings().clone(),
             gmm: self.0.gmm().clone(),
             gmx: self.0.gmx().clone(),

@@ -10,6 +10,7 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
 //!
 use crate::types::*;
+use egobox_gp::{ParamTuning, ThetaTuning};
 #[allow(unused_imports)] // Avoid linting problem
 use egobox_moe::{FullGpSurrogate, GpMixture, GpSurrogate};
 use linfa::{traits::Fit, Dataset};
@@ -45,9 +46,20 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         * Hard: prediction is taken from the expert with highest responsability
 ///         resulting in a model with discontinuities.
 ///
+///     theta_init ([nx] where nx is the dimension of inputs x)
+///         Initial guess for GP theta hyperparameters.
+///         When None the default is 1e-2 for all components
+///
+///     theta_bounds ([[lower_1, upper_1], ..., [lower_nx, upper_nx]] where nx is the dimension of inputs x)
+///         Space search when optimizing theta GP hyperparameters
+///         When None the default is [1e-6, 1e2] for all components
+///
 ///     kpls_dim (0 < int < nx where nx is the dimension of inputs x)
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
+///
+///     n_start (int >= 0)
+///         Number of internal GP hyperpameters optimization restart (multistart)
 ///
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
@@ -58,7 +70,10 @@ pub(crate) struct GpMix {
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub recombination: Recombination,
+    pub theta_init: Option<Vec<f64>>,
+    pub theta_bounds: Option<Vec<Vec<f64>>>,
     pub kpls_dim: Option<usize>,
+    pub n_start: usize,
     pub seed: Option<u64>,
 }
 
@@ -70,7 +85,10 @@ impl GpMix {
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         recombination = Recombination::Smooth,
+        theta_init = None,
+        theta_bounds = None,
         kpls_dim = None,
+        n_start = 10,
         seed = None
     ))]
     #[allow(clippy::too_many_arguments)]
@@ -79,7 +97,10 @@ impl GpMix {
         regr_spec: u8,
         corr_spec: u8,
         recombination: Recombination,
+        theta_init: Option<Vec<f64>>,
+        theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
+        n_start: usize,
         seed: Option<u64>,
     ) -> Self {
         GpMix {
@@ -87,7 +108,10 @@ impl GpMix {
             regression_spec: RegressionSpec(regr_spec),
             correlation_spec: CorrelationSpec(corr_spec),
             recombination,
+            theta_init,
+            theta_bounds,
             kpls_dim,
+            n_start,
             seed,
         }
     }
@@ -101,7 +125,7 @@ impl GpMix {
     /// Returns Gpx object
     ///     the fitted Gaussian process mixture  
     ///
-    fn fit(&mut self, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> Gpx {
+    fn fit(&mut self, py: Python, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> Gpx {
         let dataset = Dataset::new(xt.as_array().to_owned(), yt.as_array().to_owned());
 
         let recomb = match self.recombination {
@@ -113,17 +137,46 @@ impl GpMix {
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        let moe = GpMixture::params()
-            .n_clusters(self.n_clusters)
-            .recombination(recomb)
-            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-            .correlation_spec(
-                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-            )
-            .kpls_dim(self.kpls_dim)
-            .with_rng(rng)
-            .fit(&dataset)
-            .expect("MoE model training");
+
+        let mut theta_tuning = ThetaTuning::default();
+        if let Some(init) = self.theta_init.as_ref() {
+            theta_tuning = ParamTuning {
+                init: init.to_vec(),
+                ..theta_tuning.into()
+            }
+            .try_into()
+            .expect("Theta tuning initial init");
+        }
+        if let Some(bounds) = self.theta_bounds.as_ref() {
+            theta_tuning = ParamTuning {
+                bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
+                ..theta_tuning.into()
+            }
+            .try_into()
+            .expect("Theta tuning bounds");
+        }
+
+        if let Err(ctrlc::Error::MultipleHandlers) = ctrlc::set_handler(|| std::process::exit(2)) {
+            // ignore multiple handlers error
+        };
+        let moe = py.allow_threads(|| {
+            GpMixture::params()
+                .n_clusters(self.n_clusters)
+                .recombination(recomb)
+                .regression_spec(
+                    egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
+                )
+                .correlation_spec(
+                    egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+                )
+                .theta_tuning(theta_tuning)
+                .kpls_dim(self.kpls_dim)
+                .n_start(self.n_start)
+                .with_rng(rng)
+                .fit(&dataset)
+                .expect("MoE model training")
+        });
+
         Gpx(Box::new(moe))
     }
 }
@@ -143,15 +196,22 @@ impl Gpx {
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         recombination = Recombination::Smooth,
+        theta_init = None,
+        theta_bounds = None,
         kpls_dim = None,
+        n_start = 10,
         seed = None
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn builder(
         n_clusters: usize,
         regr_spec: u8,
         corr_spec: u8,
         recombination: Recombination,
+        theta_init: Option<Vec<f64>>,
+        theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
+        n_start: usize,
         seed: Option<u64>,
     ) -> GpMix {
         GpMix::new(
@@ -159,7 +219,10 @@ impl Gpx {
             regr_spec,
             corr_spec,
             recombination,
+            theta_init,
+            theta_bounds,
             kpls_dim,
+            n_start,
             seed,
         )
     }

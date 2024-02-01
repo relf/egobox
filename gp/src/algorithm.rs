@@ -15,19 +15,37 @@ use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Z
 use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
-use ndarray_rand::rand::SeedableRng;
+use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray_rand::rand_distr::Normal;
+use ndarray_rand::RandomExt;
 use ndarray_stats::QuantileExt;
 
+use log::debug;
 use rand_xoshiro::Xoshiro256Plus;
+use rayon::prelude::*;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::time::Instant;
 
-use ndarray_rand::rand_distr::Normal;
-use ndarray_rand::RandomExt;
+pub(crate) struct CobylaParams {
+    pub rhobeg: f64,
+    pub ftol_rel: f64,
+    pub maxeval: usize,
+}
+
+impl Default for CobylaParams {
+    fn default() -> Self {
+        CobylaParams {
+            rhobeg: 0.5,
+            ftol_rel: 1e-4,
+            maxeval: 25,
+        }
+    }
+}
 
 // const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
-const N_START: usize = 10; // number of optimization restart (aka multistart)
+//const N_START: usize = 0; // number of optimization restart (aka multistart)
 
 /// Internal parameters computed Gp during training
 /// used later on in prediction computations
@@ -160,6 +178,9 @@ impl<F: Float> Clone for GpInnerParams<F> {
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
     theta: Array1<F>,
+    /// Reduced likelihood value (result from internal optimization)
+    /// Maybe used to compare different trained models
+    likelihood: F,
     /// Regression model
     #[cfg_attr(
         feature = "serializable",
@@ -202,6 +223,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
     fn clone(&self) -> Self {
         Self {
             theta: self.theta.to_owned(),
+            likelihood: self.likelihood,
             mean: self.mean,
             corr: self.corr,
             inner_params: self.inner_params.clone(),
@@ -216,7 +238,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> fmt::Display
     for GaussianProcess<F, Mean, Corr>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "GP({}, {})", self.mean, self.corr)
+        write!(
+            f,
+            "GP(mean={}, corr={}, theta={}, variance={}, likelihood={})",
+            self.mean, self.corr, self.theta, self.inner_params.sigma2, self.likelihood,
+        )
     }
 }
 
@@ -751,7 +777,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let y = dataset.targets();
         if let Some(d) = self.kpls_dim() {
             if *d > x.ncols() {
-                return Err(GpError::InvalidValue(format!(
+                return Err(GpError::InvalidValueError(format!(
                     "Dimension reduction {} should be smaller than actual \
                     training input dimensions {}",
                     d,
@@ -786,14 +812,18 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 "Warning: multiple x input features have the same value (at least same row twice)."
             );
         }
-        let theta0 = self
-            .initial_theta()
-            .clone()
-            .map_or(Array1::from_elem(w_star.ncols(), F::cast(1e-2)), |v| {
-                Array::from_vec(v)
-            });
+
+        // Initial guess for theta
+        let theta0_dim = self.theta_tuning().theta0().len();
+        let theta0 = if theta0_dim == 1 {
+            Array1::from_elem(w_star.ncols(), self.theta_tuning().theta0()[0])
+        } else if theta0_dim == w_star.ncols() {
+            Array::from_vec(self.theta_tuning().theta0().to_vec())
+        } else {
+            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+        };
+
         let fx = self.mean().value(&xtrain.data);
-        let y_t = ytrain.clone();
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
             let theta =
@@ -808,42 +838,60 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             }
             let theta = theta.mapv(F::cast);
             let rxx = self.corr().value(&x_distances.d, &theta, &w_star);
-            match reduced_likelihood(&fx, rxx, &x_distances, &y_t, self.nugget()) {
+            match reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget()) {
                 Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
                 Err(_) => f64::INFINITY,
             }
         };
 
         // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
-        let mut theta0s = Array2::zeros((N_START + 1, theta0.len()));
-        theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
-        let mut xlimits: Array2<F> = Array2::zeros((theta0.len(), 2));
-        for mut row in xlimits.rows_mut() {
-            row.assign(&arr1(&[F::cast(-6), F::cast(2)]));
-        }
-        // Use a seed here for reproducibility. Do we need to make it truly random
-        // Probably no, as it is just to get init values spread over
-        // [1e-6, 20] for multistart thanks to LHS method.
-        let seeds = Lhs::new(&xlimits)
-            .kind(egobox_doe::LhsKind::Maximin)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
-            .sample(N_START);
-        Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
-            .and(seeds.rows())
-            .par_for_each(|mut theta, row| theta.assign(&row));
+        // let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
+        let bounds_dim = self.theta_tuning().bounds().len();
+        let bounds = if bounds_dim == 1 {
+            vec![self.theta_tuning().bounds()[0]; w_star.ncols()]
+        } else if theta0_dim == w_star.ncols() {
+            self.theta_tuning().bounds().to_vec()
+        } else {
+            panic!(
+                "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
+                w_star.ncols(),
+                theta0_dim
+            )
+        };
 
-        let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
+        let (params, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
+        debug!(
+            "Optimize with multistart theta = {:?} and bounds = {:?}",
+            params, bounds
+        );
+        let now = Instant::now();
+        let opt_params = (0..params.nrows())
+            .into_par_iter()
+            .map(|i| {
+                let opt_res = optimize_params(
+                    objfn,
+                    &params.row(i).to_owned(),
+                    &bounds,
+                    CobylaParams {
+                        maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+                        ..CobylaParams::default()
+                    },
+                );
 
-        let opt_thetas = theta0s.map_axis(Axis(1), |theta| {
-            optimize_params(objfn, &theta.to_owned(), &bounds)
-        });
-        let opt_index = opt_thetas.map(|(_, opt_f)| opt_f).argmin().unwrap();
-        let opt_theta = &(opt_thetas[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
-        // println!("opt_theta={}", opt_theta);
-        let rxx = self.corr().value(&x_distances.d, opt_theta, &w_star);
-        let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
+                opt_res
+            })
+            .reduce(
+                || (Array::ones((params.ncols(),)), f64::INFINITY),
+                |a, b| if b.1 < a.1 { b } else { a },
+            );
+        debug!("elapsed optim = {:?}", now.elapsed().as_millis());
+        let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
+        let rxx = self.corr().value(&x_distances.d, &opt_params, &w_star);
+        let (lkh, inner_params) =
+            reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
         Ok(GaussianProcess {
-            theta: opt_theta.to_owned(),
+            theta: opt_params,
+            likelihood: lkh,
             mean: *self.mean(),
             corr: *self.corr(),
             inner_params,
@@ -854,12 +902,60 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
     }
 }
 
+pub(crate) fn prepare_multistart<F: Float>(
+    n_start: usize,
+    theta0: &Array1<F>,
+    bounds: &[(F, F)],
+) -> (Array2<F>, Vec<(F, F)>) {
+    // Use log10 theta as optimization parameter
+    let bounds: Vec<(F, F)> = bounds
+        .iter()
+        .map(|(lo, up)| (lo.log10(), up.log10()))
+        .collect();
+
+    // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
+    let mut theta0s = Array2::zeros((n_start + 1, theta0.len()));
+    theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
+
+    match n_start.cmp(&1) {
+        std::cmp::Ordering::Equal => {
+            //let mut rng = Xoshiro256Plus::seed_from_u64(42);
+            let mut rng = Xoshiro256Plus::from_entropy();
+            let vals = bounds.iter().map(|(a, b)| rng.gen_range(*a..*b)).collect();
+            theta0s.row_mut(1).assign(&Array::from_vec(vals))
+        }
+        std::cmp::Ordering::Greater => {
+            let mut xlimits: Array2<F> = Array2::zeros((bounds.len(), 2));
+            // for mut row in xlimits.rows_mut() {
+            //     row.assign(&arr1(&[limits.0, limits.1]));
+            // }
+            Zip::from(xlimits.rows_mut())
+                .and(&bounds)
+                .for_each(|mut row, limits| row.assign(&arr1(&[limits.0, limits.1])));
+            // Use a seed here for reproducibility. Do we need to make it truly random
+            // Probably no, as it is just to get init values spread over
+            // [1e-6, 20] for multistart thanks to LHS method.
+
+            let seeds = Lhs::new(&xlimits)
+                .kind(egobox_doe::LhsKind::Maximin)
+                .with_rng(Xoshiro256Plus::seed_from_u64(42))
+                .sample(n_start);
+            Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
+                .and(seeds.rows())
+                .par_for_each(|mut theta, row| theta.assign(&row));
+        }
+        std::cmp::Ordering::Less => (),
+    };
+    (theta0s, bounds)
+}
+
 /// Optimize gp hyper parameters given an initial guess and bounds with NLOPT::Cobyla
 #[cfg(feature = "nlopt")]
 pub(crate) fn optimize_params<ObjF, F>(
     objfn: ObjF,
     param0: &Array1<F>,
     bounds: &[(F, F)],
+    cobyla: CobylaParams,
 ) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
@@ -879,9 +975,9 @@ where
     let upper_bounds = bounds.iter().map(|b| into_f64(&b.1)).collect::<Vec<_>>();
     optimizer.set_upper_bounds(&upper_bounds).unwrap();
 
-    optimizer.set_initial_step1(0.5).unwrap();
-    optimizer.set_maxeval(15 * param0.len() as u32).unwrap();
-    optimizer.set_ftol_rel(1e-4).unwrap();
+    optimizer.set_initial_step1(cobyla.rhobeg).unwrap();
+    optimizer.set_maxeval(cobyla.maxeval as u32).unwrap();
+    optimizer.set_ftol_rel(cobyla.ftol_rel).unwrap();
 
     match optimizer.optimize(&mut param) {
         Ok((_, fmin)) => {
@@ -906,6 +1002,7 @@ pub(crate) fn optimize_params<ObjF, F>(
     objfn: ObjF,
     param0: &Array1<F>,
     bounds: &[(F, F)],
+    cobyla: CobylaParams,
 ) -> (Array1<f64>, f64)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
@@ -916,10 +1013,6 @@ where
     let base: f64 = 10.;
     let cons: Vec<&dyn Func<()>> = vec![];
     let param0 = param0.map(|v| into_f64(v)).into_raw_vec();
-
-    let initial_step = 0.5;
-    let ftol_rel = 1e-4;
-    let maxeval = 15 * param0.len();
 
     let bounds: Vec<_> = bounds
         .iter()
@@ -932,10 +1025,10 @@ where
         &bounds,
         &cons,
         (),
-        maxeval,
-        cobyla::RhoBeg::All(initial_step),
+        cobyla.maxeval,
+        cobyla::RhoBeg::All(cobyla.rhobeg),
         Some(StopTols {
-            ftol_rel,
+            ftol_rel: cobyla.ftol_rel,
             ..StopTols::default()
         }),
     ) {
@@ -1158,7 +1251,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
-        .initial_theta(Some(vec![0.1]))
+        .theta_init(vec![0.1])
         .kpls_dim(Some(1))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fit error");
@@ -1181,7 +1274,7 @@ mod tests {
                         [<$regr Mean>]::default(),
                         [<$corr Corr>]::default(),
                     )
-                    .initial_theta(Some(vec![0.1]))
+                    .theta_init(vec![0.1])
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fit error");
                     let yvals = gp

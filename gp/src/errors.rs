@@ -21,9 +21,6 @@ pub enum GpError {
     /// When PLS fails
     #[error("PLS error: {0}")]
     PlsError(#[from] linfa_pls::PlsError),
-    /// When a value is invalid
-    #[error("PLS error: {0}")]
-    InvalidValue(String),
     /// When a linfa error occurs
     #[error(transparent)]
     LinfaError(#[from] linfa::error::Error),
@@ -36,7 +33,7 @@ pub enum GpError {
     /// When error during loading
     #[error("Load error: {0}")]
     LoadError(String),
-    /// When error during loading
+    /// When error dur to a bad value
     #[error("InvalidValue error: {0}")]
     InvalidValueError(String),
 }

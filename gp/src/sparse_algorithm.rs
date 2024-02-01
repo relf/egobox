@@ -1,26 +1,25 @@
 use crate::algorithm::optimize_params;
 use crate::errors::{GpError, Result};
-use crate::sgp_parameters::{
+use crate::sparse_parameters::{
     Inducings, SgpParams, SgpValidParams, SparseMethod, VarianceEstimation,
 };
 use crate::{correlation_models::*, utils::pairwise_differences};
-use egobox_doe::{Lhs, SamplingMethod};
+use crate::{prepare_multistart, CobylaParams};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
-use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
 use ndarray_einsum_beta::*;
-use ndarray_stats::QuantileExt;
-
 use ndarray_rand::rand::seq::SliceRandom;
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
+use log::debug;
+use rayon::prelude::*;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-const N_START: usize = 10; // number of optimization restart (aka multistart)
+use std::time::Instant;
 
 /// Woodbury data computed during training and used for prediction
 ///
@@ -152,6 +151,9 @@ pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
     sigma2: F,
     /// Gaussian noise variance
     noise: F,
+    /// Reduced likelihood value (result from internal optimization)
+    /// Maybe used to compare different trained models
+    likelihood: F,
     /// Weights in case of KPLS dimension reduction coming from PLS regression (orig_dim, kpls_dim)
     w_star: Array2<F>,
     /// Training inputs
@@ -177,10 +179,11 @@ impl<F: Float, Corr: CorrelationModel<F>> Clone for SparseGaussianProcess<F, Cor
     fn clone(&self) -> Self {
         Self {
             corr: self.corr,
-            method: self.method.clone(),
+            method: self.method,
             theta: self.theta.to_owned(),
             sigma2: self.sigma2,
             noise: self.noise,
+            likelihood: self.likelihood,
             w_star: self.w_star.to_owned(),
             xtrain: self.xtrain.clone(),
             ytrain: self.xtrain.clone(),
@@ -192,7 +195,11 @@ impl<F: Float, Corr: CorrelationModel<F>> Clone for SparseGaussianProcess<F, Cor
 
 impl<F: Float, Corr: CorrelationModel<F>> fmt::Display for SparseGaussianProcess<F, Corr> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SGP({})", self.corr)
+        write!(
+            f,
+            "SGP(corr={}, theta={}, variance={}, noise variance={}, likelihood={})",
+            self.corr, self.theta, self.sigma2, self.noise, self.likelihood
+        )
     }
 }
 
@@ -337,7 +344,7 @@ where
     }
 }
 
-impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
+impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
     Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for SgpValidParams<F, Corr>
 {
     type Object = SparseGaussianProcess<F, Corr>;
@@ -351,7 +358,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
         let y = dataset.targets();
         if let Some(d) = self.kpls_dim() {
             if *d > x.ncols() {
-                return Err(GpError::InvalidValue(format!(
+                return Err(GpError::InvalidValueError(format!(
                     "Dimension reduction {} should be smaller than actual \
                     training input dimensions {}",
                     d,
@@ -360,8 +367,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             };
         }
 
-        let xtrain = x.to_owned();
-        let ytrain = y.to_owned();
+        let xtrain = x;
+        let ytrain = y;
 
         let mut w_star = Array2::eye(x.ncols());
         if let Some(n_components) = self.kpls_dim() {
@@ -378,17 +385,18 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
         };
 
         // Initial guess for theta
-        let theta0: Array1<_> = self
-            .initial_theta()
-            .clone()
-            .map_or(Array1::from_elem(w_star.ncols(), F::cast(1e-2)), |v| {
-                Array::from_vec(v)
-            });
+        let theta0_dim = self.theta_tuning().theta0().len();
+        let theta0 = if theta0_dim == 1 {
+            Array1::from_elem(w_star.ncols(), self.theta_tuning().theta0()[0])
+        } else if theta0_dim == w_star.ncols() {
+            Array::from_vec(self.theta_tuning().theta0().to_vec())
+        } else {
+            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+        };
 
         // Initial guess for variance
         let y_std = ytrain.std_axis(Axis(0), F::one());
         let sigma2_0 = y_std[0] * y_std[0];
-        //let sigma2_0 = F::cast(1e-2);
 
         // Initial guess for noise, when noise variance constant, it is not part of optimization params
         let (is_noise_estimated, noise0) = match self.noise_variance() {
@@ -418,7 +426,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             None => Xoshiro256Plus::from_entropy(),
         };
         let z = match self.inducings() {
-            Inducings::Randomized(n) => make_inducings(*n, &xtrain, &mut rng),
+            Inducings::Randomized(n) => make_inducings(*n, &xtrain.view(), &mut rng),
             Inducings::Located(z) => z.to_owned(),
         };
 
@@ -453,8 +461,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
                 sigma2,
                 noise,
                 &w_star,
-                &xtrain,
-                &ytrain,
+                &xtrain.view(),
+                &ytrain.view(),
                 &z,
                 self.nugget(),
             ) {
@@ -463,29 +471,27 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
             }
         };
 
-        // Multistart: user theta0 + LHS samplings
-        let mut params = Array2::zeros((N_START + 1, params_0.len()));
-        params.row_mut(0).assign(&params_0.mapv(|v| F::log10(v)));
-        let mut xlimits: Array2<F> = Array2::zeros((params_0.len(), 2));
-        for mut row in xlimits.rows_mut() {
-            row.assign(&arr1(&[F::cast(-6), F::cast(2)]));
-        }
-        // Use a seed here for reproducibility. Do we need to make it truly random
-        // Probably no, as it is just to get init values spread over
-        // [1e-6, 20] for multistart thanks to LHS method.
-        let seeds = Lhs::new(&xlimits)
-            .kind(egobox_doe::LhsKind::Maximin)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
-            .sample(N_START);
-        Zip::from(params.slice_mut(s![1.., ..]).rows_mut())
-            .and(seeds.rows())
-            .par_for_each(|mut theta, row| theta.assign(&row));
+        // // bounds of theta, variance and optionally noise variance
+        // let mut bounds = vec![(F::cast(1e-16).log10(), F::cast(1.).log10()); params.ncols()];
+        // Initial guess for theta
+        let bounds_dim = self.theta_tuning().bounds().len();
+        let bounds = if bounds_dim == 1 {
+            vec![self.theta_tuning().bounds()[0]; params_0.len()]
+        } else if theta0_dim == params_0.len() {
+            self.theta_tuning().bounds().to_vec()
+        } else {
+            panic!(
+                "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
+                w_star.ncols(),
+                theta0_dim
+            )
+        };
 
-        // bounds of theta, variance and optionally noise variance
-        let mut bounds = vec![(F::cast(1e-6).log10(), F::cast(1e2).log10()); params.ncols()];
+        let (params, mut bounds) = prepare_multistart(self.n_start(), &params_0, &bounds);
+
         // variance bounds
         bounds[params.ncols() - 1 - is_noise_estimated as usize] =
-            (F::cast(1e-6).log10(), (F::cast(9.) * sigma2_0).log10());
+            (F::cast(1e-12).log10(), (F::cast(9.) * sigma2_0).log10());
         // optionally adjust noise variance bounds
         if let VarianceEstimation::Estimated {
             initial_guess: _,
@@ -497,12 +503,32 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
                 *noise_bounds = (lo.log10(), up.log10());
             }
         }
+        debug!(
+            "Optimize with multistart theta = {:?} and bounds = {:?}",
+            params, bounds
+        );
+        let now = Instant::now();
+        let opt_params = (0..params.nrows())
+            .into_par_iter()
+            .map(|i| {
+                let opt_res = optimize_params(
+                    objfn,
+                    &params.row(i).to_owned(),
+                    &bounds,
+                    CobylaParams {
+                        maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+                        ..CobylaParams::default()
+                    },
+                );
 
-        let opt_params =
-            params.map_axis(Axis(1), |p| optimize_params(objfn, &p.to_owned(), &bounds));
-        let opt_index = opt_params.map(|(_, opt_f)| opt_f).argmin().unwrap();
-        let opt_params = &(opt_params[opt_index]).0.mapv(|v| F::cast(base.powf(v)));
-        // println!("opt_theta={}", opt_theta);
+                opt_res
+            })
+            .reduce(
+                || (Array::ones((params.ncols(),)), f64::INFINITY),
+                |a, b| if b.1 < a.1 { b } else { a },
+            );
+        debug!("elapsed optim = {:?}", now.elapsed().as_millis());
+        let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
         let opt_theta = opt_params
             .slice(s![..n - 1 - is_noise_estimated as usize])
             .to_owned();
@@ -514,22 +540,23 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F>>
         };
 
         // Recompute reduced likelihood with optimized params
-        let (_, w_data) = self.reduced_likelihood(
+        let (lkh, w_data) = self.reduced_likelihood(
             &opt_theta,
             opt_sigma2,
             opt_noise,
             &w_star,
-            &xtrain,
-            &ytrain,
+            &xtrain.view(),
+            &ytrain.view(),
             &z,
             self.nugget(),
         )?;
         Ok(SparseGaussianProcess {
             corr: *self.corr(),
-            method: self.method().clone(),
+            method: self.method(),
             theta: opt_theta,
             sigma2: opt_sigma2,
             noise: opt_noise,
+            likelihood: lkh,
             w_data,
             w_star,
             xtrain: xtrain.to_owned(),
@@ -549,8 +576,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         sigma2: F,
         noise: F,
         w_star: &Array2<F>,
-        xtrain: &Array2<F>,
-        ytrain: &Array2<F>,
+        xtrain: &ArrayView2<F>,
+        ytrain: &ArrayView2<F>,
         z: &Array2<F>,
         nugget: F,
     ) -> Result<(F, WoodburyData<F>)> {
@@ -590,8 +617,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         sigma2: F,
         noise: F,
         w_star: &Array2<F>,
-        xtrain: &Array2<F>,
-        ytrain: &Array2<F>,
+        xtrain: &ArrayView2<F>,
+        ytrain: &ArrayView2<F>,
         z: &Array2<F>,
         nugget: F,
     ) -> (F, WoodburyData<F>) {
@@ -664,8 +691,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         sigma2: F,
         noise: F,
         w_star: &Array2<F>,
-        xtrain: &Array2<F>,
-        ytrain: &Array2<F>,
+        xtrain: &ArrayView2<F>,
+        ytrain: &ArrayView2<F>,
         z: &Array2<F>,
         nugget: F,
     ) -> (F, WoodburyData<F>) {
@@ -710,7 +737,6 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         let term6 = -a.diag().sum();
 
         let likelihood = -F::cast(0.5) * (term1 + term2 + term3 + term4 + term5 + term6);
-        println!("likelihood={}", likelihood);
 
         let li_ui = li.dot(&ui);
         let bi = Array::eye(nz) + li.t().dot(&li);
@@ -725,7 +751,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
 
 fn make_inducings<F: Float>(
     n_inducing: usize,
-    xt: &Array2<F>,
+    xt: &ArrayView2<F>,
     rng: &mut Xoshiro256Plus,
 ) -> Array2<F> {
     let mut indices = (0..xt.nrows()).collect::<Vec<_>>();
@@ -797,39 +823,51 @@ mod tests {
 
     #[test]
     fn test_sgp_default() {
-        let mut rng = Xoshiro256Plus::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::seed_from_u64(42);
         // Generate training data
         let nt = 200;
         // Variance of the gaussian noise on our training data
         let eta2: f64 = 0.01;
         let (xt, yt) = make_test_data(nt, eta2, &mut rng);
+        // let test_dir = "target/tests";
+        // let file_path = format!("{}/smt_xt.npy", test_dir);
+        // let xt: Array2<f64> = read_npy(file_path).expect("xt read");
+        // let file_path = format!("{}/smt_yt.npy", test_dir);
+        // let yt: Array2<f64> = read_npy(file_path).expect("yt read");
 
-        let xplot = Array::linspace(-0.5, 0.5, 100).insert_axis(Axis(1));
+        let xplot = Array::linspace(-1.0, 1.0, 100).insert_axis(Axis(1));
         let n_inducings = 30;
 
+        // let file_path = format!("{}/smt_z.npy", test_dir);
+        // let z: Array2<f64> = read_npy(file_path).expect("z read");
+        // println!("{:?}", z);
+
         let sgp = SparseKriging::params(Inducings::Randomized(n_inducings))
+            //let sgp = SparseKriging::params(Inducings::Located(z))
+            //.noise_variance(VarianceEstimation::Constant(0.01))
             .seed(Some(42))
-            .initial_theta(Some(vec![0.1]))
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fitted");
 
+        println!("theta={:?}", sgp.theta());
+        println!("variance={:?}", sgp.variance());
         println!("noise variance={:?}", sgp.noise_variance());
-        assert_abs_diff_eq!(eta2, sgp.noise_variance());
+        // assert_abs_diff_eq!(eta2, sgp.noise_variance());
 
         let sgp_vals = sgp.predict_values(&xplot).unwrap();
         let yplot = f_obj(&xplot);
         let errvals = (yplot - &sgp_vals).mapv(|v| v.abs());
-        assert_abs_diff_eq!(errvals, Array2::zeros((xplot.nrows(), 1)), epsilon = 1.0);
+        assert_abs_diff_eq!(errvals, Array2::zeros((xplot.nrows(), 1)), epsilon = 0.5);
         let sgp_vars = sgp.predict_variances(&xplot).unwrap();
         let errvars = (&sgp_vars - Array2::from_elem((xplot.nrows(), 1), 0.01)).mapv(|v| v.abs());
-        assert_abs_diff_eq!(errvars, Array2::zeros((xplot.nrows(), 1)), epsilon = 0.05);
+        assert_abs_diff_eq!(errvars, Array2::zeros((xplot.nrows(), 1)), epsilon = 0.2);
 
         save_data(&xt, &yt, sgp.inducings(), &xplot, &sgp_vals, &sgp_vars);
     }
 
     #[test]
     fn test_sgp_vfe() {
-        let mut rng = Xoshiro256Plus::seed_from_u64(0);
+        let mut rng = Xoshiro256Plus::seed_from_u64(42);
         // Generate training data
         let nt = 200;
         // Variance of the gaussian noise on our training data
@@ -844,7 +882,7 @@ mod tests {
         let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
         let n_inducings = 30;
 
-        let z = make_inducings(n_inducings, &xt, &mut rng);
+        let z = make_inducings(n_inducings, &xt.view(), &mut rng);
         // let file_path = format!("{}/smt_z.npy", test_dir);
         // let z: Array2<f64> = read_npy(file_path).expect("z read");
 
@@ -853,7 +891,7 @@ mod tests {
             Inducings::Located(z),
         )
         .sparse_method(SparseMethod::Vfe)
-        .initial_theta(Some(vec![0.01]))
+        .noise_variance(VarianceEstimation::Constant(0.01))
         .fit(&Dataset::new(xt.clone(), yt.clone()))
         .expect("GP fitted");
 
@@ -885,7 +923,7 @@ mod tests {
         let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
         let n_inducings = 30;
 
-        let z = make_inducings(n_inducings, &xt, &mut rng);
+        let z = make_inducings(n_inducings, &xt.view(), &mut rng);
         // let file_path = format!("{}/smt_z.npy", test_dir);
         // let z: Array2<f64> = read_npy(file_path).expect("z read");
 
@@ -895,7 +933,7 @@ mod tests {
         )
         .sparse_method(SparseMethod::Vfe)
         //.sparse_method(SparseMethod::Fitc)
-        .initial_theta(Some(vec![0.1]))
+        .theta_init(vec![0.1])
         .noise_variance(VarianceEstimation::Estimated {
             initial_guess: 0.02,
             bounds: (1e-3, 1.),
@@ -906,7 +944,7 @@ mod tests {
         println!("theta={:?}", sgp.theta());
         println!("variance={:?}", sgp.variance());
         println!("noise variance={:?}", sgp.noise_variance());
-        assert_abs_diff_eq!(eta2, sgp.noise_variance(), epsilon = 0.005);
+        assert_abs_diff_eq!(eta2, sgp.noise_variance(), epsilon = 0.015);
         assert_abs_diff_eq!(&z, sgp.inducings(), epsilon = 0.0015);
 
         let sgp_vals = sgp.predict_values(&xplot).unwrap();

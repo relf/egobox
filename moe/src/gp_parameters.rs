@@ -8,6 +8,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
+use egobox_gp::{ParamTuning, ThetaTuning};
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -29,9 +30,13 @@ pub struct GpMixValidParams<F: Float, R: Rng + Clone> {
     regression_spec: RegressionSpec,
     /// Specification of GP correlation models to be used
     correlation_spec: CorrelationSpec,
+    /// Theta hyperparameter tuning
+    theta_tuning: ThetaTuning<F>,
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
+    /// Number of GP hyperparameters optimization restarts
+    n_start: usize,
     /// Gaussian Mixture model used to cluster
     gmm: Option<Box<GaussianMixtureModel<F>>>,
     /// GaussianMixture preset
@@ -47,7 +52,9 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixValidParams<F, R> 
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
+            theta_tuning: ThetaTuning::default(),
             kpls_dim: None,
+            n_start: 10,
             gmm: None,
             gmx: None,
             rng: R::from_entropy(),
@@ -79,6 +86,16 @@ impl<F: Float, R: Rng + Clone> GpMixValidParams<F, R> {
     /// The optional number of PLS components
     pub fn kpls_dim(&self) -> Option<usize> {
         self.kpls_dim
+    }
+
+    /// The speified tuning of theta hyperparameter
+    pub fn theta_tuning(&self) -> &ThetaTuning<F> {
+        &self.theta_tuning
+    }
+
+    /// The number of hypermarameters optimization restarts
+    pub fn n_start(&self) -> usize {
+        self.n_start
     }
 
     /// An optional gaussian mixture to be fitted to generate multivariate normal
@@ -134,7 +151,9 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::ALL,
             correlation_spec: CorrelationSpec::ALL,
+            theta_tuning: ThetaTuning::default(),
             kpls_dim: None,
+            n_start: 10,
             gmm: None,
             gmx: None,
             rng,
@@ -171,11 +190,47 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
         self
     }
 
+    /// Set initial value for theta hyper parameter.
+    ///
+    /// During training process, the internal optimization is started from `theta_init`.
+    pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
+        self.0.theta_tuning = ParamTuning {
+            init: theta_init,
+            ..self.0.theta_tuning.into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Set theta hyper parameter search space.
+    pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
+        self.0.theta_tuning = ParamTuning {
+            bounds: theta_bounds,
+            ..self.0.theta_tuning.into()
+        }
+        .try_into()
+        .unwrap();
+        self
+    }
+
+    /// Set theta hyper parameter tuning
+    pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<F>) -> Self {
+        self.0.theta_tuning = theta_tuning;
+        self
+    }
+
     /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
     ///
     /// None means no PLS dimension reduction applied.
     pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.0.kpls_dim = kpls_dim;
+        self
+    }
+
+    /// Sets the number of hyperparameters optimization restarts
+    pub fn n_start(mut self, n_start: usize) -> Self {
+        self.0.n_start = n_start;
         self
     }
 
@@ -205,6 +260,8 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
             kpls_dim: self.0.kpls_dim(),
+            theta_tuning: self.0.theta_tuning().clone(),
+            n_start: self.0.n_start(),
             gmm: self.0.gmm().clone(),
             gmx: self.0.gmx().clone(),
             rng,

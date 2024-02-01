@@ -10,7 +10,7 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Sgp_Tutorial.ipynb) for usage.
 //!
 use crate::types::*;
-use egobox_gp::Inducings;
+use egobox_gp::{Inducings, ParamTuning, ThetaTuning};
 use egobox_moe::{GpSurrogate, SparseGpMixture};
 use linfa::{traits::Fit, Dataset};
 use ndarray::Array2;
@@ -19,18 +19,13 @@ use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use rand_xoshiro::Xoshiro256Plus;
 
-/// Gaussian processes mixture builder
+/// Sparse Gaussian processes mixture builder
 ///
 ///     n_clusters (int >= 0)
 ///         Number of clusters used by the mixture of surrogate experts.
 ///         When set to 0, the number of cluster is determined automatically and refreshed every
 ///         10-points addition (should say 'tentative addition' because addition may fail for some points
 ///         but failures are counted anyway).
-///
-///     regr_spec (RegressionSpec flags, an int in [1, 7]):
-///         Specification of regression models used in mixture.
-///         Can be RegressionSpec.CONSTANT (1), RegressionSpec.LINEAR (2), RegressionSpec.QUADRATIC (4) or
-///         any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
 ///
 ///     corr_spec (CorrelationSpec flags, an int in [1, 15]):
 ///         Specification of correlation models used in mixture.
@@ -50,15 +45,25 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
+///     n_start (int >= 0)
+///         Number of internal GP hyperpameters optimization restart (multistart)
+///
+///     method (SparseMethod.FITC or SparseMethod.VFE)
+///         Sparse method to be used (default is FITC)
+///
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///         
 #[pyclass]
 pub(crate) struct SparseGpMix {
     pub correlation_spec: CorrelationSpec,
+    pub theta_init: Option<Vec<f64>>,
+    pub theta_bounds: Option<Vec<Vec<f64>>>,
     pub kpls_dim: Option<usize>,
+    pub n_start: usize,
     pub nz: Option<usize>,
     pub z: Option<Array2<f64>>,
+    pub method: SparseMethod,
     pub seed: Option<u64>,
 }
 
@@ -67,24 +72,36 @@ impl SparseGpMix {
     #[new]
     #[pyo3(signature = (
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
+        theta_init = None,
+        theta_bounds = None,
         kpls_dim = None,
+        n_start = 10,
         nz = None,
         z = None,
+        method = SparseMethod::Fitc,
         seed = None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         corr_spec: u8,
+        theta_init: Option<Vec<f64>>,
+        theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
+        n_start: usize,
         nz: Option<usize>,
         z: Option<PyReadonlyArray2<f64>>,
+        method: SparseMethod,
         seed: Option<u64>,
     ) -> Self {
         SparseGpMix {
             correlation_spec: CorrelationSpec(corr_spec),
+            theta_init,
+            theta_bounds,
             kpls_dim,
+            n_start,
             nz,
             z: z.map(|z| z.as_array().to_owned()),
+            method,
             seed,
         }
     }
@@ -98,7 +115,12 @@ impl SparseGpMix {
     /// Returns Sgp object
     ///     the fitted Gaussian process mixture  
     ///
-    fn fit(&mut self, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> SparseGpx {
+    fn fit(
+        &mut self,
+        py: Python,
+        xt: PyReadonlyArray2<f64>,
+        yt: PyReadonlyArray2<f64>,
+    ) -> SparseGpx {
         let dataset = Dataset::new(xt.as_array().to_owned(), yt.as_array().to_owned());
 
         let rng = if let Some(seed) = self.seed {
@@ -115,18 +137,45 @@ impl SparseGpMix {
             panic!("You must specify inducing points")
         };
 
-        let sgp = SparseGpMixture::params(inducings)
-            // .n_clusters(self.n_clusters)
-            // .recombination(recomb)
-            // .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-            .correlation_spec(
-                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-            )
-            .kpls_dim(self.kpls_dim)
-            .with_rng(rng)
-            .fit(&dataset)
-            .expect("Sgp model training");
+        let method = match self.method {
+            SparseMethod::Fitc => egobox_gp::SparseMethod::Fitc,
+            SparseMethod::Vfe => egobox_gp::SparseMethod::Vfe,
+        };
 
+        let mut theta_tuning = ThetaTuning::default();
+        if let Some(init) = self.theta_init.as_ref() {
+            theta_tuning = ParamTuning {
+                init: init.to_vec(),
+                ..theta_tuning.into()
+            }
+            .try_into()
+            .expect("Theta tuning initial init");
+        }
+        if let Some(bounds) = self.theta_bounds.as_ref() {
+            theta_tuning = ParamTuning {
+                bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
+                ..theta_tuning.into()
+            }
+            .try_into()
+            .expect("Theta tuning bounds");
+        }
+
+        if let Err(ctrlc::Error::MultipleHandlers) = ctrlc::set_handler(|| std::process::exit(2)) {
+            // ignore multiple handlers error
+        };
+        let sgp = py.allow_threads(|| {
+            SparseGpMixture::params(inducings)
+                .correlation_spec(
+                    egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+                )
+                .theta_tuning(theta_tuning)
+                .kpls_dim(self.kpls_dim)
+                .n_start(self.n_start)
+                .sparse_method(method)
+                .with_rng(rng)
+                .fit(&dataset)
+                .expect("Sgp model training")
+        });
         SparseGpx(Box::new(sgp))
     }
 }
@@ -143,19 +192,38 @@ impl SparseGpx {
     #[staticmethod]
     #[pyo3(signature = (
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
+        theta_init = None,
+        theta_bounds = None,
         kpls_dim = None,
+        n_start = 10,
         nz = None,
         z = None,
+        method = SparseMethod::Fitc,
         seed = None
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn builder(
         corr_spec: u8,
+        theta_init: Option<Vec<f64>>,
+        theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
+        n_start: usize,
         nz: Option<usize>,
         z: Option<PyReadonlyArray2<f64>>,
+        method: SparseMethod,
         seed: Option<u64>,
     ) -> SparseGpMix {
-        SparseGpMix::new(corr_spec, kpls_dim, nz, z, seed)
+        SparseGpMix::new(
+            corr_spec,
+            theta_init,
+            theta_bounds,
+            kpls_dim,
+            n_start,
+            nz,
+            z,
+            method,
+            seed,
+        )
     }
 
     /// Returns the String representation from serde json serializer

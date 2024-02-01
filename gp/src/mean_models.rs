@@ -16,7 +16,7 @@ use std::convert::TryFrom;
 use std::fmt;
 
 /// A trait for mean models used in GP regression
-pub trait RegressionModel<F: Float>: Clone + Copy + Default + fmt::Display {
+pub trait RegressionModel<F: Float>: Clone + Copy + Default + fmt::Display + Sync {
     /// Compute regression coefficients defining the mean behaviour of the GP model
     /// for the given `x` data points specified as (n, nx) matrix.
     fn value(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F>;
