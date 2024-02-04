@@ -119,7 +119,6 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                 .ok();
 
             if let Some(gmm) = maybe_gmm {
-                let gmm = Box::new(gmm);
                 // Cross Validation
                 for (train, valid) in dataset.fold(5).into_iter() {
                     if let Ok(mixture) = GpMixParams::default()
@@ -127,7 +126,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                         .regression_spec(regression_spec)
                         .correlation_spec(correlation_spec)
                         .kpls_dim(kpls_dim)
-                        .gmm(Some(gmm.clone()))
+                        .gmm(gmm.clone())
                         .fit(&train)
                     {
                         let xytrain =

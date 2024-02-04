@@ -42,9 +42,9 @@ pub struct SparseGpMixtureValidParams<F: Float, R: Rng + Clone> {
     /// Inducings
     inducings: Inducings<F>,
     /// Gaussian Mixture model used to cluster
-    gmm: Option<Box<GaussianMixtureModel<F>>>,
+    gmm: Option<GaussianMixtureModel<F>>,
     /// GaussianMixture preset
-    gmx: Option<Box<GaussianMixture<F>>>,
+    gmx: Option<GaussianMixture<F>>,
     /// Random number generator
     rng: R,
 }
@@ -116,13 +116,13 @@ impl<F: Float, R: Rng + Clone> SparseGpMixtureValidParams<F, R> {
 
     /// An optional gaussian mixture to be fitted to generate multivariate normal
     /// in turns used to cluster
-    pub fn gmm(&self) -> Option<GaussianMixtureModel<F>> {
-        self.gmm.as_ref().map(|gmm| *gmm.clone())
+    pub fn gmm(&self) -> Option<&GaussianMixtureModel<F>> {
+        self.gmm.as_ref()
     }
 
     /// An optional multivariate normal used to cluster (take precedence over gmm)
-    pub fn gmx(&self) -> Option<GaussianMixture<F>> {
-        self.gmx.as_ref().map(|gmx| *gmx.clone())
+    pub fn gmx(&self) -> Option<&GaussianMixture<F>> {
+        self.gmx.as_ref()
     }
 
     /// The random generator
@@ -270,9 +270,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> SparseGpMixtureParams<F, R> {
     /// Warning: no consistency check is done on the given initialization data
     /// *Panic* if multivariate normal init data not sound
     pub fn gmx(mut self, weights: Array1<F>, means: Array2<F>, covariances: Array3<F>) -> Self {
-        self.0.gmx = Some(Box::new(
-            GaussianMixture::new(weights, means, covariances).unwrap(),
-        ));
+        self.0.gmx = Some(GaussianMixture::new(weights, means, covariances).unwrap());
         self
     }
 
@@ -288,8 +286,8 @@ impl<F: Float, R: Rng + SeedableRng + Clone> SparseGpMixtureParams<F, R> {
             n_start: self.0.n_start(),
             sparse_method: self.0.sparse_method(),
             inducings: self.0.inducings().clone(),
-            gmm: self.0.gmm().map(Box::new),
-            gmx: self.0.gmx().map(Box::new),
+            gmm: self.0.gmm().cloned(),
+            gmx: self.0.gmx().cloned(),
             rng,
         })
     }
