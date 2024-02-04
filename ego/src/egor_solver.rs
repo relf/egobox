@@ -541,7 +541,7 @@ where
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         init: bool,
         recluster: bool,
-        clustering: &Option<Clustering>,
+        clustering: Option<&Clustering>,
         model_name: &str,
     ) -> Box<dyn ClusteredSurrogate> {
         let mut builder = self.surrogate_builder.clone();
@@ -567,9 +567,9 @@ where
             );
             model
         } else {
-            let clustering = clustering.as_ref().unwrap().clone();
+            let clustering = clustering.unwrap();
             let model = builder
-                .train_on_clusters(&xt.view(), &yt.view(), &clustering)
+                .train_on_clusters(&xt.view(), &yt.view(), clustering)
                 .expect("GP training failure");
             model
         }
@@ -615,7 +615,7 @@ where
                             &yt.slice(s![.., k..k + 1]).to_owned(),
                             init && i == 0,
                             recluster,
-                            &clusterings[k],
+                            clusterings[k].as_ref(),
                             &name,
                         )
                     })

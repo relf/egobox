@@ -109,8 +109,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParam
     }
 
     /// Get number of components used by PLS
-    pub fn kpls_dim(&self) -> &Option<usize> {
-        &self.kpls_dim
+    pub fn kpls_dim(&self) -> Option<&usize> {
+        self.kpls_dim.as_ref()
     }
 
     /// Get the number of internal optimization restart

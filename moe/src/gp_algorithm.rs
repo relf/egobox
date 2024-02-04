@@ -109,7 +109,7 @@ impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
         let dataset = Dataset::from(training);
 
         let gmx = if self.gmx().is_some() {
-            *self.gmx().as_ref().unwrap().clone()
+            self.gmx().unwrap().clone()
         } else {
             trace!("GMM training...");
             let gmm = GaussianMixtureModel::params(n_clusters)
