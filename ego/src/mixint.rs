@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
-use egobox_doe::{FullFactorial, Lhs, Random};
+use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
 use egobox_moe::{
     Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, FullGpSurrogate, GpMixParams,
     GpMixture, GpSurrogate, RegressionSpec,
@@ -668,12 +668,15 @@ impl MixintContext {
     /// Create a mixed integer LHS
     pub fn create_lhs_sampling<F: Float>(
         &self,
+        kind: LhsKind,
         seed: Option<u64>,
     ) -> MixintSampling<F, Lhs<F, Xoshiro256Plus>> {
-        let lhs = seed.map_or(Lhs::new(&as_continuous_limits(&self.xtypes)), |seed| {
-            let rng = Xoshiro256Plus::seed_from_u64(seed);
-            Lhs::new(&as_continuous_limits(&self.xtypes)).with_rng(rng)
-        });
+        let lhs = seed
+            .map_or(Lhs::new(&as_continuous_limits(&self.xtypes)), |seed| {
+                let rng = Xoshiro256Plus::seed_from_u64(seed);
+                Lhs::new(&as_continuous_limits(&self.xtypes)).with_rng(rng)
+            })
+            .kind(kind);
         MixintSampling {
             method: lhs,
             xtypes: self.xtypes.clone(),
@@ -740,7 +743,7 @@ mod tests {
         ];
 
         let mixi = MixintContext::new(&xtypes);
-        let mixi_lhs = mixi.create_lhs_sampling(Some(0));
+        let mixi_lhs = mixi.create_lhs_sampling(LhsKind::default(), Some(0));
 
         let actual = mixi_lhs.sample(10);
         let expected = array![
@@ -863,7 +866,7 @@ mod tests {
         let xtypes = vec![XType::Int(0, 5), XType::Cont(0., 4.), XType::Enum(4)];
 
         let mixi = MixintContext::new(&xtypes);
-        let mixi_lhs = mixi.create_lhs_sampling(Some(0));
+        let mixi_lhs = mixi.create_lhs_sampling(LhsKind::default(), Some(0));
 
         let n = mixi.get_unfolded_dim() * 10;
         let xt = mixi_lhs.sample(n);
@@ -877,7 +880,7 @@ mod tests {
             .expect("Mixint surrogate creation");
 
         let ntest = 10;
-        let mixi_lhs = mixi.create_lhs_sampling(Some(42));
+        let mixi_lhs = mixi.create_lhs_sampling(LhsKind::default(), Some(42));
 
         let xtest = mixi_lhs.sample(ntest);
         let ytest = mixi_moe
