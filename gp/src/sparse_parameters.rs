@@ -86,8 +86,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     }
 
     /// Get the number of components used by PLS
-    pub fn kpls_dim(&self) -> &Option<usize> {
-        &self.gp_params.kpls_dim
+    pub fn kpls_dim(&self) -> Option<&usize> {
+        self.gp_params.kpls_dim.as_ref()
     }
 
     /// Get starting theta value for optimization
@@ -121,8 +121,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     }
 
     /// Get seed
-    pub fn seed(&self) -> &Option<u64> {
-        &self.seed
+    pub fn seed(&self) -> Option<&u64> {
+        self.seed.as_ref()
     }
 }
 
