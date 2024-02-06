@@ -14,7 +14,7 @@ use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 
 /// Kinds of Latin Hypercube Design
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum LhsKind {
     /// sample is choosen randomly within its latin hypercube intervals
@@ -28,6 +28,7 @@ pub enum LhsKind {
     /// samples locations is optimized using the Enhanced Stochastic Evolutionary algorithm (ESE)
     /// See Jin, R. and Chen, W. and Sudjianto, A. (2005), “An efficient algorithm for constructing
     /// optimal design of computer experiments.” Journal of Statistical Planning and Inference, 134:268-287.
+    #[default]
     Optimized,
 }
 
@@ -96,7 +97,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         }
         Lhs {
             xlimits: xlimits.to_owned(),
-            kind: LhsKind::Optimized,
+            kind: LhsKind::default(),
             rng: Arc::new(RwLock::new(rng)),
         }
     }

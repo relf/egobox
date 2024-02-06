@@ -1,4 +1,4 @@
-# Efficient global optimization 
+# Efficient global optimization
 
 [![crates.io](https://img.shields.io/crates/v/egobox-ego)](https://crates.io/crates/egobox-ego)
 [![docs](https://docs.rs/egobox-ego/badge.svg)](https://docs.rs/egobox-ego)
@@ -23,11 +23,10 @@ It is a Rust port of EGO of the [SMT](https://smt.readthedocs.io) Python library
 
 There is some usage examples in the examples/ directory. To run, use:
 
-```
-$ cargo run --release --example ackley
+``` bash
+cargo run --release --example ackley
 ```
 
 ## License
 
-Licensed under the Apache License, Version 2.0 http://www.apache.org/licenses/LICENSE-2.0
-
+Licensed under the Apache License, Version 2.0 <http://www.apache.org/licenses/LICENSE-2.0>

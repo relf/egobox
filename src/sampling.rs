@@ -1,17 +1,19 @@
 use crate::types::*;
-use egobox_doe::SamplingMethod;
+use egobox_doe::{LhsKind, SamplingMethod};
 use egobox_ego::MixintContext;
 use numpy::{IntoPyArray, PyArray2};
 use pyo3::prelude::*;
 
-#[pyclass]
+#[pyclass(rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Debug, Clone, Copy)]
-#[allow(clippy::upper_case_acronyms)]
 pub enum Sampling {
-    LHS = 0,
-    #[allow(non_camel_case_types)]
-    FULL_FACTORIAL = 1,
-    RANDOM = 2,
+    Lhs = 1,
+    FullFactorial = 2,
+    Random = 3,
+    LhsClassic = 4,
+    LhsCentered = 5,
+    LhsMaximin = 6,
+    LhsCenteredMaximin = 7,
 }
 
 /// Samples generation using given method
@@ -53,21 +55,30 @@ pub fn sampling(
         })
         .collect();
 
+    let mixin = MixintContext::new(&xtypes);
     let doe = match method {
-        Sampling::LHS => MixintContext::new(&xtypes)
-            .create_lhs_sampling(seed)
-            .sample(n_samples),
-        Sampling::FULL_FACTORIAL => egobox_ego::MixintContext::new(&xtypes)
-            .create_ffact_sampling()
-            .sample(n_samples),
-        Sampling::RANDOM => egobox_ego::MixintContext::new(&xtypes)
-            .create_rand_sampling(seed)
-            .sample(n_samples),
-    };
+        Sampling::Lhs => Box::new(mixin.create_lhs_sampling(LhsKind::default(), seed))
+            as Box<dyn SamplingMethod<_>>,
+        Sampling::LhsClassic => Box::new(mixin.create_lhs_sampling(LhsKind::Classic, seed))
+            as Box<dyn SamplingMethod<_>>,
+        Sampling::LhsMaximin => Box::new(mixin.create_lhs_sampling(LhsKind::Maximin, seed))
+            as Box<dyn SamplingMethod<_>>,
+        Sampling::LhsCentered => Box::new(mixin.create_lhs_sampling(LhsKind::Centered, seed))
+            as Box<dyn SamplingMethod<_>>,
+        Sampling::LhsCenteredMaximin => {
+            Box::new(mixin.create_lhs_sampling(LhsKind::CenteredMaximin, seed))
+                as Box<dyn SamplingMethod<_>>
+        }
+        Sampling::FullFactorial => Box::new(mixin.create_ffact_sampling()),
+        Sampling::Random => {
+            Box::new(mixin.create_rand_sampling(seed)) as Box<dyn SamplingMethod<_>>
+        }
+    }
+    .sample(n_samples);
     doe.into_pyarray(py)
 }
 
-/// Samples generation using Latin Hypercube Sampling
+/// Samples generation using optimized Latin Hypercube Sampling
 ///
 /// # Parameters
 ///     xspecs: list of XSpec
@@ -84,5 +95,5 @@ pub(crate) fn lhs(
     n_samples: usize,
     seed: Option<u64>,
 ) -> &PyArray2<f64> {
-    sampling(py, Sampling::LHS, xspecs, n_samples, seed)
+    sampling(py, Sampling::Lhs, xspecs, n_samples, seed)
 }

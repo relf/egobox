@@ -1,6 +1,6 @@
 # Contributing
 
-Any input, feedback, bug report or contribution is welcome. 
+Any input, feedback, bug report or contribution is welcome.
 
 When contributing to this repository, please first discuss the change you wish to make via an [issue](https://github.com/relf/egobox/issues/new). Subsequent code changes, if any, happen through pull requests.
 
@@ -13,7 +13,7 @@ When contributing to this repository, please first discuss the change you wish t
 5. Ensure the tests pass. Run `cargo test --release --all`.
 6. Create the pull request.
 
-More information in [GitHub docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request). 
+More information in [GitHub docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request).
 
 ## Code of Conduct
 
