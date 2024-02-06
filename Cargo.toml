@@ -1,6 +1,6 @@
 [package]
 name = "egobox"
-version = "0.15.0"
+version = "0.15.1"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2021"
 description = "A toolbox for efficient global optimization"
@@ -30,10 +30,10 @@ persistent-moe = ["egobox-moe/persistent"]
 blas = ["ndarray/blas", "egobox-gp/blas", "egobox-moe/blas", "egobox-ego/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.15.0", path = "./doe" }
-egobox-gp = { version = "0.15.0", path = "./gp" }
-egobox-moe = { version = "0.15.0", path = "./moe", features = ["persistent"] }
-egobox-ego = { version = "0.15.0", path = "./ego", features = ["persistent"] }
+egobox-doe = { version = "0.15.1", path = "./doe" }
+egobox-gp = { version = "0.15.1", path = "./gp" }
+egobox-moe = { version = "0.15.1", path = "./moe", features = ["persistent"] }
+egobox-ego = { version = "0.15.1", path = "./ego", features = ["persistent"] }
 
 linfa = { version = "0.7", default-features = false }
 
