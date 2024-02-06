@@ -13,7 +13,7 @@ When contributing to this repository, please first discuss the change you wish t
 5. Ensure the tests pass. Run `cargo test --release --all`.
 6. Create the pull request.
 
-More information in [GitHub docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request). 
+More information in [GitHub docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request).
 
 ## Code of Conduct
 

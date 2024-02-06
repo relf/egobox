@@ -53,7 +53,8 @@ Version 0.11.0 - 20/09/2023
 ===========================
 
 * Automate Python package build and upload on Pypi from Github CI by @relf in <https://github.com/relf/egobox/pull/104>
-* Fix FullFactorial when asked nb iof samples is small wrt x dimension by @relf in <https://github.com/relf/egobox/pull/105>
+* Fix FullFactorial when asked nb iof samples is small wrt x dimension
+by @relf in <https://github.com/relf/egobox/pull/105>
 * Make mixed-integer sampling methods available in Python by @relf in <https://github.com/relf/egobox/pull/106>
 
 Version 0.10.0 - 22/06/2023
@@ -73,7 +74,8 @@ Version 0.9.0 - 02/06/2023
 
 * `ego`:
   * Infill criterion is now a trait object in `EgorSolver` structure (#92)
-  * `Egor` and `EgorSolver` API: methods taking argument of type Option\<T\> now take argument of type T (#94)
+  * `Egor` and `EgorSolver` API: methods taking argument of type Option\<T\>
+  now take argument of type T (#94)
   * `EgorBuilder::min_within_mixed_space()` is now `EgorBuilder::min_within_mixint_space()` (#96)
   * `egobox-ego` library doc updated (#95)
 
@@ -202,5 +204,7 @@ Initial release
 
 * `doe`: `LHS`, `FullFactorial`, `Random sampling`
 * `gp`: Gaussian Process models with 3 regression models (constant, linear quadratic) and 4 correlation models (squared exponential, absolute exponential, matern32, matern52)
-* `moe`: Mixture of Experts: find the bests mix of gps given a number of clusters regarding smooth or hard recombination
-* `ego`: Contains egor optimizer which is a super EGO algorithm implemented on top of the previous elements. It implements several infill strategy: EI, WB2, WB2S and use either COBYLA or SLSQP for internal optimization.
+* `moe`: Mixture of Experts: find the bests mix of gps given a number of clusters
+regarding smooth or hard recombination
+* `ego`: Contains egor optimizer which is a super EGO algorithm implemented on top of the previous elements.
+It implements several infill strategy: EI, WB2, WB2S and use either COBYLA or SLSQP for internal optimization.
