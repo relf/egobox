@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 
 #[pyclass(rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum Sampling {
+pub enum Sampling {
     Lhs = 1,
     FullFactorial = 2,
     Random = 3,
