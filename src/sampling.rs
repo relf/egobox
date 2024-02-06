@@ -55,29 +55,26 @@ pub fn sampling(
         })
         .collect();
 
+    let mixin = MixintContext::new(&xtypes);
     let doe = match method {
-        Sampling::Lhs => MixintContext::new(&xtypes)
-            .create_lhs_sampling(LhsKind::default(), seed)
-            .sample(n_samples),
-        Sampling::LhsClassic => MixintContext::new(&xtypes)
-            .create_lhs_sampling(LhsKind::Classic, seed)
-            .sample(n_samples),
-        Sampling::LhsMaximin => MixintContext::new(&xtypes)
-            .create_lhs_sampling(LhsKind::Maximin, seed)
-            .sample(n_samples),
-        Sampling::LhsCentered => MixintContext::new(&xtypes)
-            .create_lhs_sampling(LhsKind::Centered, seed)
-            .sample(n_samples),
-        Sampling::LhsCenteredMaximin => MixintContext::new(&xtypes)
-            .create_lhs_sampling(LhsKind::CenteredMaximin, seed)
-            .sample(n_samples),
-        Sampling::FullFactorial => egobox_ego::MixintContext::new(&xtypes)
-            .create_ffact_sampling()
-            .sample(n_samples),
-        Sampling::Random => egobox_ego::MixintContext::new(&xtypes)
-            .create_rand_sampling(seed)
-            .sample(n_samples),
-    };
+        Sampling::Lhs => Box::new(mixin.create_lhs_sampling(LhsKind::default(), seed))
+            as Box<dyn SamplingMethod<_>>,
+        Sampling::LhsClassic => Box::new(mixin.create_lhs_sampling(LhsKind::Classic, seed))
+            as Box<dyn SamplingMethod<_>>,
+        Sampling::LhsMaximin => Box::new(mixin.create_lhs_sampling(LhsKind::Maximin, seed))
+            as Box<dyn SamplingMethod<_>>,
+        Sampling::LhsCentered => Box::new(mixin.create_lhs_sampling(LhsKind::Centered, seed))
+            as Box<dyn SamplingMethod<_>>,
+        Sampling::LhsCenteredMaximin => {
+            Box::new(mixin.create_lhs_sampling(LhsKind::CenteredMaximin, seed))
+                as Box<dyn SamplingMethod<_>>
+        }
+        Sampling::FullFactorial => Box::new(mixin.create_ffact_sampling()),
+        Sampling::Random => {
+            Box::new(mixin.create_rand_sampling(seed)) as Box<dyn SamplingMethod<_>>
+        }
+    }
+    .sample(n_samples);
     doe.into_pyarray(py)
 }
 
