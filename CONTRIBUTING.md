@@ -1,6 +1,6 @@
 # Contributing
 
-Any input, feedback, bug report or contribution is welcome. 
+Any input, feedback, bug report or contribution is welcome.
 
 When contributing to this repository, please first discuss the change you wish to make via an [issue](https://github.com/relf/egobox/issues/new). Subsequent code changes, if any, happen through pull requests.
 
