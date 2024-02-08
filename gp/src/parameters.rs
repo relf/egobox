@@ -169,7 +169,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.theta_tuning = ParamTuning {
             init: theta_init,
-            ..ThetaTuning::default().into()
+            ..self.0.theta_tuning.into()
         }
         .try_into()
         .unwrap();
@@ -180,7 +180,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
         self.0.theta_tuning = ParamTuning {
             bounds: theta_bounds,
-            ..ThetaTuning::default().into()
+            ..self.0.theta_tuning.into()
         }
         .try_into()
         .unwrap();
