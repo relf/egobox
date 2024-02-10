@@ -126,8 +126,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
 
         let mut t = t0;
         let mut lhs_own = lhs.to_owned();
-        let mut lhs_best = Array2::zeros((lhs_own.nrows(), lhs_own.ncols()));
-        lhs_best.assign(&lhs_own);
+        let mut lhs_best = lhs.to_owned();
         let nx = lhs.ncols();
         let mut phip = self._phip(&lhs_best, p);
         let mut phip_best = phip;
@@ -138,30 +137,28 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
 
             for i in 0..inner_loop {
                 let modulo = (i + 1) % nx;
-                let mut l_x: Vec<Box<Array2<F>>> = Vec::new();
-                let mut l_phip: Vec<F> = Vec::new();
+                let mut l_x: Vec<Array2<F>> = Vec::with_capacity(j_range);
+                let mut l_phip: Vec<F> = Vec::with_capacity(j_range);
 
                 // Build j different plans with a single swap procedure
                 // See description of phip_swap procedure
                 let mut rng = self.rng.write().unwrap();
                 for j in 0..j_range {
-                    l_x.push(Box::new(lhs_own.to_owned()));
+                    l_x.push(lhs_own.to_owned());
                     let php = self._phip_swap(&mut l_x[j], modulo, phip, p, &mut *rng);
                     l_phip.push(php);
                 }
-                let lphip = Array::from_shape_vec(l_phip.len(), l_phip).unwrap();
+                let lphip = Array::from_shape_vec(j_range, l_phip).unwrap();
                 let k = lphip.argmin().unwrap();
                 let phip_try = lphip[k];
                 // Threshold of acceptance
                 if phip_try - phip <= t * F::cast(rng.gen::<f64>()) {
                     phip = phip_try;
                     n_acpt += 1.;
-                    //lhs_own.assign(&(*l_x[k]));
-                    lhs_own = *l_x[k].to_owned();
+                    lhs_own = l_x.swap_remove(k);
 
                     // best plan retained
                     if phip < phip_best {
-                        // lhs_best.assign(&lhs_own);
                         lhs_best = lhs_own.to_owned();
                         phip_best = phip;
                         n_imp += 1.;
