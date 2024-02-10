@@ -203,7 +203,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let mut row_i = 0;
         for (i, row) in x.axis_iter(Axis(0)).enumerate() {
             if i != i1 && i != i2 {
-                x_rest.slice_mut(s![row_i, ..]).assign(&row);
+                x_rest.row_mut(row_i).assign(&row);
                 row_i += 1;
             }
         }
@@ -211,19 +211,18 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let mut dist1 = cdist(&x.slice(s![i1..i1 + 1, ..]), &x_rest);
         let mut dist2 = cdist(&x.slice(s![i2..i2 + 1, ..]), &x_rest);
 
-        let m1 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i1..i1 + 1, k])).map(|v| *v * *v);
-        let m2 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i2..i2 + 1, k])).map(|v| *v * *v);
+        let m1 = (x_rest.column(k).to_owned() - x[[i1, k]]).map(|v| *v * *v);
+        let m2 = (x_rest.column(k).to_owned() - x[[i2, k]]).map(|v| *v * *v);
 
-        let mut d1 = dist1.mapv(|v| v * v) - &m1 + &m2;
         let two = F::cast(2.);
+        let mut d1 = dist1.mapv(|v| v * v) - &m1 + &m2;
         d1.mapv_inplace(|v| F::powf(v, -p / two));
         let mut d2 = dist2.mapv(|v| v * v) + &m1 - &m2;
         d2.mapv_inplace(|v| F::powf(v, -p / two));
 
         dist1.mapv_inplace(|v| F::powf(v, -p));
         dist2.mapv_inplace(|v| F::powf(v, -p));
-        let mut res = (d1 - dist1).sum();
-        res += (d2 - dist2).sum();
+        let mut res = (d1 - dist1).sum() + (d2 - dist2).sum();
         res = F::powf(F::powf(phip, p) + res, F::one() / p);
 
         // swap points
@@ -247,7 +246,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         }
         let mut lhs = Array::zeros((ns, nx));
         for j in 0..nx {
-            let mut colj = rdpoints.slice(s![.., j]).to_owned();
+            let mut colj = rdpoints.column(j).to_owned();
             colj.as_slice_mut().unwrap().shuffle(&mut *rng);
             lhs.column_mut(j).assign(&colj);
         }
