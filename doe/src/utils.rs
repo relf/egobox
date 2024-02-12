@@ -1,5 +1,5 @@
 use linfa::Float;
-use ndarray::{s, Array1, Array2, ArrayBase, Data, Ix2};
+use ndarray::{Array1, Array2, ArrayBase, Data, Ix2};
 use ndarray_stats::DeviationExt;
 
 pub fn pdist<F: Float>(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array1<F> {
@@ -9,9 +9,9 @@ pub fn pdist<F: Float>(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array1<F> {
     let mut k = 0;
     for i in 0..nrows {
         for j in (i + 1)..nrows {
-            let a = x.slice(s![i, ..]);
-            let b = x.slice(s![j, ..]);
-            res[k] = F::from(a.l2_dist(&b).unwrap()).unwrap();
+            let a = x.row(i);
+            let b = x.row(j);
+            res[k] = F::cast(a.l2_dist(&b).unwrap());
             k += 1;
         }
     }
@@ -35,9 +35,9 @@ pub fn cdist<F: Float>(
     let mut res = Array2::zeros((ma, mb));
     for i in 0..ma {
         for j in 0..mb {
-            let a = xa.slice(s![i, ..]);
-            let b = xb.slice(s![j, ..]);
-            res[[i, j]] = F::from(a.l2_dist(&b).unwrap()).unwrap();
+            let a = xa.row(i);
+            let b = xb.row(j);
+            res[[i, j]] = F::cast(a.l2_dist(&b).unwrap());
         }
     }
 

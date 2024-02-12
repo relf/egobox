@@ -126,8 +126,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
 
         let mut t = t0;
         let mut lhs_own = lhs.to_owned();
-        let mut lhs_best = Array2::zeros((lhs_own.nrows(), lhs_own.ncols()));
-        lhs_best.assign(&lhs_own);
+        let mut lhs_best = lhs.to_owned();
         let nx = lhs.ncols();
         let mut phip = self._phip(&lhs_best, p);
         let mut phip_best = phip;
@@ -138,30 +137,28 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
 
             for i in 0..inner_loop {
                 let modulo = (i + 1) % nx;
-                let mut l_x: Vec<Box<Array2<F>>> = Vec::new();
-                let mut l_phip: Vec<F> = Vec::new();
+                let mut l_x: Vec<Array2<F>> = Vec::with_capacity(j_range);
+                let mut l_phip: Vec<F> = Vec::with_capacity(j_range);
 
                 // Build j different plans with a single swap procedure
                 // See description of phip_swap procedure
                 let mut rng = self.rng.write().unwrap();
                 for j in 0..j_range {
-                    l_x.push(Box::new(lhs_own.to_owned()));
+                    l_x.push(lhs_own.to_owned());
                     let php = self._phip_swap(&mut l_x[j], modulo, phip, p, &mut *rng);
                     l_phip.push(php);
                 }
-                let lphip = Array::from_shape_vec(l_phip.len(), l_phip).unwrap();
+                let lphip = Array::from_shape_vec(j_range, l_phip).unwrap();
                 let k = lphip.argmin().unwrap();
                 let phip_try = lphip[k];
                 // Threshold of acceptance
                 if phip_try - phip <= t * F::cast(rng.gen::<f64>()) {
                     phip = phip_try;
                     n_acpt += 1.;
-                    //lhs_own.assign(&(*l_x[k]));
-                    lhs_own = *l_x[k].to_owned();
+                    lhs_own = l_x.swap_remove(k);
 
                     // best plan retained
                     if phip < phip_best {
-                        // lhs_best.assign(&lhs_own);
                         lhs_best = lhs_own.to_owned();
                         phip_best = phip;
                         n_imp += 1.;
@@ -203,7 +200,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let mut row_i = 0;
         for (i, row) in x.axis_iter(Axis(0)).enumerate() {
             if i != i1 && i != i2 {
-                x_rest.slice_mut(s![row_i, ..]).assign(&row);
+                x_rest.row_mut(row_i).assign(&row);
                 row_i += 1;
             }
         }
@@ -211,19 +208,18 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let mut dist1 = cdist(&x.slice(s![i1..i1 + 1, ..]), &x_rest);
         let mut dist2 = cdist(&x.slice(s![i2..i2 + 1, ..]), &x_rest);
 
-        let m1 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i1..i1 + 1, k])).map(|v| *v * *v);
-        let m2 = (x_rest.slice(s![.., k]).to_owned() - x.slice(s![i2..i2 + 1, k])).map(|v| *v * *v);
+        let m1 = (x_rest.column(k).to_owned() - x[[i1, k]]).map(|v| *v * *v);
+        let m2 = (x_rest.column(k).to_owned() - x[[i2, k]]).map(|v| *v * *v);
 
-        let mut d1 = dist1.mapv(|v| v * v) - &m1 + &m2;
         let two = F::cast(2.);
+        let mut d1 = dist1.mapv(|v| v * v) - &m1 + &m2;
         d1.mapv_inplace(|v| F::powf(v, -p / two));
         let mut d2 = dist2.mapv(|v| v * v) + &m1 - &m2;
         d2.mapv_inplace(|v| F::powf(v, -p / two));
 
         dist1.mapv_inplace(|v| F::powf(v, -p));
         dist2.mapv_inplace(|v| F::powf(v, -p));
-        let mut res = (d1 - dist1).sum();
-        res += (d2 - dist2).sum();
+        let mut res = (d1 - dist1).sum() + (d2 - dist2).sum();
         res = F::powf(F::powf(phip, p) + res, F::one() / p);
 
         // swap points
@@ -247,7 +243,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         }
         let mut lhs = Array::zeros((ns, nx));
         for j in 0..nx {
-            let mut colj = rdpoints.slice(s![.., j]).to_owned();
+            let mut colj = rdpoints.column(j).to_owned();
             colj.as_slice_mut().unwrap().shuffle(&mut *rng);
             lhs.column_mut(j).assign(&colj);
         }
