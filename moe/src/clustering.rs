@@ -348,7 +348,6 @@ mod tests {
     use crate::gp_algorithm::GpMixture;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
-    use env_logger::{Builder, Env};
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
     use ndarray::{array, Array1, Array2, Axis, Zip};
@@ -413,10 +412,6 @@ mod tests {
 
     #[test]
     fn test_find_best_cluster_nb_2d() {
-        let env = Env::new().filter_or("EGOBOX_LOG", "info");
-        let mut builder = Builder::from_env(env);
-        let builder = builder.target(env_logger::Target::Stdout);
-        builder.try_init().ok();
         let doe = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]);
         let xtrain = doe.sample(100);
         let ytrain = l1norm(&xtrain);

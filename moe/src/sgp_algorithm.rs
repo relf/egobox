@@ -76,7 +76,6 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<SparseGpMixture> {
         trace!("Sgp training...");
-        let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
 

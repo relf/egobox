@@ -5,22 +5,23 @@
 [![linting](https://github.com/relf/egobox/workflows/lint/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Alint)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.04737/status.svg)](https://doi.org/10.21105/joss.04737)
 
-Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt). 
+Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt).
 
-`egobox` is twofold: 
-1. for end-users: [a Python module](#the-python-module), the Python binding of the optimizer named `Egor` and the surrogate model `Gpx`, mixture of Gaussian processes, written in Rust. 
+`egobox` is twofold:
+
+1. for end-users: [a Python module](#the-python-module), the Python binding of the optimizer named `Egor` and the surrogate model `Gpx`, mixture of Gaussian processes, written in Rust.
 2. for developers: [a set of Rust libraries](#the-rust-libraries) useful to implement bayesian optimization (EGO-like) algorithms,
 
 ## The Python module
 
-Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions. 
+Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions.
 You can install the Python package using:
 
 ```bash
-$ pip install egobox
+pip install egobox
 ```
 
-See the [tutorial notebooks](https://github.com/relf/egobox/tree/master/doc/README.md) for usage of the optimizer 
+See the [tutorial notebooks](https://github.com/relf/egobox/tree/master/doc/README.md) for usage of the optimizer
 and mixture of Gaussian processes surrogate model.
 
 ## The Rust libraries
@@ -40,10 +41,10 @@ Depending on the sub-packages you want to use, you have to add following declara
 
 ```text
 [dependencies]
-egobox-doe = { version = "0.15.0" }
-egobox-gp  = { version = "0.15.0" }
-egobox-moe = { version = "0.15.0" }
-egobox-ego = { version = "0.15.0" }
+egobox-doe = { version = "0.15" }
+egobox-gp  = { version = "0.15" }
+egobox-moe = { version = "0.15" }
+egobox-ego = { version = "0.15" }
 ```
 
 ### Features
@@ -53,17 +54,26 @@ The table below presents the various features available depending on the subcrat
 | Name         | doe  | gp   | moe  | ego  |
 | :----------- | :--- | :--- | :--- | :--- |
 | serializable | ✔️    | ✔️    | ✔️    |      |
-| persistent   |      |      | ✔️    |      |
+| persistent   |      |      | ✔️    |  ✔️(*)  |
 | blas         |      | ✔️    | ✔️    | ✔️    |
 | nlopt        |      | ✔️    |      | ✔️    |
 
+(*) required for mixed-variable gaussian process
+
 #### serializable
+
 When selected, the serialization with [serde crate](https://serde.rs/) is enabled.
+
 #### persistent
-When selected, the save and load as a json file with [serde_json crate](https://serde.rs/) is enabled. 
+
+When selected, the save and load as a json file with [serde_json crate](https://serde.rs/) is enabled.
+
 #### blas
+
 When selected, the usage of BLAS/LAPACK backend is possible, see [below](#blaslapack-backend-optional) for more information.
+
 #### nlopt
+
 When selected, the [nlopt crate](https://github.com/adwhit/rust-nlopt) is used to provide optimizer implementations (ie Cobyla, Slsqp)
 
 ### Examples
@@ -71,19 +81,19 @@ When selected, the [nlopt crate](https://github.com/adwhit/rust-nlopt) is used t
 Examples (in `examples/` sub-packages folder) are run as follows:
 
 ```bash
-$ cd doe && cargo run --example samplings --release
+cd doe && cargo run --example samplings --release
 ```
 
 ``` bash
-$ cd gp && cargo run --example kriging --release
+cd gp && cargo run --example kriging --release
 ```
 
 ``` bash
-$ cd moe && cargo run --example clustering --release
+cd moe && cargo run --example clustering --release
 ```
 
 ``` bash
-$ cd ego && cargo run --example ackley --release
+cd ego && cargo run --example ackley --release
 ```
 
 ### BLAS/LAPACK backend (optional)
@@ -95,20 +105,23 @@ As for `linfa`, the linear algebra routines used in `gp`, `moe` ad `ego` are pro
 Otherwise, you can choose an external BLAS/LAPACK backend available through the [ndarray-linalg](https://github.com/rust-ndarray/ndarray-linalg) crate. In this case, you have to specify the `blas` feature and a `linfa` [BLAS/LAPACK backend feature](https://github.com/rust-ml/linfa#blaslapack-backend) (more information in [linfa features](https://github.com/rust-ml/linfa#blaslapack-backend)).
 
 Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you could specify in your `Cargo.toml` the following features:
+
 ```text
 [dependencies]
-egobox-gp = { version = "0.15.0", features = ["blas", "linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.15", features = ["blas", "linfa/intel-mkl-static"] }
 ```
+
 or you could run the `gp` example as follows:
+
 ``` bash
-$ cd gp && cargo run --example kriging --release --features blas,linfa/intel-mkl-static
+cd gp && cargo run --example kriging --release --features blas,linfa/intel-mkl-static
 ```
 
 ## Citation
 
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.04737/status.svg)](https://doi.org/10.21105/joss.04737)
 
-If you find this project useful for your research, you may cite it as follows: 
+If you find this project useful for your research, you may cite it as follows:
 
 ```text
 @article{
@@ -127,4 +140,3 @@ If you find this project useful for your research, you may cite it as follows:
 ```
 
 Additionally, you may consider adding a star to the repository. This positive feedback improves the visibility of the project.
-
