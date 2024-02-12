@@ -75,7 +75,6 @@ impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<GpMixture> {
         trace!("Moe training...");
-        let _opt = env_logger::try_init().ok();
         let nx = xt.ncols();
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
 
@@ -1085,24 +1084,23 @@ mod tests {
         let x = Array1::linspace(0., 1., 50).insert_axis(Axis(1));
         let preds = moe.predict_values(&x).expect("MOE prediction");
         let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
-        println!("dpred = {dpreds}");
 
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
-        write_npy(format!("{test_dir}/x_hard.npy"), &x).expect("x saved");
-        write_npy(format!("{test_dir}/preds_hard.npy"), &preds).expect("preds saved");
-        write_npy(format!("{test_dir}/dpreds_hard.npy"), &dpreds).expect("dpreds saved");
+        write_npy(format!("{test_dir}/x_moe_smooth.npy"), &x).expect("x saved");
+        write_npy(format!("{test_dir}/preds_moe_smooth.npy"), &preds).expect("preds saved");
+        write_npy(format!("{test_dir}/dpreds_moe_smooth.npy"), &dpreds).expect("dpreds saved");
 
         let mut rng = Xoshiro256Plus::seed_from_u64(42);
         for _ in 0..20 {
             let x1: f64 = rng.gen_range(0.0..1.0);
 
-            let h = 1e-4;
+            let h = 1e-8;
             let xtest = array![[x1]];
 
             let x = array![[x1], [x1 + h], [x1 - h]];
-            let preds = moe.predict_derivatives(&x).unwrap();
-            let fdiff = preds[[1, 0]] - preds[[1, 0]] / 2. * h;
+            let preds = moe.predict_values(&x).unwrap();
+            let fdiff = (preds[[1, 0]] - preds[[2, 0]]) / (2. * h);
 
             let drv = moe.predict_derivatives(&xtest).unwrap();
             let df = df_test_1d(&xtest);
@@ -1115,6 +1113,7 @@ mod tests {
             println!(
                 "Test predicted derivatives at {xtest}: drv {drv}, true df {df}, fdiff {fdiff}"
             );
+            println!("preds(x, x+h, x-h)={}", preds);
             assert_abs_diff_eq!(err, 0.0, epsilon = 2.5e-1);
         }
     }
