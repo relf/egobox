@@ -39,5 +39,5 @@ name = "lhs"
 harness = false
 
 [[bench]]
-name = "lhs_classic"
+name = "lhs_classics"
 harness = false
