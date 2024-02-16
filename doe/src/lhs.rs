@@ -232,22 +232,22 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let cut = Array::linspace(0., 1., ns + 1);
 
         let mut rng = self.rng.write().unwrap();
-        let rnd = Array::random_using((ns, nx), Uniform::new(0., 1.), &mut *rng);
+        let rnd = Array::random_using((nx, ns), Uniform::new(0., 1.), &mut *rng);
         let a = cut.slice(s![..ns]).to_owned();
         let b = cut.slice(s![1..(ns + 1)]);
         let c = &b - &a;
-        let mut rdpoints = Array::zeros((ns, nx));
+        let mut rdpoints = Array::zeros((nx, ns));
         for j in 0..nx {
-            let d = rnd.column(j).to_owned() * &c + &a;
-            rdpoints.column_mut(j).assign(&d)
+            let d = rnd.row(j).to_owned() * &c + &a;
+            rdpoints.row_mut(j).assign(&d)
         }
-        let mut lhs = Array::zeros((ns, nx));
+        let mut lhs = Array::zeros((nx, ns));
         for j in 0..nx {
-            let mut colj = rdpoints.column(j).to_owned();
+            let mut colj = rdpoints.row_mut(j);
             colj.as_slice_mut().unwrap().shuffle(&mut *rng);
-            lhs.column_mut(j).assign(&colj);
+            lhs.row_mut(j).assign(&colj);
         }
-        lhs.mapv(F::cast)
+        lhs.mapv_into_any(F::cast).reversed_axes()
     }
 
     fn _centered_lhs(&self, ns: usize) -> Array2<F> {
