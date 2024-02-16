@@ -5,11 +5,7 @@ use ndarray::aview1;
 fn criterion_lhs_classics(c: &mut Criterion) {
     let dims = [500];
     let sizes = [1000];
-    let kinds = [
-        // LhsKind::Classic,
-        LhsKind::Maximin,
-        LhsKind::Centered,
-    ];
+    let kinds = [LhsKind::Classic, LhsKind::Maximin, LhsKind::Centered];
 
     let mut group = c.benchmark_group("doe");
     group.sample_size(10);
