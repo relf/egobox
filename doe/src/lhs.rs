@@ -14,7 +14,7 @@ use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 
 /// Kinds of Latin Hypercube Design
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Copy)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum LhsKind {
     /// sample is choosen randomly within its latin hypercube intervals
@@ -254,11 +254,10 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
-        let u = Array::random((ns, nx), Uniform::new(0., 1.));
         let a = cut.slice(s![..ns]).to_owned();
         let b = cut.slice(s![1..(ns + 1)]);
         let mut c = (a + b) / 2.;
-        let mut lhs = Array::zeros(u.raw_dim());
+        let mut lhs = Array::zeros((ns, nx));
 
         let mut rng = self.rng.write().unwrap();
         for j in 0..nx {
