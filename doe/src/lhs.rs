@@ -257,14 +257,14 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let a = cut.slice(s![..ns]).to_owned();
         let b = cut.slice(s![1..(ns + 1)]);
         let mut c = (a + b) / 2.;
-        let mut lhs = Array::zeros((ns, nx));
+        let mut lhs = Array::zeros((ns, nx).f());
 
         let mut rng = self.rng.write().unwrap();
         for j in 0..nx {
             c.as_slice_mut().unwrap().shuffle(&mut *rng);
             lhs.column_mut(j).assign(&c);
         }
-        lhs.mapv(F::cast)
+        lhs.mapv_into_any(F::cast)
     }
 
     fn _maximin_lhs(&self, ns: usize, centered: bool, max_iters: usize) -> Array2<F> {
