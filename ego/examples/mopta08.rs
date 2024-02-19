@@ -265,7 +265,7 @@ fn main() -> anyhow::Result<()> {
         .configure(|config| {
             config
                 .n_cstr(N_CSTR)
-                .cstr_tol(&cstr_tol)
+                .cstr_tol(cstr_tol.clone())
                 .n_clusters(1)
                 .n_start(50)
                 .n_doe(n_doe)

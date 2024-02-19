@@ -125,8 +125,8 @@ impl EgorConfig {
     }
 
     /// Sets the tolerance on constraints violation (`cstr < tol`)
-    pub fn cstr_tol(mut self, tol: &Array1<f64>) -> Self {
-        self.cstr_tol = Some(tol.to_owned());
+    pub fn cstr_tol(mut self, tol: Array1<f64>) -> Self {
+        self.cstr_tol = Some(tol);
         self
     }
 

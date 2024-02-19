@@ -412,13 +412,20 @@ mod tests {
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(3);
         let res = EgorBuilder::optimize(f_g24)
-            .configure(|config| config.n_cstr(2).doe(&doe).max_iters(20).random_seed(42))
+            .configure(|config| {
+                config
+                    .n_cstr(2)
+                    .doe(&doe)
+                    .max_iters(20)
+                    .cstr_tol(array![2e-6, 1e-6])
+                    .random_seed(42)
+            })
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
         println!("G24 optim result = {res:?}");
         let expected = array![2.3295, 3.1785];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-2);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
     }
 
     #[test]
@@ -434,7 +441,7 @@ mod tests {
                     .regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
                     .n_cstr(2)
-                    .cstr_tol(&array![2e-6, 2e-6])
+                    .cstr_tol(array![2e-6, 2e-6])
                     .q_points(2)
                     .qei_strategy(QEiStrategy::KrigingBeliever)
                     .doe(&doe)
