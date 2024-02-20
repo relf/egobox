@@ -37,3 +37,7 @@ approx = "0.4"
 [[bench]]
 name = "lhs"
 harness = false
+
+[[bench]]
+name = "lhs_classics"
+harness = false

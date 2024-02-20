@@ -1,7 +1,7 @@
 use crate::utils::{cdist, pdist};
 use crate::SamplingMethod;
 use linfa::Float;
-use ndarray::{s, Array, Array2, ArrayBase, Axis, Data, Ix2};
+use ndarray::{s, Array, Array2, ArrayBase, Axis, Data, Ix2, ShapeBuilder};
 use ndarray_rand::{
     rand::seq::SliceRandom, rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt,
 };
@@ -14,7 +14,7 @@ use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 
 /// Kinds of Latin Hypercube Design
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Copy)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum LhsKind {
     /// sample is choosen randomly within its latin hypercube intervals
@@ -232,40 +232,39 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
         let cut = Array::linspace(0., 1., ns + 1);
 
         let mut rng = self.rng.write().unwrap();
-        let rnd = Array::random_using((ns, nx), Uniform::new(0., 1.), &mut *rng);
+        let rnd = Array::random_using((ns, nx).f(), Uniform::new(0., 1.), &mut *rng);
         let a = cut.slice(s![..ns]).to_owned();
         let b = cut.slice(s![1..(ns + 1)]);
         let c = &b - &a;
-        let mut rdpoints = Array::zeros((ns, nx));
+        let mut rdpoints = Array::zeros((ns, nx).f());
         for j in 0..nx {
             let d = rnd.column(j).to_owned() * &c + &a;
             rdpoints.column_mut(j).assign(&d)
         }
-        let mut lhs = Array::zeros((ns, nx));
+        let mut lhs = Array::zeros((ns, nx).f());
         for j in 0..nx {
-            let mut colj = rdpoints.column(j).to_owned();
+            let mut colj = rdpoints.column_mut(j);
             colj.as_slice_mut().unwrap().shuffle(&mut *rng);
             lhs.column_mut(j).assign(&colj);
         }
-        lhs.mapv(F::cast)
+        lhs.mapv_into_any(F::cast)
     }
 
     fn _centered_lhs(&self, ns: usize) -> Array2<F> {
         let nx = self.xlimits.nrows();
         let cut = Array::linspace(0., 1., ns + 1);
 
-        let u = Array::random((ns, nx), Uniform::new(0., 1.));
         let a = cut.slice(s![..ns]).to_owned();
         let b = cut.slice(s![1..(ns + 1)]);
         let mut c = (a + b) / 2.;
-        let mut lhs = Array::zeros(u.raw_dim());
+        let mut lhs = Array::zeros((ns, nx).f());
 
         let mut rng = self.rng.write().unwrap();
         for j in 0..nx {
             c.as_slice_mut().unwrap().shuffle(&mut *rng);
             lhs.column_mut(j).assign(&c);
         }
-        lhs.mapv(F::cast)
+        lhs.mapv_into_any(F::cast)
     }
 
     fn _maximin_lhs(&self, ns: usize, centered: bool, max_iters: usize) -> Array2<F> {
@@ -298,11 +297,11 @@ mod tests {
     fn test_lhs() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![
-            [9.862795467127624, 0.2612922645307346],
-            [5.085755595295461, 0.645406747745314],
-            [7.000042958859238, 0.46061306226099713],
-            [8.087609607403724, 0.9046507902710129],
-            [6.062569781563214, 0.06208227914542097]
+            [9.000042958859238, 0.2175219214807449],
+            [5.085755595295461, 0.7725590934255249],
+            [7.062569781563214, 0.44540674774531397],
+            [8.306461322653673, 0.9046507902710129],
+            [6.310411395727105, 0.0606130622609971]
         ];
         let actual = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
@@ -324,11 +323,11 @@ mod tests {
     fn test_classic_lhs() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
         let expected = array![
-            [9.862795467127624, 0.46061306226099713],
-            [5.085755595295461, 0.645406747745314],
-            [7.000042958859238, 0.2612922645307346],
-            [8.087609607403724, 0.9046507902710129],
-            [6.062569781563214, 0.06208227914542097]
+            [9.000042958859238, 0.44540674774531397],
+            [5.085755595295461, 0.7725590934255249],
+            [7.062569781563214, 0.2175219214807449],
+            [8.306461322653673, 0.9046507902710129],
+            [6.310411395727105, 0.0606130622609971]
         ];
         let actual = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))

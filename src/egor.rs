@@ -433,7 +433,7 @@ impl Egor {
             .max_iters(max_iters.unwrap_or(1))
             .n_start(self.n_start)
             .n_doe(self.n_doe)
-            .cstr_tol(&cstr_tol)
+            .cstr_tol(cstr_tol)
             .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
             .correlation_spec(
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
