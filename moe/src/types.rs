@@ -121,9 +121,6 @@ impl Clustering {
     }
 }
 
-/// A trait for Gp surrogates using clustering
-pub trait ClusteredGpSurrogate: Clustered + GpSurrogate {}
-
 /// A trait for Mixture of GP surrogates with derivatives using clustering
 pub trait MixtureGpSurrogate: Clustered + FullGpSurrogate {
     fn experts(&self) -> &[Box<dyn FullGpSurrogate>];
