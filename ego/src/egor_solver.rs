@@ -117,7 +117,7 @@ use crate::types::*;
 use crate::utils::{compute_cstr_scales, update_data};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
-use egobox_moe::{ClusteredSurrogate, Clustering, CorrelationSpec, GpMixParams, RegressionSpec};
+use egobox_moe::{Clustering, CorrelationSpec, GpMixParams, MixtureGpSurrogate, RegressionSpec};
 use env_logger::{Builder, Env};
 use finitediff::FiniteDiff;
 use linfa::ParamGuard;
@@ -198,10 +198,10 @@ impl SurrogateBuilder for GpMixParams<f64, Xoshiro256Plus> {
         &self,
         xt: &ArrayView2<f64>,
         yt: &ArrayView2<f64>,
-    ) -> Result<Box<dyn ClusteredSurrogate>> {
+    ) -> Result<Box<dyn MixtureGpSurrogate>> {
         let checked = self.check_ref()?;
         let moe = checked.train(xt, yt)?;
-        Ok(moe).map(|moe| Box::new(moe) as Box<dyn ClusteredSurrogate>)
+        Ok(moe).map(|moe| Box::new(moe) as Box<dyn MixtureGpSurrogate>)
     }
 
     fn train_on_clusters(
@@ -209,10 +209,10 @@ impl SurrogateBuilder for GpMixParams<f64, Xoshiro256Plus> {
         xt: &ArrayView2<f64>,
         yt: &ArrayView2<f64>,
         clustering: &Clustering,
-    ) -> Result<Box<dyn ClusteredSurrogate>> {
+    ) -> Result<Box<dyn MixtureGpSurrogate>> {
         let checked = self.check_ref()?;
         let moe = checked.train_on_clusters(xt, yt, clustering)?;
-        Ok(moe).map(|moe| Box::new(moe) as Box<dyn ClusteredSurrogate>)
+        Ok(moe).map(|moe| Box::new(moe) as Box<dyn MixtureGpSurrogate>)
     }
 }
 
@@ -543,7 +543,7 @@ where
         recluster: bool,
         clustering: Option<&Clustering>,
         model_name: &str,
-    ) -> Box<dyn ClusteredSurrogate> {
+    ) -> Box<dyn MixtureGpSurrogate> {
         let mut builder = self.surrogate_builder.clone();
         builder.set_kpls_dim(self.config.kpls_dim);
         builder.set_regression_spec(self.config.regression_spec);
@@ -601,7 +601,7 @@ where
             };
 
             info!("Train surrogates with {} points...", xt.nrows());
-            let models: Vec<std::boxed::Box<dyn egobox_moe::ClusteredSurrogate>> =
+            let models: Vec<std::boxed::Box<dyn egobox_moe::MixtureGpSurrogate>> =
                 (0..=self.config.n_cstr)
                     .into_par_iter()
                     .map(|k| {
@@ -669,8 +669,8 @@ where
     fn compute_scaling(
         &self,
         sampling: &Lhs<f64, Xoshiro256Plus>,
-        obj_model: &dyn ClusteredSurrogate,
-        cstr_models: &[Box<dyn ClusteredSurrogate>],
+        obj_model: &dyn MixtureGpSurrogate,
+        cstr_models: &[Box<dyn MixtureGpSurrogate>],
         f_min: f64,
     ) -> (f64, Array1<f64>, f64) {
         let npts = 100 * self.xlimits.nrows();
@@ -702,8 +702,8 @@ where
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
-        obj_model: &dyn ClusteredSurrogate,
-        cstr_models: &[Box<dyn ClusteredSurrogate>],
+        obj_model: &dyn MixtureGpSurrogate,
+        cstr_models: &[Box<dyn MixtureGpSurrogate>],
         cstr_tol: &Array1<f64>,
         lhs_optim_seed: Option<u64>,
     ) -> Result<Array1<f64>> {
@@ -869,8 +869,8 @@ where
         &self,
         xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        obj_model: &dyn ClusteredSurrogate,
-        cstr_models: &[Box<dyn ClusteredSurrogate>],
+        obj_model: &dyn MixtureGpSurrogate,
+        cstr_models: &[Box<dyn MixtureGpSurrogate>],
     ) -> Result<Vec<f64>> {
         let mut res: Vec<f64> = Vec::with_capacity(3);
         if self.config.q_ei == QEiStrategy::ConstantLiarMinimum {
@@ -901,7 +901,7 @@ where
     fn compute_infill_obj_scale(
         &self,
         x: &ArrayView2<f64>,
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
     ) -> f64 {
         let mut crit_vals = Array1::zeros(x.nrows());
@@ -935,7 +935,7 @@ where
     fn eval_infill_obj(
         &self,
         x: &[f64],
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
         scale: f64,
         scale_ic: f64,
@@ -951,7 +951,7 @@ where
     pub fn eval_grad_infill_obj(
         &self,
         x: &[f64],
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
         scale: f64,
         scale_ic: f64,

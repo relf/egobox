@@ -460,7 +460,7 @@ impl FullGpSurrogate for GpMixture {
     }
 }
 
-impl ClusteredSurrogate for GpMixture {
+impl MixtureGpSurrogate for GpMixture {
     /// Selected experts in the mixture
     fn experts(&self) -> &[Box<dyn FullGpSurrogate>] {
         &self.experts
