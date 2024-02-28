@@ -12,7 +12,6 @@ use linfa_pls::PlsRegression;
 #[cfg(feature = "blas")]
 use log::warn;
 use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
-use ndarray_einsum_beta::*;
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use ndarray_rand::rand::{Rng, SeedableRng};
@@ -57,7 +56,7 @@ impl Default for CobylaParams {
 )]
 pub(crate) struct GpInnerParams<F: Float> {
     /// Gaussian process variance
-    sigma2: Array1<F>,
+    sigma2: F,
     /// Generalized least-squares regression weights for Universal Kriging or given beta0 for Ordinary Kriging
     beta: Array2<F>,
     /// Gaussian Process weights
@@ -274,13 +273,10 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
         let (rt, u, _) = self._compute_rt_u(x);
 
-        let a = &self.inner_params.sigma2;
-        let b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
+        let mut b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
             + u.mapv(|v: F| v * v).sum_axis(Axis(0));
-        let mse = einsum("i,j->ji", &[a, &b])
-            .unwrap()
-            .into_shape((x.nrows(), 1))
-            .unwrap();
+        b.mapv_inplace(|v| self.inner_params.sigma2 * v);
+        let mse = b.into_shape((x.nrows(), 1)).unwrap();
 
         // Mean Squared Error might be slightly negative depending on
         // machine precision: set to zero in that case
@@ -295,8 +291,10 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let k = self.corr.value(&cross_dx, &self.theta, &self.w_star);
         let k = k.into_shape((xnorm.nrows(), xnorm.nrows())).unwrap();
 
-        let cov_matrix =
-            &self.inner_params.sigma2.to_owned() * (k - rt.t().to_owned().dot(&rt) + u.t().dot(&u));
+        // let cov_matrix =
+        //     &array![self.inner_params.sigma2] * (k - rt.t().to_owned().dot(&rt) + u.t().dot(&u));
+        let mut cov_matrix = k - rt.t().to_owned().dot(&rt) + u.t().dot(&u);
+        cov_matrix.mapv_inplace(|v| self.inner_params.sigma2 * v);
         cov_matrix
     }
 
@@ -416,6 +414,21 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let normal = Normal::new(0., 1.).unwrap();
         let ary = Array::random((n_eval, n_traj), normal).mapv(|v| F::cast(v));
         mean + c.dot(&ary)
+    }
+
+    /// Retrieve optimized hyperparameters theta
+    pub fn theta(&self) -> &Array1<F> {
+        &self.theta
+    }
+
+    /// Estimated variance
+    pub fn variance(&self) -> F {
+        self.inner_params.sigma2
+    }
+
+    /// Retrieve reduced likelihood value
+    pub fn likelihood(&self) -> F {
+        self.likelihood
     }
 
     /// Retrieve number of PLS components 1 <= n <= x dimension
@@ -556,7 +569,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         let dx = pairwise_differences(&xnorm, &self.xtrain.data);
 
-        let sigma2 = &self.inner_params.sigma2;
+        let sigma2 = self.inner_params.sigma2;
         let r_chol = &self.inner_params.r_chol;
 
         let r = self.corr.value(&dx, &self.theta, &self.w_star);
@@ -611,8 +624,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let prime_t = (-p2 + p4).mapv(|v| two * v).t().to_owned();
 
         let x_std = &self.xtrain.std;
-        let dvar = sigma2 * prime_t / x_std;
-        dvar.row(0).to_owned()
+        let dvar = (prime_t / x_std).mapv(|v| v * sigma2);
+        dvar.row(0).into_owned()
     }
 
     /// See non blas version
@@ -626,7 +639,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let dx = pairwise_differences(&xnorm, &self.xtrain.data);
 
-        let sigma2 = &self.inner_params.sigma2;
+        let sigma2 = self.inner_params.sigma2;
         let r_chol = &self.inner_params.r_chol.to_owned().with_lapack();
 
         let r = self
@@ -690,8 +703,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let prime_t = (-p2 + p4).without_lapack().mapv(|v| two * v).t().to_owned();
 
         let x_std = &self.xtrain.std;
-        let dvar = sigma2 * prime_t / x_std;
-        dvar.row(0).to_owned()
+        let dvar = (prime_t / x_std).mapv(|v| v * sigma2);
+        dvar.row(0).into_owned()
     }
 
     /// Predict variance derivatives at a set of points `x` specified as a (n, nx) matrix where x has nx components.
@@ -1113,12 +1126,13 @@ fn reduced_likelihood<F: Float>(
     let logdet = r_chol.diag().mapv(|v: F| v.log10()).sum() * F::cast(2.) / n_obs;
 
     // Reduced likelihood
-    let sigma2: Array1<F> = rho_sqr / n_obs;
+    let sigma2 = rho_sqr / n_obs;
     let reduced_likelihood = -n_obs * (sigma2.sum().log10() + logdet);
+
     Ok((
         reduced_likelihood,
         GpInnerParams {
-            sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
+            sigma2: sigma2[0] * ytrain.std[0] * ytrain.std[0],
             beta,
             gamma,
             r_chol,
@@ -1208,7 +1222,7 @@ fn reduced_likelihood<F: Float>(
     Ok((
         reduced_likelihood,
         GpInnerParams {
-            sigma2: sigma2 * &ytrain.std.mapv(|v| v * v),
+            sigma2: sigma2[0] * ytrain.std[0] * ytrain.std[0],
             beta: beta.without_lapack(),
             gamma: gamma.without_lapack(),
             r_chol: r_chol.without_lapack(),
