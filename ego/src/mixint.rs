@@ -597,7 +597,11 @@ impl FullGpSurrogate for MixintMoe {
     }
 }
 
-impl ClusteredSurrogate for MixintMoe {}
+impl ClusteredSurrogate for MixintMoe {
+    fn experts(&self) -> &[Box<dyn FullGpSurrogate>] {
+        self.moe.experts()
+    }
+}
 
 impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for MixintMoe {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {

@@ -460,7 +460,12 @@ impl FullGpSurrogate for GpMixture {
     }
 }
 
-impl ClusteredSurrogate for GpMixture {}
+impl ClusteredSurrogate for GpMixture {
+    /// Selected experts in the mixture
+    fn experts(&self) -> &[Box<dyn FullGpSurrogate>] {
+        &self.experts
+    }
+}
 
 impl GpMixture {
     /// Constructor of mixture of experts parameters
@@ -471,11 +476,6 @@ impl GpMixture {
     /// Recombination mode
     pub fn recombination(&self) -> Recombination<f64> {
         self.recombination
-    }
-
-    /// Selected experts in the mixture
-    pub fn experts(&self) -> &[Box<dyn FullGpSurrogate>] {
-        &self.experts
     }
 
     /// Gaussian mixture
