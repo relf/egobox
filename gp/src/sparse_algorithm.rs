@@ -287,6 +287,11 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         self.noise
     }
 
+    /// Retrieve reduced likelihood value
+    pub fn likelihood(&self) -> F {
+        self.likelihood
+    }
+
     /// Inducing points
     pub fn inducings(&self) -> &Array2<F> {
         &self.inducings
