@@ -46,7 +46,7 @@ pub trait SgpSurrogateParams {
     fn train(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn SgpSurrogate>>;
 }
 
-/// A trait for a GP surrogate
+/// A trait for a base GP surrogate
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
 pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     /// Predict output values at n points given as (n, xdim) matrix.
@@ -60,7 +60,7 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
 
 /// A trait for a GP surrogate with derivatives predictions and sampling
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
-pub trait FullGpSurrogate: GpSurrogate {
+pub trait GpSurrogateExt {
     /// Predict derivatives at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
@@ -71,13 +71,22 @@ pub trait FullGpSurrogate: GpSurrogate {
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>>;
 }
 
-/// A trait for a Sparse GP surrogate.
+/// A trait for a GP surrogate.
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
-pub trait SgpSurrogate: GpSurrogate {
+pub trait GpParameterized {
     fn theta(&self) -> &Array1<f64>;
     fn variance(&self) -> f64;
     fn noise_variance(&self) -> f64;
+    fn likelihood(&self) -> f64;
 }
+
+/// A trait for a GP surrogate.
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+pub trait FullGpSurrogate: GpParameterized + GpSurrogate + GpSurrogateExt {}
+
+/// A trait for a Sparse GP surrogate.
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+pub trait SgpSurrogate: GpParameterized + GpSurrogate {}
 
 /// A macro to declare GP surrogate using regression model and correlation model names.
 ///
@@ -159,7 +168,7 @@ macro_rules! declare_surrogate {
             }
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
-            impl FullGpSurrogate for [<Gp $regr $corr Surrogate>] {
+            impl GpSurrogateExt for [<Gp $regr $corr Surrogate>] {
                 fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_derivatives(x))
                 }
@@ -170,6 +179,28 @@ macro_rules! declare_surrogate {
                     Ok(self.0.sample(x, n_traj))
                 }
             }
+
+            #[cfg_attr(feature = "serializable", typetag::serde)]
+            impl GpParameterized for [<Gp $regr $corr Surrogate>] {
+                fn theta(&self) -> &Array1<f64> {
+                    self.0.theta()
+                }
+
+                fn variance(&self) -> f64 {
+                    self.0.variance()
+                }
+
+                fn noise_variance(&self) -> f64 {
+                    0.0
+                }
+
+                fn likelihood(&self) -> f64 {
+                    self.0.likelihood()
+                }
+            }
+
+            #[cfg_attr(feature = "serializable", typetag::serde)]
+            impl FullGpSurrogate for [<Gp $regr $corr Surrogate>] {}
 
             impl std::fmt::Display for [<Gp $regr $corr Surrogate>] {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -281,8 +312,7 @@ macro_rules! declare_sgp_surrogate {
             }
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
-            impl SgpSurrogate for [<Sgp $corr Surrogate>] {
-
+            impl GpParameterized for [<Sgp $corr Surrogate>] {
                 fn theta(&self) -> &Array1<f64> {
                     self.0.theta()
                 }
@@ -294,7 +324,14 @@ macro_rules! declare_sgp_surrogate {
                 fn noise_variance(&self) -> f64 {
                     self.0.noise_variance()
                 }
+
+                fn likelihood(&self) -> f64 {
+                    self.0.likelihood()
+                }
             }
+
+            #[cfg_attr(feature = "serializable", typetag::serde)]
+            impl SgpSurrogate for [<Sgp $corr Surrogate>] {}
 
             impl std::fmt::Display for [<Sgp $corr Surrogate>] {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
