@@ -14,7 +14,7 @@ keywords = [
   "optimization",
 ]
 categories = ["algorithms", "mathematics", "science"]
-rust-version = "1.70" # MSVR
+rust-version = "1.74" # MSVR
 
 exclude = [".github/"]
 
