@@ -1,5 +1,5 @@
 use crate::gaussian_mixture::GaussianMixture;
-use crate::{FullGpSurrogate, GpSurrogate};
+use crate::{FullGpSurrogate, GpSurrogate, GpSurrogateExt};
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
@@ -121,8 +121,7 @@ impl Clustering {
     }
 }
 
-/// A trait for Gp surrogates using clustering
-pub trait ClusteredGpSurrogate: Clustered + GpSurrogate {}
-
-/// A trait for Gp surrogates with derivatives using clustering
-pub trait ClusteredSurrogate: Clustered + FullGpSurrogate {}
+/// A trait for Mixture of GP surrogates with derivatives using clustering
+pub trait MixtureGpSurrogate: Clustered + GpSurrogate + GpSurrogateExt {
+    fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>>;
+}

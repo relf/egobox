@@ -18,16 +18,20 @@ class TestGpMix(unittest.TestCase):
     def test_gpx_kriging(self):
         gpx = self.gpx
 
+        print(f"gpx.theta = {gpx.thetas()}")
+        print(f"gpx.variance= {gpx.variances()}")
+        print(f"gpx.likelihood = {gpx.likelihoods()}")
+
         # should interpolate
-        self.assertAlmostEqual(1.0, float(gpx.predict_values(np.array([[1.0]]))))
-        self.assertAlmostEqual(0.0, float(gpx.predict_variances(np.array([[1.0]]))))
+        self.assertAlmostEqual(1.0, gpx.predict_values(np.array([[1.0]])).item())
+        self.assertAlmostEqual(0.0, gpx.predict_variances(np.array([[1.0]])).item())
 
         # check a point not too far from a training point
         self.assertAlmostEqual(
-            1.1163, float(gpx.predict_values(np.array([[1.1]]))), delta=1e-3
+            1.1163, gpx.predict_values(np.array([[1.1]])).item(), delta=1e-3
         )
         self.assertAlmostEqual(
-            0.0, float(gpx.predict_variances(np.array([[1.1]]))), delta=1e-3
+            0.0, gpx.predict_variances(np.array([[1.1]])).item(), delta=1e-3
         )
 
     def test_gpx_save_load(self):
@@ -42,15 +46,15 @@ class TestGpMix(unittest.TestCase):
         os.remove(filename)
 
         # should interpolate
-        self.assertAlmostEqual(1.0, float(gpx2.predict_values(np.array([[1.0]]))))
-        self.assertAlmostEqual(0.0, float(gpx2.predict_variances(np.array([[1.0]]))))
+        self.assertAlmostEqual(1.0, gpx2.predict_values(np.array([[1.0]])).item())
+        self.assertAlmostEqual(0.0, gpx2.predict_variances(np.array([[1.0]])).item())
 
         # check a point not too far from a training point
         self.assertAlmostEqual(
-            1.1163, float(gpx2.predict_values(np.array([[1.1]]))), delta=1e-3
+            1.1163, gpx2.predict_values(np.array([[1.1]])).item(), delta=1e-3
         )
         self.assertAlmostEqual(
-            0.0, float(gpx2.predict_variances(np.array([[1.1]]))), delta=1e-3
+            0.0, gpx2.predict_variances(np.array([[1.1]])).item(), delta=1e-3
         )
 
 

@@ -1,7 +1,7 @@
 use crate::algorithm::optimize_params;
 use crate::errors::{GpError, Result};
 use crate::sparse_parameters::{
-    Inducings, SgpParams, SgpValidParams, SparseMethod, VarianceEstimation,
+    Inducings, ParamEstimation, SgpParams, SgpValidParams, SparseMethod,
 };
 use crate::{correlation_models::*, utils::pairwise_differences};
 use crate::{prepare_multistart, CobylaParams};
@@ -57,7 +57,7 @@ impl<F: Float> Clone for WoodburyData<F> {
 ///
 /// [`SparseGaussianProcess`] inducing points definition can be either random or provided by the user through
 /// the [`Inducings`] specification. The used sparse method is specified with the [`SparseMethod`].
-/// Noise variance can be either specified as a known constant or estimated (see [`VarianceEstimation`]).
+/// Noise variance can be either specified as a known constant or estimated (see [`ParamEstimation`]).
 /// Unlike [`GaussianProcess`]([crate::GaussianProcess]) implementation [`SparseGaussianProcess`]
 /// does not allow choosing a trend which is supposed to be zero.
 /// The correlation kernel might be selected amongst [available kernels](crate::correlation_models).
@@ -287,6 +287,11 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         self.noise
     }
 
+    /// Retrieve reduced likelihood value
+    pub fn likelihood(&self) -> F {
+        self.likelihood
+    }
+
     /// Inducing points
     pub fn inducings(&self) -> &Array2<F> {
         &self.inducings
@@ -400,8 +405,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
 
         // Initial guess for noise, when noise variance constant, it is not part of optimization params
         let (is_noise_estimated, noise0) = match self.noise_variance() {
-            VarianceEstimation::Constant(c) => (false, c),
-            VarianceEstimation::Estimated {
+            ParamEstimation::Fixed(c) => (false, c),
+            ParamEstimation::Estimated {
                 initial_guess: c,
                 bounds: _,
             } => (true, c),
@@ -493,7 +498,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         bounds[params.ncols() - 1 - is_noise_estimated as usize] =
             (F::cast(1e-12).log10(), (F::cast(9.) * sigma2_0).log10());
         // optionally adjust noise variance bounds
-        if let VarianceEstimation::Estimated {
+        if let ParamEstimation::Estimated {
             initial_guess: _,
             bounds: (lo, up),
         } = self.noise_variance()
@@ -844,7 +849,7 @@ mod tests {
 
         let sgp = SparseKriging::params(Inducings::Randomized(n_inducings))
             //let sgp = SparseKriging::params(Inducings::Located(z))
-            //.noise_variance(VarianceEstimation::Constant(0.01))
+            //.noise_variance(ParamEstimation::Constant(0.01))
             .seed(Some(42))
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fitted");
@@ -891,7 +896,7 @@ mod tests {
             Inducings::Located(z),
         )
         .sparse_method(SparseMethod::Vfe)
-        .noise_variance(VarianceEstimation::Constant(0.01))
+        .noise_variance(ParamEstimation::Fixed(0.01))
         .fit(&Dataset::new(xt.clone(), yt.clone()))
         .expect("GP fitted");
 
@@ -934,7 +939,7 @@ mod tests {
         .sparse_method(SparseMethod::Vfe)
         //.sparse_method(SparseMethod::Fitc)
         .theta_init(vec![0.1])
-        .noise_variance(VarianceEstimation::Estimated {
+        .noise_variance(ParamEstimation::Estimated {
             initial_guess: 0.02,
             bounds: (1e-3, 1.),
         })

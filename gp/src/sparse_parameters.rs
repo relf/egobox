@@ -10,14 +10,14 @@ use serde::{Deserialize, Serialize};
 
 /// Variance estimation method
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum VarianceEstimation<F: Float> {
-    /// Constant variance (ie given not estimated)
-    Constant(F),
-    /// Variance is estimated between given bounds (lower, upper) starting from the inital guess
+pub enum ParamEstimation<F: Float> {
+    /// Constant parameter (ie given not estimated)
+    Fixed(F),
+    /// Parameter is estimated between given bounds (lower, upper) starting from the inital guess
     Estimated { initial_guess: F, bounds: (F, F) },
 }
-impl<F: Float> Default for VarianceEstimation<F> {
-    fn default() -> VarianceEstimation<F> {
+impl<F: Float> Default for ParamEstimation<F> {
+    fn default() -> ParamEstimation<F> {
         Self::Estimated {
             initial_guess: F::cast(1e-2),
             bounds: (F::cast(100.0) * F::epsilon(), F::cast(1e10)),
@@ -58,7 +58,7 @@ pub struct SgpValidParams<F: Float, Corr: CorrelationModel<F>> {
     /// gp
     gp_params: GpValidParams<F, ConstantMean, Corr>,
     /// Gaussian homeoscedastic noise variance
-    noise: VarianceEstimation<F>,
+    noise: ParamEstimation<F>,
     /// Inducing points
     z: Inducings<F>,
     /// Method
@@ -71,7 +71,7 @@ impl<F: Float> Default for SgpValidParams<F, SquaredExponentialCorr> {
     fn default() -> SgpValidParams<F, SquaredExponentialCorr> {
         SgpValidParams {
             gp_params: GpValidParams::default(),
-            noise: VarianceEstimation::default(),
+            noise: ParamEstimation::default(),
             z: Inducings::default(),
             method: SparseMethod::default(),
             seed: None,
@@ -116,7 +116,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     }
 
     /// Get noise variance configuration
-    pub fn noise_variance(&self) -> &VarianceEstimation<F> {
+    pub fn noise_variance(&self) -> &ParamEstimation<F> {
         &self.noise
     }
 
@@ -143,7 +143,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
                 n_start: 10,
                 nugget: F::cast(1000.0) * F::epsilon(),
             },
-            noise: VarianceEstimation::default(),
+            noise: ParamEstimation::default(),
             z: inducings,
             method: SparseMethod::default(),
             seed: None,
@@ -227,7 +227,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     }
 
     /// Set noise variance configuration defining noise handling.
-    pub fn noise_variance(mut self, config: VarianceEstimation<F>) -> Self {
+    pub fn noise_variance(mut self, config: ParamEstimation<F>) -> Self {
         self.0.noise = config;
         self
     }

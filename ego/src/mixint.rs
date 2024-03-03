@@ -6,8 +6,8 @@ use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
 use egobox_moe::{
-    Clustered, ClusteredSurrogate, Clustering, CorrelationSpec, FullGpSurrogate, GpMixParams,
-    GpMixture, GpSurrogate, RegressionSpec,
+    Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixParams, GpMixture, GpSurrogate,
+    GpSurrogateExt, MixtureGpSurrogate, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -440,9 +440,9 @@ impl SurrogateBuilder for MixintGpMixParams {
         &self,
         xt: &ArrayView2<f64>,
         yt: &ArrayView2<f64>,
-    ) -> Result<Box<dyn ClusteredSurrogate>> {
+    ) -> Result<Box<dyn MixtureGpSurrogate>> {
         let mixmoe = self.check_ref()?._train(xt, yt)?;
-        Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn ClusteredSurrogate>)
+        Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn MixtureGpSurrogate>)
     }
 
     fn train_on_clusters(
@@ -450,9 +450,9 @@ impl SurrogateBuilder for MixintGpMixParams {
         xt: &ArrayView2<f64>,
         yt: &ArrayView2<f64>,
         clustering: &Clustering,
-    ) -> Result<Box<dyn ClusteredSurrogate>> {
+    ) -> Result<Box<dyn MixtureGpSurrogate>> {
         let mixmoe = self.check_ref()?._train_on_clusters(xt, yt, clustering)?;
-        Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn ClusteredSurrogate>)
+        Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn MixtureGpSurrogate>)
     }
 }
 
@@ -565,7 +565,7 @@ impl GpSurrogate for MixintMoe {
 }
 
 #[typetag::serde]
-impl FullGpSurrogate for MixintMoe {
+impl GpSurrogateExt for MixintMoe {
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
@@ -597,7 +597,11 @@ impl FullGpSurrogate for MixintMoe {
     }
 }
 
-impl ClusteredSurrogate for MixintMoe {}
+impl MixtureGpSurrogate for MixintMoe {
+    fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
+        self.moe.experts()
+    }
+}
 
 impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for MixintMoe {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {

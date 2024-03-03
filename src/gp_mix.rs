@@ -11,11 +11,13 @@
 //!
 use crate::types::*;
 use egobox_gp::{ParamTuning, ThetaTuning};
+use egobox_moe::{Clustered, MixtureGpSurrogate};
 #[allow(unused_imports)] // Avoid linting problem
-use egobox_moe::{FullGpSurrogate, GpMixture, GpSurrogate};
+use egobox_moe::{GpMixture, GpSurrogate, GpSurrogateExt};
 use linfa::{traits::Fit, Dataset};
+use ndarray::{Array1, Array2, Zip};
 use ndarray_rand::rand::SeedableRng;
-use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use rand_xoshiro::Xoshiro256Plus;
 
@@ -314,5 +316,50 @@ impl Gpx {
             .sample(&x.as_array(), n_traj)
             .unwrap()
             .into_pyarray(py)
+    }
+
+    /// Get optimized thetas hyperparameters (ie once GP experts are fitted)
+    ///
+    /// Returns
+    ///     thetas as an array[n_clusters, nx or kpls_dim]
+    ///
+    fn thetas<'py>(&self, py: Python<'py>) -> &'py PyArray2<f64> {
+        let experts = self.0.experts();
+        let proto = experts.first().expect("Mixture should contain an expert");
+        let mut thetas = Array2::zeros((self.0.n_clusters(), proto.theta().len()));
+        Zip::from(thetas.rows_mut())
+            .and(experts)
+            .for_each(|mut theta, expert| theta.assign(expert.theta()));
+        thetas.into_pyarray(py)
+    }
+
+    /// Get GP expert variance (ie posterior GP variance)
+    ///
+    /// Returns
+    ///     variances as an array[n_clusters]
+    ///
+    fn variances<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+        let experts = self.0.experts();
+        let mut variances = Array1::zeros(self.0.n_clusters());
+        Zip::from(&mut variances)
+            .and(experts)
+            .for_each(|var, expert| *var = expert.variance());
+        variances.into_pyarray(py)
+    }
+
+    /// Get reduced likelihood values gotten when fitting the GP experts
+    ///
+    /// Maybe used to compare various parameterization
+    ///
+    /// Returns
+    ///     likelihood as an array[n_clusters]
+    ///
+    fn likelihoods<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+        let experts = self.0.experts();
+        let mut likelihoods = Array1::zeros(self.0.n_clusters());
+        Zip::from(&mut likelihoods)
+            .and(experts)
+            .for_each(|lkh, expert| *lkh = expert.likelihood());
+        likelihoods.into_pyarray(py)
     }
 }

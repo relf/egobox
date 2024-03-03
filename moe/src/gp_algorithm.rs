@@ -434,7 +434,7 @@ impl GpSurrogate for GpMixture {
 }
 
 #[cfg_attr(feature = "serializable", typetag::serde)]
-impl FullGpSurrogate for GpMixture {
+impl GpSurrogateExt for GpMixture {
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_derivatives_hard(x),
@@ -460,7 +460,12 @@ impl FullGpSurrogate for GpMixture {
     }
 }
 
-impl ClusteredSurrogate for GpMixture {}
+impl MixtureGpSurrogate for GpMixture {
+    /// Selected experts in the mixture
+    fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
+        &self.experts
+    }
+}
 
 impl GpMixture {
     /// Constructor of mixture of experts parameters
@@ -471,11 +476,6 @@ impl GpMixture {
     /// Recombination mode
     pub fn recombination(&self) -> Recombination<f64> {
         self.recombination
-    }
-
-    /// Selected experts in the mixture
-    pub fn experts(&self) -> &[Box<dyn FullGpSurrogate>] {
-        &self.experts
     }
 
     /// Gaussian mixture
@@ -764,14 +764,14 @@ impl GpMixture {
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <GpMixture as FullGpSurrogate>::predict_derivatives(self, &x.view())
+        <GpMixture as GpSurrogateExt>::predict_derivatives(self, &x.view())
     }
 
     pub fn predict_variance_derivatives(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <GpMixture as FullGpSurrogate>::predict_variance_derivatives(self, &x.view())
+        <GpMixture as GpSurrogateExt>::predict_variance_derivatives(self, &x.view())
     }
 
     #[cfg(feature = "persistent")]
@@ -788,7 +788,7 @@ impl GpMixture {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         n_traj: usize,
     ) -> Result<Array2<f64>> {
-        <GpMixture as FullGpSurrogate>::sample(self, &x.view(), n_traj)
+        <GpMixture as GpSurrogateExt>::sample(self, &x.view(), n_traj)
     }
 }
 

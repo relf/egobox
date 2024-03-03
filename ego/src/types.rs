@@ -1,6 +1,6 @@
 use crate::errors::Result;
 use argmin::core::CostFunction;
-use egobox_moe::{ClusteredSurrogate, Clustering};
+use egobox_moe::{Clustering, MixtureGpSurrogate};
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
 use serde::{Deserialize, Serialize};
@@ -128,7 +128,7 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
         &self,
         xt: &ArrayView2<f64>,
         yt: &ArrayView2<f64>,
-    ) -> Result<Box<dyn ClusteredSurrogate>>;
+    ) -> Result<Box<dyn MixtureGpSurrogate>>;
 
     /// Train the surrogate with given training dataset (x, y) and given clustering
     fn train_on_clusters(
@@ -136,7 +136,7 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
         xt: &ArrayView2<f64>,
         yt: &ArrayView2<f64>,
         clustering: &Clustering,
-    ) -> Result<Box<dyn ClusteredSurrogate>>;
+    ) -> Result<Box<dyn MixtureGpSurrogate>>;
 }
 
 pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}

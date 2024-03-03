@@ -5,7 +5,7 @@ pub use ei::{ExpectedImprovement, EI};
 pub use wb2::{WB2Criterion, WB2, WB2S};
 
 use dyn_clonable::*;
-use egobox_moe::ClusteredSurrogate;
+use egobox_moe::MixtureGpSurrogate;
 use ndarray::{Array1, ArrayView2};
 
 /// A trait for infill criterion which maximmum location will
@@ -20,7 +20,7 @@ pub trait InfillCriterion: Clone + Sync {
     fn value(
         &self,
         x: &[f64],
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
         scale: Option<f64>,
     ) -> f64;
@@ -29,11 +29,11 @@ pub trait InfillCriterion: Clone + Sync {
     fn grad(
         &self,
         x: &[f64],
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
         scale: Option<f64>,
     ) -> Array1<f64>;
 
     /// Scaling factor computation
-    fn scaling(&self, x: &ArrayView2<f64>, obj_model: &dyn ClusteredSurrogate, f_min: f64) -> f64;
+    fn scaling(&self, x: &ArrayView2<f64>, obj_model: &dyn MixtureGpSurrogate, f_min: f64) -> f64;
 }

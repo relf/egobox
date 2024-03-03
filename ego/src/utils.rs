@@ -1,5 +1,5 @@
 use crate::types::XType;
-use egobox_moe::ClusteredSurrogate;
+use egobox_moe::MixtureGpSurrogate;
 use libm::erfc;
 use ndarray::{concatenate, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_stats::{DeviationExt, QuantileExt};
@@ -9,7 +9,7 @@ const SQRT_2PI: f64 = 2.5066282746310007;
 /// Computes scaling factors used to scale constraint functions values.
 pub fn compute_cstr_scales(
     x: &ArrayView2<f64>,
-    cstr_models: &[Box<dyn ClusteredSurrogate>],
+    cstr_models: &[Box<dyn MixtureGpSurrogate>],
 ) -> Array1<f64> {
     let scales: Vec<f64> = cstr_models
         .par_iter()

@@ -1,6 +1,6 @@
 use crate::criteria::InfillCriterion;
 use crate::utils::{norm_cdf, norm_pdf};
-use egobox_moe::ClusteredSurrogate;
+use egobox_moe::MixtureGpSurrogate;
 use ndarray::{Array1, ArrayView};
 
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ impl InfillCriterion for ExpectedImprovement {
     fn value(
         &self,
         x: &[f64],
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
         _scale: Option<f64>,
     ) -> f64 {
@@ -43,7 +43,7 @@ impl InfillCriterion for ExpectedImprovement {
     fn grad(
         &self,
         x: &[f64],
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
         _scale: Option<f64>,
     ) -> Array1<f64> {
@@ -84,7 +84,7 @@ impl InfillCriterion for ExpectedImprovement {
     fn scaling(
         &self,
         _x: &ndarray::ArrayView2<f64>,
-        _obj_model: &dyn ClusteredSurrogate,
+        _obj_model: &dyn MixtureGpSurrogate,
         _f_min: f64,
     ) -> f64 {
         1.0

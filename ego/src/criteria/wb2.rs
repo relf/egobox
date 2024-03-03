@@ -1,6 +1,6 @@
 use crate::criteria::{ei::EI, InfillCriterion};
 
-use egobox_moe::ClusteredSurrogate;
+use egobox_moe::MixtureGpSurrogate;
 use ndarray::{Array1, ArrayView, ArrayView2, Axis};
 use ndarray_stats::QuantileExt;
 
@@ -16,7 +16,7 @@ impl InfillCriterion for WB2Criterion {
     fn value(
         &self,
         x: &[f64],
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
         scale: Option<f64>,
     ) -> f64 {
@@ -31,7 +31,7 @@ impl InfillCriterion for WB2Criterion {
     fn grad(
         &self,
         x: &[f64],
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
         scale: Option<f64>,
     ) -> Array1<f64> {
@@ -44,7 +44,7 @@ impl InfillCriterion for WB2Criterion {
     fn scaling(
         &self,
         x: &ndarray::ArrayView2<f64>,
-        obj_model: &dyn ClusteredSurrogate,
+        obj_model: &dyn MixtureGpSurrogate,
         f_min: f64,
     ) -> f64 {
         if let Some(scale) = self.0 {
@@ -58,7 +58,7 @@ impl InfillCriterion for WB2Criterion {
 /// Computes the scaling factor used to scale WB2 infill criteria.
 pub(crate) fn compute_wb2s_scale(
     x: &ArrayView2<f64>,
-    obj_model: &dyn ClusteredSurrogate,
+    obj_model: &dyn MixtureGpSurrogate,
     f_min: f64,
 ) -> f64 {
     let ratio = 100.; // TODO: make it a parameter
@@ -106,7 +106,7 @@ mod tests {
             .recombination(Recombination::Hard)
             .fit(&Dataset::new(xt, yt))
             .expect("GP fitting");
-        let bgp = Box::new(gp) as Box<dyn ClusteredSurrogate>;
+        let bgp = Box::new(gp) as Box<dyn MixtureGpSurrogate>;
 
         let h = 1e-4;
         let x1 = 0.1;

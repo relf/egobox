@@ -427,8 +427,6 @@ impl GpSurrogate for SparseGpMixture {
     }
 }
 
-impl ClusteredGpSurrogate for SparseGpMixture {}
-
 impl SparseGpMixture {
     /// Constructor of mixture of experts parameters
     pub fn params(inducings: Inducings<f64>) -> SparseGpMixtureParams<f64, Xoshiro256Plus> {
