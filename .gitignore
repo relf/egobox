@@ -15,7 +15,7 @@ Cargo.lock
 # Python, notebook
 **/py_egobox/
 **/.ipynb_checkpoints/
-python/egobox/egobox.pyd
+**/*.pyd
 **/__pycache__
 
 # Project
