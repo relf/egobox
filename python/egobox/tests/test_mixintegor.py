@@ -1,7 +1,6 @@
 import unittest
 import numpy as np
 import egobox as egx
-import time
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -37,8 +36,14 @@ class TestMixintEgx(unittest.TestCase):
     def test_int(self):
         xtypes = [egx.XSpec(egx.XType.INT, [0.0, 25.0])]
 
-        egor = egx.Egor(xtypes, seed=42, n_doe=3)
+        egor = egx.Egor(
+            xtypes,
+            infill_strategy=egx.InfillStrategy.EI,
+            seed=42,
+            doe=np.array([[0.0], [7.0], [25.0]]),
+        )
         res = egor.minimize(xsinx, max_iters=10)
+        print(res.x_opt, res.y_opt)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=5e-3)
         self.assertAlmostEqual(19, res.x_opt[0], delta=1)

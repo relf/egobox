@@ -268,21 +268,26 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
     }
 
     fn _maximin_lhs(&self, ns: usize, centered: bool, max_iters: usize) -> Array2<F> {
-        let mut max_dist = F::zero();
-        let mut lhs = self._classic_lhs(ns);
-        for _ in 0..max_iters {
+        let mut lhs = if centered {
+            self._centered_lhs(ns)
+        } else {
+            self._classic_lhs(ns)
+        };
+        let mut max_dist = *pdist(&lhs).min().unwrap();
+        let mut lhs_maximin = lhs;
+        for _ in 0..max_iters - 1 {
             if centered {
                 lhs = self._centered_lhs(ns);
             } else {
                 lhs = self._classic_lhs(ns);
             }
-            let d = pdist(&lhs);
-            let d_min = F::cast(*d.min().unwrap());
+            let d_min = *pdist(&lhs).min().unwrap();
             if max_dist < d_min {
-                max_dist = d_min
+                max_dist = d_min;
+                std::mem::swap(&mut lhs_maximin, &mut lhs)
             }
         }
-        lhs
+        lhs_maximin
     }
 }
 
@@ -350,7 +355,7 @@ mod tests {
     #[test]
     fn test_centered_maximin_lhs() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
-        let expected = array![[5.5, 0.9], [9.5, 0.7], [8.5, 0.3], [7.5, 0.1], [6.5, 0.5]];
+        let expected = array![[7.5, 0.9], [8.5, 0.1], [5.5, 0.7], [6.5, 0.3], [9.5, 0.5]];
         let actual = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(0))
             .kind(LhsKind::CenteredMaximin)
