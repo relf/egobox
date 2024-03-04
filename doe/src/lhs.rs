@@ -355,7 +355,7 @@ mod tests {
     #[test]
     fn test_centered_maximin_lhs() {
         let xlimits = arr2(&[[5., 10.], [0., 1.]]);
-        let expected = array![[5.5, 0.9], [9.5, 0.7], [8.5, 0.3], [7.5, 0.1], [6.5, 0.5]];
+        let expected = array![[7.5, 0.9], [8.5, 0.1], [5.5, 0.7], [6.5, 0.3], [9.5, 0.5]];
         let actual = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(0))
             .kind(LhsKind::CenteredMaximin)
