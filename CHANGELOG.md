@@ -1,11 +1,17 @@
-Changes
--------
+# Changes
 
-Version 0.16.0 - unreleased
-===========================
+## Version 0.17.0 - unreleased
 
-Version 0.15.0 - 02/01/2023
-===========================
+## Version 0.16.0 - 07/03/2024
+
+* Add `Gpx` accessors by @relf in <https://github.com/relf/egobox/pull/140>
+* Fix `LHS` maximin bug by @relf in <https://github.com/relf/egobox/pull/141>
+* `doe`: Improve classic, centered and maximin LHS performances by @relf in <https://github.com/relf/egobox/pull/138>
+* `doe`: Improve optimized LHS performances (1.25x speedup) by @relf in <https://github.com/relf/egobox/pull/136>
+* Rework (mostly internal) API to avoid awkward &Option by @relf in <https://github.com/relf/egobox/pull/134>
+* Add Python bindings for all LHS flavours by @relf in <https://github.com/relf/egobox/pull/135>
+
+## Version 0.15.0 - 02/01/2024
 
 * `gp`: Implement sparse gaussian process methods (cf. `SparseGaussianProcess`)
 * Python binding: `SparseGpMix`, see doc/tutorial
@@ -14,8 +20,7 @@ Version 0.15.0 - 02/01/2023
   * `n_start` controls the number of optimization multistart
 * In GP/SGP `rayon` is used to make parallel optimization multistart
 
-Version 0.14.0 - 13/12/2023
-===========================
+## Version 0.14.0 - 13/12/2023
 
 * `ego`: Fix ask-and-tell interface `suggest()` method in presence of discrete variable to work
 in discrete not in continuous space
@@ -25,20 +30,18 @@ A few API breaking changes:
 * `EgorConfig::no_discrete` attribute removed, use `EgorConfig::discrete()` method
 * `SurrogateBuilder::new_with_xtypes_rng` renamed `new_with_xtypes`
 
-Version 0.13.0 - 30/11/2023
-===========================
+## Version 0.13.0 - 30/11/2023
 
 * `ego`: API refactoring to enable `ask-and-tell` interface
   * Configuration of Egor is factorize out in `EgorConfig`
   * `EgorBuilder` gets a `configure` method to tune the configuration
   * `EgorService` structure represent `Egor` when used as service
   * Python `Egor` API changes:
-    * function under optimization is now given via `minimize(fun, max_iters=...)` method
+    * function under optimization is now given via `minimize(fun, max_iters-...)` method
     * new method `suggest(xdoe, ydoe)` allows to ask for x suggestion and tell current function evaluations
     * new method `get_result(xdoe, ydoe)` to get the best evaluation (ie minimum) from given ones
 
-Version 0.12.0 - 10/11/2023
-===========================
+## Version 0.12.0 - 10/11/2023
 
 * `gp` uses pure Rust COBYLA by @relf in <https://github.com/relf/egobox/pull/110,https://github.com/relf/egobox/pull/113>
 * `ego` as pure Rust implementation (`nlopt` is now optional) by @relf in <https://github.com/relf/egobox/pull/112>
@@ -49,16 +52,14 @@ Version 0.12.0 - 10/11/2023
 * Bump actions/checkout from 2 to 4 by @dependabot in <https://github.com/relf/egobox/pull/107>
 * Bump actions/setup-python from 2 to 4 by @dependabot in <https://github.com/relf/egobox/pull/108>
 
-Version 0.11.0 - 20/09/2023
-===========================
+## Version 0.11.0 - 20/09/2023
 
 * Automate Python package build and upload on Pypi from Github CI by @relf in <https://github.com/relf/egobox/pull/104>
 * Fix FullFactorial when asked nb iof samples is small wrt x dimension
 by @relf in <https://github.com/relf/egobox/pull/105>
 * Make mixed-integer sampling methods available in Python by @relf in <https://github.com/relf/egobox/pull/106>
 
-Version 0.10.0 - 22/06/2023
-===========================
+## Version 0.10.0 - 22/06/2023
 
 * `gp`, `moe` and `egobox` Python module:
   * Added Gaussian process sampling (#97)
@@ -69,8 +70,7 @@ Version 0.10.0 - 22/06/2023
 
 * Notebooks and documentation updates (#97, #98, #99)
 
-Version 0.9.0 - 02/06/2023
-==========================
+## Version 0.9.0 - 02/06/2023
 
 * `ego`:
   * Infill criterion is now a trait object in `EgorSolver` structure (#92)
@@ -81,14 +81,12 @@ Version 0.9.0 - 02/06/2023
 
 * `egobox` Python module: Upgrade to PyO3 0.18 (#91)
 
-Version 0.8.2 - 31/03/2023
-==========================
+## Version 0.8.2 - 31/03/2023
 
 * `ego`:
   * Fix Egor solver best iter computation (#89)
 
-Version 0.8.1 - 28/03/2023
-==========================
+## Version 0.8.1 - 28/03/2023
 
 * `ego`:
   * Make objective and constraints training in parallel (#86)
@@ -97,8 +95,7 @@ Version 0.8.1 - 28/03/2023
 * `moe`:
   * Fix k-fold cross-validation (#85)  
 
-Version 0.8.0 - 10/03/2023
-==========================
+## Version 0.8.0 - 10/03/2023
 
 * `ego`:
   * Renaming `XType`, `XSpec` for consistency (#82)
@@ -114,8 +111,7 @@ Version 0.8.0 - 10/03/2023
   * Fix scaling check for infinity (#70)
   * Use kriging surrogate by default (#69)
 
-Version 0.7.0 - 11/01/2023
-==========================
+## Version 0.7.0 - 11/01/2023
 
 * `gp`:
   * Add analytic derivatives computations (#54, #55, #56, #58, #60). All derivatives available for all mean/correlation models are implemented.
@@ -130,8 +126,7 @@ Version 0.7.0 - 11/01/2023
 * Use xoshiro instead of isaac random generator (#63)
 * Upgrade `ndarray 0.15`, `linfa 0.6.1`, `PyO3 0.17` (#57, #64)
 
-Version 0.6.0 - 2022-11-14
-==========================
+## Version 0.6.0 - 2022-11-14
 
 * `gp`: Kriging derivatives predictions are implemented (#44, #45), derivatives for Gp with linear regression are implemented (#47)
   * `predict_derivatives`: prediction of the output derivatives y wtr the input x
@@ -140,15 +135,13 @@ Version 0.6.0 - 2022-11-14
 * `ego`: when available derivatives are used to optimize the infill criterion with slsqp (#44)  
 * `egobox` Python binding: add `GpMix`/`Gpx` in Python `egobox` module, the Python binding of `egobox-moe::Moe` (#31)
 
-Version 0.5.0 - 2022-10-07
-==========================
+## Version 0.5.0 - 2022-10-07
 
 * Add Egor `minimize` interruption capability (Ctrl+C) from Python (#30)
 * Minor performance improvement in moe clustering (#29)
 * Improvements following JOSS submission review (#34, #36, #38, #39, #40, #42)
 
-Version 0.4.0 - 2022-07-09
-==========================
+## Version 0.4.0 - 2022-07-09
 
 * Generate Python `egobox` module for Linux (#20)
 * Improve `Egor` robustness by adding LHS optimization (#21)
@@ -157,8 +150,7 @@ Version 0.4.0 - 2022-07-09
 * Improve `Egor` by implementing automatic reclustering every 10-points addition (#25)
 * Fix `Egor` parallel infill strategy (qEI): bad objectives and constraints gp models updste (#26)
 
-Version 0.3.0 - 2022-05-05
-==========================
+## Version 0.3.0 - 2022-05-05
 
 Improve mixture of experts (#15)
 
@@ -183,22 +175,19 @@ Refactor `MixintEgor` (#17)
 * Rename `SurrogateParams` to `MoeBuilder`
 * Rename `n_parallel` to `q_parallel` (qEI stategy)
 
-Version 0.2.1 - 2022-04-13
-==========================
+## Version 0.2.1 - 2022-04-13
 
 * Improve documentation
 * `egobox` Python module: rename egobox `Optimizer` class to `Egor`
 
-Version 0.2.0 - 2022-03-24
-==========================
+## Version 0.2.0 - 2022-03-24
 
 * Add hot start
 * Add constraint handling
 * Add mixed-integer optimization capability
 * Add Python binding with PyO3
 
-Version 0.1.0 - 2021-11-18
-==========================
+## Version 0.1.0 - 2021-11-18
 
 Initial release
 
