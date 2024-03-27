@@ -23,7 +23,7 @@ impl InfillCriterion for ExpectedImprovement {
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = obj_model.predict(&pt) {
-            if let Ok(s) = obj_model.predic_var(&pt) {
+            if let Ok(s) = obj_model.predict_var(&pt) {
                 let pred = p[[0, 0]];
                 let sigma = s[[0, 0]].sqrt();
                 let args0 = (f_min - pred) / sigma;
@@ -49,7 +49,7 @@ impl InfillCriterion for ExpectedImprovement {
     ) -> Array1<f64> {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = obj_model.predict(&pt) {
-            if let Ok(s) = obj_model.predic_var(&pt) {
+            if let Ok(s) = obj_model.predict_var(&pt) {
                 let sigma = s[[0, 0]].sqrt();
                 if sigma.abs() < 1e-12 {
                     Array1::zeros(pt.len())
@@ -59,7 +59,7 @@ impl InfillCriterion for ExpectedImprovement {
                     let arg = (f_min - pred) / sigma;
                     let y_prime = obj_model.predict_derivatives(&pt).unwrap();
                     let y_prime = y_prime.row(0);
-                    let sig_2_prime = obj_model.predict_variance_derivatives(&pt).unwrap();
+                    let sig_2_prime = obj_model.predict_var_derivatives(&pt).unwrap();
 
                     let sig_2_prime = sig_2_prime.row(0);
                     let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));

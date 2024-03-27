@@ -57,7 +57,7 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     /// Predict output values at n points given as (n, xdim) matrix.
     fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
-    fn predic_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Save model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str) -> Result<()>;
@@ -71,7 +71,7 @@ pub trait GpSurrogateExt {
     fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict derivatives of the variance at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
-    fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Sample trajectories
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>>;
 }
@@ -155,8 +155,8 @@ macro_rules! declare_surrogate {
                 fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict(x)?)
                 }
-                fn predic_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predic_var(x)?)
+                fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_var(x)?)
                 }
 
                 #[cfg(feature = "persistent")]
@@ -177,8 +177,8 @@ macro_rules! declare_surrogate {
                 fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_derivatives(x))
                 }
-                fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_variance_derivatives(x))
+                fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_var_derivatives(x))
                 }
                 fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
                     Ok(self.0.sample(x, n_traj))
@@ -300,8 +300,8 @@ macro_rules! declare_sgp_surrogate {
                 fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict(x)?)
                 }
-                fn predic_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predic_var(x)?)
+                fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_var(x)?)
                 }
 
                 #[cfg(feature = "persistent")]

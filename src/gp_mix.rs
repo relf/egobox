@@ -295,9 +295,9 @@ impl Gpx {
     /// Returns
     ///     the variances of the output values at nsamples input points (array[nsamples, 1])
     ///
-    fn predic_var<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> &'py PyArray2<f64> {
+    fn predict_var<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> &'py PyArray2<f64> {
         self.0
-            .predic_var(&x.as_array().to_owned())
+            .predict_var(&x.as_array().to_owned())
             .unwrap()
             .into_pyarray(py)
     }
@@ -333,13 +333,13 @@ impl Gpx {
     ///     the variance derivatives at nsamples x points (array[nsamples, nx]) wrt inputs
     ///     The ith column is the partial derivative value wrt to the ith component of x at the given samples.
     ///
-    fn predict_variance_derivatives<'py>(
+    fn predict_var_derivatives<'py>(
         &self,
         py: Python<'py>,
         x: PyReadonlyArray2<f64>,
     ) -> &'py PyArray2<f64> {
         self.0
-            .predict_variance_derivatives(&x.as_array().to_owned())
+            .predict_var_derivatives(&x.as_array().to_owned())
             .unwrap()
             .into_pyarray(py)
     }

@@ -408,10 +408,10 @@ impl GpSurrogate for SparseGpMixture {
         }
     }
 
-    fn predic_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predic_var_hard(x),
-            Recombination::Smooth(_) => self.predic_var_smooth(x),
+            Recombination::Hard => self.predict_var_hard(x),
+            Recombination::Smooth(_) => self.predict_var_smooth(x),
         }
     }
     /// Save Sgp model in given file.
@@ -479,7 +479,7 @@ impl SparseGpMixture {
     /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
     /// or another (ie responsabilities).
     /// The smooth recombination of each cluster expert responsabilty is used to get the result.
-    pub fn predic_var_smooth(
+    pub fn predict_var_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
@@ -494,7 +494,7 @@ impl SparseGpMixture {
                 let preds: Array1<f64> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predic_var(&x).unwrap()[[0, 0]])
+                    .map(|gp| gp.predict_var(&x).unwrap()[[0, 0]])
                     .collect();
                 *y = (preds * p * p).sum();
             });
@@ -527,7 +527,7 @@ impl SparseGpMixture {
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// The expert of the cluster is used to predict variance value.
     /// Returns the variances as a (n, 1) column vector
-    pub fn predic_var_hard(
+    pub fn predict_var_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
@@ -540,7 +540,7 @@ impl SparseGpMixture {
             .for_each(|mut y, x, &c| {
                 y.assign(
                     &self.experts[c]
-                        .predic_var(&x.insert_axis(Axis(0)))
+                        .predict_var(&x.insert_axis(Axis(0)))
                         .unwrap()
                         .row(0),
                 );
@@ -552,8 +552,8 @@ impl SparseGpMixture {
         <SparseGpMixture as GpSurrogate>::predict(self, &x.view())
     }
 
-    pub fn predic_var(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
-        <SparseGpMixture as GpSurrogate>::predic_var(self, &x.view())
+    pub fn predict_var(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
+        <SparseGpMixture as GpSurrogate>::predict_var(self, &x.view())
     }
 
     #[cfg(feature = "persistent")]
@@ -608,7 +608,7 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.0.predic_var(x).expect("Sgp variances prediction");
+        let values = self.0.predict_var(x).expect("Sgp variances prediction");
         *y = values;
     }
 
@@ -669,7 +669,7 @@ mod tests {
         let yplot = f_obj(&xplot);
         let errvals = (yplot - &sgp_vals).mapv(|v| v.abs());
         assert_abs_diff_eq!(errvals, Array2::zeros((xplot.nrows(), 1)), epsilon = 1.0);
-        let sgp_vars = sgp.predic_var(&xplot).unwrap();
+        let sgp_vars = sgp.predict_var(&xplot).unwrap();
         let errvars = (&sgp_vars - Array2::from_elem((xplot.nrows(), 1), 0.01)).mapv(|v| v.abs());
         assert_abs_diff_eq!(errvars, Array2::zeros((xplot.nrows(), 1)), epsilon = 0.05);
     }
