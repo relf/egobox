@@ -121,7 +121,7 @@ impl<F: Float> Clone for WoodburyData<F> {
 /// // Predict with our trained SGP
 /// let xplot = Array::linspace(-1., 1., 100).insert_axis(Axis(1));
 /// let sgp_vals = sgp.predict(&xplot).unwrap();
-/// let sgp_vars = sgp.predict_variances(&xplot).unwrap();
+/// let sgp_vars = sgp.predic_var(&xplot).unwrap();
 /// ```
 ///
 /// # Reference
@@ -239,7 +239,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
 
     /// Predict variance values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n variance values as (n, 1) column vector.
-    pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
+    pub fn predic_var(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
         let kx = self.compute_k(&self.inducings, x, &self.w_star, &self.theta, self.sigma2);
         let kxx = Array::from_elem(x.nrows(), self.sigma2);
         let var = kxx - (self.w_data.inv.t().clone().dot(&kx) * &kx).sum_axis(Axis(0));
@@ -340,7 +340,7 @@ where
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.0.predict_variances(x).expect("GP Prediction");
+        let values = self.0.predic_var(x).expect("GP Prediction");
         *y = values;
     }
 
@@ -863,7 +863,7 @@ mod tests {
         let yplot = f_obj(&xplot);
         let errvals = (yplot - &sgp_vals).mapv(|v| v.abs());
         assert_abs_diff_eq!(errvals, Array2::zeros((xplot.nrows(), 1)), epsilon = 0.5);
-        let sgp_vars = sgp.predict_variances(&xplot).unwrap();
+        let sgp_vars = sgp.predic_var(&xplot).unwrap();
         let errvars = (&sgp_vars - Array2::from_elem((xplot.nrows(), 1), 0.01)).mapv(|v| v.abs());
         assert_abs_diff_eq!(errvars, Array2::zeros((xplot.nrows(), 1)), epsilon = 0.2);
 
@@ -906,7 +906,7 @@ mod tests {
         assert_abs_diff_eq!(eta2, sgp.noise_variance());
 
         let sgp_vals = sgp.predict(&xplot).unwrap();
-        let sgp_vars = sgp.predict_variances(&xplot).unwrap();
+        let sgp_vars = sgp.predic_var(&xplot).unwrap();
 
         save_data(&xt, &yt, sgp.inducings(), &xplot, &sgp_vals, &sgp_vars);
     }
@@ -953,7 +953,7 @@ mod tests {
         assert_abs_diff_eq!(&z, sgp.inducings(), epsilon = 0.0015);
 
         let sgp_vals = sgp.predict(&xplot).unwrap();
-        let sgp_vars = sgp.predict_variances(&xplot).unwrap();
+        let sgp_vars = sgp.predic_var(&xplot).unwrap();
 
         save_data(&xt, &yt, &z, &xplot, &sgp_vals, &sgp_vars);
     }

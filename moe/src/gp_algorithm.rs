@@ -414,10 +414,10 @@ impl GpSurrogate for GpMixture {
         }
     }
 
-    fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predic_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_variances_hard(x),
-            Recombination::Smooth(_) => self.predict_variances_smooth(x),
+            Recombination::Hard => self.predic_var_hard(x),
+            Recombination::Smooth(_) => self.predic_var_smooth(x),
         }
     }
     /// Save Moe model in given file.
@@ -514,7 +514,7 @@ impl GpMixture {
     /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
     /// or another (ie responsabilities).
     /// The smooth recombination of each cluster expert responsabilty is used to get the result.
-    pub fn predict_variances_smooth(
+    pub fn predic_var_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
@@ -529,7 +529,7 @@ impl GpMixture {
                 let preds: Array1<f64> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_variances(&x).unwrap()[[0, 0]])
+                    .map(|gp| gp.predic_var(&x).unwrap()[[0, 0]])
                     .collect();
                 *y = (preds * p * p).sum();
             });
@@ -606,7 +606,7 @@ impl GpMixture {
                 let preds: Array1<f64> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_variances(&xii).unwrap()[[0, 0]])
+                    .map(|gp| gp.predic_var(&xii).unwrap()[[0, 0]])
                     .collect();
                 let drvs: Vec<Array1<f64>> = self
                     .experts
@@ -665,7 +665,7 @@ impl GpMixture {
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// The expert of the cluster is used to predict variance value.
     /// Returns the variances as a (n, 1) column vector
-    pub fn predict_variances_hard(
+    pub fn predic_var_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
@@ -678,7 +678,7 @@ impl GpMixture {
             .for_each(|mut y, x, &c| {
                 y.assign(
                     &self.experts[c]
-                        .predict_variances(&x.insert_axis(Axis(0)))
+                        .predic_var(&x.insert_axis(Axis(0)))
                         .unwrap()
                         .row(0),
                 );
@@ -747,11 +747,8 @@ impl GpMixture {
         <GpMixture as GpSurrogate>::predict(self, &x.view())
     }
 
-    pub fn predict_variances(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Array2<f64>> {
-        <GpMixture as GpSurrogate>::predict_variances(self, &x.view())
+    pub fn predic_var(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
+        <GpMixture as GpSurrogate>::predic_var(self, &x.view())
     }
 
     pub fn predict_derivatives(
@@ -829,10 +826,7 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
             "The number of data points must match the number of output targets."
         );
 
-        let values = self
-            .0
-            .predict_variances(x)
-            .expect("MoE variances prediction");
+        let values = self.0.predic_var(x).expect("MoE variances prediction");
         *y = values;
     }
 
@@ -1003,7 +997,7 @@ mod tests {
             .expect("MOE fitted");
         // Smoke test: prediction is pretty good hence variance is very low
         let x = Array1::linspace(0., 1., 20).insert_axis(Axis(1));
-        let variances = moe.predict_variances(&x).expect("MOE variances prediction");
+        let variances = moe.predic_var(&x).expect("MOE variances prediction");
         assert_abs_diff_eq!(*variances.max().unwrap(), 0., epsilon = 1e-10);
     }
 
@@ -1163,7 +1157,7 @@ mod tests {
             assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
             assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
 
-            let y_pred = moe.predict_variances(&x).unwrap();
+            let y_pred = moe.predic_var(&x).unwrap();
             let y_deriv = moe.predict_variance_derivatives(&x).unwrap();
 
             let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);

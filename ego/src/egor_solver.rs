@@ -883,7 +883,7 @@ where
         } else {
             let x = &xk.view().insert_axis(Axis(0));
             let pred = obj_model.predict(x)?[[0, 0]];
-            let var = obj_model.predict_variances(x)?[[0, 0]];
+            let var = obj_model.predic_var(x)?[[0, 0]];
             let conf = match self.config.q_ei {
                 QEiStrategy::KrigingBeliever => 0.,
                 QEiStrategy::KrigingBelieverLowerBound => -3.,

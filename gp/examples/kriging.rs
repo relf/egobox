@@ -24,7 +24,7 @@ fn main() {
     let ypred = kriging.predict(&xtest).expect("Kriging prediction");
     // predict standard deviation
     let ysigma = kriging
-        .predict_variances(&xtest)
+        .predic_var(&xtest)
         .expect("Kriging prediction")
         .map(|v| v.sqrt());
 

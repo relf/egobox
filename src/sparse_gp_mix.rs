@@ -282,13 +282,9 @@ impl SparseGpx {
     /// Returns
     ///     the variances of the output values at nsamples input points (array[nsamples, 1])
     ///
-    fn predict_variances<'py>(
-        &self,
-        py: Python<'py>,
-        x: PyReadonlyArray2<f64>,
-    ) -> &'py PyArray2<f64> {
+    fn predic_var<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> &'py PyArray2<f64> {
         self.0
-            .predict_variances(&x.as_array().to_owned())
+            .predic_var(&x.as_array().to_owned())
             .unwrap()
             .into_pyarray(py)
     }

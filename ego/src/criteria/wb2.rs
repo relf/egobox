@@ -165,11 +165,11 @@ mod tests {
         let xtest12 = array![[x1 - h, x2]];
         let xtest21 = array![[x1, x2 + h]];
         let xtest22 = array![[x1, x2 - h]];
-        let fdiff1 = (bgp.predict_variances(&xtest11.view()).unwrap()
-            - bgp.predict_variances(&xtest12.view()).unwrap())
+        let fdiff1 = (bgp.predic_var(&xtest11.view()).unwrap()
+            - bgp.predic_var(&xtest12.view()).unwrap())
             / (2. * h);
-        let fdiff2 = (bgp.predict_variances(&xtest21.view()).unwrap()
-            - bgp.predict_variances(&xtest22.view()).unwrap())
+        let fdiff2 = (bgp.predic_var(&xtest21.view()).unwrap()
+            - bgp.predic_var(&xtest22.view()).unwrap())
             / (2. * h);
         println!(
             "gp var fdiff({}) = [[{}, {}]]",
