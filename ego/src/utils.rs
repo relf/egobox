@@ -15,7 +15,7 @@ pub fn compute_cstr_scales(
         .par_iter()
         .map(|cstr_model| {
             let preds: Array1<f64> = cstr_model
-                .predict_values(x)
+                .predict(x)
                 .unwrap()
                 .into_iter()
                 .filter(|v| !v.is_infinite()) // filter out infinite values

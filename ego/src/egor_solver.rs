@@ -771,7 +771,7 @@ where
                         } else {
                             let f = |x: &Vec<f64>| -> f64 {
                                 cstr_models[i]
-                                    .predict_values(
+                                    .predict(
                                         &Array::from_shape_vec((1, x.len()), x.to_vec())
                                             .unwrap()
                                             .view(),
@@ -783,7 +783,7 @@ where
                         }
                     }
                     cstr_models[index]
-                        .predict_values(
+                        .predict(
                             &Array::from_shape_vec((1, x.len()), x.to_vec())
                                 .unwrap()
                                 .view(),
@@ -882,8 +882,8 @@ where
             Ok(res)
         } else {
             let x = &xk.view().insert_axis(Axis(0));
-            let pred = obj_model.predict_values(x)?[[0, 0]];
-            let var = obj_model.predict_variances(x)?[[0, 0]];
+            let pred = obj_model.predict(x)?[[0, 0]];
+            let var = obj_model.predict_var(x)?[[0, 0]];
             let conf = match self.config.q_ei {
                 QEiStrategy::KrigingBeliever => 0.,
                 QEiStrategy::KrigingBelieverLowerBound => -3.,
@@ -892,7 +892,7 @@ where
             };
             res.push(pred + conf * f64::sqrt(var));
             for cstr_model in cstr_models {
-                res.push(cstr_model.predict_values(x)?[[0, 0]]);
+                res.push(cstr_model.predict(x)?[[0, 0]]);
             }
             Ok(res)
         }

@@ -21,8 +21,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let xtest = Lhs::new(&arr2(&[[-1., 1.], [-1., 1.]])).sample(50);
     let ytest = norm1(&xtest);
 
-    let ymoe1 = moe1.predict_values(&xtest)?;
-    let ymoe5 = moe5.predict_values(&xtest)?;
+    let ymoe1 = moe1.predict(&xtest)?;
+    let ymoe5 = moe5.predict(&xtest)?;
 
     println!("Compute average prediction error");
     println!(

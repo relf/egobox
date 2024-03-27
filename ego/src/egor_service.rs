@@ -122,9 +122,9 @@ pub struct EgorService<SB: SurrogateBuilder> {
 
 impl<SB: SurrogateBuilder> EgorService<SB> {
     /// Given an evaluated doe (x, y) data, return the next promising x point
-    /// where optimum may occurs regarding the infill criterium.
-    /// This function inverse the control of the optimization and can used
-    /// ask-and-tell interface to the EGO optimizer.
+    /// where optimum may be located with regard to the infill criterion.
+    /// This function inverses the control of the optimization and can be used
+    /// for an ask-and-tell interface to the Egor optimizer.
     pub fn suggest(
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,

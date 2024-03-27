@@ -531,24 +531,24 @@ impl Clustered for MixintMoe {
 
 #[typetag::serde]
 impl GpSurrogate for MixintMoe {
-    fn predict_values(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+    fn predict(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
             x.to_owned()
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        self.moe.predict_values(&xcast)
+        self.moe.predict(&xcast)
     }
 
-    fn predict_variances(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+    fn predict_var(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
             x.to_owned()
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        self.moe.predict_variances(&xcast)
+        self.moe.predict_var(&xcast)
     }
 
     /// Save Moe model in given file.
@@ -576,14 +576,14 @@ impl GpSurrogateExt for MixintMoe {
         self.moe.predict_derivatives(&xcast)
     }
 
-    fn predict_variance_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+    fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
             x.to_owned()
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        self.moe.predict_variance_derivatives(&xcast)
+        self.moe.predict_var_derivatives(&xcast)
     }
 
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> egobox_moe::Result<Array2<f64>> {
@@ -611,7 +611,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Mix
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.moe.predict_values(x).expect("MixintMoE prediction");
+        let values = self.moe.predict(x).expect("MixintMoE prediction");
         *y = values;
     }
 
@@ -633,7 +633,7 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
 
         let values = self
             .0
-            .predict_variances(x)
+            .predict_var(x)
             .expect("MixintMoE variances prediction");
         *y = values;
     }
@@ -838,11 +838,9 @@ mod tests {
 
         let num = 5;
         let xtest = Array::linspace(0.0, 4.0, num).insert_axis(Axis(1));
-        let ytest = mixi_moe
-            .predict_values(&xtest.view())
-            .expect("Predict val fail");
+        let ytest = mixi_moe.predict(&xtest.view()).expect("Predict val fail");
         let yvar = mixi_moe
-            .predict_variances(&xtest.view())
+            .predict_var(&xtest.view())
             .expect("Predict var fail");
         println!("{ytest:?}");
         assert_abs_diff_eq!(
@@ -887,9 +885,7 @@ mod tests {
         let mixi_lhs = mixi.create_lhs_sampling(LhsKind::default(), Some(42));
 
         let xtest = mixi_lhs.sample(ntest);
-        let ytest = mixi_moe
-            .predict_values(&xtest.view())
-            .expect("Predict val fail");
+        let ytest = mixi_moe.predict(&xtest.view()).expect("Predict val fail");
         let ytrue = ftest(&xtest);
         assert_abs_diff_eq!(ytrue, ytest, epsilon = 2.0);
     }

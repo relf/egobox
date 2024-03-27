@@ -11,9 +11,9 @@ gpx = egx.GpMix().fit(xt, yt)
 num = 100
 x = np.linspace(0.0, 4.0, num).reshape((-1, 1))
 
-y = gpx.predict_values(x)
+y = gpx.predict(x)
 # estimated variance
-s2 = gpx.predict_variances(x)
+s2 = gpx.predict_var(x)
 
 fig, axs = plt.subplots(1)
 

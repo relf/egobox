@@ -23,7 +23,7 @@ impl InfillCriterion for WB2Criterion {
         let scale = scale.unwrap_or(1.0);
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         let ei = EI.value(x, obj_model, f_min, None);
-        scale * ei - obj_model.predict_values(&pt).unwrap()[[0, 0]]
+        scale * ei - obj_model.predict(&pt).unwrap()[[0, 0]]
     }
 
     /// Computes derivatives of WS2 infill criterion wrt to x components at given `x` point
@@ -68,7 +68,7 @@ pub(crate) fn compute_wb2s_scale(
     });
     let i_max = ei_x.argmax().unwrap();
     let pred_max = obj_model
-        .predict_values(&x.row(i_max).insert_axis(Axis(0)))
+        .predict(&x.row(i_max).insert_axis(Axis(0)))
         .unwrap()[[0, 0]];
     let ei_max = ei_x[i_max];
     if ei_max.abs() > 100. * f64::EPSILON {
@@ -138,11 +138,11 @@ mod tests {
         let xtest12 = array![[x1 - h, x2]];
         let xtest21 = array![[x1, x2 + h]];
         let xtest22 = array![[x1, x2 - h]];
-        let fdiff1 = (bgp.predict_values(&xtest11.view()).unwrap()
-            - bgp.predict_values(&xtest12.view()).unwrap())
+        let fdiff1 = (bgp.predict(&xtest11.view()).unwrap()
+            - bgp.predict(&xtest12.view()).unwrap())
             / (2. * h);
-        let fdiff2 = (bgp.predict_values(&xtest21.view()).unwrap()
-            - bgp.predict_values(&xtest22.view()).unwrap())
+        let fdiff2 = (bgp.predict(&xtest21.view()).unwrap()
+            - bgp.predict(&xtest22.view()).unwrap())
             / (2. * h);
         println!(
             "gp fdiff({}) = [[{}, {}]]",
@@ -165,11 +165,11 @@ mod tests {
         let xtest12 = array![[x1 - h, x2]];
         let xtest21 = array![[x1, x2 + h]];
         let xtest22 = array![[x1, x2 - h]];
-        let fdiff1 = (bgp.predict_variances(&xtest11.view()).unwrap()
-            - bgp.predict_variances(&xtest12.view()).unwrap())
+        let fdiff1 = (bgp.predict_var(&xtest11.view()).unwrap()
+            - bgp.predict_var(&xtest12.view()).unwrap())
             / (2. * h);
-        let fdiff2 = (bgp.predict_variances(&xtest21.view()).unwrap()
-            - bgp.predict_variances(&xtest22.view()).unwrap())
+        let fdiff2 = (bgp.predict_var(&xtest21.view()).unwrap()
+            - bgp.predict_var(&xtest22.view()).unwrap())
             / (2. * h);
         println!(
             "gp var fdiff({}) = [[{}, {}]]",
@@ -180,7 +180,7 @@ mod tests {
         println!(
             "GP predict variances derivatives({}) = {}",
             xtest,
-            bgp.predict_variance_derivatives(&basetest.view()).unwrap()
+            bgp.predict_var_derivatives(&basetest.view()).unwrap()
         );
     }
 }

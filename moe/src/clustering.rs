@@ -140,7 +140,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                         }
                         let actual = valid.targets();
                         let mixture = mixture.set_recombination(Recombination::Hard);
-                        let h_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
+                        let h_error = if let Ok(pred) = mixture.predict(valid.records()) {
                             if pred.iter().any(|v| f64::is_infinite(*v)) {
                                 1.0 // max bad value
                             } else if pred.iter().any(|v| f64::is_nan(*v)) {
@@ -160,7 +160,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                         };
                         h_errors.push(h_error);
                         let mixture = mixture.set_recombination(Recombination::Smooth(None));
-                        let s_error = if let Ok(pred) = mixture.predict_values(valid.records()) {
+                        let s_error = if let Ok(pred) = mixture.predict(valid.records()) {
                             if pred.iter().any(|v| f64::is_infinite(*v)) {
                                 1.0 // max bad value
                             } else if pred.iter().any(|v| f64::is_nan(*v)) {
@@ -401,7 +401,7 @@ mod tests {
             .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&obs).unwrap();
+        let preds = moe.predict(&obs).unwrap();
 
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
@@ -435,7 +435,7 @@ mod tests {
             .correlation_spec(CorrelationSpec::ALL)
             .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();
-        let ypreds = moe.predict_values(&xvalid).expect("moe not fitted");
+        let ypreds = moe.predict(&xvalid).expect("moe not fitted");
         debug!("{:?}", concatenate![Axis(1), ypreds, yvalid]);
         assert_abs_diff_eq!(&ypreds, &yvalid, epsilon = 1e-2);
     }

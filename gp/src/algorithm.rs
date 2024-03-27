@@ -158,8 +158,8 @@ impl<F: Float> Clone for GpInnerParams<F> {
 /// let xtest = Array::linspace(0., 25., 26).insert_axis(Axis(1));
 /// let ytest = xsinx(&xtest);
 ///
-/// let ypred = kriging.predict_values(&xtest).expect("Kriging prediction");
-/// let yvariances = kriging.predict_variances(&xtest).expect("Kriging prediction");  
+/// let ypred = kriging.predict(&xtest).expect("Kriging prediction");
+/// let yvariances = kriging.predict_var(&xtest).expect("Kriging prediction");  
 ///```
 ///
 /// # Reference:
@@ -256,7 +256,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict output values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n scalar output values as (n, 1) column vector.
-    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
+    pub fn predict(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         // Compute the mean term at x
         let f = self.mean.value(&xnorm);
@@ -270,7 +270,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict variance values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n variance values as (n, 1) column vector.
-    pub fn predict_variances(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
+    pub fn predict_var(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
         let (rt, u, _) = self._compute_rt_u(x);
 
         let mut b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
@@ -410,7 +410,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             }
         }
         .without_lapack();
-        let mean = self.predict_values(x).unwrap();
+        let mean = self.predict(x).unwrap();
         let normal = Normal::new(0., 1.).unwrap();
         let ary = Array::random((n_eval, n_traj), normal).mapv(|v| F::cast(v));
         mean + c.dot(&ary)
@@ -561,7 +561,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Predict variance derivatives at a point `x` specified as a (nx,) vector where x has nx components.
     /// Returns a (nx,) vector containing variance derivatives at `x` wrt each nx components
     #[cfg(not(feature = "blas"))]
-    pub fn predict_variance_derivatives_single(
+    pub fn predict_var_derivatives_single(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
     ) -> Array1<F> {
@@ -630,7 +630,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// See non blas version
     #[cfg(feature = "blas")]
-    pub fn predict_variance_derivatives_single(
+    pub fn predict_var_derivatives_single(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
     ) -> Array1<F> {
@@ -709,14 +709,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict variance derivatives at a set of points `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing variance derivatives at `x` wrt each nx components
-    pub fn predict_variance_derivatives(
-        &self,
-        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> Array2<F> {
+    pub fn predict_var_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut derivs = Array::zeros((x.nrows(), x.ncols()));
         Zip::from(derivs.rows_mut())
             .and(x.rows())
-            .for_each(|mut der, x| der.assign(&self.predict_variance_derivatives_single(&x)));
+            .for_each(|mut der, x| der.assign(&self.predict_var_derivatives_single(&x)));
         derivs
     }
 }
@@ -736,7 +733,7 @@ where
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.predict_values(x).expect("GP Prediction");
+        let values = self.predict(x).expect("GP Prediction");
         *y = values;
     }
 
@@ -767,7 +764,7 @@ where
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.0.predict_variances(x).expect("GP Prediction");
+        let values = self.0.predict_var(x).expect("GP Prediction");
         *y = values;
     }
 
@@ -1271,7 +1268,7 @@ mod tests {
         .expect("GP fit error");
         let rng = Xoshiro256Plus::seed_from_u64(43);
         let xtest = Lhs::new(&xlimits).with_rng(rng).sample(nt);
-        let ytest = gp.predict_values(&xtest).expect("prediction error");
+        let ytest = gp.predict(&xtest).expect("prediction error");
         assert_abs_diff_eq!(Array::from_elem((nt, 1), 3.1), ytest, epsilon = 1e-6);
     }
 
@@ -1292,20 +1289,20 @@ mod tests {
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fit error");
                     let yvals = gp
-                        .predict_values(&arr2(&[[1.0], [3.5]]))
+                        .predict(&arr2(&[[1.0], [3.5]]))
                         .expect("prediction error");
                     let expected_y = arr2(&[[1.0], [0.9]]);
                     assert_abs_diff_eq!(expected_y, yvals, epsilon = 0.5);
 
-                    let gpr_vals = gp.predict_values(&xplot).unwrap();
+                    let gpr_vals = gp.predict(&xplot).unwrap();
 
                     let yvars = gp
-                        .predict_variances(&arr2(&[[1.0], [3.5]]))
+                        .predict_var(&arr2(&[[1.0], [3.5]]))
                         .expect("prediction error");
                     let expected_vars = arr2(&[[0.], [0.1]]);
                     assert_abs_diff_eq!(expected_vars, yvars, epsilon = 0.5);
 
-                    let gpr_vars = gp.predict_variances(&xplot).unwrap();
+                    let gpr_vars = gp.predict_var(&xplot).unwrap();
 
                     let test_dir = "target/tests";
                     std::fs::create_dir_all(test_dir).ok();
@@ -1397,7 +1394,7 @@ mod tests {
             .expect("GP fit error");
 
             let xtest = Array2::ones((1, dim));
-            let ytest = gp.predict_values(&xtest).expect("prediction error");
+            let ytest = gp.predict(&xtest).expect("prediction error");
             let ytrue = griewank(&xtest.row(0).to_owned());
             assert_abs_diff_eq!(Array::from_elem((1, 1), ytrue), ytest, epsilon = 1.1);
         });
@@ -1430,7 +1427,7 @@ mod tests {
         let xv = Lhs::new(&xlimits).sample(100);
         let yv = tensor_product_exp(&xv);
 
-        let ytest = gp.predict_values(&xv).unwrap();
+        let ytest = gp.predict(&xv).unwrap();
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
         assert_abs_diff_eq!(err, 0., epsilon = 2e-2);
     }
@@ -1467,7 +1464,7 @@ mod tests {
         let xv = Lhs::new(&xlimits).with_rng(rng2).sample(300);
         let yv = rosenb(&xv);
 
-        let ytest = gp.predict(&xv);
+        let ytest = gp.predict(&xv).expect("GP prediction");
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
         assert_abs_diff_eq!(err, 0., epsilon = 4e-1);
 
@@ -1529,7 +1526,7 @@ mod tests {
                         [xa, xb - e]
                     ];
 
-                    let y_pred = gp.predict_values(&x).unwrap();
+                    let y_pred = gp.predict(&x).unwrap();
                     println!("value at [{},{}] = {}", xa, xb, y_pred);
                     let y_deriv = gp.predict_derivatives(&x);
                     println!("deriv at [{},{}] = {}", xa, xb, y_deriv);
@@ -1598,13 +1595,13 @@ mod tests {
                             [xa, xb - e]
                         ];
                         println!("****************************************");
-                        let y_pred = gp.predict_values(&x).unwrap();
+                        let y_pred = gp.predict(&x).unwrap();
                         println!("value at [{},{}] = {}", xa, xb, y_pred);
                         let y_deriv = gp.predict_derivatives(&x);
                         println!("deriv at [{},{}] = {}", xa, xb, y_deriv);
-                        let y_pred = gp.predict_variances(&x).unwrap();
+                        let y_pred = gp.predict_var(&x).unwrap();
                         println!("variance at [{},{}] = {}", xa, xb, y_pred);
-                        let y_deriv = gp.predict_variance_derivatives(&x);
+                        let y_deriv = gp.predict_var_derivatives(&x);
                         println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
 
                         let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
@@ -1658,9 +1655,9 @@ mod tests {
                 [xa, xb + e],
                 [xa, xb - e]
             ];
-            let y_pred = gp.predict_variances(&x).unwrap();
+            let y_pred = gp.predict_var(&x).unwrap();
             println!("variance at [{xa},{xb}] = {y_pred}");
-            let y_deriv = gp.predict_variance_derivatives(&x);
+            let y_deriv = gp.predict_var_derivatives(&x);
             println!("variance deriv at [{xa},{xb}] = {y_deriv}");
 
             let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);

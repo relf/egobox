@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let xlimits = arr2(&[[-1., 1.], [-1., 1.]]);
     let xtest = FullFactorial::new(&xlimits).sample(100);
-    let ytest = moe.predict_values(&xtest)?;
+    let ytest = moe.predict(&xtest)?;
     let ytrue = norm1(&xtest);
 
     // Save data as numpy arrays to plot with Python
