@@ -290,7 +290,7 @@ impl<R: Rng + SeedableRng + Clone> SparseGpMixtureValidParams<f64, R> {
             let errors = scale_factors.map(move |&factor| {
                 let gmx2 = gmx.clone();
                 let gmx2 = gmx2.heaviside_factor(factor);
-                let pred = predict_values_smooth(experts, &gmx2, xtest).unwrap();
+                let pred = predict_smooth(experts, &gmx2, xtest).unwrap();
                 pred.sub(ytest).mapv(|x| x * x).sum().sqrt() / xtest.mapv(|x| x * x).sum().sqrt()
             });
 
@@ -327,7 +327,7 @@ fn check_number_of_points<F>(
 /// `gmx` is used to get the probability of x to belongs to one cluster
 /// or another (ie responsabilities). Those responsabilities are used to combine
 /// output values predict by each cluster experts.
-fn predict_values_smooth(
+fn predict_smooth(
     experts: &[Box<dyn SgpSurrogate>],
     gmx: &GaussianMixture<f64>,
     points: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -342,7 +342,7 @@ fn predict_values_smooth(
             let x = x.insert_axis(Axis(0));
             let preds: Array1<f64> = experts
                 .iter()
-                .map(|gp| gp.predict_values(&x).unwrap()[[0, 0]])
+                .map(|gp| gp.predict(&x).unwrap()[[0, 0]])
                 .collect();
             *y = (preds * p).sum();
         });
@@ -401,10 +401,10 @@ impl Clustered for SparseGpMixture {
 
 #[cfg_attr(feature = "serializable", typetag::serde)]
 impl GpSurrogate for SparseGpMixture {
-    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_values_hard(x),
-            Recombination::Smooth(_) => self.predict_values_smooth(x),
+            Recombination::Hard => self.predict_hard(x),
+            Recombination::Smooth(_) => self.predict_smooth(x),
         }
     }
 
@@ -471,11 +471,8 @@ impl SparseGpMixture {
     /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
     /// or another (ie responsabilities).     
     /// The smooth recombination of each cluster expert responsabilty is used to get the result.
-    pub fn predict_values_smooth(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Array2<f64>> {
-        predict_values_smooth(&self.experts, &self.gmx, x)
+    pub fn predict_smooth(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
+        predict_smooth(&self.experts, &self.gmx, x)
     }
 
     /// Predict variances at a set of points `x` specified as (n, nx) matrix.
@@ -508,10 +505,7 @@ impl SparseGpMixture {
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// Then the expert of the cluster is used to predict the output value.
     /// Returns the ouputs as a (n, 1) column vector
-    pub fn predict_values_hard(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Array2<f64>> {
+    pub fn predict_hard(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(x);
         trace!("Clustering {:?}", clustering);
         let mut preds = Array2::zeros((x.nrows(), 1));
@@ -521,7 +515,7 @@ impl SparseGpMixture {
             .for_each(|mut y, x, &c| {
                 y.assign(
                     &self.experts[c]
-                        .predict_values(&x.insert_axis(Axis(0)))
+                        .predict(&x.insert_axis(Axis(0)))
                         .unwrap()
                         .row(0),
                 );
@@ -554,8 +548,8 @@ impl SparseGpMixture {
         Ok(variances)
     }
 
-    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
-        <SparseGpMixture as GpSurrogate>::predict_values(self, &x.view())
+    pub fn predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
+        <SparseGpMixture as GpSurrogate>::predict(self, &x.view())
     }
 
     pub fn predict_variances(
@@ -596,7 +590,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Spa
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.predict_values(x).expect("Sgp prediction");
+        let values = self.predict(x).expect("Sgp prediction");
         *y = values;
     }
 
@@ -677,7 +671,7 @@ mod tests {
 
         println!("noise variance={:?}", sgp.experts()[0].noise_variance());
 
-        let sgp_vals = sgp.predict_values(&xplot).unwrap();
+        let sgp_vals = sgp.predict(&xplot).unwrap();
         let yplot = f_obj(&xplot);
         let errvals = (yplot - &sgp_vals).mapv(|v| v.abs());
         assert_abs_diff_eq!(errvals, Array2::zeros((xplot.nrows(), 1)), epsilon = 1.0);

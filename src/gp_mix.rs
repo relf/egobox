@@ -269,11 +269,21 @@ impl Gpx {
     /// Returns
     ///     the output values at nsamples x points (array[nsamples, 1])
     ///
+    fn predict<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> &'py PyArray2<f64> {
+        self.0.predict(&x.as_array()).unwrap().into_pyarray(py)
+    }
+
+    /// Predict output values at nsamples points.
+    ///
+    /// Parameters
+    ///     x (array[nsamples, nx])
+    ///         input values
+    ///
+    /// Returns
+    ///     the output values at nsamples x points (array[nsamples, 1])
+    ///
     fn predict_values<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> &'py PyArray2<f64> {
-        self.0
-            .predict_values(&x.as_array().to_owned())
-            .unwrap()
-            .into_pyarray(py)
+        self.0.predict(&x.as_array()).unwrap().into_pyarray(py)
     }
 
     /// Predict variances at nsample points.
@@ -292,6 +302,48 @@ impl Gpx {
     ) -> &'py PyArray2<f64> {
         self.0
             .predict_variances(&x.as_array().to_owned())
+            .unwrap()
+            .into_pyarray(py)
+    }
+
+    /// Predict surrogate output derivatives at nsamples points.
+    ///
+    /// Parameters
+    ///     x (array[nsamples, nx])
+    ///         input values
+    ///
+    /// Returns
+    ///     the output derivatives at nsamples x points (array[nsamples, nx]) wrt inputs
+    ///     The ith column is the partial derivative value wrt to the ith component of x at the given samples.
+    ///
+    fn predict_derivatives<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray2<f64>,
+    ) -> &'py PyArray2<f64> {
+        self.0
+            .predict_derivatives(&x.as_array().to_owned())
+            .unwrap()
+            .into_pyarray(py)
+    }
+
+    /// Predict variance derivatives at nsamples points.
+    ///
+    /// Parameters
+    ///     x (array[nsamples, nx])
+    ///         input values
+    ///
+    /// Returns
+    ///     the variance derivatives at nsamples x points (array[nsamples, nx]) wrt inputs
+    ///     The ith column is the partial derivative value wrt to the ith component of x at the given samples.
+    ///
+    fn predict_variance_derivatives<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray2<f64>,
+    ) -> &'py PyArray2<f64> {
+        self.0
+            .predict_variance_derivatives(&x.as_array().to_owned())
             .unwrap()
             .into_pyarray(py)
     }

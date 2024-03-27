@@ -50,7 +50,12 @@ pub trait SgpSurrogateParams {
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
 pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     /// Predict output values at n points given as (n, xdim) matrix.
-    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    #[deprecated(since = "0.17.0", note = "renamed predict")]
+    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+        self.predict(x)
+    }
+    /// Predict output values at n points given as (n, xdim) matrix.
+    fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
     fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Save model in given file.
@@ -147,8 +152,8 @@ macro_rules! declare_surrogate {
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
             impl GpSurrogate for [<Gp $regr $corr Surrogate>] {
-                fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_values(x)?)
+                fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict(x)?)
                 }
                 fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_variances(x)?)
@@ -292,8 +297,8 @@ macro_rules! declare_sgp_surrogate {
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
             impl GpSurrogate for [<Sgp $corr Surrogate>] {
-                fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_values(x)?)
+                fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict(x)?)
                 }
                 fn predict_variances(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_variances(x)?)
@@ -425,7 +430,7 @@ mod tests {
         let gp = load("target/tests/save_gp.json").expect("GP not loaded");
         let xv = Lhs::new(&xlimits).sample(20);
         let yv = xsinx(&xv);
-        let ytest = gp.predict_values(&xv.view()).unwrap();
+        let ytest = gp.predict(&xv.view()).unwrap();
         let err = ytest.l2_dist(&yv).unwrap() / yv.norm_l2();
         assert_abs_diff_eq!(err, 0., epsilon = 2e-1);
     }

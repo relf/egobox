@@ -38,7 +38,7 @@ macro_rules! compute_error {
                 trace!("GP trained");
                 gp
             }) {
-                let pred = gp.predict_values(valid.records()).unwrap();
+                let pred = gp.predict(valid.records()).unwrap();
                 let error = (valid.targets() - pred).norm_l2();
                 trace!("Prediction error = {error}");
                 errors.push(error);

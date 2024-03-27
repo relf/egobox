@@ -31,8 +31,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let xtest = Array::linspace(0., 1., 101).insert_axis(Axis(1));
     let ytest = f3parts(&xtest);
 
-    let ymoe1 = moe1.predict_values(&xtest)?;
-    let ymoe3 = moe3.predict_values(&xtest)?;
+    let ymoe1 = moe1.predict(&xtest)?;
+    let ymoe3 = moe3.predict(&xtest)?;
 
     println!("Compute average prediction error");
     println!(

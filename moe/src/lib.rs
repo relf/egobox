@@ -75,7 +75,7 @@
 //!                     .recombination(Recombination::Hard)
 //!                     .fit(&ds)
 //!                     .expect("MoE model training")
-//!                     .predict_values(&observations)
+//!                     .predict(&observations)
 //!                     .expect("MoE predictions");
 //! ```
 //!

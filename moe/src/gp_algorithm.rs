@@ -296,7 +296,7 @@ impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
             let errors = scale_factors.map(move |&factor| {
                 let gmx2 = gmx.clone();
                 let gmx2 = gmx2.heaviside_factor(factor);
-                let pred = predict_values_smooth(experts, &gmx2, xtest).unwrap();
+                let pred = predict_smooth(experts, &gmx2, xtest).unwrap();
                 pred.sub(ytest).mapv(|x| x * x).sum().sqrt() / xtest.mapv(|x| x * x).sum().sqrt()
             });
 
@@ -333,7 +333,7 @@ fn check_number_of_points<F>(
 /// `gmx` is used to get the probability of x to belongs to one cluster
 /// or another (ie responsabilities). Those responsabilities are used to combine
 /// output values predict by each cluster experts.
-fn predict_values_smooth(
+fn predict_smooth(
     experts: &[Box<dyn FullGpSurrogate>],
     gmx: &GaussianMixture<f64>,
     points: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -348,7 +348,7 @@ fn predict_values_smooth(
             let x = x.insert_axis(Axis(0));
             let preds: Array1<f64> = experts
                 .iter()
-                .map(|gp| gp.predict_values(&x).unwrap()[[0, 0]])
+                .map(|gp| gp.predict(&x).unwrap()[[0, 0]])
                 .collect();
             *y = (preds * p).sum();
         });
@@ -407,10 +407,10 @@ impl Clustered for GpMixture {
 
 #[cfg_attr(feature = "serializable", typetag::serde)]
 impl GpSurrogate for GpMixture {
-    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_values_hard(x),
-            Recombination::Smooth(_) => self.predict_values_smooth(x),
+            Recombination::Hard => self.predict_hard(x),
+            Recombination::Smooth(_) => self.predict_smooth(x),
         }
     }
 
@@ -506,11 +506,8 @@ impl GpMixture {
     /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
     /// or another (ie responsabilities).     
     /// The smooth recombination of each cluster expert responsabilty is used to get the result.
-    pub fn predict_values_smooth(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Array2<f64>> {
-        predict_values_smooth(&self.experts, &self.gmx, x)
+    pub fn predict_smooth(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
+        predict_smooth(&self.experts, &self.gmx, x)
     }
 
     /// Predict variances at a set of points `x` specified as (n, nx) matrix.
@@ -560,7 +557,7 @@ impl GpMixture {
                 let preds: Array1<f64> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_values(&x).unwrap()[[0, 0]])
+                    .map(|gp| gp.predict(&x).unwrap()[[0, 0]])
                     .collect();
                 let drvs: Vec<Array1<f64>> = self
                     .experts
@@ -646,10 +643,7 @@ impl GpMixture {
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// Then the expert of the cluster is used to predict the output value.
     /// Returns the ouputs as a (n, 1) column vector
-    pub fn predict_values_hard(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Array2<f64>> {
+    pub fn predict_hard(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(x);
         trace!("Clustering {:?}", clustering);
         let mut preds = Array2::zeros((x.nrows(), 1));
@@ -659,7 +653,7 @@ impl GpMixture {
             .for_each(|mut y, x, &c| {
                 y.assign(
                     &self.experts[c]
-                        .predict_values(&x.insert_axis(Axis(0)))
+                        .predict(&x.insert_axis(Axis(0)))
                         .unwrap()
                         .row(0),
                 );
@@ -749,8 +743,8 @@ impl GpMixture {
         self.experts[ith].sample(&x.view(), n_traj)
     }
 
-    pub fn predict_values(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
-        <GpMixture as GpSurrogate>::predict_values(self, &x.view())
+    pub fn predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
+        <GpMixture as GpSurrogate>::predict(self, &x.view())
     }
 
     pub fn predict_variances(
@@ -814,7 +808,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for GpM
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.predict_values(x).expect("MoE prediction");
+        let values = self.predict(x).expect("MoE prediction");
         *y = values;
     }
 
@@ -902,7 +896,7 @@ mod tests {
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 30).insert_axis(Axis(1));
-        let preds = moe.predict_values(&x).expect("MOE prediction");
+        let preds = moe.predict(&x).expect("MOE prediction");
         let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
         println!("dpred = {dpreds}");
         let test_dir = "target/tests";
@@ -912,12 +906,12 @@ mod tests {
         write_npy(format!("{test_dir}/dpreds_hard.npy"), &dpreds).expect("dpreds saved");
         assert_abs_diff_eq!(
             0.39 * 0.39,
-            moe.predict_values(&array![[0.39]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
             epsilon = 1e-4
         );
         assert_abs_diff_eq!(
             f64::sin(10. * 0.82),
-            moe.predict_values(&array![[0.82]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.82]]).unwrap()[[0, 0]],
             epsilon = 1e-4
         );
     }
@@ -936,7 +930,7 @@ mod tests {
             .fit(&ds)
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&x).expect("MOE prediction");
+        let preds = moe.predict(&x).expect("MOE prediction");
         write_npy(format!("{test_dir}/xt.npy"), &xt).expect("x saved");
         write_npy(format!("{test_dir}/yt.npy"), &yt).expect("preds saved");
         write_npy(format!("{test_dir}/x_smooth.npy"), &x).expect("x saved");
@@ -946,7 +940,7 @@ mod tests {
         println!("Smooth moe {moe}");
         assert_abs_diff_eq!(
             0.2623, // test we are not good as the true value = 0.37*0.37 = 0.1369
-            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
 
@@ -961,12 +955,12 @@ mod tests {
 
         std::fs::create_dir_all(test_dir).ok();
         let x = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict_values(&x).expect("MOE prediction");
+        let preds = moe.predict(&x).expect("MOE prediction");
         write_npy(format!("{test_dir}/x_smooth2.npy"), &x).expect("x saved");
         write_npy(format!("{test_dir}/preds_smooth2.npy"), &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
-            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
     }
@@ -989,7 +983,7 @@ mod tests {
         );
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
-            moe.predict_values(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
             epsilon = 1e-3
         );
     }
@@ -1056,15 +1050,11 @@ mod tests {
             .fit(&ds)
             .expect("MOE fitted");
         let xtest = array![[0.6]];
-        let y_expected = moe.predict_values(&xtest).unwrap();
+        let y_expected = moe.predict(&xtest).unwrap();
         let filename = format!("{test_dir}/saved_moe.json");
         moe.save(&filename).expect("MoE saving");
         let new_moe = GpMixture::load(&filename).expect("MoE loading");
-        assert_abs_diff_eq!(
-            y_expected,
-            new_moe.predict_values(&xtest).unwrap(),
-            epsilon = 1e-6
-        );
+        assert_abs_diff_eq!(y_expected, new_moe.predict(&xtest).unwrap(), epsilon = 1e-6);
     }
 
     #[test]
@@ -1082,7 +1072,7 @@ mod tests {
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 50).insert_axis(Axis(1));
-        let preds = moe.predict_values(&x).expect("MOE prediction");
+        let preds = moe.predict(&x).expect("MOE prediction");
         let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
 
         let test_dir = "target/tests";
@@ -1099,7 +1089,7 @@ mod tests {
             let xtest = array![[x1]];
 
             let x = array![[x1], [x1 + h], [x1 - h]];
-            let preds = moe.predict_values(&x).unwrap();
+            let preds = moe.predict(&x).unwrap();
             let fdiff = (preds[[1, 0]] - preds[[2, 0]]) / (2. * h);
 
             let drv = moe.predict_derivatives(&xtest).unwrap();
@@ -1164,7 +1154,7 @@ mod tests {
                 [xa, xb + e],
                 [xa, xb - e]
             ];
-            let y_pred = moe.predict_values(&x).unwrap();
+            let y_pred = moe.predict(&x).unwrap();
             let y_deriv = moe.predict_derivatives(&x).unwrap();
 
             let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);

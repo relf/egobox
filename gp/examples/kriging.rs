@@ -21,7 +21,7 @@ fn main() {
     let xtest = Array::linspace(0., 25., 26).insert_axis(Axis(1));
     let ytest = xsinx(&xtest);
     // predict values
-    let ypred = kriging.predict_values(&xtest).expect("Kriging prediction");
+    let ypred = kriging.predict(&xtest).expect("Kriging prediction");
     // predict standard deviation
     let ysigma = kriging
         .predict_variances(&xtest)
