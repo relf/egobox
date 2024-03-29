@@ -11,7 +11,7 @@
 //!
 use crate::types::*;
 use egobox_gp::{Inducings, ParamTuning, ThetaTuning};
-use egobox_moe::{GpSurrogate, SparseGpMixture};
+use egobox_moe::{GpMixture, GpSurrogate, GpType};
 use linfa::{traits::Fit, Dataset};
 use ndarray::Array2;
 use ndarray_rand::rand::SeedableRng;
@@ -164,14 +164,17 @@ impl SparseGpMix {
             // ignore multiple handlers error
         };
         let sgp = py.allow_threads(|| {
-            SparseGpMixture::params(inducings)
+            GpMixture::params()
+                .gp_type(GpType::SparseGp {
+                    sparse_method: method,
+                    inducings,
+                })
                 .correlation_spec(
                     egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
                 )
                 .theta_tuning(theta_tuning)
                 .kpls_dim(self.kpls_dim)
                 .n_start(self.n_start)
-                .sparse_method(method)
                 .with_rng(rng)
                 .fit(&dataset)
                 .expect("Sgp model training")
@@ -182,7 +185,7 @@ impl SparseGpMix {
 
 /// A trained Gaussian processes mixture
 #[pyclass]
-pub(crate) struct SparseGpx(Box<SparseGpMixture>);
+pub(crate) struct SparseGpx(Box<GpMixture>);
 
 #[pymethods]
 impl SparseGpx {
@@ -254,7 +257,7 @@ impl SparseGpx {
     ///
     #[staticmethod]
     fn load(filename: String) -> SparseGpx {
-        SparseGpx(SparseGpMixture::load(&filename).unwrap())
+        SparseGpx(GpMixture::load(&filename).unwrap())
     }
 
     /// Predict output values at nsamples points.
