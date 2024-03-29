@@ -95,7 +95,7 @@ use crate::errors::Result;
 use crate::mixint::*;
 use crate::types::*;
 
-use egobox_moe::GpMixParams;
+use egobox_moe::GpMixtureParams;
 use log::info;
 use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
@@ -136,7 +136,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Egor<O, GpMixParams<f64, Xoshiro256Plus>> {
+    ) -> Egor<O, GpMixtureParams<f64, Xoshiro256Plus>> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
