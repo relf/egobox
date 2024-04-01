@@ -4,7 +4,8 @@ use crate::sparse_parameters::{
     Inducings, ParamEstimation, SgpParams, SgpValidParams, SparseMethod,
 };
 use crate::{correlation_models::*, utils::pairwise_differences};
-use crate::{prepare_multistart, CobylaParams};
+use crate::{prepare_multistart, sample, CobylaParams, GpSamplingMethod};
+use finitediff::FiniteDiff;
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
@@ -295,6 +296,39 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
     /// Inducing points
     pub fn inducings(&self) -> &Array2<F> {
         &self.inducings
+    }
+
+    pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.ncols()));
+        let f = |x: &Array1<f64>| -> f64 {
+            let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
+            let v = self.predict(&x).unwrap()[[0, 0]];
+            unsafe { *(&v as *const F as *const f64) }
+        };
+        Zip::from(drv.rows_mut())
+            .and(x.rows())
+            .for_each(|mut row, xi| {
+                let xi = xi.mapv(|v| unsafe { *(&v as *const F as *const f64) });
+                let grad = xi.central_diff(&f).mapv(|v| F::cast(v));
+                row.assign(&grad);
+            });
+        drv
+    }
+    pub fn predict_var_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.ncols()));
+        let f = |x: &Array1<f64>| -> f64 {
+            let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
+            let v = self.predict_var(&x).unwrap()[[0, 0]];
+            unsafe { *(&v as *const F as *const f64) }
+        };
+        Zip::from(drv.rows_mut())
+            .and(x.rows())
+            .for_each(|mut row, xi| {
+                let xi = xi.mapv(|v| unsafe { *(&v as *const F as *const f64) });
+                let grad = xi.central_diff(&f).mapv(|v| F::cast(v));
+                row.assign(&grad);
+            });
+        drv
     }
 }
 
