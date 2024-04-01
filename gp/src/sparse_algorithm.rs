@@ -330,6 +330,32 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
             });
         drv
     }
+
+    /// Sample the gaussian process for `n_traj` trajectories using cholesky decomposition
+    pub fn sample_chol(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self._sample(x, n_traj, GpSamplingMethod::Cholesky)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using eigenvalues decomposition
+    pub fn sample_eig(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self._sample(x, n_traj, GpSamplingMethod::EigenValues)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using eigenvalues decomposition (alias of `sample_eig`)
+    pub fn sample(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self.sample_eig(x, n_traj)
+    }
+
+    fn _sample(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        n_traj: usize,
+        method: GpSamplingMethod,
+    ) -> Array2<F> {
+        let mean = self.predict(x).unwrap();
+        let cov = self.compute_k(x, x, &self.w_star, &self.theta, self.sigma2);
+        sample(x, mean, cov, n_traj, method)
+    }
 }
 
 impl<F, D, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>> for SparseGaussianProcess<F, Corr>

@@ -202,7 +202,7 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     ytrain: NormalizedMatrix<F>,
 }
 
-enum GpSamplingMethod {
+pub(crate) enum GpSamplingMethod {
     Cholesky,
     EigenValues,
 }
@@ -378,42 +378,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         n_traj: usize,
         method: GpSamplingMethod,
     ) -> Array2<F> {
-        let n_eval = x.nrows();
-        let cov = self._compute_covariance(x);
-        let c = match method {
-            GpSamplingMethod::Cholesky => {
-                #[cfg(not(feature = "blas"))]
-                let c = cov.with_lapack().cholesky().unwrap();
-                #[cfg(feature = "blas")]
-                let c = cov.with_lapack().cholesky(UPLO::Lower).unwrap();
-                c
-            }
-            GpSamplingMethod::EigenValues => {
-                #[cfg(feature = "blas")]
-                let (v, w) = cov.with_lapack().eigh(UPLO::Lower).unwrap();
-                #[cfg(not(feature = "blas"))]
-                let (v, w) = cov.with_lapack().eigh_into().unwrap();
-                let v = v.mapv(F::cast);
-                let v = v.mapv(|x| {
-                    // We lower bound the float value at 1e-9
-                    if x < F::cast(1e-9) {
-                        return F::zero();
-                    }
-                    x.sqrt()
-                });
-                let d = Array2::from_diag(&v).with_lapack();
-                #[cfg(feature = "blas")]
-                let c = w.dot(&d);
-                #[cfg(not(feature = "blas"))]
-                let c = w.dot(&d);
-                c
-            }
-        }
-        .without_lapack();
         let mean = self.predict(x).unwrap();
-        let normal = Normal::new(0., 1.).unwrap();
-        let ary = Array::random((n_eval, n_traj), normal).mapv(|v| F::cast(v));
-        mean + c.dot(&ary)
+        let cov = self._compute_covariance(x);
+        sample(x, mean, cov, n_traj, method)
     }
 
     /// Retrieve optimized hyperparameters theta
@@ -1227,6 +1194,54 @@ fn reduced_likelihood<F: Float>(
             ft_qr_r: ft_qr_r.without_lapack(),
         },
     ))
+}
+
+/// Sample the gaussian process for `n_traj` trajectories using either
+/// cholesky or eigenvalues decomposition to compute the decomposition of the conditioned covariance matrix.
+/// `cov_x` is the covariance matrix at the given x points [n, nx]
+/// The later one is recommended as cholesky decomposition suffer from occurence of ill-conditioned matrices
+/// when the number of x locations increase.
+pub(crate) fn sample<F: Float>(
+    x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    mean_x: Array2<F>,
+    cov_x: Array2<F>,
+    n_traj: usize,
+    method: GpSamplingMethod,
+) -> Array2<F> {
+    let n_eval = x.nrows();
+    let c = match method {
+        GpSamplingMethod::Cholesky => {
+            #[cfg(not(feature = "blas"))]
+            let c = cov_x.with_lapack().cholesky().unwrap();
+            #[cfg(feature = "blas")]
+            let c = cov_x.with_lapack().cholesky(UPLO::Lower).unwrap();
+            c
+        }
+        GpSamplingMethod::EigenValues => {
+            #[cfg(feature = "blas")]
+            let (v, w) = cov_x.with_lapack().eigh(UPLO::Lower).unwrap();
+            #[cfg(not(feature = "blas"))]
+            let (v, w) = cov_x.with_lapack().eigh_into().unwrap();
+            let v = v.mapv(F::cast);
+            let v = v.mapv(|x| {
+                // We lower bound the float value at 1e-9
+                if x < F::cast(1e-9) {
+                    return F::zero();
+                }
+                x.sqrt()
+            });
+            let d = Array2::from_diag(&v).with_lapack();
+            #[cfg(feature = "blas")]
+            let c = w.dot(&d);
+            #[cfg(not(feature = "blas"))]
+            let c = w.dot(&d);
+            c
+        }
+    }
+    .without_lapack();
+    let normal = Normal::new(0., 1.).unwrap();
+    let ary = Array::random((n_eval, n_traj), normal).mapv(|v| F::cast(v));
+    mean_x.to_owned() + c.dot(&ary)
 }
 
 #[cfg(test)]
