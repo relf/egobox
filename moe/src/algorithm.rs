@@ -803,21 +803,20 @@ impl GpMixture {
         <GpMixture as GpSurrogateExt>::predict_var_derivatives(self, &x.view())
     }
 
-    #[cfg(feature = "persistent")]
-    /// Load Moe from given json file.
-    pub fn load(path: &str) -> Result<Box<GpMixture>> {
-        let data = fs::read_to_string(path)?;
-        let moe: GpMixture = serde_json::from_str(&data).unwrap();
-        Ok(Box::new(moe))
-    }
-
-    #[cfg(not(feature = "blas"))]
     pub fn sample(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         n_traj: usize,
     ) -> Result<Array2<f64>> {
         <GpMixture as GpSurrogateExt>::sample(self, &x.view(), n_traj)
+    }
+
+    #[cfg(feature = "persistent")]
+    /// Load Moe from given json file.
+    pub fn load(path: &str) -> Result<Box<GpMixture>> {
+        let data = fs::read_to_string(path)?;
+        let moe: GpMixture = serde_json::from_str(&data).unwrap();
+        Ok(Box::new(moe))
     }
 }
 
