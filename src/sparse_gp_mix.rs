@@ -11,11 +11,11 @@
 //!
 use crate::types::*;
 use egobox_gp::{Inducings, ParamTuning, ThetaTuning};
-use egobox_moe::{GpMixture, GpSurrogate, GpType};
+use egobox_moe::{Clustered, GpMixture, GpSurrogate, GpType, MixtureGpSurrogate};
 use linfa::{traits::Fit, Dataset};
-use ndarray::Array2;
+use ndarray::{Array1, Array2, Zip};
 use ndarray_rand::rand::SeedableRng;
-use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use rand_xoshiro::Xoshiro256Plus;
 
@@ -290,5 +290,120 @@ impl SparseGpx {
             .predict_var(&x.as_array().to_owned())
             .unwrap()
             .into_pyarray(py)
+    }
+
+    /// Predict surrogate output derivatives at nsamples points.
+    ///
+    /// Implementation note: central finite difference technique
+    /// on `predict()` function is used which may be subject to numerical issues
+    ///
+    /// Parameters
+    ///     x (array[nsamples, nx])
+    ///         input values
+    ///
+    /// Returns
+    ///     the output derivatives at nsamples x points (array[nsamples, nx]) wrt inputs
+    ///     The ith column is the partial derivative value wrt to the ith component of x at the given samples.
+    ///
+    fn predict_derivatives<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray2<f64>,
+    ) -> &'py PyArray2<f64> {
+        self.0
+            .predict_derivatives(&x.as_array().to_owned())
+            .unwrap()
+            .into_pyarray(py)
+    }
+
+    /// Predict variance derivatives at nsamples points.
+    ///
+    /// Implementation note: central finite difference technique
+    /// on `predict_var()` function is used which may be subject to numerical issues
+    ///
+    /// Parameters
+    ///     x (array[nsamples, nx])
+    ///         input values
+    ///
+    /// Returns
+    ///     the variance derivatives at nsamples x points (array[nsamples, nx]) wrt inputs
+    ///     The ith column is the partial derivative value wrt to the ith component of x at the given samples.
+    ///
+    fn predict_var_derivatives<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray2<f64>,
+    ) -> &'py PyArray2<f64> {
+        self.0
+            .predict_var_derivatives(&x.as_array().to_owned())
+            .unwrap()
+            .into_pyarray(py)
+    }
+
+    /// Sample gaussian process trajectories.
+    ///
+    /// Parameters
+    ///     x (array[nsamples, nx])
+    ///         locations of the sampled trajectories
+    ///     n_traj number of trajectories to generate
+    ///
+    /// Returns
+    ///     the trajectories as an array[nsamples, n_traj]
+    ///
+    fn sample<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray2<f64>,
+        n_traj: usize,
+    ) -> &'py PyArray2<f64> {
+        self.0
+            .sample(&x.as_array(), n_traj)
+            .unwrap()
+            .into_pyarray(py)
+    }
+
+    /// Get optimized thetas hyperparameters (ie once GP experts are fitted)
+    ///
+    /// Returns
+    ///     thetas as an array[n_clusters, nx or kpls_dim]
+    ///
+    fn thetas<'py>(&self, py: Python<'py>) -> &'py PyArray2<f64> {
+        let experts = self.0.experts();
+        let proto = experts.first().expect("Mixture should contain an expert");
+        let mut thetas = Array2::zeros((self.0.n_clusters(), proto.theta().len()));
+        Zip::from(thetas.rows_mut())
+            .and(experts)
+            .for_each(|mut theta, expert| theta.assign(expert.theta()));
+        thetas.into_pyarray(py)
+    }
+
+    /// Get GP expert variance (ie posterior GP variance)
+    ///
+    /// Returns
+    ///     variances as an array[n_clusters]
+    ///
+    fn variances<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+        let experts = self.0.experts();
+        let mut variances = Array1::zeros(self.0.n_clusters());
+        Zip::from(&mut variances)
+            .and(experts)
+            .for_each(|var, expert| *var = expert.variance());
+        variances.into_pyarray(py)
+    }
+
+    /// Get reduced likelihood values gotten when fitting the GP experts
+    ///
+    /// Maybe used to compare various parameterization
+    ///
+    /// Returns
+    ///     likelihood as an array[n_clusters]
+    ///
+    fn likelihoods<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+        let experts = self.0.experts();
+        let mut likelihoods = Array1::zeros(self.0.n_clusters());
+        Zip::from(&mut likelihoods)
+            .and(experts)
+            .for_each(|lkh, expert| *lkh = expert.likelihood());
+        likelihoods.into_pyarray(py)
     }
 }

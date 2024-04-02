@@ -316,14 +316,14 @@ macro_rules! declare_sgp_surrogate {
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
             impl GpSurrogateExt for [<Sgp $corr Surrogate>] {
-                fn predict_derivatives(&self, _x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    todo!("SparseGp derivatives predictions not implemented yet")
+                fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_derivatives(x))
                 }
-                fn predict_var_derivatives(&self, _x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    todo!("SparseGp var derivatives predictions not implemented yet")
+                fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_var_derivatives(x))
                 }
-                fn sample(&self, _x: &ArrayView2<f64>, _n_traj: usize) -> Result<Array2<f64>> {
-                    todo!("SparseGp sampling not implemented yet")
+                fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
+                    Ok(self.0.sample(x, n_traj))
                 }
             }
 
