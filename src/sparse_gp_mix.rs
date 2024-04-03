@@ -270,10 +270,7 @@ impl SparseGpx {
     ///     the output values at nsamples x points (array[nsamples, 1])
     ///
     fn predict<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> &'py PyArray2<f64> {
-        self.0
-            .predict(&x.as_array().to_owned())
-            .unwrap()
-            .into_pyarray(py)
+        self.0.predict(&x.as_array()).unwrap().into_pyarray(py)
     }
 
     /// Predict variances at nsample points.
@@ -311,7 +308,7 @@ impl SparseGpx {
         x: PyReadonlyArray2<f64>,
     ) -> &'py PyArray2<f64> {
         self.0
-            .predict_derivatives(&x.as_array().to_owned())
+            .predict_derivatives(&x.as_array())
             .unwrap()
             .into_pyarray(py)
     }
@@ -335,7 +332,7 @@ impl SparseGpx {
         x: PyReadonlyArray2<f64>,
     ) -> &'py PyArray2<f64> {
         self.0
-            .predict_var_derivatives(&x.as_array().to_owned())
+            .predict_var_derivatives(&x.as_array())
             .unwrap()
             .into_pyarray(py)
     }
