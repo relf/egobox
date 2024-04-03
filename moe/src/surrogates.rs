@@ -31,19 +31,11 @@ pub trait GpSurrogateParams {
 }
 
 /// A trait for sparse GP surrogate parameters to build surrogate.
-pub trait SgpSurrogateParams {
-    /// Set theta
-    fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>);
-    /// Set the number of PLS components
-    fn kpls_dim(&mut self, kpls_dim: Option<usize>);
-    /// Set the nuber of internal optimization restarts
-    fn n_start(&mut self, n_start: usize);
+pub trait SgpSurrogateParams: GpSurrogateParams {
     /// Set the sparse method
     fn sparse_method(&mut self, method: SparseMethod);
     /// Set random generator seed
     fn seed(&mut self, seed: Option<u64>);
-    /// Train the surrogate
-    fn train(&self, x: &ArrayView2<f64>, y: &ArrayView2<f64>) -> Result<Box<dyn SgpSurrogate>>;
 }
 
 /// A trait for a base GP surrogate
@@ -91,7 +83,7 @@ pub trait FullGpSurrogate: GpParameterized + GpSurrogate + GpSurrogateExt {}
 
 /// A trait for a Sparse GP surrogate.
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
-pub trait SgpSurrogate: GpParameterized + GpSurrogate {}
+pub trait SgpSurrogate: FullGpSurrogate {}
 
 /// A macro to declare GP surrogate using regression model and correlation model names.
 ///
@@ -256,7 +248,7 @@ macro_rules! declare_sgp_surrogate {
                 }
             }
 
-            impl SgpSurrogateParams for [<Sgp $corr SurrogateParams>] {
+            impl GpSurrogateParams for [<Sgp $corr SurrogateParams>] {
                 fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>) {
                     self.0 = self.0.clone().theta_tuning(theta_tuning);
                 }
@@ -269,22 +261,28 @@ macro_rules! declare_sgp_surrogate {
                     self.0 = self.0.clone().n_start(n_start);
                 }
 
-                fn sparse_method(&mut self, method: SparseMethod) {
-                    self.0 = self.0.clone().sparse_method(method);
-                }
-
-                fn seed(&mut self, seed: Option<u64>) {
-                    self.0 = self.0.clone().seed(seed);
+                fn nugget(&mut self, nugget: f64) {
+                    self.0 = self.0.clone().nugget(nugget);
                 }
 
                 fn train(
                     &self,
                     x: &ArrayView2<f64>,
                     y: &ArrayView2<f64>,
-                ) -> Result<Box<dyn SgpSurrogate>> {
+                ) -> Result<Box<dyn FullGpSurrogate>> {
                     Ok(Box::new([<Sgp $corr Surrogate>](
                         self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,
                     )))
+                }
+            }
+
+            impl SgpSurrogateParams for [<Sgp $corr SurrogateParams>] {
+                fn sparse_method(&mut self, method: SparseMethod) {
+                    self.0 = self.0.clone().sparse_method(method);
+                }
+
+                fn seed(&mut self, seed: Option<u64>) {
+                    self.0 = self.0.clone().seed(seed);
                 }
             }
 
@@ -317,6 +315,19 @@ macro_rules! declare_sgp_surrogate {
             }
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
+            impl GpSurrogateExt for [<Sgp $corr Surrogate>] {
+                fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_derivatives(x))
+                }
+                fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_var_derivatives(x))
+                }
+                fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
+                    Ok(self.0.sample(x, n_traj))
+                }
+            }
+
+            #[cfg_attr(feature = "serializable", typetag::serde)]
             impl GpParameterized for [<Sgp $corr Surrogate>] {
                 fn theta(&self) -> &Array1<f64> {
                     self.0.theta()
@@ -334,6 +345,9 @@ macro_rules! declare_sgp_surrogate {
                     self.0.likelihood()
                 }
             }
+
+            #[cfg_attr(feature = "serializable", typetag::serde)]
+            impl FullGpSurrogate for [<Sgp $corr Surrogate>] {}
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
             impl SgpSurrogate for [<Sgp $corr Surrogate>] {}

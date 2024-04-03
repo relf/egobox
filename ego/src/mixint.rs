@@ -6,8 +6,8 @@ use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
 use egobox_moe::{
-    Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixParams, GpMixture, GpSurrogate,
-    GpSurrogateExt, MixtureGpSurrogate, RegressionSpec,
+    Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
+    GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -282,14 +282,14 @@ impl<F: Float, S: egobox_doe::SamplingMethod<F>> egobox_doe::SamplingMethod<F>
 }
 
 /// Moe type builder for mixed-integer Egor optimizer
-pub type MoeBuilder = GpMixParams<f64, Xoshiro256Plus>;
+pub type MoeBuilder = GpMixtureParams<f64, Xoshiro256Plus>;
 /// A decorator of Moe surrogate builder that takes into account XType specifications
 ///
 /// It allows to implement continuous relaxation over continuous Moe builder.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MixintMoeValidParams {
     /// The surrogate factory
-    surrogate_builder: GpMixParams<f64, Xoshiro256Plus>,
+    surrogate_builder: GpMixtureParams<f64, Xoshiro256Plus>,
     /// The input specifications
     xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)
@@ -389,7 +389,7 @@ impl MixintMoeValidParams {
 
 impl SurrogateBuilder for MixintGpMixParams {
     fn new_with_xtypes(xtypes: &[XType]) -> Self {
-        MixintGpMixParams::new(xtypes, &GpMixParams::new())
+        MixintGpMixParams::new(xtypes, &GpMixtureParams::new())
     }
 
     /// Sets the allowed regression models used in gaussian processes.
@@ -844,13 +844,13 @@ mod tests {
             .expect("Predict var fail");
         println!("{ytest:?}");
         assert_abs_diff_eq!(
-            array![[0.], [0.8297580023632912], [1.5], [0.9], [1.]],
+            array![[0.], [0.7872696212255119], [1.5], [0.9], [1.]],
             ytest,
             epsilon = 1e-3
         );
         println!("{yvar:?}");
         assert_abs_diff_eq!(
-            array![[0.], [0.35302771336218247], [0.], [0.], [0.]],
+            array![[0.], [0.2852695228568877], [0.], [0.], [0.]],
             yvar,
             epsilon = 1e-3
         );

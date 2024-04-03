@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::gp_parameters::GpMixParams;
+use crate::parameters::GpMixtureParams;
 use crate::types::*;
 use log::{debug, info};
 
@@ -121,7 +121,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
             if let Some(gmm) = maybe_gmm {
                 // Cross Validation
                 for (train, valid) in dataset.fold(5).into_iter() {
-                    if let Ok(mixture) = GpMixParams::default()
+                    if let Ok(mixture) = GpMixtureParams::default()
                         .n_clusters(n_clusters)
                         .regression_spec(regression_spec)
                         .correlation_spec(correlation_spec)
@@ -345,7 +345,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gp_algorithm::GpMixture;
+    use crate::algorithm::GpMixture;
     use approx::assert_abs_diff_eq;
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
     #[cfg(not(feature = "blas"))]

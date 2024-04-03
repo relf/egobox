@@ -41,7 +41,9 @@ rayon = "1"
 
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
-typetag = { version = "0.1", optional = true }
+typetag = { version = "0.2", optional = true }
+
+finitediff = { version = "0.1", features = ["ndarray"] }
 
 [dev-dependencies]
 criterion = "0.4.0"

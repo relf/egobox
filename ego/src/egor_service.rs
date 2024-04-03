@@ -44,7 +44,7 @@ use crate::egor_solver::*;
 use crate::mixint::*;
 use crate::types::*;
 
-use egobox_moe::GpMixParams;
+use egobox_moe::GpMixtureParams;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
@@ -80,7 +80,7 @@ impl EgorServiceBuilder {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> EgorService<GpMixParams<f64, Xoshiro256Plus>> {
+    ) -> EgorService<GpMixtureParams<f64, Xoshiro256Plus>> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {

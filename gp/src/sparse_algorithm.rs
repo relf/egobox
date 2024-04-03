@@ -4,7 +4,8 @@ use crate::sparse_parameters::{
     Inducings, ParamEstimation, SgpParams, SgpValidParams, SparseMethod,
 };
 use crate::{correlation_models::*, utils::pairwise_differences};
-use crate::{prepare_multistart, CobylaParams};
+use crate::{prepare_multistart, sample, CobylaParams, GpSamplingMethod};
+use finitediff::FiniteDiff;
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
@@ -295,6 +296,65 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
     /// Inducing points
     pub fn inducings(&self) -> &Array2<F> {
         &self.inducings
+    }
+
+    pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.ncols()));
+        let f = |x: &Array1<f64>| -> f64 {
+            let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
+            let v = self.predict(&x).unwrap()[[0, 0]];
+            unsafe { *(&v as *const F as *const f64) }
+        };
+        Zip::from(drv.rows_mut())
+            .and(x.rows())
+            .for_each(|mut row, xi| {
+                let xi = xi.mapv(|v| unsafe { *(&v as *const F as *const f64) });
+                let grad = xi.central_diff(&f).mapv(|v| F::cast(v));
+                row.assign(&grad);
+            });
+        drv
+    }
+    pub fn predict_var_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+        let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.ncols()));
+        let f = |x: &Array1<f64>| -> f64 {
+            let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
+            let v = self.predict_var(&x).unwrap()[[0, 0]];
+            unsafe { *(&v as *const F as *const f64) }
+        };
+        Zip::from(drv.rows_mut())
+            .and(x.rows())
+            .for_each(|mut row, xi| {
+                let xi = xi.mapv(|v| unsafe { *(&v as *const F as *const f64) });
+                let grad = xi.central_diff(&f).mapv(|v| F::cast(v));
+                row.assign(&grad);
+            });
+        drv
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using cholesky decomposition
+    pub fn sample_chol(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self._sample(x, n_traj, GpSamplingMethod::Cholesky)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using eigenvalues decomposition
+    pub fn sample_eig(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self._sample(x, n_traj, GpSamplingMethod::EigenValues)
+    }
+
+    /// Sample the gaussian process for `n_traj` trajectories using eigenvalues decomposition (alias of `sample_eig`)
+    pub fn sample(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>, n_traj: usize) -> Array2<F> {
+        self.sample_eig(x, n_traj)
+    }
+
+    fn _sample(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        n_traj: usize,
+        method: GpSamplingMethod,
+    ) -> Array2<F> {
+        let mean = self.predict(x).unwrap();
+        let cov = self.compute_k(x, x, &self.w_star, &self.theta, self.sigma2);
+        sample(x, mean, cov, n_traj, method)
     }
 }
 

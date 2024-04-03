@@ -8,7 +8,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
-use egobox_gp::{ParamTuning, ThetaTuning};
+use egobox_gp::{Inducings, ParamTuning, SparseMethod, ThetaTuning};
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -18,10 +18,24 @@ use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+pub enum GpType<F: Float> {
+    FullGp,
+    SparseGp {
+        /// Used sparse method
+        sparse_method: SparseMethod,
+        /// Inducings
+        inducings: Inducings<F>,
+    },
+}
+
 /// Mixture of experts checked parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct GpMixValidParams<F: Float, R: Rng + Clone> {
+pub struct GpMixtureValidParams<F: Float, R: Rng + Clone> {
+    /// Gp Type
+    gp_type: GpType<F>,
     /// Number of clusters (i.e. number of experts)
     n_clusters: usize,
     /// [Recombination] mode
@@ -45,13 +59,14 @@ pub struct GpMixValidParams<F: Float, R: Rng + Clone> {
     rng: R,
 }
 
-impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixValidParams<F, R> {
-    fn default() -> GpMixValidParams<F, R> {
-        GpMixValidParams {
+impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixtureValidParams<F, R> {
+    fn default() -> GpMixtureValidParams<F, R> {
+        GpMixtureValidParams {
+            gp_type: GpType::FullGp,
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
-            regression_spec: RegressionSpec::ALL,
-            correlation_spec: CorrelationSpec::ALL,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             theta_tuning: ThetaTuning::default(),
             kpls_dim: None,
             n_start: 10,
@@ -62,7 +77,12 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixValidParams<F, R> 
     }
 }
 
-impl<F: Float, R: Rng + Clone> GpMixValidParams<F, R> {
+impl<F: Float, R: Rng + Clone> GpMixtureValidParams<F, R> {
+    /// The optional number of PLS components
+    pub fn gp_type(&self) -> &GpType<F> {
+        &self.gp_type
+    }
+
     /// The number of clusters, hence the number of experts of the mixture.
     pub fn n_clusters(&self) -> usize {
         self.n_clusters
@@ -83,14 +103,14 @@ impl<F: Float, R: Rng + Clone> GpMixValidParams<F, R> {
         self.correlation_spec
     }
 
-    /// The optional number of PLS components
-    pub fn kpls_dim(&self) -> Option<usize> {
-        self.kpls_dim
-    }
-
     /// The speified tuning of theta hyperparameter
     pub fn theta_tuning(&self) -> &ThetaTuning<F> {
         &self.theta_tuning
+    }
+
+    /// The optional number of PLS components
+    pub fn kpls_dim(&self) -> Option<usize> {
+        self.kpls_dim
     }
 
     /// The number of hypermarameters optimization restarts
@@ -118,39 +138,33 @@ impl<F: Float, R: Rng + Clone> GpMixValidParams<F, R> {
 /// Mixture of experts parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct GpMixParams<F: Float, R: Rng + Clone>(GpMixValidParams<F, R>);
+pub struct GpMixtureParams<F: Float, R: Rng + Clone>(GpMixtureValidParams<F, R>);
 
-impl<F: Float> Default for GpMixParams<F, Xoshiro256Plus> {
-    fn default() -> GpMixParams<F, Xoshiro256Plus> {
-        GpMixParams(GpMixValidParams::default())
+impl<F: Float> Default for GpMixtureParams<F, Xoshiro256Plus> {
+    fn default() -> GpMixtureParams<F, Xoshiro256Plus> {
+        GpMixtureParams(GpMixtureValidParams::default())
     }
 }
 
-impl<F: Float> GpMixParams<F, Xoshiro256Plus> {
-    /// Constructor of Moe parameters with `n_clusters`.
-    ///
-    /// Default values are provided as follows:
-    ///
-    /// * recombination: `Smooth`
-    /// * regression_spec: `ALL`
-    /// * correlation_spec: `ALL`
-    /// * kpls_dim: `None`
+impl<F: Float> GpMixtureParams<F, Xoshiro256Plus> {
+    /// Constructor of GP parameters.
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> GpMixParams<F, Xoshiro256Plus> {
-        Self::new_with_rng(Xoshiro256Plus::from_entropy())
+    pub fn new() -> GpMixtureParams<F, Xoshiro256Plus> {
+        Self::new_with_rng(GpType::FullGp, Xoshiro256Plus::from_entropy())
     }
 }
 
-impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
-    /// Constructor of Moe parameters specifying randon number generator for reproducibility
+impl<F: Float, R: Rng + SeedableRng + Clone> GpMixtureParams<F, R> {
+    /// Constructor of Sgp parameters specifying randon number generator for reproducibility
     ///
-    /// See [GpMixParams::new] for default parameters.
-    pub fn new_with_rng(rng: R) -> GpMixParams<F, R> {
-        Self(GpMixValidParams {
+    /// See [`new`](SparseGpMixtureParams::new) for default parameters.
+    pub fn new_with_rng(gp_type: GpType<F>, rng: R) -> GpMixtureParams<F, R> {
+        Self(GpMixtureValidParams {
+            gp_type,
             n_clusters: 1,
             recombination: Recombination::Smooth(Some(F::one())),
-            regression_spec: RegressionSpec::ALL,
-            correlation_spec: CorrelationSpec::ALL,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             theta_tuning: ThetaTuning::default(),
             kpls_dim: None,
             n_start: 10,
@@ -158,6 +172,12 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
             gmx: None,
             rng,
         })
+    }
+
+    /// Sets the number of clusters
+    pub fn gp_type(mut self, gp_type: GpType<F>) -> Self {
+        self.0.gp_type = gp_type;
+        self
     }
 
     /// Sets the number of clusters
@@ -203,6 +223,12 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
         self
     }
 
+    /// Sets the number of componenets retained during PLS dimension reduction.
+    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
+        self.0.kpls_dim = kpls_dim;
+        self
+    }
+
     /// Set theta hyper parameter search space.
     pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
         self.0.theta_tuning = ParamTuning {
@@ -220,14 +246,6 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
         self
     }
 
-    /// Sets the number of PLS components in [1, nx]  where nx is the x dimension
-    ///
-    /// None means no PLS dimension reduction applied.
-    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
-        self.0.kpls_dim = kpls_dim;
-        self
-    }
-
     /// Sets the number of hyperparameters optimization restarts
     pub fn n_start(mut self, n_start: usize) -> Self {
         self.0.n_start = n_start;
@@ -236,7 +254,7 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
 
     #[doc(hidden)]
     /// Sets the gaussian mixture (used to find the optimal number of clusters)
-    pub(crate) fn gmm(mut self, gmm: GaussianMixtureModel<F>) -> Self {
+    pub fn gmm(mut self, gmm: GaussianMixtureModel<F>) -> Self {
         self.0.gmm = Some(gmm);
         self
     }
@@ -251,14 +269,15 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
     }
 
     /// Sets the random number generator for reproducibility
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> GpMixParams<F, R2> {
-        GpMixParams(GpMixValidParams {
+    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> GpMixtureParams<F, R2> {
+        GpMixtureParams(GpMixtureValidParams {
+            gp_type: self.0.gp_type().clone(),
             n_clusters: self.0.n_clusters(),
             recombination: self.0.recombination(),
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
-            kpls_dim: self.0.kpls_dim(),
             theta_tuning: self.0.theta_tuning().clone(),
+            kpls_dim: None,
             n_start: self.0.n_start(),
             gmm: self.0.gmm().cloned(),
             gmx: self.0.gmx().cloned(),
@@ -267,8 +286,8 @@ impl<F: Float, R: Rng + Clone> GpMixParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> ParamGuard for GpMixParams<F, R> {
-    type Checked = GpMixValidParams<F, R>;
+impl<F: Float, R: Rng + Clone> ParamGuard for GpMixtureParams<F, R> {
+    type Checked = GpMixtureValidParams<F, R>;
     type Error = MoeError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {
@@ -288,8 +307,8 @@ impl<F: Float, R: Rng + Clone> ParamGuard for GpMixParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> From<GpMixValidParams<F, R>> for GpMixParams<F, R> {
-    fn from(item: GpMixValidParams<F, R>) -> Self {
-        GpMixParams(item)
+impl<F: Float, R: Rng + Clone> From<GpMixtureValidParams<F, R>> for GpMixtureParams<F, R> {
+    fn from(item: GpMixtureValidParams<F, R>) -> Self {
+        GpMixtureParams(item)
     }
 }

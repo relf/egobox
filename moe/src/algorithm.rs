@@ -2,12 +2,12 @@ use super::gaussian_mixture::GaussianMixture;
 use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
-use crate::expertise_macros::*;
-use crate::gp_parameters::{GpMixParams, GpMixValidParams};
+use crate::parameters::{GpMixtureParams, GpMixtureValidParams};
 use crate::surrogates::*;
 use crate::types::*;
+use crate::{expertise_macros::*, GpType};
 
-use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
+use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess, SparseGaussianProcess};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict, PredictInplace};
 use linfa::{Dataset, DatasetBase, Float, ParamGuard};
@@ -47,7 +47,7 @@ macro_rules! check_allowed {
 }
 
 impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
-    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for GpMixValidParams<f64, R>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for GpMixtureValidParams<f64, R>
 {
     type Object = GpMixture;
 
@@ -68,7 +68,7 @@ impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
     }
 }
 
-impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
+impl<R: Rng + SeedableRng + Clone> GpMixtureValidParams<f64, R> {
     pub fn train(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -173,7 +173,8 @@ impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
             let ytest = test.slice(s![.., nx..]).to_owned();
             let factor = self.optimize_heaviside_factor(&experts, gmx, &xtest, &ytest);
             info!("Retrain mixture with optimized heaviside factor={}", factor);
-            let moe = GpMixParams::from(self.clone())
+
+            let moe = GpMixtureParams::from(self.clone())
                 .n_clusters(gmx.n_clusters())
                 .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
@@ -182,6 +183,7 @@ impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
             Ok(moe)
         } else {
             Ok(GpMixture {
+                gp_type: self.gp_type().clone(),
                 recombination: recomb,
                 experts,
                 gmx: gmx.clone(),
@@ -239,39 +241,80 @@ impl<R: Rng + SeedableRng + Clone> GpMixValidParams<f64, R> {
             (map_error[argmin].0.clone(), Some(map_error[argmin].1))
         };
         debug!("after Find best expert");
-        let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
-            match best.0.as_str() {
-                "Constant_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Constant, SquaredExponential))
-                }
-                "Constant_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Constant, AbsoluteExponential))
-                }
-                "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
-                "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
-                "Linear_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Linear, SquaredExponential))
-                }
-                "Linear_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Linear, AbsoluteExponential))
-                }
-                "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
-                "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
-                "Quadratic_SquaredExponential" => {
-                    Ok(make_surrogate_params!(Quadratic, SquaredExponential))
-                }
-                "Quadratic_AbsoluteExponential" => {
-                    Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
-                }
-                "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
-                "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
-                _ => return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0))),
-            };
-        let mut expert_params = best_expert_params?;
-        expert_params.theta_tuning(self.theta_tuning().clone());
-        expert_params.kpls_dim(self.kpls_dim());
-        expert_params.n_start(self.n_start());
-        let expert = expert_params.train(&xtrain.view(), &ytrain.view());
+
+        let expert = match self.gp_type() {
+            GpType::FullGp { .. } => {
+                let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
+                    match best.0.as_str() {
+                        "Constant_SquaredExponential" => {
+                            Ok(make_surrogate_params!(Constant, SquaredExponential))
+                        }
+                        "Constant_AbsoluteExponential" => {
+                            Ok(make_surrogate_params!(Constant, AbsoluteExponential))
+                        }
+                        "Constant_Matern32" => Ok(make_surrogate_params!(Constant, Matern32)),
+                        "Constant_Matern52" => Ok(make_surrogate_params!(Constant, Matern52)),
+                        "Linear_SquaredExponential" => {
+                            Ok(make_surrogate_params!(Linear, SquaredExponential))
+                        }
+                        "Linear_AbsoluteExponential" => {
+                            Ok(make_surrogate_params!(Linear, AbsoluteExponential))
+                        }
+                        "Linear_Matern32" => Ok(make_surrogate_params!(Linear, Matern32)),
+                        "Linear_Matern52" => Ok(make_surrogate_params!(Linear, Matern52)),
+                        "Quadratic_SquaredExponential" => {
+                            Ok(make_surrogate_params!(Quadratic, SquaredExponential))
+                        }
+                        "Quadratic_AbsoluteExponential" => {
+                            Ok(make_surrogate_params!(Quadratic, AbsoluteExponential))
+                        }
+                        "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
+                        "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
+                        _ => {
+                            return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0)))
+                        }
+                    };
+                let mut expert_params = best_expert_params?;
+                expert_params.n_start(self.n_start());
+                expert_params.kpls_dim(self.kpls_dim());
+                expert_params.theta_tuning(self.theta_tuning().clone());
+                debug!("Train best expert...");
+                expert_params.train(&xtrain.view(), &ytrain.view())
+            }
+            GpType::SparseGp {
+                inducings,
+                sparse_method,
+                ..
+            } => {
+                let inducings = inducings.to_owned();
+                let best_expert_params: std::result::Result<Box<dyn SgpSurrogateParams>, MoeError> =
+                    match best.0.as_str() {
+                        "Constant_SquaredExponential" => {
+                            Ok(make_sgp_surrogate_params!(SquaredExponential, inducings))
+                        }
+                        "Constant_AbsoluteExponential" => {
+                            Ok(make_sgp_surrogate_params!(AbsoluteExponential, inducings))
+                        }
+                        "Constant_Matern32" => Ok(make_sgp_surrogate_params!(Matern32, inducings)),
+                        "Constant_Matern52" => Ok(make_sgp_surrogate_params!(Matern52, inducings)),
+                        _ => {
+                            return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0)))
+                        }
+                    };
+                let mut expert_params = best_expert_params?;
+                let seed = self.rng().gen();
+                debug!("Theta tuning = {:?}", self.theta_tuning());
+                expert_params.sparse_method(*sparse_method);
+                expert_params.seed(seed);
+                expert_params.n_start(self.n_start());
+                expert_params.kpls_dim(self.kpls_dim());
+                expert_params.theta_tuning(self.theta_tuning().clone());
+                debug!("Train best expert...");
+                expert_params.train(&xtrain.view(), &ytrain.view())
+            }
+        };
+
+        debug!("...after best expert training");
         if let Some(v) = best.1 {
             info!("Best expert {} accuracy={}", best.0, v);
         }
@@ -366,6 +409,8 @@ pub struct GpMixture {
     gmx: GaussianMixture<f64>,
     /// The dimension of the predicted output
     output_dim: usize,
+    /// Gp type
+    gp_type: GpType<f64>,
 }
 
 impl std::fmt::Display for GpMixture {
@@ -469,8 +514,8 @@ impl MixtureGpSurrogate for GpMixture {
 
 impl GpMixture {
     /// Constructor of mixture of experts parameters
-    pub fn params() -> GpMixParams<f64, Xoshiro256Plus> {
-        GpMixParams::new()
+    pub fn params() -> GpMixtureParams<f64, Xoshiro256Plus> {
+        GpMixtureParams::new()
     }
 
     /// Recombination mode
@@ -758,21 +803,20 @@ impl GpMixture {
         <GpMixture as GpSurrogateExt>::predict_var_derivatives(self, &x.view())
     }
 
-    #[cfg(feature = "persistent")]
-    /// Load Moe from given json file.
-    pub fn load(path: &str) -> Result<Box<GpMixture>> {
-        let data = fs::read_to_string(path)?;
-        let moe: GpMixture = serde_json::from_str(&data).unwrap();
-        Ok(Box::new(moe))
-    }
-
-    #[cfg(not(feature = "blas"))]
     pub fn sample(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         n_traj: usize,
     ) -> Result<Array2<f64>> {
         <GpMixture as GpSurrogateExt>::sample(self, &x.view(), n_traj)
+    }
+
+    #[cfg(feature = "persistent")]
+    /// Load Moe from given json file.
+    pub fn load(path: &str) -> Result<Box<GpMixture>> {
+        let data = fs::read_to_string(path)?;
+        let moe: GpMixture = serde_json::from_str(&data).unwrap();
+        Ok(Box::new(moe))
     }
 }
 
