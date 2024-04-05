@@ -566,24 +566,24 @@ impl GpSurrogate for MixintMoe {
 
 #[typetag::serde]
 impl GpSurrogateExt for MixintMoe {
-    fn predict_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+    fn predict_gradients(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
             x.to_owned()
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        self.moe.predict_derivatives(&xcast)
+        self.moe.predict_gradients(&xcast)
     }
 
-    fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+    fn predict_var_gradients(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
             x.to_owned()
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        self.moe.predict_var_derivatives(&xcast)
+        self.moe.predict_var_gradients(&xcast)
     }
 
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> egobox_moe::Result<Array2<f64>> {

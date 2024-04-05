@@ -34,10 +34,10 @@ class TestGpMix(unittest.TestCase):
             0.0, gpx.predict_var(np.array([[1.1]])).item(), delta=1e-3
         )
         self.assertAlmostEqual(
-            1.1204, gpx.predict_derivatives(np.array([[1.1]])).item(), delta=1e-3
+            1.1204, gpx.predict_gradients(np.array([[1.1]])).item(), delta=1e-3
         )
         self.assertAlmostEqual(
-            0.0092, gpx.predict_var_derivatives(np.array([[1.1]])).item(), delta=1e-3
+            0.0092, gpx.predict_var_gradients(np.array([[1.1]])).item(), delta=1e-3
         )
 
     def test_gpx_save_load(self):

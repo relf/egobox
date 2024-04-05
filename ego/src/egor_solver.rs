@@ -760,7 +760,7 @@ where
                     if let Some(grad) = gradient {
                         if self.is_grad_impl_available() {
                             let grd = cstr_models[i]
-                                .predict_derivatives(
+                                .predict_gradients(
                                     &Array::from_shape_vec((1, x.len()), x.to_vec())
                                         .unwrap()
                                         .view(),
