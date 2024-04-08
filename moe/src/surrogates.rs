@@ -60,10 +60,10 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
 pub trait GpSurrogateExt {
     /// Predict derivatives at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
-    fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    fn predict_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Predict derivatives of the variance at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
-    fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    fn predict_var_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Sample trajectories
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>>;
 }
@@ -166,11 +166,11 @@ macro_rules! declare_surrogate {
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
             impl GpSurrogateExt for [<Gp $regr $corr Surrogate>] {
-                fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_derivatives(x))
+                fn predict_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_gradients(x))
                 }
-                fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_var_derivatives(x))
+                fn predict_var_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_var_gradients(x))
                 }
                 fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
                     Ok(self.0.sample(x, n_traj))
@@ -316,11 +316,11 @@ macro_rules! declare_sgp_surrogate {
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
             impl GpSurrogateExt for [<Sgp $corr Surrogate>] {
-                fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_derivatives(x))
+                fn predict_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_gradients(x))
                 }
-                fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict_var_derivatives(x))
+                fn predict_var_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                    Ok(self.0.predict_var_gradients(x))
                 }
                 fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
                     Ok(self.0.sample(x, n_traj))

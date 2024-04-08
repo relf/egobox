@@ -480,17 +480,17 @@ impl GpSurrogate for GpMixture {
 
 #[cfg_attr(feature = "serializable", typetag::serde)]
 impl GpSurrogateExt for GpMixture {
-    fn predict_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_derivatives_hard(x),
-            Recombination::Smooth(_) => self.predict_derivatives_smooth(x),
+            Recombination::Hard => self.predict_gradients_hard(x),
+            Recombination::Smooth(_) => self.predict_gradients_smooth(x),
         }
     }
 
-    fn predict_var_derivatives(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_var_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
-            Recombination::Hard => self.predict_var_derivatives_hard(x),
-            Recombination::Smooth(_) => self.predict_var_derivatives_smooth(x),
+            Recombination::Hard => self.predict_var_gradients_hard(x),
+            Recombination::Smooth(_) => self.predict_var_gradients_smooth(x),
         }
     }
 
@@ -585,7 +585,7 @@ impl GpMixture {
     /// Return derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
     /// of the output wrt the nx components of `x` valued at the ith x point.
     /// The smooth recombination of each cluster expert responsability is used to get the result.
-    pub fn predict_derivatives_smooth(
+    pub fn predict_gradients_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
@@ -607,7 +607,7 @@ impl GpMixture {
                 let drvs: Vec<Array1<f64>> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_derivatives(&x).unwrap().row(0).to_owned())
+                    .map(|gp| gp.predict_gradients(&x).unwrap().row(0).to_owned())
                     .collect();
 
                 let preds = preds.insert_axis(Axis(1));
@@ -633,7 +633,7 @@ impl GpMixture {
     /// Return derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
     /// of the vairance wrt the nx components of `x` valued at the ith x point.
     /// The smooth recombination of each cluster expert responsability is used to get the result.
-    pub fn predict_var_derivatives_smooth(
+    pub fn predict_var_gradients_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
@@ -656,7 +656,7 @@ impl GpMixture {
                 let drvs: Vec<Array1<f64>> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_var_derivatives(&xii).unwrap().row(0).to_owned())
+                    .map(|gp| gp.predict_var_gradients(&xii).unwrap().row(0).to_owned())
                     .collect();
 
                 let preds = preds.insert_axis(Axis(1));
@@ -731,7 +731,7 @@ impl GpMixture {
     /// The expert of the cluster is used to predict variance value.
     /// Returns derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
     /// of the output wrt the nx components of `x` valued at the ith x point.
-    pub fn predict_derivatives_hard(
+    pub fn predict_gradients_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
@@ -743,7 +743,7 @@ impl GpMixture {
             .for_each(|mut drv_i, xi, &c| {
                 let x = xi.to_owned().insert_axis(Axis(0));
                 let x_drv: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> =
-                    self.experts[c].predict_derivatives(&x.view()).unwrap();
+                    self.experts[c].predict_gradients(&x.view()).unwrap();
                 drv_i.assign(&x_drv.column(0))
             });
         Ok(drv)
@@ -754,7 +754,7 @@ impl GpMixture {
     /// The expert of the cluster is used to predict variance value.
     /// Returns derivatives as a (n, nx) matrix where the ith row contain the partial derivatives of
     /// of the output wrt the nx components of `x` valued at the ith x point.
-    pub fn predict_var_derivatives_hard(
+    pub fn predict_var_gradients_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
@@ -766,7 +766,7 @@ impl GpMixture {
             .for_each(|mut vardrv_i, xi, &c| {
                 let x = xi.to_owned().insert_axis(Axis(0));
                 let x_vardrv: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> =
-                    self.experts[c].predict_var_derivatives(&x.view()).unwrap();
+                    self.experts[c].predict_var_gradients(&x.view()).unwrap();
                 vardrv_i.assign(&x_vardrv.row(0))
             });
         Ok(vardrv)
@@ -789,18 +789,18 @@ impl GpMixture {
         <GpMixture as GpSurrogate>::predict_var(self, &x.view())
     }
 
-    pub fn predict_derivatives(
+    pub fn predict_gradients(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <GpMixture as GpSurrogateExt>::predict_derivatives(self, &x.view())
+        <GpMixture as GpSurrogateExt>::predict_gradients(self, &x.view())
     }
 
-    pub fn predict_var_derivatives(
+    pub fn predict_var_gradients(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
-        <GpMixture as GpSurrogateExt>::predict_var_derivatives(self, &x.view())
+        <GpMixture as GpSurrogateExt>::predict_var_gradients(self, &x.view())
     }
 
     pub fn sample(
@@ -928,7 +928,7 @@ mod tests {
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 30).insert_axis(Axis(1));
         let preds = moe.predict(&x).expect("MOE prediction");
-        let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
+        let dpreds = moe.predict_gradients(&x).expect("MOE drv prediction");
         println!("dpred = {dpreds}");
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
@@ -1104,7 +1104,7 @@ mod tests {
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 50).insert_axis(Axis(1));
         let preds = moe.predict(&x).expect("MOE prediction");
-        let dpreds = moe.predict_derivatives(&x).expect("MOE drv prediction");
+        let dpreds = moe.predict_gradients(&x).expect("MOE drv prediction");
 
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
@@ -1123,7 +1123,7 @@ mod tests {
             let preds = moe.predict(&x).unwrap();
             let fdiff = (preds[[1, 0]] - preds[[2, 0]]) / (2. * h);
 
-            let drv = moe.predict_derivatives(&xtest).unwrap();
+            let drv = moe.predict_gradients(&xtest).unwrap();
             let df = df_test_1d(&xtest);
 
             let err = if drv[[0, 0]] < 0.2 {
@@ -1186,7 +1186,7 @@ mod tests {
                 [xa, xb - e]
             ];
             let y_pred = moe.predict(&x).unwrap();
-            let y_deriv = moe.predict_derivatives(&x).unwrap();
+            let y_deriv = moe.predict_gradients(&x).unwrap();
 
             let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
             let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
@@ -1195,7 +1195,7 @@ mod tests {
             assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
 
             let y_pred = moe.predict_var(&x).unwrap();
-            let y_deriv = moe.predict_var_derivatives(&x).unwrap();
+            let y_deriv = moe.predict_var_gradients(&x).unwrap();
 
             let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
             let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);

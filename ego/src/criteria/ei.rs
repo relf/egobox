@@ -57,9 +57,9 @@ impl InfillCriterion for ExpectedImprovement {
                     let pred = p[[0, 0]];
                     let diff_y = f_min - pred;
                     let arg = (f_min - pred) / sigma;
-                    let y_prime = obj_model.predict_derivatives(&pt).unwrap();
+                    let y_prime = obj_model.predict_gradients(&pt).unwrap();
                     let y_prime = y_prime.row(0);
-                    let sig_2_prime = obj_model.predict_var_derivatives(&pt).unwrap();
+                    let sig_2_prime = obj_model.predict_var_gradients(&pt).unwrap();
 
                     let sig_2_prime = sig_2_prime.row(0);
                     let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));

@@ -298,7 +298,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         &self.inducings
     }
 
-    pub fn predict_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+    pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.ncols()));
         let f = |x: &Array1<f64>| -> f64 {
             let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
@@ -314,7 +314,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
             });
         drv
     }
-    pub fn predict_var_derivatives(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
+    pub fn predict_var_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.ncols()));
         let f = |x: &Array1<f64>| -> f64 {
             let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));

@@ -38,7 +38,7 @@ impl InfillCriterion for WB2Criterion {
         let scale = scale.unwrap_or(1.0);
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         let grad_ei = EI.grad(x, obj_model, f_min, None) * scale;
-        grad_ei - obj_model.predict_derivatives(&pt).unwrap().row(0)
+        grad_ei - obj_model.predict_gradients(&pt).unwrap().row(0)
     }
 
     fn scaling(
@@ -153,7 +153,7 @@ mod tests {
         println!(
             "GP predict derivatives({}) = {}",
             xtest,
-            bgp.predict_derivatives(&basetest.view()).unwrap()
+            bgp.predict_gradients(&basetest.view()).unwrap()
         );
 
         let h = 1e-4;
@@ -180,7 +180,7 @@ mod tests {
         println!(
             "GP predict variances derivatives({}) = {}",
             xtest,
-            bgp.predict_var_derivatives(&basetest.view()).unwrap()
+            bgp.predict_var_gradients(&basetest.view()).unwrap()
         );
     }
 }
