@@ -41,10 +41,10 @@ Depending on the sub-packages you want to use, you have to add following declara
 
 ```text
 [dependencies]
-egobox-doe = { version = "0.17" }
-egobox-gp  = { version = "0.17" }
-egobox-moe = { version = "0.17" }
-egobox-ego = { version = "0.17" }
+egobox-doe = { version = "0.18" }
+egobox-gp  = { version = "0.18" }
+egobox-moe = { version = "0.18" }
+egobox-ego = { version = "0.18" }
 ```
 
 ### Features
@@ -54,7 +54,7 @@ The table below presents the various features available depending on the subcrat
 | Name         | doe  | gp   | moe  | ego  |
 | :----------- | :--- | :--- | :--- | :--- |
 | serializable | ✔️    | ✔️    | ✔️    |      |
-| persistent   |      |      | ✔️    |  ✔️(*)  |
+| persistent   |      |      | ✔️    | ✔️(*) |
 | blas         |      | ✔️    | ✔️    | ✔️    |
 | nlopt        |      | ✔️    |      | ✔️    |
 
@@ -108,7 +108,7 @@ Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you coul
 
 ```text
 [dependencies]
-egobox-gp = { version = "0.17", features = ["blas", "linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.18", features = ["blas", "linfa/intel-mkl-static"] }
 ```
 
 or you could run the `gp` example as follows:
