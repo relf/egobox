@@ -229,9 +229,21 @@ impl<F: Float> GaussianMixture<F> {
     ) -> (Array1<F>, Array2<F>) {
         let weighted_log_prob = self.compute_log_gaussian_prob(x) + self.weights().mapv(|v| v.ln());
         let log_prob_norm = weighted_log_prob
-            .mapv(|v| v.exp())
+            .mapv(|v| {
+                if v <= F::cast(f64::MIN_10_EXP) {
+                    F::zero()
+                } else {
+                    v.exp()
+                }
+            })
             .sum_axis(Axis(1))
-            .mapv(|v| v.ln());
+            .mapv(|v| {
+                if v.abs() < F::epsilon() {
+                    F::zero()
+                } else {
+                    v.ln()
+                }
+            });
         let log_resp = weighted_log_prob - log_prob_norm.to_owned().insert_axis(Axis(1));
         (log_prob_norm, log_resp)
     }
