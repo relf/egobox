@@ -518,6 +518,11 @@ impl GpMixture {
         GpMixtureParams::new()
     }
 
+    /// Retrieve output dimensions from
+    pub fn gp_type(&self) -> &GpType<f64> {
+        &self.gp_type
+    }
+
     /// Recombination mode
     pub fn recombination(&self) -> Recombination<f64> {
         self.recombination
