@@ -166,7 +166,7 @@ impl<F: Float> GaussianMixture<F> {
     }
 
     /// Compute the density functions at x for the n multivariate normal distributions
-    /// Returnds the pdf values as a (n,) vaector
+    /// Returns the pdf values as a (n,) vector
     pub fn pdfs<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix1>) -> Array1<F> {
         let xx = x.to_owned().insert_axis(Axis(0));
         self.compute_log_gaussian_prob(&xx).row(0).mapv(|v| v.exp())
