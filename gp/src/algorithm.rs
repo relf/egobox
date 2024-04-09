@@ -828,13 +828,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let bounds_dim = self.theta_tuning().bounds().len();
         let bounds = if bounds_dim == 1 {
             vec![self.theta_tuning().bounds()[0]; w_star.ncols()]
-        } else if theta0_dim == w_star.ncols() {
+        } else if bounds_dim == w_star.ncols() {
             self.theta_tuning().bounds().to_vec()
         } else {
             panic!(
                 "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
                 w_star.ncols(),
-                theta0_dim
+                bounds_dim
             )
         };
 
