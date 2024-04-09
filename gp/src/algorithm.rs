@@ -1258,7 +1258,7 @@ mod tests {
     use ndarray::{arr2, array, Array, Zip};
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
-    use ndarray_npy::{read_npy, write_npy};
+    use ndarray_npy::write_npy;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
@@ -1355,52 +1355,53 @@ mod tests {
     test_gp!(Quadratic, Matern32);
     test_gp!(Quadratic, Matern52);
 
+    fn griewank(x: &Array2<f64>) -> Array2<f64> {
+        let dim = x.ncols();
+        let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
+        let mut y = Array2::zeros((x.nrows(), 1));
+        Zip::from(y.rows_mut()).and(x.rows()).for_each(|mut y, x| {
+            let s = x.mapv(|v| v * v).sum() / 4000.;
+            let p = (x.to_owned() / &d)
+                .mapv(|v| v.cos())
+                .fold(1., |acc, x| acc * x);
+            y[0] = s - p + 1.;
+        });
+        y
+    }
+
+    #[test]
+    fn test_griewank() {
+        let x = array![[1., 1., 1., 1., 1.], [2., 2., 2., 2., 2.]];
+        assert_abs_diff_eq!(
+            array![[0.72890641], [1.01387135]],
+            griewank(&x),
+            epsilon = 1e-8
+        );
+    }
+
     #[test]
     fn test_kpls_griewank() {
-        let dims = [5, 10, 20]; //, 60];
-        let nts = [100, 300, 400]; //, 800];
+        let dims = [5]; // , 10, 60];
+        let nts = [100]; // , 300, 500];
+        let lim = array![[-600., 600.]];
 
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
 
-        (0..2).for_each(|i| {
+        (0..dims.len()).for_each(|i| {
             let dim = dims[i];
             let nt = nts[i];
+            let xlimits = lim.broadcast((dim, 2)).unwrap();
 
-            let griewank = |x: &Array1<f64>| -> f64 {
-                let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
-                x.mapv(|v| v * v).sum() / 4000.
-                    - (x / &d).mapv(|v| v.cos()).fold(1., |acc, x| acc * x)
-                    + 1.0
-            };
-            let prefix = "gp";
+            let prefix = "griewank";
             let xfilename = format!("{test_dir}/{prefix}_xt_{nt}x{dim}.npy");
-            let yfilename = format!("{}/{}_yt_{}x{}.npy", test_dir, prefix, nt, 1);
+            let yfilename = format!("{test_dir}/{prefix}_yt_{nt}x1.npy");
 
-            let xt = match read_npy(&xfilename) {
-                Ok(xt) => xt,
-                Err(_) => {
-                    let lim = array![[-600., 600.]];
-                    let xlimits = lim.broadcast((dim, 2)).unwrap();
-                    let rng = Xoshiro256Plus::seed_from_u64(42);
-                    let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
-                    write_npy(&xfilename, &xt).expect("cannot save xt");
-                    xt
-                }
-            };
-
-            let yt = match read_npy(&yfilename) {
-                Ok(yt) => yt,
-                Err(_) => {
-                    let mut yv: Array1<f64> = Array1::zeros(xt.nrows());
-                    Zip::from(&mut yv).and(xt.rows()).par_for_each(|y, x| {
-                        *y = griewank(&x.to_owned());
-                    });
-                    let yt = yv.into_shape((xt.nrows(), 1)).unwrap();
-                    write_npy(&yfilename, &yt).expect("cannot save yt");
-                    yt
-                }
-            };
+            let rng = Xoshiro256Plus::seed_from_u64(42);
+            let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
+            write_npy(xfilename, &xt).expect("cannot save xt");
+            let yt = griewank(&xt);
+            write_npy(yfilename, &yt).expect("cannot save yt");
 
             let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
                 ConstantMean::default(),
@@ -1410,10 +1411,20 @@ mod tests {
             .fit(&Dataset::new(xt, yt))
             .expect("GP fit error");
 
-            let xtest = Array2::ones((1, dim));
+            let rng = Xoshiro256Plus::seed_from_u64(0);
+            let xtest = Lhs::new(&xlimits).with_rng(rng).sample(100);
+            //let xtest = Array2::ones((1, dim));
             let ytest = gp.predict(&xtest).expect("prediction error");
-            let ytrue = griewank(&xtest.row(0).to_owned());
-            assert_abs_diff_eq!(Array::from_elem((1, 1), ytrue), ytest, epsilon = 1.1);
+            let ytrue = griewank(&xtest);
+
+            let nrmse = (ytrue.to_owned() - &ytest).norm_l2() / ytrue.norm_l2();
+            println!(
+                "diff={}  ytrue={} nrsme={}",
+                (ytrue.to_owned() - &ytest).norm_l2(),
+                ytrue.norm_l2(),
+                nrmse
+            );
+            assert_abs_diff_eq!(nrmse, 0., epsilon = 1e-2);
         });
     }
 
