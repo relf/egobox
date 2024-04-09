@@ -341,6 +341,24 @@ mod tests {
         println!("probas =  {probas:?}");
     }
 
+    #[test]
+    fn test_gmx_one_cluster() {
+        let weights = array![1.0];
+        let means = array![[4., 4.]];
+        let covs = array![[[3., 0.], [0., 3.]]];
+        let gmix = GaussianMixture::new(weights, means, covs)
+            .expect("Gaussian mixture creation failed")
+            .heaviside_factor(1.0);
+        let mut obs = Array2::from_elem((11, 2), 0.);
+        Zip::from(obs.rows_mut())
+            .and(&Array::linspace(0., 4., 11))
+            .for_each(|mut o, &v| o.assign(&array![v, v]));
+        let _preds = gmix.predict(&obs);
+        assert_abs_diff_eq!(_preds, Array::from_elem((11,), 0));
+        let probas = gmix.predict_probas(&obs);
+        assert_abs_diff_eq!(probas, Array::from_elem((11, 1), 1.0));
+    }
+
     fn test_case(
         means: Array2<f64>,
         covariances: Array3<f64>,
