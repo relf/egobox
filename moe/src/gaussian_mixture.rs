@@ -107,14 +107,14 @@ impl<F: Float> GaussianMixture<F> {
 
     /// Compute the probability of each n x points given as a (n, nx) matrix to belong to a given cluster.
     pub fn predict_probas<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        let (_, log_resp) = self.compute_log_prob_resp(x);
-        log_resp.mapv(|v| v.exp())
         if self.n_clusters() == 1 {
             Array::from_elem((x.nrows(), 1), F::one())
         } else {
             let (_, log_resp) = self.compute_log_prob_resp(x);
             log_resp.mapv(|v| v.exp())
         }
+    }
+
     /// Compute the derivatives of the probability at the x point given as a (nx,) vector
     /// to belong to a given cluster among the n clusters.
     /// Returns a (n, nx) matrix where the ith row is the derivatives wrt to the nx components valued at x
