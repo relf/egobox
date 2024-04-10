@@ -1,6 +1,22 @@
 # Changes
 
-## Version 0.17.0 - unreleased
+## Version 0.18.1 - 10/04/2023
+
+* Fix GP mixture with kpls option on Griewank test function by @relf in <https://github.com/relf/egobox/pull/150>
+
+## Version 0.18.0 - 08/04/2023
+
+* [Breaking changes] `gp`, `moe`, `egobox` (Python): Rename `predict_derivatives()` as `predict_gradients()` by @relf in <https://github.com/relf/egobox/pull/148>
+
+## Version 0.17.0 - 04/04/2023
+
+* [Breaking changes] `gp` API renaming by @relf in <https://github.com/relf/egobox/pull/145>
+  * `predict_values()` is renamed `predict()`
+  * `predict_variances()` is renamed `predict_var()`
+  * `predict_variance_derivatives()` is renamed `predict_var_derivatives()`
+   Derivatives predictions (`predict_derivatives()` and `predict_var_derivatives()`) are made available in Python.
+* Refactor Mixture of Experts by @relf in <https://github.com/relf/egobox/pull/146>
+  Factorize code between full GP and sparse GP implementations
 
 ## Version 0.16.0 - 07/03/2024
 
