@@ -518,6 +518,11 @@ impl GpMixture {
         GpMixtureParams::new()
     }
 
+    /// Retrieve output dimensions from
+    pub fn gp_type(&self) -> &GpType<f64> {
+        &self.gp_type
+    }
+
     /// Recombination mode
     pub fn recombination(&self) -> Recombination<f64> {
         self.recombination
@@ -1243,5 +1248,67 @@ mod tests {
         // Values may vary depending on the platforms and linalg backends
         // assert_eq!("Mixture[Hard](Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.03871601282054056], variance=[0.276011431746834], likelihood=454.17113736397033), Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.07903503494417609], variance=[0.0077182164672893756], likelihood=436.39615700140183), Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.050821466014058826], variance=[0.32824998062969973], likelihood=193.19339252734846))", moe.to_string());
         println!("Display moe: {}", moe);
+    }
+
+    fn griewank(x: &Array2<f64>) -> Array2<f64> {
+        let dim = x.ncols();
+        let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
+        let mut y = Array2::zeros((x.nrows(), 1));
+        Zip::from(y.rows_mut()).and(x.rows()).for_each(|mut y, x| {
+            let s = x.mapv(|v| v * v).sum() / 4000.;
+            let p = (x.to_owned() / &d)
+                .mapv(|v| v.cos())
+                .fold(1., |acc, x| acc * x);
+            y[0] = s - p + 1.;
+        });
+        y
+    }
+
+    #[test]
+    fn test_kpls_griewank() {
+        let dims = [100];
+        let nts = [100];
+        let lim = array![[-600., 600.]];
+
+        let test_dir = "target/tests";
+        std::fs::create_dir_all(test_dir).ok();
+
+        (0..1).for_each(|i| {
+            let dim = dims[i];
+            let nt = nts[i];
+            let xlimits = lim.broadcast((dim, 2)).unwrap();
+
+            let prefix = "griewank";
+            let xfilename = format!("{test_dir}/{prefix}_xt_{nt}x{dim}.npy");
+            let yfilename = format!("{test_dir}/{prefix}_yt_{nt}x1.npy");
+
+            let rng = Xoshiro256Plus::seed_from_u64(42);
+            let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
+            write_npy(xfilename, &xt).expect("cannot save xt");
+            let yt = griewank(&xt);
+            write_npy(yfilename, &yt).expect("cannot save yt");
+
+            let gp = GpMixture::params()
+                .n_clusters(1)
+                .regression_spec(RegressionSpec::CONSTANT)
+                .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+                .kpls_dim(Some(3))
+                .fit(&Dataset::new(xt, yt))
+                .expect("GP fit error");
+
+            let rng = Xoshiro256Plus::seed_from_u64(0);
+            let xtest = Lhs::new(&xlimits).with_rng(rng).sample(100);
+            let ytest = gp.predict(&xtest).expect("prediction error");
+            let ytrue = griewank(&xtest);
+
+            let nrmse = (ytrue.to_owned() - &ytest).norm_l2() / ytrue.norm_l2();
+            println!(
+                "diff={}  ytrue={} nrsme={}",
+                (ytrue.to_owned() - &ytest).norm_l2(),
+                ytrue.norm_l2(),
+                nrmse
+            );
+            assert_abs_diff_eq!(nrmse, 0., epsilon = 1e-2);
+        });
     }
 }

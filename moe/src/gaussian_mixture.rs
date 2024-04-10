@@ -106,11 +106,13 @@ impl<F: Float> GaussianMixture<F> {
     }
 
     /// Compute the probability of each n x points given as a (n, nx) matrix to belong to a given cluster.
-    /// Returns the corresponding indexes of the cluster (i.e. the corresponding mvn distribution)
-    /// as a (n,) vector  
     pub fn predict_probas<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        let (_, log_resp) = self.compute_log_prob_resp(x);
-        log_resp.mapv(|v| v.exp())
+        if self.n_clusters() == 1 {
+            Array::from_elem((x.nrows(), 1), F::one())
+        } else {
+            let (_, log_resp) = self.compute_log_prob_resp(x);
+            log_resp.mapv(|v| v.exp())
+        }
     }
 
     /// Compute the derivatives of the probability at the x point given as a (nx,) vector
@@ -164,7 +166,7 @@ impl<F: Float> GaussianMixture<F> {
     }
 
     /// Compute the density functions at x for the n multivariate normal distributions
-    /// Returnds the pdf values as a (n,) vaector
+    /// Returns the pdf values as a (n,) vector
     pub fn pdfs<D: Data<Elem = F>>(&self, x: &ArrayBase<D, Ix1>) -> Array1<F> {
         let xx = x.to_owned().insert_axis(Axis(0));
         self.compute_log_gaussian_prob(&xx).row(0).mapv(|v| v.exp())
@@ -227,9 +229,21 @@ impl<F: Float> GaussianMixture<F> {
     ) -> (Array1<F>, Array2<F>) {
         let weighted_log_prob = self.compute_log_gaussian_prob(x) + self.weights().mapv(|v| v.ln());
         let log_prob_norm = weighted_log_prob
-            .mapv(|v| v.exp())
+            .mapv(|v| {
+                if v <= F::cast(f64::MIN_10_EXP) {
+                    F::zero()
+                } else {
+                    v.exp()
+                }
+            })
             .sum_axis(Axis(1))
-            .mapv(|v| v.ln());
+            .mapv(|v| {
+                if v.abs() < F::epsilon() {
+                    F::zero()
+                } else {
+                    v.ln()
+                }
+            });
         let log_resp = weighted_log_prob - log_prob_norm.to_owned().insert_axis(Axis(1));
         (log_prob_norm, log_resp)
     }
@@ -325,6 +339,24 @@ mod tests {
         println!("preds =  {_preds:?}");
         let probas = gmix.predict_probas(&obs);
         println!("probas =  {probas:?}");
+    }
+
+    #[test]
+    fn test_gmx_one_cluster() {
+        let weights = array![1.0];
+        let means = array![[4., 4.]];
+        let covs = array![[[3., 0.], [0., 3.]]];
+        let gmix = GaussianMixture::new(weights, means, covs)
+            .expect("Gaussian mixture creation failed")
+            .heaviside_factor(1.0);
+        let mut obs = Array2::from_elem((11, 2), 0.);
+        Zip::from(obs.rows_mut())
+            .and(&Array::linspace(0., 4., 11))
+            .for_each(|mut o, &v| o.assign(&array![v, v]));
+        let _preds = gmix.predict(&obs);
+        assert_abs_diff_eq!(_preds, Array::from_elem((11,), 0));
+        let probas = gmix.predict_probas(&obs);
+        assert_abs_diff_eq!(probas, Array::from_elem((11, 1), 1.0));
     }
 
     fn test_case(

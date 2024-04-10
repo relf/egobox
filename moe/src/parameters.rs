@@ -64,7 +64,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixtureValidParams<F,
         GpMixtureValidParams {
             gp_type: GpType::FullGp,
             n_clusters: 1,
-            recombination: Recombination::Smooth(Some(F::one())),
+            recombination: Recombination::Hard,
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             theta_tuning: ThetaTuning::default(),

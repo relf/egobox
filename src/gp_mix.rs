@@ -40,7 +40,7 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         CorrelationSpec.MATERN32 (4), CorrelationSpec.MATERN52 (8) or
 ///         any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
 ///
-///     recombination (Recombination.Smooth or Recombination.Hard)
+///     recombination (Recombination.Smooth or Recombination.Hard (default))
 ///         Specify how the various experts predictions are recombined
 ///         * Smooth: prediction is a combination of experts prediction wrt their responsabilities,
 ///         the heaviside factor which controls steepness of the change between experts regions is optimized
@@ -86,7 +86,7 @@ impl GpMix {
         n_clusters = 1,
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
-        recombination = Recombination::Smooth,
+        recombination = Recombination::Hard,
         theta_init = None,
         theta_bounds = None,
         kpls_dim = None,
