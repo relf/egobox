@@ -46,7 +46,7 @@ typetag = { version = "0.2", optional = true }
 finitediff = { version = "0.1", features = ["ndarray"] }
 
 [dev-dependencies]
-criterion = "0.4.0"
+criterion = "0.5"
 serde_json = "1"
 approx = "0.4"
 argmin_testfunctions = "0.1"
