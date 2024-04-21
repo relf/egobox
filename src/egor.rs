@@ -14,7 +14,7 @@ use crate::types::*;
 use egobox_ego::find_best_result_index;
 use ndarray::{concatenate, Array1, Axis};
 use numpy::ndarray::{Array2, ArrayView2};
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2, ToPyArray};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -250,7 +250,7 @@ impl Egor {
         let fun = fun.to_object(py);
         let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
             Python::with_gil(|py| {
-                let args = (x.to_owned().into_pyarray(py),);
+                let args = (x.to_owned().into_pyarray_bound(py),);
                 let res = fun.call1(py, args).unwrap();
                 let pyarray: &PyArray2<f64> = res.extract(py).unwrap();
                 pyarray.to_owned_array()
@@ -267,15 +267,15 @@ impl Egor {
                 .run()
                 .expect("Egor should optimize the objective function")
         });
-        let x_opt = res.x_opt.into_pyarray(py).to_owned();
-        let y_opt = res.y_opt.into_pyarray(py).to_owned();
-        let x_hist = res.x_hist.into_pyarray(py).to_owned();
-        let y_hist = res.y_hist.into_pyarray(py).to_owned();
+        let x_opt = res.x_opt.into_pyarray_bound(py).to_owned();
+        let y_opt = res.y_opt.into_pyarray_bound(py).to_owned();
+        let x_hist = res.x_hist.into_pyarray_bound(py).to_owned();
+        let y_hist = res.y_hist.into_pyarray_bound(py).to_owned();
         Ok(OptimResult {
-            x_opt,
-            y_opt,
-            x_hist,
-            y_hist,
+            x_opt: x_opt.into(),
+            y_opt: y_opt.into(),
+            x_hist: x_hist.into(),
+            y_hist: y_hist.into(),
         })
     }
 
@@ -308,7 +308,7 @@ impl Egor {
             .min_within_mixint_space(&xtypes);
 
         let x_suggested = py.allow_threads(|| mixintegor.suggest(&x_doe, &y_doe));
-        x_suggested.to_pyarray(py).into()
+        x_suggested.to_pyarray_bound(py).into()
     }
 
     /// This function gives the best evaluation index given the outputs
@@ -348,10 +348,10 @@ impl Egor {
         let x_doe = x_doe.as_array();
         let y_doe = y_doe.as_array();
         let idx = find_best_result_index(&y_doe, &self.cstr_tol());
-        let x_opt = x_doe.row(idx).to_pyarray(py).into();
-        let y_opt = y_doe.row(idx).to_pyarray(py).into();
-        let x_hist = x_doe.to_pyarray(py).into();
-        let y_hist = y_doe.to_pyarray(py).into();
+        let x_opt = x_doe.row(idx).to_pyarray_bound(py).into();
+        let y_opt = y_doe.row(idx).to_pyarray_bound(py).into();
+        let x_hist = x_doe.to_pyarray_bound(py).into();
+        let y_hist = y_doe.to_pyarray_bound(py).into();
         OptimResult {
             x_opt,
             y_opt,

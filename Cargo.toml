@@ -40,17 +40,17 @@ linfa = { version = "0.7", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx"] }
 ndarray-rand = "0.14"
-numpy = "0.20.0"
+numpy = "0.21.0"
 anyhow = "1"
 rayon = "1"
 
 rand_xoshiro = "0.6"
 libm = "0.2"
 finitediff = { version = "0.1.4", features = ["ndarray"] }
-env_logger = "0.10.0"
+env_logger = "0.11"
 log = "0.4"
-pyo3 = { version = "0.20.0", features = ["extension-module"] }
-pyo3-log = "0.9.0"
+pyo3 = { version = "0.21", features = ["extension-module"] }
+pyo3-log = "0.10"
 serde = "1"
 serde_json = "1"
 ctrlc = "3.4"

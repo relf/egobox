@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 
 #[doc(hidden)]
 #[pymodule]
-fn egobox(_py: Python, m: &PyModule) -> PyResult<()> {
+fn egobox(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
     let env = Env::new().filter_or("EGOBOX_LOG", "info");
