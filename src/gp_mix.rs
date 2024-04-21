@@ -269,8 +269,11 @@ impl Gpx {
     /// Returns
     ///     the output values at nsamples x points (array[nsamples, 1])
     ///
-    fn predict<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> &'py PyArray2<f64> {
-        self.0.predict(&x.as_array()).unwrap().into_pyarray(py)
+    fn predict<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> Bound<'py, PyArray2<f64>> {
+        self.0
+            .predict(&x.as_array())
+            .unwrap()
+            .into_pyarray_bound(py)
     }
 
     /// Predict variances at nsample points.
@@ -282,8 +285,15 @@ impl Gpx {
     /// Returns
     ///     the variances of the output values at nsamples input points (array[nsamples, 1])
     ///
-    fn predict_var<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> &'py PyArray2<f64> {
-        self.0.predict_var(&x.as_array()).unwrap().into_pyarray(py)
+    fn predict_var<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray2<f64>,
+    ) -> Bound<'py, PyArray2<f64>> {
+        self.0
+            .predict_var(&x.as_array())
+            .unwrap()
+            .into_pyarray_bound(py)
     }
 
     /// Predict surrogate output derivatives at nsamples points.
@@ -300,11 +310,11 @@ impl Gpx {
         &self,
         py: Python<'py>,
         x: PyReadonlyArray2<f64>,
-    ) -> &'py PyArray2<f64> {
+    ) -> Bound<'py, PyArray2<f64>> {
         self.0
             .predict_gradients(&x.as_array())
             .unwrap()
-            .into_pyarray(py)
+            .into_pyarray_bound(py)
     }
 
     /// Predict variance derivatives at nsamples points.
@@ -321,11 +331,11 @@ impl Gpx {
         &self,
         py: Python<'py>,
         x: PyReadonlyArray2<f64>,
-    ) -> &'py PyArray2<f64> {
+    ) -> Bound<'py, PyArray2<f64>> {
         self.0
             .predict_var_gradients(&x.as_array())
             .unwrap()
-            .into_pyarray(py)
+            .into_pyarray_bound(py)
     }
 
     /// Sample gaussian process trajectories.
@@ -343,11 +353,11 @@ impl Gpx {
         py: Python<'py>,
         x: PyReadonlyArray2<f64>,
         n_traj: usize,
-    ) -> &'py PyArray2<f64> {
+    ) -> Bound<'py, PyArray2<f64>> {
         self.0
             .sample(&x.as_array(), n_traj)
             .unwrap()
-            .into_pyarray(py)
+            .into_pyarray_bound(py)
     }
 
     /// Get optimized thetas hyperparameters (ie once GP experts are fitted)
@@ -355,14 +365,14 @@ impl Gpx {
     /// Returns
     ///     thetas as an array[n_clusters, nx or kpls_dim]
     ///
-    fn thetas<'py>(&self, py: Python<'py>) -> &'py PyArray2<f64> {
+    fn thetas<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
         let experts = self.0.experts();
         let proto = experts.first().expect("Mixture should contain an expert");
         let mut thetas = Array2::zeros((self.0.n_clusters(), proto.theta().len()));
         Zip::from(thetas.rows_mut())
             .and(experts)
             .for_each(|mut theta, expert| theta.assign(expert.theta()));
-        thetas.into_pyarray(py)
+        thetas.into_pyarray_bound(py)
     }
 
     /// Get GP expert variance (ie posterior GP variance)
@@ -370,13 +380,13 @@ impl Gpx {
     /// Returns
     ///     variances as an array[n_clusters]
     ///
-    fn variances<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+    fn variances<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
         let experts = self.0.experts();
         let mut variances = Array1::zeros(self.0.n_clusters());
         Zip::from(&mut variances)
             .and(experts)
             .for_each(|var, expert| *var = expert.variance());
-        variances.into_pyarray(py)
+        variances.into_pyarray_bound(py)
     }
 
     /// Get reduced likelihood values gotten when fitting the GP experts
@@ -386,12 +396,12 @@ impl Gpx {
     /// Returns
     ///     likelihood as an array[n_clusters]
     ///
-    fn likelihoods<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+    fn likelihoods<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
         let experts = self.0.experts();
         let mut likelihoods = Array1::zeros(self.0.n_clusters());
         Zip::from(&mut likelihoods)
             .and(experts)
             .for_each(|lkh, expert| *lkh = expert.likelihood());
-        likelihoods.into_pyarray(py)
+        likelihoods.into_pyarray_bound(py)
     }
 }

@@ -29,12 +29,12 @@ pub enum Sampling {
 ///
 #[pyfunction]
 pub fn sampling(
-    py: Python,
+    py: Python<'_>,
     method: Sampling,
     xspecs: PyObject,
     n_samples: usize,
     seed: Option<u64>,
-) -> &PyArray2<f64> {
+) -> Bound<'_, PyArray2<f64>> {
     let specs: Vec<XSpec> = xspecs.extract(py).expect("Error in xspecs conversion");
     if specs.is_empty() {
         panic!("Error: xspecs argument cannot be empty")
@@ -75,7 +75,7 @@ pub fn sampling(
         }
     }
     .sample(n_samples);
-    doe.into_pyarray(py)
+    doe.into_pyarray_bound(py)
 }
 
 /// Samples generation using optimized Latin Hypercube Sampling
@@ -94,6 +94,6 @@ pub(crate) fn lhs(
     xspecs: PyObject,
     n_samples: usize,
     seed: Option<u64>,
-) -> &PyArray2<f64> {
+) -> Bound<'_, PyArray2<f64>> {
     sampling(py, Sampling::Lhs, xspecs, n_samples, seed)
 }
