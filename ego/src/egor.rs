@@ -14,7 +14,7 @@
 //!     let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
 //!     Zip::from(y.rows_mut())
 //!         .and(x.rows())
-//!         .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]));
+//!         .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec())]));
 //!     y
 //! }
 //!
@@ -347,7 +347,7 @@ mod tests {
         let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
         Zip::from(y.rows_mut())
             .and(x.rows())
-            .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]));
+            .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec())]));
         y
     }
 

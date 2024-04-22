@@ -59,7 +59,7 @@ approx = "0.4"
 ndarray-npy = "0.8"
 ndarray-csv = "0.5"
 csv = "1.1"
-argmin_testfunctions = "0.1"
+argmin_testfunctions = "0.2"
 rand_isaac = "0.3"
 
 [[bench]]

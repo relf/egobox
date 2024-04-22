@@ -7,11 +7,7 @@ fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
     Zip::from(y.rows_mut())
         .and(x.rows())
         .par_for_each(|mut yi, xi| {
-            yi.assign(&array![argmin_testfunctions::rosenbrock(
-                &xi.to_vec(),
-                1.,
-                100.
-            )])
+            yi.assign(&array![argmin_testfunctions::rosenbrock(&xi.to_vec())])
         });
     y
 }
