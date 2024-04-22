@@ -217,14 +217,16 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{IterState, State};
-    /// # let state: IterState<Vec<f64>, (), (), (), f64> = IterState::new();
-    /// # let param_old = vec![1.0f64, 2.0f64];
+    /// # use argmin::core::State;
+    /// # use egobox_ego::EgorState;
+    /// # use ndarray::array;
+    /// # let state: EgorState<f64> = EgorState::new();
+    /// # let param_old = array![1.0f64, 2.0f64];
     /// # let state = state.param(param_old);
     /// # assert!(state.prev_param.is_none());
     /// # assert_eq!(state.param.as_ref().unwrap()[0].to_ne_bytes(), 1.0f64.to_ne_bytes());
     /// # assert_eq!(state.param.as_ref().unwrap()[1].to_ne_bytes(), 2.0f64.to_ne_bytes());
-    /// # let param = vec![0.0f64, 3.0f64];
+    /// # let param = array![0.0f64, 3.0f64];
     /// let state = state.param(param);
     /// # assert_eq!(state.prev_param.as_ref().unwrap()[0].to_ne_bytes(), 1.0f64.to_ne_bytes());
     /// # assert_eq!(state.prev_param.as_ref().unwrap()[1].to_ne_bytes(), 2.0f64.to_ne_bytes());
@@ -246,7 +248,7 @@ where
     /// # Example
     ///
     /// ```
-    /// # use egobox_ego    ::EgorState;
+    /// # use egobox_ego::EgorState;
     /// # use argmin::core::{State, ArgminFloat};
     /// # let state: EgorState<f64> = EgorState::new();
     /// # assert_eq!(state.target_cost.to_ne_bytes(), f64::NEG_INFINITY.to_ne_bytes());
@@ -554,8 +556,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{IterState, State, ArgminFloat, TerminationReason, TerminationStatus};
-    /// # let mut state: IterState<Vec<f64>, (), (), (), f64> = IterState::new();
+    /// # use argmin::core::{State, ArgminFloat, TerminationReason, TerminationStatus};
+    /// # use egobox_ego::EgorState;
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// # assert_eq!(state.termination_status, TerminationStatus::NotTerminated);
     /// let state = state.terminate_with(TerminationReason::MaxItersReached);
     /// # assert_eq!(state.termination_status, TerminationStatus::Terminated(TerminationReason::MaxItersReached));
@@ -693,8 +696,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{IterState, State, ArgminFloat, TerminationStatus};
-    /// # let mut state: IterState<Vec<f64>, (), (), (), f64> = IterState::new();
+    /// # use argmin::core::{State, ArgminFloat, TerminationStatus};
+    /// # use egobox_ego::EgorState;
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// let termination_status = state.get_termination_status();
     /// # assert_eq!(*termination_status, TerminationStatus::NotTerminated);
     /// ```
@@ -707,8 +711,9 @@ where
     /// # Example
     ///
     /// ```
-    /// # use argmin::core::{IterState, State, ArgminFloat, TerminationReason};
-    /// # let mut state: IterState<Vec<f64>, (), (), (), f64> = IterState::new();
+    /// # use argmin::core::{State, ArgminFloat, TerminationReason};
+    /// # use egobox_ego::EgorState;
+    /// # let mut state: EgorState<f64> = EgorState::new();
     /// let termination_reason = state.get_termination_reason();
     /// # assert_eq!(termination_reason, None);
     /// ```
