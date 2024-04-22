@@ -31,7 +31,7 @@ ndarray_einsum_beta = "0.7"
 ndarray-rand = "0.14"
 ndarray-npy = "0.8"
 nlopt = { version = "0.7.0", optional = true }
-cobyla = { version = "0.5" }
+cobyla = { version = "0.6" }
 rand_xoshiro = "0.6"
 paste = "1.0"
 num-traits = "0.2"

@@ -35,12 +35,12 @@ ndarray-rand = "0.14"
 ndarray-npy = "0.8"
 rayon = "1"
 
-cobyla = { version = "0.5" }
+cobyla = { version = "0.6" }
 slsqp = { version = "0.1" }
 nlopt = { version = "0.7.0", optional = true }
 
 rand_xoshiro = { version = "0.6", features = ["serde1"] }
-argmin = { version = "0.8.0", features = ["serde1", "ctrlc"] }
+argmin = { version = "0.10.0", features = ["serde1", "ctrlc"] }
 instant = "0.1"
 libm = "0.2.6"
 finitediff = { version = "0.1", features = ["ndarray"] }
