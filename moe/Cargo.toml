@@ -46,7 +46,7 @@ rand_xoshiro = "0.6"
 paste = "1.0"
 bitflags = { version = "2.4.1", features = ["serde"] }
 log = "0.4"
-env_logger = "0.10.0"
+env_logger = "0.11.3"
 thiserror = "1"
 
 serde = { version = "1", features = ["derive"], optional = true }

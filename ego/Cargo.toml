@@ -47,7 +47,7 @@ finitediff = { version = "0.1", features = ["ndarray"] }
 # sort-axis
 rawpointer = { version = "0.2" }
 log = "0.4"
-env_logger = "0.10.0"
+env_logger = "0.11.3"
 thiserror = "1"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
