@@ -56,9 +56,9 @@ serde_json = "1"
 ctrlc = "3.4"
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = "0.5"
 approx = "0.4"
-argmin_testfunctions = "0.1"
+argmin_testfunctions = "0.2"
 
 [workspace]
 members = ["doe", "gp", "moe", "ego"]

@@ -1465,7 +1465,7 @@ mod tests {
         Zip::from(y.rows_mut())
             .and(x.rows())
             .par_for_each(|mut yi, xi| {
-                yi.assign(&array![rosenbrock(&xi.to_vec(), 1., 100.)]);
+                yi.assign(&array![rosenbrock(&xi.to_vec())]);
             });
         y
     }
