@@ -1,10 +1,9 @@
-use crate::algorithm::optimize_params;
 use crate::errors::{GpError, Result};
+use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
 use crate::sparse_parameters::{
     Inducings, ParamEstimation, SgpParams, SgpValidParams, SparseMethod,
 };
-use crate::{correlation_models::*, utils::pairwise_differences};
-use crate::{prepare_multistart, sample, CobylaParams, GpSamplingMethod};
+use crate::{correlation_models::*, sample, utils::pairwise_differences, GpSamplingMethod};
 use finitediff::FiniteDiff;
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
