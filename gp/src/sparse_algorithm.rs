@@ -1,8 +1,6 @@
 use crate::errors::{GpError, Result};
 use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
-use crate::sparse_parameters::{
-    Inducings, ParamEstimation, SgpParams, SgpValidParams, SparseMethod,
-};
+use crate::sparse_parameters::{Inducings, ParamTuning, SgpParams, SgpValidParams, SparseMethod};
 use crate::ThetaTuning;
 use crate::{correlation_models::*, sample, utils::pairwise_differences, GpSamplingMethod};
 use finitediff::FiniteDiff;
@@ -460,11 +458,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
 
         // Initial guess for noise, when noise variance constant, it is not part of optimization params
         let (is_noise_estimated, noise0) = match self.noise_variance() {
-            ParamEstimation::Fixed(c) => (false, c),
-            ParamEstimation::Estimated {
-                initial_guess: c,
-                bounds: _,
-            } => (true, c),
+            ParamTuning::Fixed(c) => (false, c),
+            ParamTuning::Optimized { init: c, bounds: _ } => (true, c),
         };
 
         let (init, bounds) = match self.theta_tuning() {
@@ -566,8 +561,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         bounds[params.ncols() - 1 - is_noise_estimated as usize] =
             (F::cast(1e-12).log10(), (F::cast(9.) * sigma2_0).log10());
         // optionally adjust noise variance bounds
-        if let ParamEstimation::Estimated {
-            initial_guess: _,
+        if let ParamTuning::Optimized {
+            init: _,
             bounds: (lo, up),
         } = self.noise_variance()
         {
@@ -965,7 +960,7 @@ mod tests {
             Inducings::Located(z),
         )
         .sparse_method(SparseMethod::Vfe)
-        .noise_variance(ParamEstimation::Fixed(0.01))
+        .noise_variance(ParamTuning::Fixed(0.01))
         .fit(&Dataset::new(xt.clone(), yt.clone()))
         .expect("GP fitted");
 
@@ -1008,8 +1003,8 @@ mod tests {
         .sparse_method(SparseMethod::Vfe)
         //.sparse_method(SparseMethod::Fitc)
         .theta_init(vec![0.1])
-        .noise_variance(ParamEstimation::Estimated {
-            initial_guess: 0.02,
+        .noise_variance(ParamTuning::Optimized {
+            init: 0.02,
             bounds: (1e-3, 1.),
         })
         .fit(&Dataset::new(xt.clone(), yt.clone()))

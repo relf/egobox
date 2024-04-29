@@ -10,8 +10,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum ThetaTuning<F: Float> {
-    Optimized { init: Vec<F>, bounds: Vec<(F, F)> },
+    /// Constant parameter (ie given not estimated)
     Fixed(Vec<F>),
+    /// Parameter is optimized between given bounds (lower, upper) starting from the inital guess
+    Optimized { init: Vec<F>, bounds: Vec<(F, F)> },
 }
 
 impl<F: Float> Default for ThetaTuning<F> {
