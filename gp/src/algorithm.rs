@@ -1,9 +1,9 @@
-use crate::correlation_models::*;
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
 use crate::parameters::{GpParams, GpValidParams};
 use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedMatrix};
+use crate::{correlation_models::*, ThetaTuning};
 
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
@@ -771,80 +771,87 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 "Warning: multiple x input features have the same value (at least same row twice)."
             );
         }
-
-        // Initial guess for theta
-        let theta0_dim = self.theta_tuning().theta0().len();
-        let theta0 = if theta0_dim == 1 {
-            Array1::from_elem(w_star.ncols(), self.theta_tuning().theta0()[0])
-        } else if theta0_dim == w_star.ncols() {
-            Array::from_vec(self.theta_tuning().theta0().to_vec())
-        } else {
-            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
-        };
-
         let fx = self.mean().value(&xtrain.data);
-        let base: f64 = 10.;
-        let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-            let theta =
-                Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
+
+        let opt_params = match self.theta_tuning() {
+            ThetaTuning::Optimized { init, bounds } => {
+                // Initial guess for theta
+                let theta0_dim = init.len();
+                let theta0 = if theta0_dim == 1 {
+                    Array1::from_elem(w_star.ncols(), init[0])
+                } else if theta0_dim == w_star.ncols() {
+                    Array::from_vec(init.to_vec())
+                } else {
+                    panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+                };
+
+                let base: f64 = 10.;
+                let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+                    let theta = Array1::from_shape_vec(
+                        (x.len(),),
+                        x.iter().map(|v| base.powf(*v)).collect(),
+                    )
                     .unwrap();
-            for v in theta.iter() {
-                // check theta as optimizer may return nan values
-                if v.is_nan() {
-                    // shortcut return worst value wrt to rlf minimization
-                    return f64::INFINITY;
-                }
-            }
-            let theta = theta.mapv(F::cast);
-            let rxx = self.corr().value(&x_distances.d, &theta, &w_star);
-            match reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget()) {
-                Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
-                Err(_) => f64::INFINITY,
-            }
-        };
+                    for v in theta.iter() {
+                        // check theta as optimizer may return nan values
+                        if v.is_nan() {
+                            // shortcut return worst value wrt to rlf minimization
+                            return f64::INFINITY;
+                        }
+                    }
+                    let theta = theta.mapv(F::cast);
+                    let rxx = self.corr().value(&x_distances.d, &theta, &w_star);
+                    match reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget()) {
+                        Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
+                        Err(_) => f64::INFINITY,
+                    }
+                };
 
-        // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
-        // let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
-        let bounds_dim = self.theta_tuning().bounds().len();
-        let bounds = if bounds_dim == 1 {
-            vec![self.theta_tuning().bounds()[0]; w_star.ncols()]
-        } else if bounds_dim == w_star.ncols() {
-            self.theta_tuning().bounds().to_vec()
-        } else {
-            panic!(
-                "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
-                w_star.ncols(),
-                bounds_dim
-            )
-        };
+                // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
+                // let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
+                let bounds_dim = bounds.len();
+                let bounds = if bounds_dim == 1 {
+                    vec![bounds[0]; w_star.ncols()]
+                } else if bounds_dim == w_star.ncols() {
+                    bounds.to_vec()
+                } else {
+                    panic!(
+                        "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
+                        w_star.ncols(),
+                        bounds_dim
+                    )
+                };
 
-        let (params, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
-        debug!(
-            "Optimize with multistart theta = {:?} and bounds = {:?}",
-            params, bounds
-        );
-        let now = Instant::now();
-        let opt_params = (0..params.nrows())
-            .into_par_iter()
-            .map(|i| {
-                let opt_res = optimize_params(
-                    objfn,
-                    &params.row(i).to_owned(),
-                    &bounds,
-                    CobylaParams {
-                        maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
-                        ..CobylaParams::default()
-                    },
+                let (params, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
+                debug!(
+                    "Optimize with multistart theta = {:?} and bounds = {:?}",
+                    params, bounds
                 );
+                let now = Instant::now();
+                let opt_params = (0..params.nrows())
+                    .into_par_iter()
+                    .map(|i| {
+                        let opt_res = optimize_params(
+                            objfn,
+                            &params.row(i).to_owned(),
+                            &bounds,
+                            CobylaParams {
+                                maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+                                ..CobylaParams::default()
+                            },
+                        );
 
-                opt_res
-            })
-            .reduce(
-                || (Array::ones((params.ncols(),)), f64::INFINITY),
-                |a, b| if b.1 < a.1 { b } else { a },
-            );
-        debug!("elapsed optim = {:?}", now.elapsed().as_millis());
-        let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
+                        opt_res
+                    })
+                    .reduce(
+                        || (Array::ones((params.ncols(),)), f64::INFINITY),
+                        |a, b| if b.1 < a.1 { b } else { a },
+                    );
+                debug!("elapsed optim = {:?}", now.elapsed().as_millis());
+                opt_params.0.mapv(|v| F::cast(base.powf(v)))
+            }
+            ThetaTuning::Fixed(_) => todo!(),
+        };
         let rxx = self.corr().value(&x_distances.d, &opt_params, &w_star);
         let (lkh, inner_params) =
             reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;

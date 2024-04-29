@@ -2,63 +2,45 @@ use crate::correlation_models::{CorrelationModel, SquaredExponentialCorr};
 use crate::errors::{GpError, Result};
 use crate::mean_models::{ConstantMean, RegressionModel};
 use linfa::{Float, ParamGuard};
-use std::convert::TryFrom;
 
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
-/// A structure to represent a n-dim parameter estimation
+/// An enum to represent a n-dim hyper parameter tuning
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct ParamTuning<F: Float> {
-    pub init: Vec<F>,
-    pub bounds: Vec<(F, F)>,
+pub enum ThetaTuning<F: Float> {
+    Optimized { init: Vec<F>, bounds: Vec<(F, F)> },
+    Fixed(Vec<F>),
 }
 
-impl<F: Float> TryFrom<ParamTuning<F>> for ThetaTuning<F> {
-    type Error = GpError;
-    fn try_from(pt: ParamTuning<F>) -> Result<ThetaTuning<F>> {
-        if pt.init.len() != pt.bounds.len() && (pt.init.len() != 1 && pt.bounds.len() != 1) {
-            return Err(GpError::InvalidValueError(format!(
-                "Bad theta tuning specification {} {}",
-                pt.init.len(),
-                pt.bounds.len()
-            )));
-        }
-        // TODO: check if init in bounds
-        Ok(ThetaTuning(pt))
-    }
-}
-
-/// As structure for theta hyperparameters guess
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-
-pub struct ThetaTuning<F: Float>(ParamTuning<F>);
 impl<F: Float> Default for ThetaTuning<F> {
-    fn default() -> ThetaTuning<F> {
-        ThetaTuning(ParamTuning {
+    fn default() -> Self {
+        ThetaTuning::Optimized {
             init: vec![F::cast(0.01)],
-            bounds: vec![(F::cast(1e-6), F::cast(1e2))],
-        })
-    }
-}
-
-impl<F: Float> From<ThetaTuning<F>> for ParamTuning<F> {
-    fn from(tt: ThetaTuning<F>) -> ParamTuning<F> {
-        ParamTuning {
-            init: tt.0.init,
-            bounds: tt.0.bounds,
+            bounds: vec![(
+                F::cast(ThetaTuning::<F>::DEFAULT_BOUNDS.0),
+                F::cast(ThetaTuning::<F>::DEFAULT_BOUNDS.1),
+            )],
         }
     }
 }
 
 impl<F: Float> ThetaTuning<F> {
-    pub fn theta0(&self) -> &[F] {
-        &self.0.init
+    pub const DEFAULT_BOUNDS: (f64, f64) = (1e-6, 1e2);
+
+    pub fn init(&self) -> &Vec<F> {
+        match self {
+            ThetaTuning::Optimized { init, bounds: _ } => init,
+            ThetaTuning::Fixed(init) => init,
+        }
     }
-    pub fn bounds(&self) -> &[(F, F)] {
-        &self.0.bounds
+
+    pub fn bounds(&self) -> Option<&Vec<(F, F)>> {
+        match self {
+            ThetaTuning::Optimized { init: _, bounds } => Some(bounds),
+            ThetaTuning::Fixed(_) => None,
+        }
     }
 }
 
@@ -163,27 +145,32 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
         self
     }
 
-    /// Set initial value for theta hyper parameter.
+    /// Set value for theta hyper parameter.
     ///
-    /// During training process, the internal optimization is started from `theta_init`.
+    /// When theta is optimized, the internal optimization is started from `theta_init`.
+    /// When theta is fixed, this set theta constant value.
     pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
-        self.0.theta_tuning = ParamTuning {
-            init: theta_init,
-            ..self.0.theta_tuning.into()
-        }
-        .try_into()
-        .unwrap();
+        self.0.theta_tuning = match self.0.theta_tuning {
+            ThetaTuning::Optimized { init: _, bounds } => ThetaTuning::Optimized {
+                init: theta_init,
+                bounds,
+            },
+            ThetaTuning::Fixed(_) => ThetaTuning::Fixed(theta_init),
+        };
         self
     }
 
     /// Set theta hyper parameter search space.
+    ///
+    /// This function is no-op when theta tuning is fixed
     pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
-        self.0.theta_tuning = ParamTuning {
-            bounds: theta_bounds,
-            ..self.0.theta_tuning.into()
-        }
-        .try_into()
-        .unwrap();
+        self.0.theta_tuning = match self.0.theta_tuning {
+            ThetaTuning::Optimized { init, bounds: _ } => ThetaTuning::Optimized {
+                init,
+                bounds: theta_bounds,
+            },
+            ThetaTuning::Fixed(f) => ThetaTuning::Fixed(f),
+        };
         self
     }
 
@@ -221,7 +208,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> ParamGuard
                     "`kpls_dim` canot be 0!".to_string(),
                 ));
             }
-            let theta = self.0.theta_tuning().theta0();
+            let theta = self.0.theta_tuning().init();
             if theta.len() > 1 && d > theta.len() {
                 return Err(GpError::InvalidValueError(format!(
                     "Dimension reduction ({}) should be smaller than expected

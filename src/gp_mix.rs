@@ -10,8 +10,7 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
 //!
 use crate::types::*;
-use egobox_gp::{ParamTuning, ThetaTuning};
-use egobox_moe::{Clustered, MixtureGpSurrogate};
+use egobox_moe::{Clustered, MixtureGpSurrogate, ThetaTuning};
 #[allow(unused_imports)] // Avoid linting problem
 use egobox_moe::{GpMixture, GpSurrogate, GpSurrogateExt};
 use linfa::{traits::Fit, Dataset};
@@ -142,20 +141,16 @@ impl GpMix {
 
         let mut theta_tuning = ThetaTuning::default();
         if let Some(init) = self.theta_init.as_ref() {
-            theta_tuning = ParamTuning {
+            theta_tuning = ThetaTuning::Optimized {
                 init: init.to_vec(),
-                ..theta_tuning.into()
+                bounds: vec![ThetaTuning::<f64>::DEFAULT_BOUNDS],
             }
-            .try_into()
-            .expect("Theta tuning initial init");
         }
         if let Some(bounds) = self.theta_bounds.as_ref() {
-            theta_tuning = ParamTuning {
+            theta_tuning = ThetaTuning::Optimized {
+                init: theta_tuning.init().to_vec(),
                 bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
-                ..theta_tuning.into()
             }
-            .try_into()
-            .expect("Theta tuning bounds");
         }
 
         if let Err(ctrlc::Error::MultipleHandlers) = ctrlc::set_handler(|| std::process::exit(2)) {
