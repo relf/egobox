@@ -467,138 +467,142 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             } => (true, c),
         };
 
-        let (n, opt_params) = match self.theta_tuning() {
-            ThetaTuning::Optimized { init, bounds } => {
-                // Initial guess for theta
-                let theta0_dim = init.len();
-                let theta0 = if theta0_dim == 1 {
-                    Array1::from_elem(w_star.ncols(), self.theta_tuning().init()[0])
-                } else if theta0_dim == w_star.ncols() {
-                    Array::from_vec(self.theta_tuning().init().to_vec())
-                } else {
-                    panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
-                };
-
-                // Initial guess for variance
-                let y_std = ytrain.std_axis(Axis(0), F::one());
-                let sigma2_0 = y_std[0] * y_std[0];
-
-                // Params consist in [theta1, ..., thetap, sigma2, [noise]]
-                // where sigma2 is the variance of the gaussian process
-                // where noise is the variance of the noise when it is estimated
-                let n = theta0.len() + 1 + is_noise_estimated as usize;
-                let mut params_0 = Array1::zeros(n);
-                params_0
-                    .slice_mut(s![..n - 1 - is_noise_estimated as usize])
-                    .assign(&theta0);
-                params_0[n - 1 - is_noise_estimated as usize] = sigma2_0;
-                if is_noise_estimated {
-                    // noise variance is estimated, noise0 is initial_guess
-                    params_0[n - 1] = *noise0;
-                }
-
-                // We prefer optimize variable change log10(theta)
-                // as theta is used as exponent in objective function
-                let base: f64 = 10.;
-                let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-                    for v in x.iter() {
-                        // check theta as optimizer may give nan values
-                        if v.is_nan() {
-                            // shortcut return worst value wrt to rlf minimization
-                            return f64::INFINITY;
-                        }
-                    }
-                    let input = Array1::from_shape_vec(
-                        (x.len(),),
-                        x.iter().map(|v| F::cast(base.powf(*v))).collect(),
-                    )
-                    .unwrap();
-
-                    let theta = input.slice(s![..input.len() - 1 - is_noise_estimated as usize]);
-                    let sigma2 = input[input.len() - 1 - is_noise_estimated as usize];
-                    let noise = if is_noise_estimated {
-                        input[input.len() - 1]
-                    } else {
-                        F::cast(*noise0)
-                    };
-
-                    let theta = theta.mapv(F::cast);
-                    match self.reduced_likelihood(
-                        &theta,
-                        sigma2,
-                        noise,
-                        &w_star,
-                        &xtrain.view(),
-                        &ytrain.view(),
-                        &z,
-                        self.nugget(),
-                    ) {
-                        Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
-                        Err(_) => f64::INFINITY,
-                    }
-                };
-
-                // // bounds of theta, variance and optionally noise variance
-                // let mut bounds = vec![(F::cast(1e-16).log10(), F::cast(1.).log10()); params.ncols()];
-                // Initial guess for theta
-                let bounds_dim = bounds.len();
-                let bounds = if bounds_dim == 1 {
-                    vec![bounds[0]; params_0.len()]
-                } else if theta0_dim == params_0.len() {
-                    bounds.to_vec()
-                } else {
-                    panic!(
-                        "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
-                        w_star.ncols(),
-                        theta0_dim
-                    )
-                };
-
-                let (params, mut bounds) = prepare_multistart(self.n_start(), &params_0, &bounds);
-
-                // variance bounds
-                bounds[params.ncols() - 1 - is_noise_estimated as usize] =
-                    (F::cast(1e-12).log10(), (F::cast(9.) * sigma2_0).log10());
-                // optionally adjust noise variance bounds
-                if let ParamEstimation::Estimated {
-                    initial_guess: _,
-                    bounds: (lo, up),
-                } = self.noise_variance()
-                {
-                    // Set bounds for noise
-                    if let Some(noise_bounds) = bounds.last_mut() {
-                        *noise_bounds = (lo.log10(), up.log10());
-                    }
-                }
-                debug!(
-                    "Optimize with multistart theta = {:?} and bounds = {:?}",
-                    params, bounds
-                );
-                let now = Instant::now();
-                let opt_params = (0..params.nrows())
-                    .into_par_iter()
-                    .map(|i| {
-                        let opt_res = optimize_params(
-                            objfn,
-                            &params.row(i).to_owned(),
-                            &bounds,
-                            CobylaParams {
-                                maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
-                                ..CobylaParams::default()
-                            },
-                        );
-
-                        opt_res
-                    })
-                    .reduce(
-                        || (Array::ones((params.ncols(),)), f64::INFINITY),
-                        |a, b| if b.1 < a.1 { b } else { a },
-                    );
-                debug!("elapsed optim = {:?}", now.elapsed().as_millis());
-                (n, opt_params.0.mapv(|v| F::cast(base.powf(v))))
-            }
-            ThetaTuning::Fixed(_) => todo!(),
+        let (init, bounds) = match self.theta_tuning() {
+            ThetaTuning::Optimized { init, bounds } => (init.clone(), bounds.clone()),
+            ThetaTuning::Fixed(init) => (
+                init.clone(),
+                init.iter().map(|v| (*v, *v)).collect::<Vec<_>>(),
+            ),
         };
+
+        // Initial guess for theta
+        let theta0_dim = init.len();
+        let theta0 = if theta0_dim == 1 {
+            Array1::from_elem(w_star.ncols(), self.theta_tuning().init()[0])
+        } else if theta0_dim == w_star.ncols() {
+            Array::from_vec(self.theta_tuning().init().to_vec())
+        } else {
+            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+        };
+
+        // Initial guess for variance
+        let y_std = ytrain.std_axis(Axis(0), F::one());
+        let sigma2_0 = y_std[0] * y_std[0];
+
+        // Params consist in [theta1, ..., thetap, sigma2, [noise]]
+        // where sigma2 is the variance of the gaussian process
+        // where noise is the variance of the noise when it is estimated
+        let n = theta0.len() + 1 + is_noise_estimated as usize;
+        let mut params_0 = Array1::zeros(n);
+        params_0
+            .slice_mut(s![..n - 1 - is_noise_estimated as usize])
+            .assign(&theta0);
+        params_0[n - 1 - is_noise_estimated as usize] = sigma2_0;
+        if is_noise_estimated {
+            // noise variance is estimated, noise0 is initial_guess
+            params_0[n - 1] = *noise0;
+        }
+
+        // We prefer optimize variable change log10(theta)
+        // as theta is used as exponent in objective function
+        let base: f64 = 10.;
+        let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+            for v in x.iter() {
+                // check theta as optimizer may give nan values
+                if v.is_nan() {
+                    // shortcut return worst value wrt to rlf minimization
+                    return f64::INFINITY;
+                }
+            }
+            let input = Array1::from_shape_vec(
+                (x.len(),),
+                x.iter().map(|v| F::cast(base.powf(*v))).collect(),
+            )
+            .unwrap();
+
+            let theta = input.slice(s![..input.len() - 1 - is_noise_estimated as usize]);
+            let sigma2 = input[input.len() - 1 - is_noise_estimated as usize];
+            let noise = if is_noise_estimated {
+                input[input.len() - 1]
+            } else {
+                F::cast(*noise0)
+            };
+
+            let theta = theta.mapv(F::cast);
+            match self.reduced_likelihood(
+                &theta,
+                sigma2,
+                noise,
+                &w_star,
+                &xtrain.view(),
+                &ytrain.view(),
+                &z,
+                self.nugget(),
+            ) {
+                Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
+                Err(_) => f64::INFINITY,
+            }
+        };
+
+        // // bounds of theta, variance and optionally noise variance
+        // let mut bounds = vec![(F::cast(1e-16).log10(), F::cast(1.).log10()); params.ncols()];
+        // Initial guess for theta
+        let bounds_dim = bounds.len();
+        let bounds = if bounds_dim == 1 {
+            vec![bounds[0]; params_0.len()]
+        } else if theta0_dim == params_0.len() {
+            bounds.to_vec()
+        } else {
+            panic!(
+                "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
+                w_star.ncols(),
+                theta0_dim
+            )
+        };
+
+        let (params, mut bounds) = prepare_multistart(self.n_start(), &params_0, &bounds);
+
+        // variance bounds
+        bounds[params.ncols() - 1 - is_noise_estimated as usize] =
+            (F::cast(1e-12).log10(), (F::cast(9.) * sigma2_0).log10());
+        // optionally adjust noise variance bounds
+        if let ParamEstimation::Estimated {
+            initial_guess: _,
+            bounds: (lo, up),
+        } = self.noise_variance()
+        {
+            // Set bounds for noise
+            if let Some(noise_bounds) = bounds.last_mut() {
+                *noise_bounds = (lo.log10(), up.log10());
+            }
+        }
+        debug!(
+            "Optimize with multistart theta = {:?} and bounds = {:?}",
+            params, bounds
+        );
+        let now = Instant::now();
+        let opt_params = (0..params.nrows())
+            .into_par_iter()
+            .map(|i| {
+                let opt_res = optimize_params(
+                    objfn,
+                    &params.row(i).to_owned(),
+                    &bounds,
+                    CobylaParams {
+                        maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+                        ..CobylaParams::default()
+                    },
+                );
+
+                opt_res
+            })
+            .reduce(
+                || (Array::ones((params.ncols(),)), f64::INFINITY),
+                |a, b| if b.1 < a.1 { b } else { a },
+            );
+        debug!("elapsed optim = {:?}", now.elapsed().as_millis());
+        let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
+
         let opt_theta = opt_params
             .slice(s![..n - 1 - is_noise_estimated as usize])
             .to_owned();
