@@ -774,6 +774,10 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let fx = self.mean().value(&xtrain.data);
 
         let opt_params = match self.theta_tuning() {
+            ThetaTuning::Fixed(init) => {
+                // Easy path no optimization
+                Array1::from_vec(init.to_vec())
+            }
             ThetaTuning::Optimized { init, bounds } => {
                 // Initial guess for theta
                 let theta0_dim = init.len();
@@ -850,7 +854,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 debug!("elapsed optim = {:?}", now.elapsed().as_millis());
                 opt_params.0.mapv(|v| F::cast(base.powf(v)))
             }
-            ThetaTuning::Fixed(_) => todo!(),
         };
         let rxx = self.corr().value(&x_distances.d, &opt_params, &w_star);
         let (lkh, inner_params) =
@@ -1527,7 +1530,6 @@ mod tests {
             let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
             let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
 
-            // TODO: still brittle, to be reworked
             if y_pred[[0, 0]].abs() > 1e-1 && y_pred[[0, 0]].abs() > 1e-1 {
                 // do not test with fdiff when variance or deriv is too small
                 assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
