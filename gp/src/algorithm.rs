@@ -1088,7 +1088,7 @@ pub(crate) fn sample<F: Float>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
     use linfa::prelude::Predict;
@@ -1539,6 +1539,24 @@ mod tests {
                 assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
             }
         }
+    }
+
+    #[test]
+    fn test_fixed_theta() {
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let gp = Kriging::params()
+            .fit(&Dataset::new(xt.clone(), yt.clone()))
+            .expect("GP fit error");
+        let default = ThetaTuning::default();
+        assert_abs_diff_ne!(*gp.theta().to_vec(), default.init());
+        let expected = gp.theta().to_vec();
+
+        let gp = Kriging::params()
+            .theta_tuning(ThetaTuning::Fixed(expected.clone()))
+            .fit(&Dataset::new(xt, yt))
+            .expect("GP fit error");
+        assert_abs_diff_eq!(*gp.theta().to_vec(), expected);
     }
 
     fn x2sinx(x: &Array2<f64>) -> Array2<f64> {
