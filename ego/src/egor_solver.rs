@@ -171,7 +171,7 @@ impl SurrogateBuilder for GpMixtureParams<f64, Xoshiro256Plus> {
     /// **panic** if xtypes contains other types than continuous type `Float`
     fn new_with_xtypes(xtypes: &[XType]) -> Self {
         if crate::utils::discrete(xtypes) {
-            panic!("GpMixParams cannot be created with discrete types!");
+            panic!("GpMixtureParams cannot be created with discrete types!");
         }
         GpMixtureParams::new()
     }
@@ -314,7 +314,7 @@ where
         let doe = hstart_doe.as_ref().or(self.config.doe.as_ref());
 
         let (y_data, x_data) = if let Some(doe) = doe {
-            let doe = to_continuous_space(&self.config.xtypes, doe);
+            let cont_doe = to_continuous_space(&self.config.xtypes, doe);
 
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
