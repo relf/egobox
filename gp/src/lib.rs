@@ -20,6 +20,8 @@ mod parameters;
 mod sparse_parameters;
 mod utils;
 
+mod optimization;
+
 pub use algorithm::*;
 pub use errors::*;
 pub use parameters::*;

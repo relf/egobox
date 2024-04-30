@@ -1,47 +1,27 @@
-use crate::correlation_models::*;
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
+use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
 use crate::parameters::{GpParams, GpValidParams};
 use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedMatrix};
-use egobox_doe::{Lhs, SamplingMethod};
+use crate::{correlation_models::*, ThetaTuning};
+
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
-#[cfg(feature = "blas")]
-use log::warn;
-use ndarray::{arr1, s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
-#[cfg(feature = "blas")]
-use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
-use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray::{Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+
 use ndarray_rand::rand_distr::Normal;
 use ndarray_rand::RandomExt;
 use ndarray_stats::QuantileExt;
 
 use log::debug;
-use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::Instant;
-
-pub(crate) struct CobylaParams {
-    pub rhobeg: f64,
-    pub ftol_rel: f64,
-    pub maxeval: usize,
-}
-
-impl Default for CobylaParams {
-    fn default() -> Self {
-        CobylaParams {
-            rhobeg: 0.5,
-            ftol_rel: 1e-4,
-            maxeval: 25,
-        }
-    }
-}
 
 // const LOG10_20: f64 = 1.301_029_995_663_981_3; //f64::log10(20.);
 //const N_START: usize = 0; // number of optimization restart (aka multistart)
@@ -791,80 +771,90 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 "Warning: multiple x input features have the same value (at least same row twice)."
             );
         }
-
-        // Initial guess for theta
-        let theta0_dim = self.theta_tuning().theta0().len();
-        let theta0 = if theta0_dim == 1 {
-            Array1::from_elem(w_star.ncols(), self.theta_tuning().theta0()[0])
-        } else if theta0_dim == w_star.ncols() {
-            Array::from_vec(self.theta_tuning().theta0().to_vec())
-        } else {
-            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
-        };
-
         let fx = self.mean().value(&xtrain.data);
-        let base: f64 = 10.;
-        let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-            let theta =
-                Array1::from_shape_vec((x.len(),), x.iter().map(|v| base.powf(*v)).collect())
+
+        let opt_params = match self.theta_tuning() {
+            ThetaTuning::Fixed(init) => {
+                // Easy path no optimization
+                Array1::from_vec(init.to_vec())
+            }
+            ThetaTuning::Optimized { init, bounds } => {
+                // Initial guess for theta
+                let theta0_dim = init.len();
+                let theta0 = if theta0_dim == 1 {
+                    Array1::from_elem(w_star.ncols(), init[0])
+                } else if theta0_dim == w_star.ncols() {
+                    Array::from_vec(init.to_vec())
+                } else {
+                    panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+                };
+
+                let base: f64 = 10.;
+                let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
+                    let theta = Array1::from_shape_vec(
+                        (x.len(),),
+                        x.iter().map(|v| base.powf(*v)).collect(),
+                    )
                     .unwrap();
-            for v in theta.iter() {
-                // check theta as optimizer may return nan values
-                if v.is_nan() {
-                    // shortcut return worst value wrt to rlf minimization
-                    return f64::INFINITY;
-                }
-            }
-            let theta = theta.mapv(F::cast);
-            let rxx = self.corr().value(&x_distances.d, &theta, &w_star);
-            match reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget()) {
-                Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
-                Err(_) => f64::INFINITY,
-            }
-        };
+                    for v in theta.iter() {
+                        // check theta as optimizer may return nan values
+                        if v.is_nan() {
+                            // shortcut return worst value wrt to rlf minimization
+                            return f64::INFINITY;
+                        }
+                    }
+                    let theta = theta.mapv(F::cast);
+                    let rxx = self.corr().value(&x_distances.d, &theta, &w_star);
+                    match reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget()) {
+                        Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
+                        Err(_) => f64::INFINITY,
+                    }
+                };
 
-        // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
-        // let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
-        let bounds_dim = self.theta_tuning().bounds().len();
-        let bounds = if bounds_dim == 1 {
-            vec![self.theta_tuning().bounds()[0]; w_star.ncols()]
-        } else if bounds_dim == w_star.ncols() {
-            self.theta_tuning().bounds().to_vec()
-        } else {
-            panic!(
-                "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
-                w_star.ncols(),
-                bounds_dim
-            )
-        };
+                // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
+                // let bounds = vec![(F::cast(-6.), F::cast(2.)); theta0.len()];
+                let bounds_dim = bounds.len();
+                let bounds = if bounds_dim == 1 {
+                    vec![bounds[0]; w_star.ncols()]
+                } else if bounds_dim == w_star.ncols() {
+                    bounds.to_vec()
+                } else {
+                    panic!(
+                        "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
+                        w_star.ncols(),
+                        bounds_dim
+                    )
+                };
 
-        let (params, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
-        debug!(
-            "Optimize with multistart theta = {:?} and bounds = {:?}",
-            params, bounds
-        );
-        let now = Instant::now();
-        let opt_params = (0..params.nrows())
-            .into_par_iter()
-            .map(|i| {
-                let opt_res = optimize_params(
-                    objfn,
-                    &params.row(i).to_owned(),
-                    &bounds,
-                    CobylaParams {
-                        maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
-                        ..CobylaParams::default()
-                    },
+                let (params, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
+                debug!(
+                    "Optimize with multistart theta = {:?} and bounds = {:?}",
+                    params, bounds
                 );
+                let now = Instant::now();
+                let opt_params = (0..params.nrows())
+                    .into_par_iter()
+                    .map(|i| {
+                        let opt_res = optimize_params(
+                            objfn,
+                            &params.row(i).to_owned(),
+                            &bounds,
+                            CobylaParams {
+                                maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+                                ..CobylaParams::default()
+                            },
+                        );
 
-                opt_res
-            })
-            .reduce(
-                || (Array::ones((params.ncols(),)), f64::INFINITY),
-                |a, b| if b.1 < a.1 { b } else { a },
-            );
-        debug!("elapsed optim = {:?}", now.elapsed().as_millis());
-        let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
+                        opt_res
+                    })
+                    .reduce(
+                        || (Array::ones((params.ncols(),)), f64::INFINITY),
+                        |a, b| if b.1 < a.1 { b } else { a },
+                    );
+                debug!("elapsed optim = {:?}", now.elapsed().as_millis());
+                opt_params.0.mapv(|v| F::cast(base.powf(v)))
+            }
+        };
         let rxx = self.corr().value(&x_distances.d, &opt_params, &w_star);
         let (lkh, inner_params) =
             reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
@@ -879,157 +869,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             ytrain,
         })
     }
-}
-
-pub(crate) fn prepare_multistart<F: Float>(
-    n_start: usize,
-    theta0: &Array1<F>,
-    bounds: &[(F, F)],
-) -> (Array2<F>, Vec<(F, F)>) {
-    // Use log10 theta as optimization parameter
-    let bounds: Vec<(F, F)> = bounds
-        .iter()
-        .map(|(lo, up)| (lo.log10(), up.log10()))
-        .collect();
-
-    // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
-    let mut theta0s = Array2::zeros((n_start + 1, theta0.len()));
-    theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
-
-    match n_start.cmp(&1) {
-        std::cmp::Ordering::Equal => {
-            //let mut rng = Xoshiro256Plus::seed_from_u64(42);
-            let mut rng = Xoshiro256Plus::from_entropy();
-            let vals = bounds.iter().map(|(a, b)| rng.gen_range(*a..*b)).collect();
-            theta0s.row_mut(1).assign(&Array::from_vec(vals))
-        }
-        std::cmp::Ordering::Greater => {
-            let mut xlimits: Array2<F> = Array2::zeros((bounds.len(), 2));
-            // for mut row in xlimits.rows_mut() {
-            //     row.assign(&arr1(&[limits.0, limits.1]));
-            // }
-            Zip::from(xlimits.rows_mut())
-                .and(&bounds)
-                .for_each(|mut row, limits| row.assign(&arr1(&[limits.0, limits.1])));
-            // Use a seed here for reproducibility. Do we need to make it truly random
-            // Probably no, as it is just to get init values spread over
-            // [1e-6, 20] for multistart thanks to LHS method.
-
-            let seeds = Lhs::new(&xlimits)
-                .kind(egobox_doe::LhsKind::Maximin)
-                .with_rng(Xoshiro256Plus::seed_from_u64(42))
-                .sample(n_start);
-            Zip::from(theta0s.slice_mut(s![1.., ..]).rows_mut())
-                .and(seeds.rows())
-                .par_for_each(|mut theta, row| theta.assign(&row));
-        }
-        std::cmp::Ordering::Less => (),
-    };
-    (theta0s, bounds)
-}
-
-/// Optimize gp hyper parameters given an initial guess and bounds with NLOPT::Cobyla
-#[cfg(feature = "nlopt")]
-pub(crate) fn optimize_params<ObjF, F>(
-    objfn: ObjF,
-    param0: &Array1<F>,
-    bounds: &[(F, F)],
-    cobyla: CobylaParams,
-) -> (Array1<f64>, f64)
-where
-    ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
-    F: Float,
-{
-    use nlopt::*;
-
-    let base: f64 = 10.;
-    // block to drop optimizer and allow self.corr borrowing after
-    let mut optimizer = Nlopt::new(Algorithm::Cobyla, param0.len(), objfn, Target::Minimize, ());
-    let mut param = param0
-        .map(|v| unsafe { *(v as *const F as *const f64) })
-        .into_raw_vec();
-
-    let lower_bounds = bounds.iter().map(|b| into_f64(&b.0)).collect::<Vec<_>>();
-    optimizer.set_lower_bounds(&lower_bounds).unwrap();
-    let upper_bounds = bounds.iter().map(|b| into_f64(&b.1)).collect::<Vec<_>>();
-    optimizer.set_upper_bounds(&upper_bounds).unwrap();
-
-    optimizer.set_initial_step1(cobyla.rhobeg).unwrap();
-    optimizer.set_maxeval(cobyla.maxeval as u32).unwrap();
-    optimizer.set_ftol_rel(cobyla.ftol_rel).unwrap();
-
-    match optimizer.optimize(&mut param) {
-        Ok((_, fmin)) => {
-            let params_opt = arr1(&param);
-            let fval = if f64::is_nan(fmin) {
-                f64::INFINITY
-            } else {
-                fmin
-            };
-            (params_opt, fval)
-        }
-        Err(_e) => {
-            // println!("ERROR OPTIM in GP err={:?}", e);
-            (arr1(&param).mapv(|v| base.powf(v)), f64::INFINITY)
-        }
-    }
-}
-
-/// Optimize gp hyper parameters given an initial guess and bounds with cobyla
-#[cfg(not(feature = "nlopt"))]
-pub(crate) fn optimize_params<ObjF, F>(
-    objfn: ObjF,
-    param0: &Array1<F>,
-    bounds: &[(F, F)],
-    cobyla: CobylaParams,
-) -> (Array1<f64>, f64)
-where
-    ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
-    F: Float,
-{
-    use cobyla::{minimize, Func, StopTols};
-
-    let base: f64 = 10.;
-    let cons: Vec<&dyn Func<()>> = vec![];
-    let param0 = param0.map(|v| into_f64(v)).into_raw_vec();
-
-    let bounds: Vec<_> = bounds
-        .iter()
-        .map(|(lo, up)| (into_f64(lo), into_f64(up)))
-        .collect();
-
-    match minimize(
-        |x, u| objfn(x, None, u),
-        &param0,
-        &bounds,
-        &cons,
-        (),
-        cobyla.maxeval,
-        cobyla::RhoBeg::All(cobyla.rhobeg),
-        Some(StopTols {
-            ftol_rel: cobyla.ftol_rel,
-            ..StopTols::default()
-        }),
-    ) {
-        Ok((_, x_opt, fval)) => {
-            let params_opt = arr1(&x_opt);
-            let fval = if f64::is_nan(fval) {
-                f64::INFINITY
-            } else {
-                fval
-            };
-            (params_opt, fval)
-        }
-        Err((status, x_opt, _)) => {
-            println!("ERROR Cobyla optimizer in GP status={:?}", status);
-            (arr1(&x_opt).mapv(|v| base.powf(v)), f64::INFINITY)
-        }
-    }
-}
-
-#[inline(always)]
-fn into_f64<F: Float>(v: &F) -> f64 {
-    unsafe { *(v as *const F as *const f64) }
 }
 
 /// Compute reduced likelihood function
@@ -1249,7 +1088,7 @@ pub(crate) fn sample<F: Float>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
     use linfa::prelude::Predict;
@@ -1691,7 +1530,6 @@ mod tests {
             let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
             let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
 
-            // TODO: still brittle, to be reworked
             if y_pred[[0, 0]].abs() > 1e-1 && y_pred[[0, 0]].abs() > 1e-1 {
                 // do not test with fdiff when variance or deriv is too small
                 assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
@@ -1701,6 +1539,24 @@ mod tests {
                 assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
             }
         }
+    }
+
+    #[test]
+    fn test_fixed_theta() {
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let gp = Kriging::params()
+            .fit(&Dataset::new(xt.clone(), yt.clone()))
+            .expect("GP fit error");
+        let default = ThetaTuning::default();
+        assert_abs_diff_ne!(*gp.theta().to_vec(), default.init());
+        let expected = gp.theta().to_vec();
+
+        let gp = Kriging::params()
+            .theta_tuning(ThetaTuning::Fixed(expected.clone()))
+            .fit(&Dataset::new(xt, yt))
+            .expect("GP fit error");
+        assert_abs_diff_eq!(*gp.theta().to_vec(), expected);
     }
 
     fn x2sinx(x: &Array2<f64>) -> Array2<f64> {

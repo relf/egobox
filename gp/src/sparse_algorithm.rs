@@ -1,10 +1,8 @@
-use crate::algorithm::optimize_params;
 use crate::errors::{GpError, Result};
-use crate::sparse_parameters::{
-    Inducings, ParamEstimation, SgpParams, SgpValidParams, SparseMethod,
-};
-use crate::{correlation_models::*, utils::pairwise_differences};
-use crate::{prepare_multistart, sample, CobylaParams, GpSamplingMethod};
+use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
+use crate::sparse_parameters::{Inducings, ParamTuning, SgpParams, SgpValidParams, SparseMethod};
+use crate::ThetaTuning;
+use crate::{correlation_models::*, sample, utils::pairwise_differences, GpSamplingMethod};
 use finitediff::FiniteDiff;
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
@@ -449,12 +447,35 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             )?;
         };
 
+        let mut rng = match self.seed() {
+            Some(seed) => Xoshiro256Plus::seed_from_u64(*seed),
+            None => Xoshiro256Plus::from_entropy(),
+        };
+        let z = match self.inducings() {
+            Inducings::Randomized(n) => make_inducings(*n, &xtrain.view(), &mut rng),
+            Inducings::Located(z) => z.to_owned(),
+        };
+
+        // Initial guess for noise, when noise variance constant, it is not part of optimization params
+        let (is_noise_estimated, noise0) = match self.noise_variance() {
+            ParamTuning::Fixed(c) => (false, c),
+            ParamTuning::Optimized { init: c, bounds: _ } => (true, c),
+        };
+
+        let (init, bounds) = match self.theta_tuning() {
+            ThetaTuning::Optimized { init, bounds } => (init.clone(), bounds.clone()),
+            ThetaTuning::Fixed(init) => (
+                init.clone(),
+                init.iter().map(|v| (*v, *v)).collect::<Vec<_>>(),
+            ),
+        };
+
         // Initial guess for theta
-        let theta0_dim = self.theta_tuning().theta0().len();
+        let theta0_dim = init.len();
         let theta0 = if theta0_dim == 1 {
-            Array1::from_elem(w_star.ncols(), self.theta_tuning().theta0()[0])
+            Array1::from_elem(w_star.ncols(), self.theta_tuning().init()[0])
         } else if theta0_dim == w_star.ncols() {
-            Array::from_vec(self.theta_tuning().theta0().to_vec())
+            Array::from_vec(self.theta_tuning().init().to_vec())
         } else {
             panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
         };
@@ -462,15 +483,6 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         // Initial guess for variance
         let y_std = ytrain.std_axis(Axis(0), F::one());
         let sigma2_0 = y_std[0] * y_std[0];
-
-        // Initial guess for noise, when noise variance constant, it is not part of optimization params
-        let (is_noise_estimated, noise0) = match self.noise_variance() {
-            ParamEstimation::Fixed(c) => (false, c),
-            ParamEstimation::Estimated {
-                initial_guess: c,
-                bounds: _,
-            } => (true, c),
-        };
 
         // Params consist in [theta1, ..., thetap, sigma2, [noise]]
         // where sigma2 is the variance of the gaussian process
@@ -485,15 +497,6 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             // noise variance is estimated, noise0 is initial_guess
             params_0[n - 1] = *noise0;
         }
-
-        let mut rng = match self.seed() {
-            Some(seed) => Xoshiro256Plus::seed_from_u64(*seed),
-            None => Xoshiro256Plus::from_entropy(),
-        };
-        let z = match self.inducings() {
-            Inducings::Randomized(n) => make_inducings(*n, &xtrain.view(), &mut rng),
-            Inducings::Located(z) => z.to_owned(),
-        };
 
         // We prefer optimize variable change log10(theta)
         // as theta is used as exponent in objective function
@@ -539,11 +542,11 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         // // bounds of theta, variance and optionally noise variance
         // let mut bounds = vec![(F::cast(1e-16).log10(), F::cast(1.).log10()); params.ncols()];
         // Initial guess for theta
-        let bounds_dim = self.theta_tuning().bounds().len();
+        let bounds_dim = bounds.len();
         let bounds = if bounds_dim == 1 {
-            vec![self.theta_tuning().bounds()[0]; params_0.len()]
+            vec![bounds[0]; params_0.len()]
         } else if theta0_dim == params_0.len() {
-            self.theta_tuning().bounds().to_vec()
+            bounds.to_vec()
         } else {
             panic!(
                 "Bounds for theta should be either 1-dim or dim of xtrain ({}), got {}",
@@ -558,8 +561,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         bounds[params.ncols() - 1 - is_noise_estimated as usize] =
             (F::cast(1e-12).log10(), (F::cast(9.) * sigma2_0).log10());
         // optionally adjust noise variance bounds
-        if let ParamEstimation::Estimated {
-            initial_guess: _,
+        if let ParamTuning::Optimized {
+            init: _,
             bounds: (lo, up),
         } = self.noise_variance()
         {
@@ -594,6 +597,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             );
         debug!("elapsed optim = {:?}", now.elapsed().as_millis());
         let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
+
         let opt_theta = opt_params
             .slice(s![..n - 1 - is_noise_estimated as usize])
             .to_owned();
@@ -956,7 +960,7 @@ mod tests {
             Inducings::Located(z),
         )
         .sparse_method(SparseMethod::Vfe)
-        .noise_variance(ParamEstimation::Fixed(0.01))
+        .noise_variance(ParamTuning::Fixed(0.01))
         .fit(&Dataset::new(xt.clone(), yt.clone()))
         .expect("GP fitted");
 
@@ -999,8 +1003,8 @@ mod tests {
         .sparse_method(SparseMethod::Vfe)
         //.sparse_method(SparseMethod::Fitc)
         .theta_init(vec![0.1])
-        .noise_variance(ParamEstimation::Estimated {
-            initial_guess: 0.02,
+        .noise_variance(ParamTuning::Optimized {
+            init: 0.02,
             bounds: (1e-3, 1.),
         })
         .fit(&Dataset::new(xt.clone(), yt.clone()))

@@ -2,7 +2,7 @@ use crate::correlation_models::{CorrelationModel, SquaredExponentialCorr};
 use crate::errors::{GpError, Result};
 use crate::mean_models::ConstantMean;
 use crate::parameters::GpValidParams;
-use crate::{ParamTuning, ThetaTuning};
+use crate::ThetaTuning;
 use linfa::{Float, ParamGuard};
 use ndarray::Array2;
 #[cfg(feature = "serializable")]
@@ -10,16 +10,16 @@ use serde::{Deserialize, Serialize};
 
 /// Variance estimation method
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ParamEstimation<F: Float> {
+pub enum ParamTuning<F: Float> {
     /// Constant parameter (ie given not estimated)
     Fixed(F),
-    /// Parameter is estimated between given bounds (lower, upper) starting from the inital guess
-    Estimated { initial_guess: F, bounds: (F, F) },
+    /// Parameter is optimized between given bounds (lower, upper) starting from the inital guess
+    Optimized { init: F, bounds: (F, F) },
 }
-impl<F: Float> Default for ParamEstimation<F> {
-    fn default() -> ParamEstimation<F> {
-        Self::Estimated {
-            initial_guess: F::cast(1e-2),
+impl<F: Float> Default for ParamTuning<F> {
+    fn default() -> ParamTuning<F> {
+        Self::Optimized {
+            init: F::cast(1e-2),
             bounds: (F::cast(100.0) * F::epsilon(), F::cast(1e10)),
         }
     }
@@ -58,7 +58,7 @@ pub struct SgpValidParams<F: Float, Corr: CorrelationModel<F>> {
     /// gp
     gp_params: GpValidParams<F, ConstantMean, Corr>,
     /// Gaussian homeoscedastic noise variance
-    noise: ParamEstimation<F>,
+    noise: ParamTuning<F>,
     /// Inducing points
     z: Inducings<F>,
     /// Method
@@ -71,7 +71,7 @@ impl<F: Float> Default for SgpValidParams<F, SquaredExponentialCorr> {
     fn default() -> SgpValidParams<F, SquaredExponentialCorr> {
         SgpValidParams {
             gp_params: GpValidParams::default(),
-            noise: ParamEstimation::default(),
+            noise: ParamTuning::default(),
             z: Inducings::default(),
             method: SparseMethod::default(),
             seed: None,
@@ -116,7 +116,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     }
 
     /// Get noise variance configuration
-    pub fn noise_variance(&self) -> &ParamEstimation<F> {
+    pub fn noise_variance(&self) -> &ParamTuning<F> {
         &self.noise
     }
 
@@ -143,7 +143,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
                 n_start: 10,
                 nugget: F::cast(1000.0) * F::epsilon(),
             },
-            noise: ParamEstimation::default(),
+            noise: ParamTuning::default(),
             z: inducings,
             method: SparseMethod::default(),
             seed: None,
@@ -156,27 +156,32 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
         self
     }
 
-    /// Set initial value for theta hyper parameter.
+    /// Set value for theta hyper parameter.
     ///
-    /// During training process, the internal optimization is started from `theta_init`.
+    /// When theta is optimized, the internal optimization is started from `theta_init`.
+    /// When theta is fixed, this set theta constant value.
     pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
-        self.0.gp_params.theta_tuning = ParamTuning {
-            init: theta_init,
-            ..(self.0.gp_params.theta_tuning().clone()).into()
-        }
-        .try_into()
-        .unwrap();
+        self.0.gp_params.theta_tuning = match self.0.gp_params.theta_tuning {
+            ThetaTuning::Optimized { init: _, bounds } => ThetaTuning::Optimized {
+                init: theta_init,
+                bounds,
+            },
+            ThetaTuning::Fixed(_) => ThetaTuning::Fixed(theta_init),
+        };
         self
     }
 
     /// Set theta hyper parameter search space.
+    ///
+    /// This function is no-op when theta tuning is fixed
     pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
-        self.0.gp_params.theta_tuning = ParamTuning {
-            bounds: theta_bounds,
-            ..(self.0.gp_params.theta_tuning()).clone().into()
-        }
-        .try_into()
-        .unwrap();
+        self.0.gp_params.theta_tuning = match self.0.gp_params.theta_tuning {
+            ThetaTuning::Optimized { init, bounds: _ } => ThetaTuning::Optimized {
+                init,
+                bounds: theta_bounds,
+            },
+            ThetaTuning::Fixed(f) => ThetaTuning::Fixed(f),
+        };
         self
     }
 
@@ -227,7 +232,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     }
 
     /// Set noise variance configuration defining noise handling.
-    pub fn noise_variance(mut self, config: ParamEstimation<F>) -> Self {
+    pub fn noise_variance(mut self, config: ParamTuning<F>) -> Self {
         self.0.noise = config;
         self
     }
@@ -250,7 +255,7 @@ impl<F: Float, Corr: CorrelationModel<F>> ParamGuard for SgpParams<F, Corr> {
                     "`kpls_dim` canot be 0!".to_string(),
                 ));
             }
-            let theta = self.0.theta_tuning().theta0();
+            let theta = self.0.theta_tuning().init();
             if theta.len() > 1 && d > theta.len() {
                 return Err(GpError::InvalidValueError(format!(
                     "Dimension reduction ({}) should be smaller than expected
