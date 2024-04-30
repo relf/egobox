@@ -312,12 +312,12 @@ impl MixintMoeValidParams {
 
 /// Parameters for mixture of experts surrogate model
 #[derive(Clone, Serialize, Deserialize)]
-pub struct MixintGpMixParams(MixintMoeValidParams);
+pub struct MixintGpMixtureParams(MixintMoeValidParams);
 
-impl MixintGpMixParams {
-    /// Constructor given  `xtypes` specifications and given surrogate builder
+impl MixintGpMixtureParams {
+    /// Constructor given `xtypes` specifications and given surrogate builder
     pub fn new(xtypes: &[XType], surrogate_builder: &MoeBuilder) -> Self {
-        MixintGpMixParams(MixintMoeValidParams {
+        MixintGpMixtureParams(MixintMoeValidParams {
             surrogate_builder: surrogate_builder.clone(),
             xtypes: xtypes.to_vec(),
             work_in_folded_space: false,
@@ -387,9 +387,9 @@ impl MixintMoeValidParams {
     }
 }
 
-impl SurrogateBuilder for MixintGpMixParams {
+impl SurrogateBuilder for MixintGpMixtureParams {
     fn new_with_xtypes(xtypes: &[XType]) -> Self {
-        MixintGpMixParams::new(xtypes, &GpMixtureParams::new())
+        MixintGpMixtureParams::new(xtypes, &GpMixtureParams::new())
     }
 
     /// Sets the allowed regression models used in gaussian processes.
@@ -471,7 +471,7 @@ impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, EgoError>
     }
 }
 
-impl ParamGuard for MixintGpMixParams {
+impl ParamGuard for MixintGpMixtureParams {
     type Checked = MixintMoeValidParams;
     type Error = EgoError;
 
@@ -485,9 +485,9 @@ impl ParamGuard for MixintGpMixParams {
     }
 }
 
-impl From<MixintMoeValidParams> for MixintGpMixParams {
+impl From<MixintMoeValidParams> for MixintGpMixtureParams {
     fn from(item: MixintMoeValidParams) -> Self {
-        MixintGpMixParams(item)
+        MixintGpMixtureParams(item)
     }
 }
 
@@ -722,7 +722,7 @@ impl MixintContext {
         surrogate_builder: &MoeBuilder,
         dataset: &DatasetBase<Array2<f64>, Array2<f64>>,
     ) -> Result<MixintMoe> {
-        let mut params = MixintGpMixParams::new(&self.xtypes, surrogate_builder);
+        let mut params = MixintGpMixtureParams::new(&self.xtypes, surrogate_builder);
         let params = params.work_in_folded_space(self.work_in_folded_space);
         params.fit(dataset)
     }

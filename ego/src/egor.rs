@@ -155,7 +155,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
-    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, MixintGpMixParams> {
+    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, MixintGpMixtureParams> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
@@ -260,6 +260,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_ei_quadratic_egor_builder() {
+        let outdir = "target/test_egor_builder_01";
+        let outfile = format!("{outdir}/{DOE_INITIAL_FILE}");
+        let _ = std::fs::remove_file(&outfile);
         let initial_doe = array![[0.], [7.], [25.]];
         let res = EgorBuilder::optimize(xsinx)
             .configure(|cfg| {
@@ -269,14 +272,15 @@ mod tests {
                     .max_iters(30)
                     .doe(&initial_doe)
                     .target(-15.1)
-                    .outdir("target/tests")
+                    .outdir(outdir)
             })
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
-        let saved_doe: Array2<f64> = read_npy(format!("target/tests/{DOE_INITIAL_FILE}")).unwrap();
+        let saved_doe: Array2<f64> = read_npy(&outfile).unwrap();
+        let _ = std::fs::remove_file(&outfile);
         assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
     }
 
@@ -312,6 +316,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_with_hotstart_egor_builder() {
+        let outdir = "target/test_hotstart_01";
+        let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
+        let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
         let xlimits = array![[0.0, 25.0]];
         let doe = Lhs::new(&xlimits).sample(10);
         let res = EgorBuilder::optimize(xsinx)
@@ -319,7 +326,7 @@ mod tests {
                 config
                     .max_iters(15)
                     .doe(&doe)
-                    .outdir("target/tests")
+                    .outdir(outdir)
                     .random_seed(42)
             })
             .min_within(&xlimits)
@@ -332,13 +339,15 @@ mod tests {
             .configure(|config| {
                 config
                     .max_iters(5)
-                    .outdir("target/tests")
+                    .outdir(outdir)
                     .hot_start(true)
                     .random_seed(42)
             })
             .min_within(&xlimits)
             .run()
             .expect("Egor should minimize xsinx");
+        let _ = std::fs::remove_file(format!("target/test_egor_builder/{DOE_INITIAL_FILE}"));
+        let _ = std::fs::remove_file(format!("target/test_egor_builder/{DOE_FILE}"));
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
@@ -581,5 +590,51 @@ mod tests {
             .unwrap();
         println!("res={:?}", res);
         assert_abs_diff_eq!(&array![-15.], &res.y_opt, epsilon = 1.);
+    }
+
+    #[test]
+    #[serial]
+    fn test_mixobj_mixint_hotstart_egor_builder() {
+        let env = env_logger::Env::new().filter_or("EGOBOX_LOG", "info");
+        let mut builder = env_logger::Builder::from_env(env);
+        let builder = builder.target(env_logger::Target::Stdout);
+        builder.try_init().ok();
+
+        let outdir = "target/test_hotstart_02";
+        let outfile = format!("{outdir}/{DOE_INITIAL_FILE}");
+        let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
+        let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
+
+        let xtypes = vec![
+            XType::Cont(-5., 5.),
+            XType::Enum(3),
+            XType::Enum(2),
+            XType::Ord(vec![0., 2., 3.]),
+        ];
+        let xlimits = as_continuous_limits::<f64>(&xtypes);
+
+        EgorBuilder::optimize(mixobj)
+            .configure(|config| config.outdir(outdir).max_iters(1).random_seed(42))
+            .min_within_mixint_space(&xtypes)
+            .run()
+            .unwrap();
+
+        // Check saved DOE has continuous (unfolded) dimension + one output
+        let saved_doe: Array2<f64> = read_npy(outfile).unwrap();
+        assert_eq!(saved_doe.shape()[1], xlimits.nrows() + 1);
+
+        // Check that with no iteration, obj function is never called
+        // as the DOE does not need to be evaluated!
+        EgorBuilder::optimize(|_x| panic!("Should not call objective function!"))
+            .configure(|config| {
+                config
+                    .outdir(outdir)
+                    .hot_start(true)
+                    .max_iters(0)
+                    .random_seed(42)
+            })
+            .min_within_mixint_space(&xtypes)
+            .run()
+            .unwrap();
     }
 }
