@@ -155,7 +155,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
-    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, MixintGpMixParams> {
+    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, MixintGpMixtureParams> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
