@@ -314,12 +314,10 @@ where
         let doe = hstart_doe.as_ref().or(self.config.doe.as_ref());
 
         let (y_data, x_data) = if let Some(doe) = doe {
-            let cont_doe = to_continuous_space(&self.config.xtypes, doe);
-
             if doe.ncols() == self.xlimits.nrows() {
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
-                (self.eval_obj(problem, &doe), doe.to_owned())
+                (self.eval_obj(problem, doe), doe.to_owned())
             } else {
                 // split doe in x and y
                 info!("Use specified DOE {} samples", doe.nrows());
@@ -343,7 +341,7 @@ where
             let path = self.config.outdir.as_ref().unwrap();
             std::fs::create_dir_all(path)?;
             let filepath = std::path::Path::new(path).join(DOE_INITIAL_FILE);
-            info!("Save initial doe {:?} in {:?}", doe.shape(), filepath);
+            info!("Save initial doe shape {:?} in {:?}", doe.shape(), filepath);
             write_npy(filepath, &doe).expect("Write initial doe");
         }
 
@@ -500,7 +498,7 @@ where
             let path = self.config.outdir.as_ref().unwrap();
             std::fs::create_dir_all(path)?;
             let filepath = std::path::Path::new(path).join(DOE_FILE);
-            info!("Save doe in {:?}", filepath);
+            info!("Save doe shape {:?} in {:?}", doe.shape(), filepath);
             write_npy(filepath, &doe).expect("Write current doe");
         }
         let best_index = find_best_result_index(&y_data, &new_state.cstr_tol);

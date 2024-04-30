@@ -315,7 +315,7 @@ impl MixintMoeValidParams {
 pub struct MixintGpMixtureParams(MixintMoeValidParams);
 
 impl MixintGpMixtureParams {
-    /// Constructor given  `xtypes` specifications and given surrogate builder
+    /// Constructor given `xtypes` specifications and given surrogate builder
     pub fn new(xtypes: &[XType], surrogate_builder: &MoeBuilder) -> Self {
         MixintGpMixtureParams(MixintMoeValidParams {
             surrogate_builder: surrogate_builder.clone(),
