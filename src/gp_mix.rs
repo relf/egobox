@@ -152,6 +152,7 @@ impl GpMix {
                 bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
             }
         }
+        let theta_tunings = vec![theta_tuning; self.n_clusters];
 
         if let Err(ctrlc::Error::MultipleHandlers) = ctrlc::set_handler(|| std::process::exit(2)) {
             // ignore multiple handlers error
@@ -166,7 +167,7 @@ impl GpMix {
                 .correlation_spec(
                     egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
                 )
-                .theta_tuning(theta_tuning)
+                .theta_tunings(&theta_tunings)
                 .kpls_dim(self.kpls_dim)
                 .n_start(self.n_start)
                 .with_rng(rng)
