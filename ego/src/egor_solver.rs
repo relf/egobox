@@ -117,6 +117,7 @@ use crate::types::*;
 use crate::utils::{compute_cstr_scales, update_data};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
+use egobox_gp::ThetaTuning;
 use egobox_moe::{
     Clustering, CorrelationSpec, GpMixtureParams, MixtureGpSurrogate, RegressionSpec,
 };
@@ -196,6 +197,11 @@ impl SurrogateBuilder for GpMixtureParams<f64, Xoshiro256Plus> {
         *self = self.clone().n_clusters(n_clusters);
     }
 
+    /// Sets the number of clusters used by the mixture of surrogate experts.
+    fn set_theta_tunings(&mut self, theta_tunings: &[ThetaTuning<f64>]) {
+        *self = self.clone().theta_tunings(theta_tunings);
+    }
+
     fn train(
         &self,
         xt: &ArrayView2<f64>,
@@ -250,6 +256,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let rng = self.rng.clone();
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
         let mut clusterings = vec![None; 1 + self.config.n_cstr];
+        let mut theta_tunings = vec![None; 1 + self.config.n_cstr];
         let cstr_tol = self
             .config
             .cstr_tol
@@ -257,8 +264,10 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
         let (x_dat, _) = self.next_points(
             true,
+            0,
             false, // done anyway
             &mut clusterings,
+            &mut theta_tunings,
             x_data,
             y_data,
             &cstr_tol,
@@ -346,11 +355,13 @@ where
         }
 
         let clusterings = vec![None; self.config.n_cstr + 1];
+        let theta_inits = vec![None; self.config.n_cstr + 1];
         let no_point_added_retries = MAX_POINT_ADDITION_RETRY;
 
         let mut initial_state = state
             .data((x_data, y_data))
             .clusterings(clusterings)
+            .theta_inits(theta_inits)
             .sampling(sampling);
         initial_state.doe_size = doe.nrows();
         initial_state.max_iters = self.config.max_iters as u64;
@@ -385,6 +396,14 @@ where
                     PotentialBug,
                     "EgorSolver: No clustering!"
                 ))?;
+        let mut theta_inits =
+            state
+                .clone()
+                .take_theta_inits()
+                .ok_or_else(argmin_error_closure!(
+                    PotentialBug,
+                    "EgorSolver: No theta inits!"
+                ))?;
         let sampling = state
             .clone()
             .take_sampling()
@@ -415,8 +434,10 @@ where
 
             let (x_dat, y_dat) = self.next_points(
                 init,
+                new_state.get_iter(),
                 recluster,
                 &mut clusterings,
+                &mut theta_inits,
                 &x_data,
                 &y_data,
                 &state.cstr_tol,
@@ -429,6 +450,7 @@ where
 
             new_state = new_state
                 .clusterings(clusterings.clone())
+                .theta_inits(theta_inits.clone())
                 .data((x_data.clone(), y_data.clone()))
                 .sampling(sampling.clone())
                 .param(x_dat.row(0).to_owned())
@@ -535,13 +557,16 @@ where
         self.config.n_clusters == 0 && (added != 0 && added % 10 == 0 && added - prev_added > 0)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn make_clustered_surrogate(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         init: bool,
+        iter: u64,
         recluster: bool,
         clustering: Option<&Clustering>,
+        theta_inits: Option<&Array2<f64>>,
         model_name: &str,
     ) -> Box<dyn MixtureGpSurrogate> {
         let mut builder = self.surrogate_builder.clone();
@@ -551,6 +576,7 @@ where
         builder.set_n_clusters(self.config.n_clusters);
 
         if init || recluster {
+            println!("i={iter} RECLUST THETA OPTIM");
             if recluster {
                 info!("{} reclustering and training...", model_name);
             } else {
@@ -568,6 +594,29 @@ where
             model
         } else {
             let clustering = clustering.unwrap();
+
+            let theta_tunings = if iter % (self.config.n_optmod as u64) == 0 {
+                // set hyperparameters optimization
+                println!("i={iter} THETA OPTIM");
+                theta_inits
+                    .unwrap()
+                    .outer_iter()
+                    .map(|init| ThetaTuning::Optimized {
+                        init: init.to_vec(),
+                        bounds: ThetaTuning::default().bounds().unwrap().to_vec(),
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                // just use previous hyperparameters
+                println!("i={iter} THETA REUSED");
+                theta_inits
+                    .unwrap()
+                    .outer_iter()
+                    .map(|init| ThetaTuning::Fixed(init.to_vec()))
+                    .collect::<Vec<_>>()
+            };
+            builder.set_theta_tunings(&theta_tunings);
+
             let model = builder
                 .train_on_clusters(&xt.view(), &yt.view(), clustering)
                 .expect("GP training failure");
@@ -579,8 +628,10 @@ where
     fn next_points(
         &self,
         init: bool,
+        iter: u64,
         recluster: bool,
         clusterings: &mut [Option<Clustering>],
+        theta_inits: &mut [Option<Array2<f64>>],
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         cstr_tol: &Array1<f64>,
@@ -614,13 +665,25 @@ where
                             &xt,
                             &yt.slice(s![.., k..k + 1]).to_owned(),
                             init && i == 0,
+                            iter,
                             recluster,
                             clusterings[k].as_ref(),
+                            theta_inits[k].as_ref(),
                             &name,
                         )
                     })
                     .collect();
-            (0..=self.config.n_cstr).for_each(|k| clusterings[k] = Some(models[k].to_clustering()));
+            (0..=self.config.n_cstr).for_each(|k| {
+                clusterings[k] = Some(models[k].to_clustering());
+                let mut thetas_k = Array2::zeros((
+                    models[k].experts().len(),
+                    models[k].experts()[0].theta().len(),
+                ));
+                for (i, expert) in models[k].experts().iter().enumerate() {
+                    thetas_k.row_mut(i).assign(expert.theta());
+                }
+                theta_inits[k] = Some(thetas_k);
+            });
 
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");

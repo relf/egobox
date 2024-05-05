@@ -17,6 +17,9 @@ pub struct EgorConfig {
     pub(crate) max_iters: usize,
     /// Number of starts for multistart approach used for hyperparameters optimization
     pub(crate) n_start: usize,
+    /// Interval between two hyperparameters optimizations (as iteration number modulo)
+    /// hyperparameters are optimized or re-used from an iteration to another
+    pub(crate) n_optmod: usize,
     /// Number of points returned by EGO iteration (aka qEI Multipoint strategy)
     /// Actually as some point determination may fail (at most q_points are returned)
     pub(crate) q_points: usize,
@@ -64,6 +67,7 @@ impl Default for EgorConfig {
         EgorConfig {
             max_iters: 20,
             n_start: 20,
+            n_optmod: 1,
             q_points: 1,
             n_doe: 0,
             n_cstr: 0,
@@ -100,6 +104,12 @@ impl EgorConfig {
     /// Sets the number of runs of infill strategy optimizations (best result taken)
     pub fn n_start(mut self, n_start: usize) -> Self {
         self.n_start = n_start;
+        self
+    }
+
+    /// Sets the number of iteration interval between two hyperparameter optimization
+    pub fn n_optmod(mut self, n_optmod: usize) -> Self {
+        self.n_optmod = n_optmod;
         self
     }
 
