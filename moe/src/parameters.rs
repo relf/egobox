@@ -46,7 +46,7 @@ pub struct GpMixtureValidParams<F: Float, R: Rng + Clone> {
     /// Specification of GP correlation models to be used
     correlation_spec: CorrelationSpec,
     /// Theta hyperparameter tuning
-    theta_tuning: ThetaTuning<F>,
+    theta_tunings: Vec<ThetaTuning<F>>,
     /// Number of PLS components, should be used when problem size
     /// is over ten variables or so.
     kpls_dim: Option<usize>,
@@ -68,7 +68,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixtureValidParams<F,
             recombination: Recombination::Hard,
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
-            theta_tuning: ThetaTuning::default(),
+            theta_tunings: vec![ThetaTuning::default()],
             kpls_dim: None,
             n_start: 10,
             gmm: None,
@@ -105,8 +105,8 @@ impl<F: Float, R: Rng + Clone> GpMixtureValidParams<F, R> {
     }
 
     /// The speified tuning of theta hyperparameter
-    pub fn theta_tuning(&self) -> &ThetaTuning<F> {
-        &self.theta_tuning
+    pub fn theta_tunings(&self) -> &Vec<ThetaTuning<F>> {
+        &self.theta_tunings
     }
 
     /// The optional number of PLS components
@@ -166,7 +166,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> GpMixtureParams<F, R> {
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
-            theta_tuning: ThetaTuning::default(),
+            theta_tunings: vec![ThetaTuning::default()],
             kpls_dim: None,
             n_start: 10,
             gmm: None,
@@ -211,44 +211,15 @@ impl<F: Float, R: Rng + SeedableRng + Clone> GpMixtureParams<F, R> {
         self
     }
 
-    /// Set value for theta hyper parameter.
-    ///
-    /// When theta is optimized, the internal optimization is started from `theta_init`.
-    /// When theta is fixed, this set theta constant value.
-    pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
-        self.0.theta_tuning = match self.0.theta_tuning {
-            ThetaTuning::Optimized { init: _, bounds } => ThetaTuning::Optimized {
-                init: theta_init,
-                bounds,
-            },
-            ThetaTuning::Fixed(_) => ThetaTuning::Fixed(theta_init),
-        };
-        self
-    }
-
     /// Sets the number of componenets retained during PLS dimension reduction.
     pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
         self.0.kpls_dim = kpls_dim;
         self
     }
 
-    /// Set theta hyper parameter search space.
-    ///
-    /// This function is no-op when theta tuning is fixed
-    pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
-        self.0.theta_tuning = match self.0.theta_tuning {
-            ThetaTuning::Optimized { init, bounds: _ } => ThetaTuning::Optimized {
-                init,
-                bounds: theta_bounds,
-            },
-            ThetaTuning::Fixed(f) => ThetaTuning::Fixed(f),
-        };
-        self
-    }
-
     /// Set theta hyper parameter tuning
-    pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<F>) -> Self {
-        self.0.theta_tuning = theta_tuning;
+    pub fn theta_tunings(mut self, theta_tunings: &[ThetaTuning<F>]) -> Self {
+        self.0.theta_tunings = theta_tunings.to_vec();
         self
     }
 
@@ -282,7 +253,7 @@ impl<F: Float, R: Rng + SeedableRng + Clone> GpMixtureParams<F, R> {
             recombination: self.0.recombination(),
             regression_spec: self.0.regression_spec(),
             correlation_spec: self.0.correlation_spec(),
-            theta_tuning: self.0.theta_tuning().clone(),
+            theta_tunings: self.0.theta_tunings().clone(),
             kpls_dim: None,
             n_start: self.0.n_start(),
             gmm: self.0.gmm().cloned(),
@@ -303,6 +274,11 @@ impl<F: Float, R: Rng + Clone> ParamGuard for GpMixtureParams<F, R> {
                     "`kpls_dim` canot be 0!".to_string(),
                 ));
             }
+        }
+        if self.0.n_clusters > 1 && self.0.theta_tunings.len() == 1 {
+        } else if self.0.n_clusters > 0 && self.0.n_clusters != self.0.theta_tunings.len() {
+            panic!("Number of clusters (={}) and theta init size (={}) not compatible, should be equal", 
+            self.0.n_clusters, self.0.theta_tunings.len());
         }
         Ok(&self.0)
     }
