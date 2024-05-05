@@ -19,7 +19,7 @@ pub enum ThetaTuning<F: Float> {
 impl<F: Float> Default for ThetaTuning<F> {
     fn default() -> Self {
         ThetaTuning::Optimized {
-            init: vec![F::cast(0.01)],
+            init: vec![F::cast(ThetaTuning::<F>::DEFAULT_INIT)],
             bounds: vec![(
                 F::cast(ThetaTuning::<F>::DEFAULT_BOUNDS.0),
                 F::cast(ThetaTuning::<F>::DEFAULT_BOUNDS.1),
@@ -29,6 +29,7 @@ impl<F: Float> Default for ThetaTuning<F> {
 }
 
 impl<F: Float> ThetaTuning<F> {
+    pub const DEFAULT_INIT: f64 = 1e-2;
     pub const DEFAULT_BOUNDS: (f64, f64) = (1e-6, 1e2);
 
     pub fn init(&self) -> &Vec<F> {
