@@ -303,6 +303,18 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_xsinx_optmod_egor() {
+        let res = EgorBuilder::optimize(xsinx)
+            .configure(|config| config.max_iters(20).n_optmod(3))
+            .min_within(&array![[0.0, 25.0]])
+            .run()
+            .expect("Egor should minimize");
+        let expected = array![18.9];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+    }
+
+    #[test]
+    #[serial]
     fn test_xsinx_auto_clustering_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| config.n_clusters(0).max_iters(20))

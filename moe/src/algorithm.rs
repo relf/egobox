@@ -154,14 +154,15 @@ impl<R: Rng + SeedableRng + Clone> GpMixtureValidParams<f64, R> {
         // Fit GPs on clustered data
         let mut experts = Vec::new();
         let nb_clusters = clusters.len();
-        for cluster in clusters {
+        for (nc, cluster) in clusters.iter().enumerate() {
             if nb_clusters > 1 && cluster.nrows() < 3 {
                 return Err(MoeError::ClusteringError(format!(
                     "Not enough points in cluster, requires at least 3, got {}",
                     cluster.nrows()
                 )));
             }
-            let expert = self.find_best_expert(nx, &cluster)?;
+            debug!("nc={} theta_tuning={:?}", nc, self.theta_tunings());
+            let expert = self.find_best_expert(nc, nx, cluster)?;
             experts.push(expert);
         }
 
@@ -196,6 +197,7 @@ impl<R: Rng + SeedableRng + Clone> GpMixtureValidParams<f64, R> {
     /// The error is computed using cross-validation
     fn find_best_expert(
         &self,
+        nc: usize,
         nx: usize,
         data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Box<dyn FullGpSurrogate>> {
@@ -277,7 +279,11 @@ impl<R: Rng + SeedableRng + Clone> GpMixtureValidParams<f64, R> {
                 let mut expert_params = best_expert_params?;
                 expert_params.n_start(self.n_start());
                 expert_params.kpls_dim(self.kpls_dim());
-                expert_params.theta_tuning(self.theta_tuning().clone());
+                if nc > 0 && self.theta_tunings().len() == 1 {
+                    expert_params.theta_tuning(self.theta_tunings()[0].clone());
+                } else {
+                    expert_params.theta_tuning(self.theta_tunings()[nc].clone());
+                }
                 debug!("Train best expert...");
                 expert_params.train(&xtrain.view(), &ytrain.view())
             }
@@ -303,12 +309,12 @@ impl<R: Rng + SeedableRng + Clone> GpMixtureValidParams<f64, R> {
                     };
                 let mut expert_params = best_expert_params?;
                 let seed = self.rng().gen();
-                debug!("Theta tuning = {:?}", self.theta_tuning());
+                debug!("Theta tuning = {:?}", self.theta_tunings());
                 expert_params.sparse_method(*sparse_method);
                 expert_params.seed(seed);
                 expert_params.n_start(self.n_start());
                 expert_params.kpls_dim(self.kpls_dim());
-                expert_params.theta_tuning(self.theta_tuning().clone());
+                expert_params.theta_tuning(self.theta_tunings()[0].clone());
                 debug!("Train best expert...");
                 expert_params.train(&xtrain.view(), &ytrain.view())
             }
@@ -1054,7 +1060,7 @@ mod tests {
         let yt = xt.mapv(|x| xsinx(&[x]));
         let data = concatenate(Axis(1), &[xt.view(), yt.view()]).unwrap();
         let moe = GpMixture::params().with_rng(rng).check_unwrap();
-        let best_expert = &moe.find_best_expert(1, &data).unwrap();
+        let best_expert = &moe.find_best_expert(0, 1, &data).unwrap();
         println!("Best expert {best_expert}");
     }
 

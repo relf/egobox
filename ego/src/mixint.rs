@@ -5,6 +5,7 @@
 use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
+use egobox_gp::ThetaTuning;
 use egobox_moe::{
     Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
     GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, RegressionSpec,
@@ -431,6 +432,19 @@ impl SurrogateBuilder for MixintGpMixtureParams {
     fn set_n_clusters(&mut self, n_clusters: usize) {
         self.0 = MixintMoeValidParams {
             surrogate_builder: self.0.surrogate_builder.clone().n_clusters(n_clusters),
+            xtypes: self.0.xtypes.clone(),
+            work_in_folded_space: self.0.work_in_folded_space,
+        }
+    }
+
+    /// Sets the theta hyperparameter tuning strategy
+    fn set_theta_tunings(&mut self, theta_tunings: &[ThetaTuning<f64>]) {
+        self.0 = MixintMoeValidParams {
+            surrogate_builder: self
+                .0
+                .surrogate_builder
+                .clone()
+                .theta_tunings(theta_tunings),
             xtypes: self.0.xtypes.clone(),
             work_in_folded_space: self.0.work_in_folded_space,
         }

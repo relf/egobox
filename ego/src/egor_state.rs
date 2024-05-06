@@ -192,18 +192,21 @@ pub struct EgorState<F: Float> {
     pub(crate) prev_added: usize,
     /// Current number of retry without adding point
     pub(crate) no_point_added_retries: i32,
-    /// run_lhs_optim
+    /// Flag to trigger LHS optimization
     pub(crate) lhs_optim: bool,
+    /// Constraint tolerance cstr < cstr_tol.
+    /// It used to assess the validity of the param point and hence the corresponding cost
+    pub(crate) cstr_tol: Array1<F>,
 
-    /// Current clusterings for objective and constraints mixture surrogate models
+    /// Current clusterings for objective and constraints GP mixture surrogate models
     pub(crate) clusterings: Option<Vec<Option<Clustering>>>,
+    /// ThetaTunings controlled by n_optmod configuration triggering
+    /// GP surrogate models hyperparameters optimization or reusing previous ones
+    pub(crate) theta_inits: Option<Vec<Option<Array2<F>>>>,
     /// Historic data (params, objective and constraints)
     pub(crate) data: Option<(Array2<F>, Array2<F>)>,
     /// Sampling method used to generate space filling samples
     pub(crate) sampling: Option<Lhs<F, Xoshiro256Plus>>,
-    /// Constraint tolerance cstr < cstr_tol.
-    /// It used to assess the validity of the param point and hence the corresponding cost
-    pub(crate) cstr_tol: Array1<F>,
 }
 
 impl<F> EgorState<F>
@@ -314,6 +317,17 @@ where
     /// Moves the current clusterings out and replaces it internally with `None`.
     pub fn take_clusterings(&mut self) -> Option<Vec<Option<Clustering>>> {
         self.clusterings.take()
+    }
+
+    /// Set the current theta init value used by surrogate models
+    pub fn theta_inits(mut self, theta_inits: Vec<Option<Array2<F>>>) -> Self {
+        self.theta_inits = Some(theta_inits);
+        self
+    }
+
+    /// Moves the current theta inits out and replaces it internally with `None`.
+    pub fn take_theta_inits(&mut self) -> Option<Vec<Option<Array2<F>>>> {
+        self.theta_inits.take()
     }
 
     /// Set the current data points as training points for the surrogate models
@@ -445,6 +459,7 @@ where
             clusterings: None,
             data: None,
             sampling: None,
+            theta_inits: None,
             cstr_tol: Array1::zeros(0),
         }
     }

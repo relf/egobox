@@ -1,6 +1,6 @@
 use crate::errors::Result;
 use argmin::core::CostFunction;
-use egobox_moe::{Clustering, MixtureGpSurrogate};
+use egobox_moe::{Clustering, MixtureGpSurrogate, ThetaTuning};
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayView2};
 use serde::{Deserialize, Serialize};
@@ -122,6 +122,9 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
 
     /// Sets the number of clusters used by the mixture of surrogate experts.
     fn set_n_clusters(&mut self, n_clusters: usize);
+
+    /// Sets the hyperparameters tuning strategy
+    fn set_theta_tunings(&mut self, theta_tunings: &[ThetaTuning<f64>]);
 
     /// Train the surrogate with given training dataset (x, y)
     fn train(

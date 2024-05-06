@@ -52,7 +52,7 @@ def G24_c2(point):
 def g24(point):
     p = np.atleast_2d(point)
     res = np.array([G24(p), G24_c1(p), G24_c2(p)]).T
-    print(res)
+    print(f"y={res}")
     return res
 
 
@@ -65,9 +65,9 @@ def six_humps(x):
     x = np.atleast_2d(x)
     x1 = x[:, 0]
     x2 = x[:, 1]
-    print(x)
+    print(f"x={x}")
     sum1 = 4 * x1**2 - 2.1 * x1**4 + 1.0 / 3.0 * x1**6 + x1 * x2 - 4 * x2**2 + 4 * x2**4
-    print(np.atleast_2d(sum1).T)
+    print(f"y={np.atleast_2d(sum1).T}")
     return np.atleast_2d(sum1).T
 
 
@@ -142,7 +142,7 @@ class TestOptimizer(unittest.TestCase):
             seed=1,
         )
         start = time.process_time()
-        res = egor.minimize(g24, max_iters=20)
+        res = egor.minimize(g24, max_iters=30)
         end = time.process_time()
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=5e-1)
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
