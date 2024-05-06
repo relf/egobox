@@ -576,7 +576,7 @@ where
         builder.set_n_clusters(self.config.n_clusters);
 
         if init || recluster {
-            println!("i={iter} RECLUST THETA OPTIM");
+            debug!("i={iter} RECLUST THETA OPTIM");
             if recluster {
                 info!("{} reclustering and training...", model_name);
             } else {
@@ -597,7 +597,7 @@ where
 
             let theta_tunings = if iter % (self.config.n_optmod as u64) == 0 {
                 // set hyperparameters optimization
-                println!("i={iter} THETA OPTIM");
+                debug!("i={iter} THETA OPTIM");
                 theta_inits
                     .unwrap()
                     .outer_iter()
@@ -608,7 +608,7 @@ where
                     .collect::<Vec<_>>()
             } else {
                 // just use previous hyperparameters
-                println!("i={iter} THETA REUSED");
+                debug!("i={iter} THETA REUSED");
                 theta_inits
                     .unwrap()
                     .outer_iter()
