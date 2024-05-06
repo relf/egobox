@@ -692,7 +692,7 @@ where
 }
 
 /// Gausssian Process adaptator to implement `linfa::Predict` trait for variance prediction.
-struct GpVariancePredictor<'a, F, Mean, Corr>(&'a GaussianProcess<F, Mean, Corr>)
+pub struct GpVariancePredictor<'a, F, Mean, Corr>(&'a GaussianProcess<F, Mean, Corr>)
 where
     F: Float,
     Mean: RegressionModel<F>,

@@ -378,14 +378,14 @@ where
     }
 }
 
-/// Gausssian Process adaptator to implement `linfa::Predict` trait for variance prediction.
-struct GpVariancePredictor<'a, F, Corr>(&'a SparseGaussianProcess<F, Corr>)
+/// Sparse Gausssian Process adaptator to implement `linfa::Predict` trait for variance prediction.
+pub struct SparseGpVariancePredictor<'a, F, Corr>(&'a SparseGaussianProcess<F, Corr>)
 where
     F: Float,
     Corr: CorrelationModel<F>;
 
 impl<'a, F, D, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
-    for GpVariancePredictor<'a, F, Corr>
+    for SparseGpVariancePredictor<'a, F, Corr>
 where
     F: Float,
     D: Data<Elem = F>,
