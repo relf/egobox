@@ -608,21 +608,21 @@ where
                         bounds: ThetaTuning::default().bounds().unwrap().to_vec(),
                     })
                     .collect::<Vec<_>>();
-                    if model_name == "Objective" {
+                if model_name == "Objective" {
                     info!("Objective model hyperparameters optim init >>> {inits:?}");
-                    }
-                    inits
-                } else {
+                }
+                inits
+            } else {
                 // just use previous hyperparameters
                 let inits = theta_inits
                     .unwrap()
                     .outer_iter()
                     .map(|init| ThetaTuning::Fixed(init.to_vec()))
                     .collect::<Vec<_>>();
-                    if model_name == "Objective" {
-                        info!("Objective model hyperparameters reused >>> {inits:?}");
-                        }
-                    inits
+                if model_name == "Objective" {
+                    info!("Objective model hyperparameters reused >>> {inits:?}");
+                }
+                inits
             };
             builder.set_theta_tunings(&theta_tunings);
 
@@ -750,10 +750,7 @@ where
         let scaling_points = sampling.sample(npts);
         let scale_infill_obj =
             self.compute_infill_obj_scale(&scaling_points.view(), obj_model, f_min);
-        info!(
-            "Infill criterion scaler is updated to {}",
-            scale_infill_obj
-        );
+        info!("Infill criterion scaler is updated to {}", scale_infill_obj);
         let scale_cstr = if cstr_models.is_empty() {
             Array1::zeros((0,))
         } else {
