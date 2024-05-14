@@ -57,6 +57,8 @@ serde_json = "1"
 typetag = { version = "0.2" }
 dyn-clonable = { version = "0.9" }
 
+derive_more = "0.99"
+
 [dev-dependencies]
 criterion = "0.5"
 approx = "0.4"

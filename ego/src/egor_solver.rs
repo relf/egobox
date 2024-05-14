@@ -384,7 +384,7 @@ where
         fobj: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
-        info!(
+        debug!(
             "********* Start iteration {}/{}",
             state.get_iter() + 1,
             state.get_max_iters()
@@ -695,7 +695,7 @@ where
             });
 
             let (obj_model, cstr_models) = models.split_first().unwrap();
-            info!("... surrogates trained");
+            debug!("... surrogates trained");
 
             match self.find_best_point(
                 x_data,
@@ -746,16 +746,19 @@ where
         f_min: f64,
     ) -> (f64, Array1<f64>, f64) {
         let npts = (100 * self.xlimits.nrows()).min(1000);
-        info!("Use {npts} to evaluate scalers");
+        debug!("Use {npts} points to evaluate scalings");
         let scaling_points = sampling.sample(npts);
         let scale_infill_obj =
             self.compute_infill_obj_scale(&scaling_points.view(), obj_model, f_min);
-        info!("Infill criterion scaler is updated to {}", scale_infill_obj);
+        info!(
+            "Infill criterion scaling is updated to {}",
+            scale_infill_obj
+        );
         let scale_cstr = if cstr_models.is_empty() {
             Array1::zeros((0,))
         } else {
             let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
-            info!("Constraints scaler is updated to {}", scale_cstr);
+            info!("Constraints scalings is updated to {}", scale_cstr);
             scale_cstr
         };
         let scale_ic =

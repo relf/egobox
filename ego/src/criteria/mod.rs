@@ -14,6 +14,9 @@ use ndarray::{Array1, ArrayView2};
 #[clonable]
 #[typetag::serde(tag = "type")]
 pub trait InfillCriterion: Clone + Sync {
+    /// Name of the infill criterion
+    fn name(&self) -> &'static str;
+
     /// Criterion value at given point x with regards to given
     /// surrogate of the objectove function, the current found min
     /// and an optional acaling factor
@@ -36,4 +39,10 @@ pub trait InfillCriterion: Clone + Sync {
 
     /// Scaling factor computation
     fn scaling(&self, x: &ArrayView2<f64>, obj_model: &dyn MixtureGpSurrogate, f_min: f64) -> f64;
+}
+
+impl std::fmt::Debug for dyn InfillCriterion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.name())
+    }
 }
