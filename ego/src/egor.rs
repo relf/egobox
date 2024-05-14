@@ -227,7 +227,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
-    use ndarray::{array, s, ArrayView2, Ix1, Zip};
+    use ndarray::{array, s, Array2, ArrayView2, Ix1, Zip};
 
     use ndarray_npy::read_npy;
 
