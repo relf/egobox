@@ -181,19 +181,6 @@ pub struct Egor<O: GroupFunc, SB: SurrogateBuilder> {
 }
 
 impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
-    /// Given an evaluated doe (x, y) data, return the next promising x point
-    /// where optimum may occurs regarding the infill criterium.
-    /// This function inverse the control of the optimization and can used
-    /// ask-and-tell interface to the EGO optimizer.
-    ///
-    #[deprecated(since = "0.13.0", note = "moved in EgorService struct impl")]
-    pub fn suggest(
-        &self,
-        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Array2<f64> {
-        self.solver.suggest(x_data, y_data)
-    }
 
     /// Runs the (constrained) optimization of the objective function.
     pub fn run(&self) -> Result<OptimResult<f64>> {
