@@ -141,6 +141,8 @@ use argmin::core::{
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use std::time::Instant;
+
 /// Numpy filename for initial DOE dump
 pub const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 /// Numpy Filename for current DOE dump
@@ -382,11 +384,12 @@ where
         fobj: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
-        debug!(
+        info!(
             "********* Start iteration {}/{}",
             state.get_iter() + 1,
             state.get_max_iters()
         );
+        let now = Instant::now();
         // Retrieve Egor internal state
         let mut clusterings =
             state
@@ -525,9 +528,10 @@ where
         }
         let best_index = find_best_result_index(&y_data, &new_state.cstr_tol);
         info!(
-            "********* End iteration {}/{}: Best fun(x)={} at x={}",
+            "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
             new_state.get_iter() + 1,
             new_state.get_max_iters(),
+            now.elapsed().as_secs_f64(),
             y_data.row(best_index),
             x_data.row(best_index)
         );
@@ -576,7 +580,6 @@ where
         builder.set_n_clusters(self.config.n_clusters);
 
         if init || recluster {
-            debug!("i={iter} RECLUST THETA OPTIM");
             if recluster {
                 info!("{} reclustering and training...", model_name);
             } else {
@@ -597,23 +600,29 @@ where
 
             let theta_tunings = if iter % (self.config.n_optmod as u64) == 0 {
                 // set hyperparameters optimization
-                debug!("i={iter} THETA OPTIM");
-                theta_inits
+                let inits = theta_inits
                     .unwrap()
                     .outer_iter()
                     .map(|init| ThetaTuning::Optimized {
                         init: init.to_vec(),
                         bounds: ThetaTuning::default().bounds().unwrap().to_vec(),
                     })
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>();
+                if model_name == "Objective" {
+                    info!("Objective model hyperparameters optim init >>> {inits:?}");
+                }
+                inits
             } else {
                 // just use previous hyperparameters
-                debug!("i={iter} THETA REUSED");
-                theta_inits
+                let inits = theta_inits
                     .unwrap()
                     .outer_iter()
                     .map(|init| ThetaTuning::Fixed(init.to_vec()))
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>();
+                if model_name == "Objective" {
+                    info!("Objective model hyperparameters reused >>> {inits:?}");
+                }
+                inits
             };
             builder.set_theta_tunings(&theta_tunings);
 
@@ -686,7 +695,7 @@ where
             });
 
             let (obj_model, cstr_models) = models.split_first().unwrap();
-            debug!("... surrogates trained");
+            info!("... surrogates trained");
 
             match self.find_best_point(
                 x_data,
@@ -736,20 +745,17 @@ where
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
         f_min: f64,
     ) -> (f64, Array1<f64>, f64) {
-        let npts = 100 * self.xlimits.nrows();
-        let scaling_points = sampling.sample(100 * self.xlimits.nrows());
-        debug!("LHS of {npts} for scaling");
+        let npts = (100 * self.xlimits.nrows()).min(1000);
+        info!("Use {npts} to evaluate scalers");
+        let scaling_points = sampling.sample(npts);
         let scale_infill_obj =
             self.compute_infill_obj_scale(&scaling_points.view(), obj_model, f_min);
-        info!(
-            "Infill criterion scaling is updated to {}",
-            scale_infill_obj
-        );
+        info!("Infill criterion scaler is updated to {}", scale_infill_obj);
         let scale_cstr = if cstr_models.is_empty() {
             Array1::zeros((0,))
         } else {
             let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
-            info!("Constraints scaling is updated to {}", scale_cstr);
+            info!("Constraints scaler is updated to {}", scale_cstr);
             scale_cstr
         };
         let scale_ic =
@@ -865,7 +871,6 @@ where
             })
             .collect();
         let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
-
         info!("Optimize infill criterion...");
         let obj_data = ObjData {
             scale_infill_obj,

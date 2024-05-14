@@ -252,11 +252,11 @@ fn main() -> anyhow::Result<()> {
 
     let dim = args.dim;
     let outdir = args.outdir;
-    let n_doe = 2 * dim;
-    let max_iters = 2 * dim;
+    let n_doe = 4 * dim;
+    let max_iters = 4 * dim;
     const N_CSTR: usize = 68;
     let cstr_tol = Array1::from_elem(N_CSTR, 1e-4);
-    let kpls_dim = 3;
+    let kpls_dim = 10;
 
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
@@ -269,6 +269,7 @@ fn main() -> anyhow::Result<()> {
                 .n_clusters(1)
                 .n_start(50)
                 .n_doe(n_doe)
+                .n_optmod(3)
                 .max_iters(max_iters)
                 .regression_spec(RegressionSpec::CONSTANT)
                 .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
