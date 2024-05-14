@@ -97,7 +97,7 @@ use crate::types::*;
 
 use egobox_moe::GpMixtureParams;
 use log::info;
-use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
+use ndarray::{concatenate, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
