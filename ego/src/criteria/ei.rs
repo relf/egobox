@@ -12,6 +12,10 @@ pub struct ExpectedImprovement;
 
 #[typetag::serde]
 impl InfillCriterion for ExpectedImprovement {
+    fn name(&self) -> &'static str {
+        "EI"
+    }
+
     /// Compute EI infill criterion at given `x` point using the surrogate model `obj_model`
     /// and the current minimum of the objective function.
     fn value(

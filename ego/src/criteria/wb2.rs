@@ -11,6 +11,14 @@ pub struct WB2Criterion(pub Option<f64>);
 
 #[typetag::serde]
 impl InfillCriterion for WB2Criterion {
+    fn name(&self) -> &'static str {
+        if self.0.is_some() {
+            "WB2S"
+        } else {
+            "WB2"
+        }
+    }
+
     /// Compute WBS2 infill criterion at given `x` point using the surrogate model `obj_model`
     /// and the current minimum of the objective function.
     fn value(
@@ -63,6 +71,7 @@ pub(crate) fn compute_wb2s_scale(
 ) -> f64 {
     let ratio = 100.; // TODO: make it a parameter
     let ei_x = x.map_axis(Axis(1), |xi| {
+        let xi = xi.as_standard_layout();
         let ei = EI.value(xi.as_slice().unwrap(), obj_model, f_min, None);
         ei
     });

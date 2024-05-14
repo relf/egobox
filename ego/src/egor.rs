@@ -184,6 +184,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     /// Runs the (constrained) optimization of the objective function.
     pub fn run(&self) -> Result<OptimResult<f64>> {
         let xtypes = self.solver.config.xtypes.clone();
+        info!("{:?}", self.solver.config);
 
         let result = Executor::new(self.fobj.clone(), self.solver.clone()).run()?;
         info!("{}", result);

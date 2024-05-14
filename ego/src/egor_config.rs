@@ -8,7 +8,7 @@ use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 
 /// Egor optimizer configuration
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct EgorConfig {
     /// Max number of function iterations allocated to find the optimum (aka iteration budget)
     /// Note 1 : The number of cost function evaluations is deduced using the following formula (n_doe + max_iters)
