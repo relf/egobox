@@ -1,14 +1,27 @@
 # Changes
 
-## Version 0.18.1 - 10/04/2023
+## Version 0.19.0 - 15/05/2024
+
+* `ego`:
+  * Allow to reuse surrogate trainings (reuse previous hyperparameters) from a previous iteration by @relf in <https://github.com/relf/egobox/pull/157>
+  * Fix hot start mechanism due to bad loaded DOE exploitation by @relf in <https://github.com/relf/egobox/pull/156>
+  * Adjust log messages by @relf in <https://github.com/relf/egobox/pull/158>
+  * Log Egor configuration by @relf in <https://github.com/relf/egobox/pull/159>
+* `gp`:
+  * Allow fixed hyperparameters theta for GP and Sparse GP by @relf in <https://github.com/relf/egobox/pull/155>
+* `egobox`:
+  * Upgrade to pyo3 0.21 by @relf in <https://github.com/relf/egobox/pull/152>
+  * Upgrade dependencies by @relf in <https://github.com/relf/egobox/pull/153>
+
+## Version 0.18.1 - 10/04/2024
 
 * Fix GP mixture with kpls option on Griewank test function by @relf in <https://github.com/relf/egobox/pull/150>
 
-## Version 0.18.0 - 08/04/2023
+## Version 0.18.0 - 08/04/2024
 
 * [Breaking changes] `gp`, `moe`, `egobox` (Python): Rename `predict_derivatives()` as `predict_gradients()` by @relf in <https://github.com/relf/egobox/pull/148>
 
-## Version 0.17.0 - 04/04/2023
+## Version 0.17.0 - 04/04/2024
 
 * [Breaking changes] `gp` API renaming by @relf in <https://github.com/relf/egobox/pull/145>
   * `predict_values()` is renamed `predict()`
