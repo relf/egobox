@@ -101,7 +101,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///
 ///     par_infill_strategy (ParInfillStrategy enum)
 ///         Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
-///         q parallel evaluations of the function under optimization.
+///         q parallel evaluations of the function under optimization (only used when q_points > 1)
 ///         Can be either ParInfillStrategy.KB (Kriging Believer),
 ///         ParInfillStrategy.KBLB (KB Lower Bound), ParInfillStrategy.KBUB (KB Upper Bound),
 ///         ParInfillStrategy.CLMIN (Constant Liar Minimum)
@@ -120,6 +120,12 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         10-points addition (should say 'tentative addition' because addition may fail for some points
 ///         but it is counted anyway).
 ///   
+///     n_optmod (int >= 1)
+///         Number of iterations between two surrogate models training (hypermarameters optimization)
+///         otherwise previous hyperparameters are re-used. The default value is 1 meaning surrogates are
+///         properly trained at each iteration. The value is used as a modulo of iteration number. For instance,
+///         with a value of 3, after the first iteration surrogate are trained at iteration 3, 6, 9, etc.  
+///
 ///     target (float)
 ///         Known optimum used as stopping criterion.
 ///
@@ -148,6 +154,7 @@ pub(crate) struct Egor {
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub n_clusters: Option<usize>,
+    pub n_optmod: usize,
     pub target: f64,
     pub outdir: Option<String>,
     pub hot_start: bool,
@@ -184,6 +191,7 @@ impl Egor {
         infill_optimizer = InfillOptimizer::Cobyla,
         kpls_dim = None,
         n_clusters = 1,
+        n_optmod = 1, 
         target = f64::NEG_INFINITY,
         outdir = None,
         hot_start = false,
@@ -206,6 +214,7 @@ impl Egor {
         infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
         n_clusters: Option<usize>,
+        n_optmod: usize,
         target: f64,
         outdir: Option<String>,
         hot_start: bool,
@@ -227,6 +236,7 @@ impl Egor {
             infill_optimizer,
             kpls_dim,
             n_clusters,
+            n_optmod,
             target,
             outdir,
             hot_start,
@@ -442,6 +452,7 @@ impl Egor {
             .q_points(self.q_points)
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
+            .n_optmod(self.n_optmod)
             .target(self.target)
             .hot_start(self.hot_start); // when used as a service no hotstart
         if let Some(doe) = doe {
