@@ -191,7 +191,7 @@ impl Egor {
         infill_optimizer = InfillOptimizer::Cobyla,
         kpls_dim = None,
         n_clusters = 1,
-        n_optmod = 1, 
+        n_optmod = 1,
         target = f64::NEG_INFINITY,
         outdir = None,
         hot_start = false,
