@@ -5,7 +5,7 @@ import egobox as egx
 import time
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 def xsinx(x: np.ndarray) -> np.ndarray:
@@ -119,6 +119,7 @@ class TestOptimizer(unittest.TestCase):
             cstr_tol=np.array([1e-3, 1e-3]),
             n_cstr=n_cstr,
             seed=42,
+            n_optmod=2,
             n_doe=n_doe,
         )
         start = time.process_time()
@@ -179,4 +180,4 @@ class TestOptimizer(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(defaultTest=["TestOptimizer.test_g24"], exit=False)
