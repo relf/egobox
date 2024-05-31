@@ -264,7 +264,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             .cstr_tol
             .clone()
             .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
-        let (x_dat, _) = self.next_points(
+        let (x_dat, _, _) = self.next_points(
             true,
             0,
             false, // done anyway
@@ -435,7 +435,7 @@ where
                 None
             };
 
-            let (x_dat, y_dat) = self.next_points(
+            let (x_dat, y_dat, infill_value) = self.next_points(
                 init,
                 new_state.get_iter(),
                 recluster,
@@ -455,9 +455,15 @@ where
                 .clusterings(clusterings.clone())
                 .theta_inits(theta_inits.clone())
                 .data((x_data.clone(), y_data.clone()))
+                .infill_value(infill_value)
                 .sampling(sampling.clone())
                 .param(x_dat.row(0).to_owned())
                 .cost(y_dat.row(0).to_owned());
+            info!(
+                "Infill criterion max value {} = {}",
+                self.config.infill_criterion.name(),
+                state.get_infill_value()
+            );
 
             let rejected_count = x_dat.nrows() - added_indices.len();
             for i in 0..x_dat.nrows() {
@@ -543,12 +549,7 @@ where
         debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> end iteration");
         debug!("Current Cost {:?}", state.get_cost());
         debug!("Best cost {:?}", state.get_best_cost());
-        // XXX: Should check target cost taking into account constraints
-        // if state.get_best_cost() <= state.get_target_cost() {
-        //     info!("Target optimum : {}", self.target);
-        //     info!("Expected optimum reached!");
-        //     return TerminationReason::TargetCostReached;
-        // }
+
         TerminationStatus::NotTerminated
     }
 }
@@ -561,6 +562,11 @@ where
         self.config.n_clusters == 0 && (added != 0 && added % 10 == 0 && added - prev_added > 0)
     }
 
+    /// Build surrogate given training data and surrogate builder
+    /// Reclustering is triggered when recluster boolean is true otherwise
+    /// previous clu=stering is used. theta_init allows to reuse
+    /// previous theta without fully retraining the surrogates
+    /// (faster execution at the cost of surrogate quality)
     #[allow(clippy::too_many_arguments)]
     fn make_clustered_surrogate(
         &self,
@@ -633,6 +639,9 @@ where
         }
     }
 
+    /// Returns next promising x points together with virtual (predicted) y values
+    /// from surrogate models (taking into account qei strategy if q_parallel)
+    /// infill criterion value is also returned
     #[allow(clippy::too_many_arguments)]
     fn next_points(
         &self,
@@ -646,10 +655,11 @@ where
         cstr_tol: &Array1<f64>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
-    ) -> (Array2<f64>, Array2<f64>) {
+    ) -> (Array2<f64>, Array2<f64>, f64) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
+        let mut infill_val = f64::INFINITY;
         for i in 0..self.config.q_points {
             let (xt, yt) = if i == 0 {
                 (x_data.to_owned(), y_data.to_owned())
@@ -706,7 +716,7 @@ where
                 cstr_tol,
                 lhs_optim,
             ) {
-                Ok(xk) => {
+                Ok((infill_obj, xk)) => {
                     match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
                         Ok(yk) => {
                             y_dat = concatenate![
@@ -715,6 +725,9 @@ where
                                 Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap()
                             ];
                             x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+                            // infill objective was minimized while infill criterion itself
+                            // is expected to be maximized hence the negative sign here
+                            infill_val = -infill_obj;
                         }
                         Err(err) => {
                             // Error while predict at best point: ignore
@@ -730,7 +743,7 @@ where
                 }
             }
         }
-        (x_dat, y_dat)
+        (x_dat, y_dat, infill_val)
     }
 
     /// True whether surrogate gradient computation implemented
@@ -768,6 +781,9 @@ where
         (scale_infill_obj, scale_cstr, scale_ic)
     }
 
+    /// Find best x promising points by optimizing the chosen infill criterion
+    /// The optimized value of the criterion is returned together with the
+    /// optimum location
     #[allow(clippy::too_many_arguments)]
     fn find_best_point(
         &self,
@@ -778,7 +794,7 @@ where
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
         cstr_tol: &Array1<f64>,
         lhs_optim_seed: Option<u64>,
-    ) -> Result<Array1<f64>> {
+    ) -> Result<(f64, Array1<f64>)> {
         let f_min = y_data.min().unwrap();
 
         let mut success = false;
@@ -884,14 +900,14 @@ where
             let x_start = sampling.sample(self.config.n_start);
 
             if let Some(seed) = lhs_optim_seed {
-                let (_, x_opt) =
+                let (y_opt, x_opt) =
                     Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &obj_data, &self.xlimits)
                         .cstr_tol(cstr_tol.to_owned())
                         .seed(seed)
                         .minimize();
 
                 info!("LHS optimization best_x {}", x_opt);
-                best_x = Some(x_opt);
+                best_x = Some((y_opt, x_opt));
                 success = true;
             } else {
                 let dim = x_data.ncols();
@@ -913,19 +929,19 @@ where
                 if res.0.is_nan() || res.0.is_infinite() {
                     success = false;
                 } else {
-                    best_x = Some(Array::from(res.1.clone()));
+                    best_x = Some((res.0, Array::from(res.1.clone())));
                     success = true;
                 }
             }
 
             if n_optim == n_max_optim && best_x.is_none() {
                 info!("All optimizations fail => Trigger LHS optimization");
-                let (_, x_opt) =
+                let (y_opt, x_opt) =
                     Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &obj_data, &self.xlimits)
                         .minimize();
 
                 info!("LHS optimization best_x {}", x_opt);
-                best_x = Some(x_opt);
+                best_x = Some((y_opt, x_opt));
                 success = true;
             }
             n_optim += 1;
@@ -936,6 +952,8 @@ where
         best_x.ok_or_else(|| EgoError::EgoError(String::from("Can not find best point")))
     }
 
+    /// Return the virtual points regarding the qei strategy
+    /// The default is to return GP prediction
     fn get_virtual_point(
         &self,
         xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
@@ -969,6 +987,8 @@ where
         }
     }
 
+    /// The infill criterion scaling is computed using x (n points of nx dim)
+    /// given the objective function surrogate
     fn compute_infill_obj_scale(
         &self,
         x: &ArrayView2<f64>,
@@ -1003,6 +1023,9 @@ where
         }
     }
 
+    /// Compute infill criterion objective expected to be minimized
+    /// meaning infill criterion objective is negative infill criterion
+    /// the latter is expected to be maximised
     fn eval_infill_obj(
         &self,
         x: &[f64],
@@ -1042,7 +1065,8 @@ where
     ) -> Array2<f64> {
         let params = if self.config.discrete() {
             // We have to cast x to folded space as EgorSolver
-            // works internally in the continuous space
+            // works internally in the continuous space while
+            // the objective function expects discrete variable in folded space
             to_discrete_space(&self.config.xtypes, x)
         } else {
             x.to_owned()

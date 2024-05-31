@@ -386,6 +386,25 @@ mod tests {
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
     }
 
+    #[test]
+    #[serial]
+    fn test_rosenbrock_2d_infill_target_egor_builder() {
+        let now = Instant::now();
+        let xlimits = array![[-2., 2.], [-2., 2.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .sample(10);
+        let res = EgorBuilder::optimize(rosenb)
+            .configure(|config| config.doe(&doe).max_iters(20).random_seed(42))
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure");
+        println!("Rosenbrock optim result = {res:?}");
+        println!("Elapsed = {:?}", now.elapsed());
+        let expected = array![1., 1.];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+    }
+
     // Objective
     fn g24(x: &ArrayBase<impl Data<Elem = f64>, Ix1>) -> f64 {
         // Function G24: 1 global optimum y_opt = -5.5080 at x_opt =(2.3295, 3.1785)
