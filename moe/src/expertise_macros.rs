@@ -43,7 +43,7 @@ macro_rules! compute_error {
                 trace!("Prediction error = {error}");
                 errors.push(error);
             }
-            let mean_err = errors.iter().fold(0.0, |acc, &item| acc + item) / errors.len() as f64;
+            let mean_err = errors.iter().sum::<f64>() / errors.len() as f64;
             trace!("-> mean error = {}", mean_err);
             mean_err
         }
