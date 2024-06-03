@@ -28,7 +28,7 @@
 //! let xtypes = to_xtypes(&array![[-2., 2.], [-2., 2.]]);
 //! let fobj = ObjFunc::new(rosenb);
 //! let config = EgorConfig::default().xtypes(&xtypes);
-//! let solver: EgorSolver<GpMixtureParams<f64, Xoshiro256Plus>> = EgorSolver::new(config, rng);
+//! let solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config, rng);
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(20))
 //!             .run()
@@ -95,7 +95,7 @@
 //!     .doe(&doe)
 //!     .target(-5.5080);
 //!
-//! let solver: EgorSolver<GpMixtureParams<f64, Xoshiro256Plus>> =
+//! let solver: EgorSolver<GpMixtureParams<f64>> =
 //!   EgorSolver::new(config, rng);
 //!
 //! let res = Executor::new(fobj, solver)
