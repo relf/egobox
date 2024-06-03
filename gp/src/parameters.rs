@@ -49,12 +49,25 @@ impl<F: Float> ThetaTuning<F> {
 
 /// A set of validated GP parameters.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))
+)]
 pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter guess of the autocorrelation model
     pub(crate) theta_tuning: ThetaTuning<F>,
     /// Regression model representing the mean(x)
+    #[cfg_attr(
+        feature = "serializable",
+        serde(bound(serialize = "Mean: Serialize", deserialize = "Mean: Deserialize<'de>"))
+    )]
     pub(crate) mean: Mean,
     /// Correlation model representing the spatial correlation between errors at e(x) and e(x')
+    #[cfg_attr(
+        feature = "serializable",
+        serde(bound(serialize = "Corr: Serialize", deserialize = "Corr: Deserialize<'de>"))
+    )]
     pub(crate) corr: Corr,
     /// Optionally apply dimension reduction (KPLS) or not
     pub(crate) kpls_dim: Option<usize>,

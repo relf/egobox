@@ -180,6 +180,8 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     xtrain: NormalizedMatrix<F>,
     /// Training outputs
     ytrain: NormalizedMatrix<F>,
+    /// Parameters
+    params: GpValidParams<F, Mean, Corr>,
 }
 
 pub(crate) enum GpSamplingMethod {
@@ -208,7 +210,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
             inner_params: self.inner_params.clone(),
             w_star: self.w_star.to_owned(),
             xtrain: self.xtrain.clone(),
-            ytrain: self.xtrain.clone(),
+            ytrain: self.ytrain.clone(),
+            params: self.params.clone(),
         }
     }
 }
@@ -867,6 +870,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             w_star,
             xtrain,
             ytrain,
+            params: self.clone(),
         })
     }
 }
