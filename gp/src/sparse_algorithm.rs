@@ -163,6 +163,8 @@ pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
     inducings: Array2<F>,
     /// Data used for prediction
     w_data: WoodburyData<F>,
+    /// Parameters used to fit this model
+    params: SgpValidParams<F, Corr>,
 }
 
 /// Kriging as sparse GP special case when using squared exponential correlation
@@ -188,6 +190,7 @@ impl<F: Float, Corr: CorrelationModel<F>> Clone for SparseGaussianProcess<F, Cor
             ytrain: self.xtrain.clone(),
             inducings: self.inducings.clone(),
             w_data: self.w_data.clone(),
+            params: self.params.clone(),
         }
     }
 }
@@ -631,6 +634,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             xtrain: xtrain.to_owned(),
             ytrain: ytrain.to_owned(),
             inducings: z.clone(),
+            params: self.clone(),
         })
     }
 }

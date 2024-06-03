@@ -9,7 +9,7 @@ use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 
 /// Variance estimation method
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ParamTuning<F: Float> {
     /// Constant parameter (ie given not estimated)
     Fixed(F),
@@ -54,6 +54,14 @@ pub enum SparseMethod {
 
 /// A set of validated SGP parameters.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serializable",
+    derive(Serialize, Deserialize),
+    serde(bound(
+        serialize = "F: Serialize, Corr: Serialize",
+        deserialize = "F: Deserialize<'de>, Corr: Deserialize<'de>"
+    ))
+)]
 pub struct SgpValidParams<F: Float, Corr: CorrelationModel<F>> {
     /// gp
     gp_params: GpValidParams<F, ConstantMean, Corr>,
