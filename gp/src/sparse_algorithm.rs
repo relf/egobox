@@ -255,25 +255,6 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         Ok(var.insert_axis(Axis(1)))
     }
 
-    /// Retrieve number of PLS components 1 <= n <= x dimension
-    pub fn kpls_dim(&self) -> Option<usize> {
-        if self.w_star.ncols() < self.xtrain.ncols() {
-            Some(self.w_star.ncols())
-        } else {
-            None
-        }
-    }
-
-    /// Retrieve input dimension before kpls dimension reduction if any
-    pub fn input_dim(&self) -> usize {
-        self.ytrain.ncols()
-    }
-
-    /// Retrieve output dimension
-    pub fn output_dim(&self) -> usize {
-        self.ytrain.ncols()
-    }
-
     /// Optimal theta
     pub fn theta(&self) -> &Array1<F> {
         &self.theta
@@ -297,6 +278,25 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
     /// Inducing points
     pub fn inducings(&self) -> &Array2<F> {
         &self.inducings
+    }
+
+    /// Retrieve number of PLS components 1 <= n <= x dimension
+    pub fn kpls_dim(&self) -> Option<usize> {
+        if self.w_star.ncols() < self.xtrain.ncols() {
+            Some(self.w_star.ncols())
+        } else {
+            None
+        }
+    }
+
+    /// Retrieve input dimension before kpls dimension reduction if any
+    pub fn input_dim(&self) -> usize {
+        self.ytrain.ncols()
+    }
+
+    /// Retrieve output dimension
+    pub fn output_dim(&self) -> usize {
+        self.ytrain.ncols()
     }
 
     pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
