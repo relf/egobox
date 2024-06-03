@@ -152,7 +152,10 @@ impl<F: Float> Clone for GpInnerParams<F> {
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),
-    serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))
+    serde(bound(
+        serialize = "F: Serialize, Mean: Serialize",
+        deserialize = "F: Deserialize<'de>, Mean: Deserialize<'de>"
+    ))
 )]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
     /// Parameter of the autocorrelation model
@@ -160,18 +163,6 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     /// Reduced likelihood value (result from internal optimization)
     /// Maybe used to compare different trained models
     likelihood: F,
-    /// Regression model
-    #[cfg_attr(
-        feature = "serializable",
-        serde(bound(serialize = "Mean: Serialize", deserialize = "Mean: Deserialize<'de>"))
-    )]
-    mean: Mean,
-    /// Correlation kernel
-    #[cfg_attr(
-        feature = "serializable",
-        serde(bound(serialize = "Corr: Serialize", deserialize = "Corr: Deserialize<'de>"))
-    )]
-    corr: Corr,
     /// Gaussian process internal fitted params
     inner_params: GpInnerParams<F>,
     /// Weights in case of KPLS dimension reduction coming from PLS regression (orig_dim, kpls_dim)
@@ -180,6 +171,12 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     xtrain: NormalizedMatrix<F>,
     /// Training outputs
     ytrain: NormalizedMatrix<F>,
+    /// Parameters used to fit this model
+    #[cfg_attr(
+        feature = "serializable",
+        serde(bound(serialize = "Corr: Serialize", deserialize = "Corr: Deserialize<'de>"))
+    )]
+    params: GpValidParams<F, Mean, Corr>,
 }
 
 pub(crate) enum GpSamplingMethod {
@@ -203,12 +200,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
         Self {
             theta: self.theta.to_owned(),
             likelihood: self.likelihood,
-            mean: self.mean,
-            corr: self.corr,
             inner_params: self.inner_params.clone(),
             w_star: self.w_star.to_owned(),
             xtrain: self.xtrain.clone(),
-            ytrain: self.xtrain.clone(),
+            ytrain: self.ytrain.clone(),
+            params: self.params.clone(),
         }
     }
 }
@@ -220,7 +216,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> fmt::Display
         write!(
             f,
             "GP(mean={}, corr={}, theta={}, variance={}, likelihood={})",
-            self.mean, self.corr, self.theta, self.inner_params.sigma2, self.likelihood,
+            self.params.mean,
+            self.params.corr,
+            self.theta,
+            self.inner_params.sigma2,
+            self.likelihood,
         )
     }
 }
@@ -239,7 +239,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     pub fn predict(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
         let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
         // Compute the mean term at x
-        let f = self.mean.value(&xnorm);
+        let f = self.params.mean.value(&xnorm);
         // Compute the correlation term at x
         let corr = self._compute_correlation(&xnorm);
         // Scaled predictor
@@ -268,7 +268,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let (rt, u, xnorm) = self._compute_rt_u(x);
 
         let cross_dx = pairwise_differences(&xnorm, &xnorm);
-        let k = self.corr.value(&cross_dx, &self.theta, &self.w_star);
+        let k = self.params.corr.value(&cross_dx, &self.theta, &self.w_star);
         let k = k.into_shape((xnorm.nrows(), xnorm.nrows())).unwrap();
 
         // let cov_matrix =
@@ -303,7 +303,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .solve_triangular(&corr_t, UPLO::Lower)
             .unwrap();
 
-        let rhs = inners.ft.t().dot(&rt) - self.mean.value(&xnorm).t();
+        let rhs = inners.ft.t().dot(&rt) - self.params.mean.value(&xnorm).t();
         #[cfg(feature = "blas")]
         let u = inners
             .ft_qr_r
@@ -327,7 +327,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // Get pairwise componentwise L1-distances to the input training set
         let dx = pairwise_differences(xnorm, &self.xtrain.data);
         // Compute the correlation function
-        let r = self.corr.value(&dx, &self.theta, &self.w_star);
+        let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
         let n_obs = xnorm.nrows();
         let nt = self.xtrain.data.nrows();
         r.into_shape((n_obs, nt)).unwrap().to_owned()
@@ -412,7 +412,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let df_dx_kx = if self.inner_params.beta.nrows() <= 1 + self.xtrain.data.ncols() {
             // for constant or linear: df/dx = cst ([0] or [1]) for all x, so takes use x[0] to get the constant
-            let df = self.mean.jacobian(&x.row(0));
+            let df = self.params.mean.jacobian(&x.row(0));
             let df_dx = df.t().row(kx).dot(beta);
             df_dx.broadcast((x.nrows(), 1)).unwrap().to_owned()
         } else {
@@ -421,7 +421,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             Zip::from(dfdx.rows_mut())
                 .and(xnorm.rows())
                 .for_each(|mut dfxi, xi| {
-                    let df = self.mean.jacobian(&xi);
+                    let df = self.params.mean.jacobian(&xi);
                     let df_dx = (df.t().row(kx)).dot(beta);
                     dfxi.assign(&df_dx);
                 });
@@ -488,12 +488,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
 
-        let df = self.mean.jacobian(&xnorm.row(0));
+        let df = self.params.mean.jacobian(&xnorm.row(0));
         let df_dx = df.t().dot(beta);
 
-        let dr = self
-            .corr
-            .jacobian(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star);
+        let dr =
+            self.params
+                .corr
+                .jacobian(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star);
 
         let dr_dx = df_dx + dr.t().dot(gamma);
         Zip::from(jac.rows_mut())
@@ -521,11 +522,12 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let sigma2 = self.inner_params.sigma2;
         let r_chol = &self.inner_params.r_chol;
 
-        let r = self.corr.value(&dx, &self.theta, &self.w_star);
-        let dr = self
-            .corr
-            .jacobian(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star)
-            / &self.xtrain.std.to_owned().insert_axis(Axis(0));
+        let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
+        let dr =
+            self.params
+                .corr
+                .jacobian(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star)
+                / &self.xtrain.std.to_owned().insert_axis(Axis(0));
 
         // rho1 = Rc^-1 . r(x, X)
         let rho1 = r_chol.solve_triangular(&r, UPLO::Lower).unwrap();
@@ -538,8 +540,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // p2 = ((R^-1 . r(x, X))^t . dr(x, X)/dx)^t = dr(x, X)/dx)^t . R^-1 . r(x, X) = p1
         let p2 = inv_kr.t().dot(&dr);
 
-        let f_x = self.mean.value(&xnorm).t().to_owned();
-        let f_mean = self.mean.value(&self.xtrain.data);
+        let f_x = self.params.mean.value(&xnorm).t().to_owned();
+        let f_mean = self.params.mean.value(&self.xtrain.data);
 
         // rho2 = Rc^-1 . F(X)
         let rho2 = r_chol.solve_triangular(&f_mean, UPLO::Lower).unwrap();
@@ -558,7 +560,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // D = Bc^t-1 . Bc^-1 . A^t = B^-1 . A^t
         let d_mat = rho3.t().solve_triangular(&inv_bat, UPLO::Upper).unwrap();
 
-        let df = self.mean.jacobian(&xnorm.row(0));
+        let df = self.params.mean.jacobian(&xnorm.row(0));
 
         // dA/dx = df(x)/dx^t - dr(x, X)/dx^t . R^-1 . F
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
@@ -861,12 +863,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         Ok(GaussianProcess {
             theta: opt_params,
             likelihood: lkh,
-            mean: *self.mean(),
-            corr: *self.corr(),
             inner_params,
             w_star,
             xtrain,
             ytrain,
+            params: self.clone(),
         })
     }
 }

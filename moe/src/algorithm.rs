@@ -25,9 +25,8 @@ use ndarray::{
 
 #[cfg(feature = "blas")]
 use ndarray_linalg::Norm;
-use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray_rand::rand::Rng;
 use ndarray_stats::QuantileExt;
-use rand_xoshiro::Xoshiro256Plus;
 
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
@@ -46,8 +45,8 @@ macro_rules! check_allowed {
     };
 }
 
-impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
-    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError> for GpMixtureValidParams<f64, R>
+impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError>
+    for GpMixtureValidParams<f64>
 {
     type Object = GpMixture;
 
@@ -68,7 +67,7 @@ impl<D: Data<Elem = f64>, R: Rng + SeedableRng + Clone>
     }
 }
 
-impl<R: Rng + SeedableRng + Clone> GpMixtureValidParams<f64, R> {
+impl GpMixtureValidParams<f64> {
     pub fn train(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -189,6 +188,7 @@ impl<R: Rng + SeedableRng + Clone> GpMixtureValidParams<f64, R> {
                 experts,
                 gmx: gmx.clone(),
                 output_dim: yt.ncols(),
+                params: self.clone(),
             })
         }
     }
@@ -405,6 +405,9 @@ fn predict_smooth(
 }
 
 /// Mixture of gaussian process experts
+/// Implementation note: the structure is not generic over 'F: Float' to be able to
+/// implement use serde easily as deserialization of generic impls is not supported yet
+/// See https://github.com/dtolnay/typetag/issues/1
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct GpMixture {
     /// The mode of recombination to get the output prediction from experts prediction
@@ -417,6 +420,8 @@ pub struct GpMixture {
     output_dim: usize,
     /// Gp type
     gp_type: GpType<f64>,
+    /// Params used to fit this model
+    params: GpMixtureValidParams<f64>,
 }
 
 impl std::fmt::Display for GpMixture {
@@ -520,7 +525,7 @@ impl MixtureGpSurrogate for GpMixture {
 
 impl GpMixture {
     /// Constructor of mixture of experts parameters
-    pub fn params() -> GpMixtureParams<f64, Xoshiro256Plus> {
+    pub fn params() -> GpMixtureParams<f64> {
         GpMixtureParams::new()
     }
 
