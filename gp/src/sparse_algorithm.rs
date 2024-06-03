@@ -133,14 +133,13 @@ impl<F: Float> Clone for WoodburyData<F> {
 #[cfg_attr(
     feature = "serializable",
     derive(Serialize, Deserialize),
-    serde(bound(serialize = "F: Serialize", deserialize = "F: Deserialize<'de>"))
+    serde(bound(
+        serialize = "F: Serialize, Corr: Serialize",
+        deserialize = "F: Deserialize<'de>, Corr: Deserialize<'de>"
+    ))
 )]
 pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
     /// Correlation kernel
-    #[cfg_attr(
-        feature = "serializable",
-        serde(bound(serialize = "Corr: Serialize", deserialize = "Corr: Deserialize<'de>"))
-    )]
     corr: Corr,
     /// Sparse method used
     method: SparseMethod,
@@ -289,14 +288,9 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         }
     }
 
-    /// Retrieve input dimension before kpls dimension reduction if any
-    pub fn input_dim(&self) -> usize {
-        self.ytrain.ncols()
-    }
-
-    /// Retrieve output dimension
-    pub fn output_dim(&self) -> usize {
-        self.ytrain.ncols()
+    /// Retrieve input and output dimensions
+    pub fn dims(&self) -> (usize, usize) {
+        (self.xtrain.ncols(), self.ytrain.ncols())
     }
 
     pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
@@ -377,7 +371,7 @@ where
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.output_dim()))
+        Array2::zeros((x.nrows(), self.dims().1))
     }
 }
 
@@ -406,7 +400,7 @@ where
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.0.output_dim()))
+        Array2::zeros((x.nrows(), self.0.dims().1))
     }
 }
 

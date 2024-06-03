@@ -41,6 +41,8 @@ pub trait SgpSurrogateParams: GpSurrogateParams {
 /// A trait for a base GP surrogate
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
 pub trait GpSurrogate: std::fmt::Display + Sync + Send {
+    /// Returns input/output dims
+    fn dims(&self) -> (usize, usize);
     /// Predict output values at n points given as (n, xdim) matrix.
     #[deprecated(since = "0.17.0", note = "renamed predict")]
     fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
@@ -144,6 +146,9 @@ macro_rules! declare_surrogate {
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
             impl GpSurrogate for [<Gp $regr $corr Surrogate>] {
+                fn dims(&self) -> (usize, usize) {
+                    self.0.dims()
+                }
                 fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict(x)?)
                 }
@@ -295,6 +300,9 @@ macro_rules! declare_sgp_surrogate {
 
             #[cfg_attr(feature = "serializable", typetag::serde)]
             impl GpSurrogate for [<Sgp $corr Surrogate>] {
+                fn dims(&self) -> (usize, usize) {
+                    self.0.dims()
+                }
                 fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict(x)?)
                 }

@@ -158,8 +158,8 @@ impl<F: Float> Clone for GpInnerParams<F> {
     feature = "serializable",
     derive(Serialize, Deserialize),
     serde(bound(
-        serialize = "F: Serialize, Mean: Serialize",
-        deserialize = "F: Deserialize<'de>, Mean: Deserialize<'de>"
+        serialize = "F: Serialize, Mean: Serialize, Corr: Serialize",
+        deserialize = "F: Deserialize<'de>, Mean: Deserialize<'de>, Corr: Deserialize<'de>"
     ))
 )]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
@@ -177,10 +177,6 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     /// Training outputs
     ytrain: NormalizedMatrix<F>,
     /// Parameters used to fit this model
-    #[cfg_attr(
-        feature = "serializable",
-        serde(bound(serialize = "Corr: Serialize", deserialize = "Corr: Deserialize<'de>"))
-    )]
     params: GpValidParams<F, Mean, Corr>,
 }
 
@@ -392,14 +388,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         }
     }
 
-    /// Retrieve input dimension before kpls dimension reduction if any
-    pub fn input_dim(&self) -> usize {
-        self.xtrain.ncols()
-    }
-
-    /// Retrieve output dimension
-    pub fn output_dim(&self) -> usize {
-        self.ytrain.ncols()
+    /// Retrieve input and output dimensions
+    pub fn dims(&self) -> (usize, usize) {
+        (self.xtrain.ncols(), self.ytrain.ncols())
     }
 
     /// Used only for leave one out cross validation quality below
@@ -413,19 +404,22 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         ytrain: NormalizedMatrix<F>,
     ) -> Result<Array2<F>> {
         let x_distances = DistanceMatrix::new(&xtrain.data);
-        let fx = self.mean.value(&xtrain.data);
-        let rxx = self.corr.value(&x_distances.d, &self.theta, &self.w_star);
+        let fx = self.params.mean.value(&xtrain.data);
+        let rxx = self
+            .params
+            .corr
+            .value(&x_distances.d, &self.theta, &self.w_star);
         let nugget = F::cast(100.0) * F::epsilon();
         let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, nugget)?;
 
         let xnorm = (x - &xtrain.mean) / &xtrain.std;
         // Compute the mean term at x
-        let f = self.mean.value(&xnorm);
+        let f = self.params.mean.value(&xnorm);
         // Compute the correlation term at x
         // Get pairwise componentwise L1-distances to the input training set
         let dx = pairwise_differences(&xnorm, &xtrain.data);
         // Compute the correlation function
-        let r = self.corr.value(&dx, &self.theta, &self.w_star);
+        let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
         let n_obs = xnorm.nrows();
         let nt = xtrain.data.nrows();
         let corr = r.into_shape((n_obs, nt)).unwrap().to_owned();
@@ -744,7 +738,7 @@ where
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.output_dim()))
+        Array2::zeros((x.nrows(), self.dims().1))
     }
 }
 
@@ -775,7 +769,7 @@ where
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.0.output_dim()))
+        Array2::zeros((x.nrows(), self.0.dims().1))
     }
 }
 

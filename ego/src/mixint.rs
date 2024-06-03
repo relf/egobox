@@ -545,6 +545,10 @@ impl Clustered for MixintMoe {
 
 #[typetag::serde]
 impl GpSurrogate for MixintMoe {
+    fn dims(&self) -> (usize, usize) {
+        self.moe.dims()
+    }
+
     fn predict(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
@@ -630,7 +634,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Mix
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.moe.output_dim()))
+        Array2::zeros((x.nrows(), self.moe.dims().1))
     }
 }
 
@@ -653,7 +657,7 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.0.output_dim()))
+        Array2::zeros((x.nrows(), self.0.dims().1))
     }
 }
 
