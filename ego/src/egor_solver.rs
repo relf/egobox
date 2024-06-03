@@ -169,7 +169,7 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     pub(crate) rng: Xoshiro256Plus,
 }
 
-impl SurrogateBuilder for GpMixtureParams<f64, Xoshiro256Plus> {
+impl SurrogateBuilder for GpMixtureParams<f64> {
     /// Constructor from domain space specified with types
     /// **panic** if xtypes contains other types than continuous type `Float`
     fn new_with_xtypes(xtypes: &[XType]) -> Self {

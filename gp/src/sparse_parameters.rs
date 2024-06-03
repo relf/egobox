@@ -9,7 +9,8 @@ use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 
 /// Variance estimation method
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum ParamTuning<F: Float> {
     /// Constant parameter (ie given not estimated)
     Fixed(F),

@@ -80,7 +80,7 @@ impl EgorServiceBuilder {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> EgorService<GpMixtureParams<f64, Xoshiro256Plus>> {
+    ) -> EgorService<GpMixtureParams<f64>> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {

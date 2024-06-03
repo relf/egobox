@@ -136,7 +136,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Egor<O, GpMixtureParams<f64, Xoshiro256Plus>> {
+    ) -> Egor<O, GpMixtureParams<f64>> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {

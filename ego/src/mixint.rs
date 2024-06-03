@@ -283,14 +283,14 @@ impl<F: Float, S: egobox_doe::SamplingMethod<F>> egobox_doe::SamplingMethod<F>
 }
 
 /// Moe type builder for mixed-integer Egor optimizer
-pub type MoeBuilder = GpMixtureParams<f64, Xoshiro256Plus>;
+pub type MoeBuilder = GpMixtureParams<f64>;
 /// A decorator of Moe surrogate builder that takes into account XType specifications
 ///
 /// It allows to implement continuous relaxation over continuous Moe builder.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MixintMoeValidParams {
     /// The surrogate factory
-    surrogate_builder: GpMixtureParams<f64, Xoshiro256Plus>,
+    surrogate_builder: GpMixtureParams<f64>,
     /// The input specifications
     xtypes: Vec<XType>,
     /// whether data are in given in folded space (enum indexes) or not (enum masks)

@@ -11,7 +11,7 @@ use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
-use ndarray_rand::rand::{Rng, SeedableRng};
+use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
 #[cfg(feature = "serializable")]
@@ -34,7 +34,7 @@ pub enum GpType<F: Float> {
 /// Mixture of experts checked parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct GpMixtureValidParams<F: Float, R: Rng + Clone> {
+pub struct GpMixtureValidParams<F: Float> {
     /// Gp Type
     gp_type: GpType<F>,
     /// Number of clusters (i.e. number of experts)
@@ -57,11 +57,11 @@ pub struct GpMixtureValidParams<F: Float, R: Rng + Clone> {
     /// GaussianMixture preset
     gmx: Option<GaussianMixture<F>>,
     /// Random number generator
-    rng: R,
+    rng: Xoshiro256Plus,
 }
 
-impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixtureValidParams<F, R> {
-    fn default() -> GpMixtureValidParams<F, R> {
+impl<F: Float> Default for GpMixtureValidParams<F> {
+    fn default() -> GpMixtureValidParams<F> {
         GpMixtureValidParams {
             gp_type: GpType::FullGp,
             n_clusters: 1,
@@ -73,12 +73,12 @@ impl<F: Float, R: Rng + SeedableRng + Clone> Default for GpMixtureValidParams<F,
             n_start: 10,
             gmm: None,
             gmx: None,
-            rng: R::from_entropy(),
+            rng: Xoshiro256Plus::from_entropy(),
         }
     }
 }
 
-impl<F: Float, R: Rng + Clone> GpMixtureValidParams<F, R> {
+impl<F: Float> GpMixtureValidParams<F> {
     /// The optional number of PLS components
     pub fn gp_type(&self) -> &GpType<F> {
         &self.gp_type
@@ -131,7 +131,7 @@ impl<F: Float, R: Rng + Clone> GpMixtureValidParams<F, R> {
     }
 
     /// The random generator
-    pub fn rng(&self) -> R {
+    pub fn rng(&self) -> Xoshiro256Plus {
         self.rng.clone()
     }
 }
@@ -139,27 +139,27 @@ impl<F: Float, R: Rng + Clone> GpMixtureValidParams<F, R> {
 /// Mixture of experts parameters
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct GpMixtureParams<F: Float, R: Rng + Clone>(GpMixtureValidParams<F, R>);
+pub struct GpMixtureParams<F: Float>(GpMixtureValidParams<F>);
 
-impl<F: Float> Default for GpMixtureParams<F, Xoshiro256Plus> {
-    fn default() -> GpMixtureParams<F, Xoshiro256Plus> {
+impl<F: Float> Default for GpMixtureParams<F> {
+    fn default() -> GpMixtureParams<F> {
         GpMixtureParams(GpMixtureValidParams::default())
     }
 }
 
-impl<F: Float> GpMixtureParams<F, Xoshiro256Plus> {
+impl<F: Float> GpMixtureParams<F> {
     /// Constructor of GP parameters.
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> GpMixtureParams<F, Xoshiro256Plus> {
+    pub fn new() -> GpMixtureParams<F> {
         Self::new_with_rng(GpType::FullGp, Xoshiro256Plus::from_entropy())
     }
 }
 
-impl<F: Float, R: Rng + SeedableRng + Clone> GpMixtureParams<F, R> {
+impl<F: Float> GpMixtureParams<F> {
     /// Constructor of Sgp parameters specifying randon number generator for reproducibility
     ///
     /// See [`new`](SparseGpMixtureParams::new) for default parameters.
-    pub fn new_with_rng(gp_type: GpType<F>, rng: R) -> GpMixtureParams<F, R> {
+    pub fn new_with_rng(gp_type: GpType<F>, rng: Xoshiro256Plus) -> GpMixtureParams<F> {
         Self(GpMixtureValidParams {
             gp_type,
             n_clusters: 1,
@@ -246,25 +246,14 @@ impl<F: Float, R: Rng + SeedableRng + Clone> GpMixtureParams<F, R> {
     }
 
     /// Sets the random number generator for reproducibility
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> GpMixtureParams<F, R2> {
-        GpMixtureParams(GpMixtureValidParams {
-            gp_type: self.0.gp_type().clone(),
-            n_clusters: self.0.n_clusters(),
-            recombination: self.0.recombination(),
-            regression_spec: self.0.regression_spec(),
-            correlation_spec: self.0.correlation_spec(),
-            theta_tunings: self.0.theta_tunings().clone(),
-            kpls_dim: None,
-            n_start: self.0.n_start(),
-            gmm: self.0.gmm().cloned(),
-            gmx: self.0.gmx().cloned(),
-            rng,
-        })
+    pub fn with_rng(mut self, rng: Xoshiro256Plus) -> GpMixtureParams<F> {
+        self.0.rng = rng;
+        self
     }
 }
 
-impl<F: Float, R: Rng + Clone> ParamGuard for GpMixtureParams<F, R> {
-    type Checked = GpMixtureValidParams<F, R>;
+impl<F: Float> ParamGuard for GpMixtureParams<F> {
+    type Checked = GpMixtureValidParams<F>;
     type Error = MoeError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {
@@ -289,8 +278,8 @@ impl<F: Float, R: Rng + Clone> ParamGuard for GpMixtureParams<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> From<GpMixtureValidParams<F, R>> for GpMixtureParams<F, R> {
-    fn from(item: GpMixtureValidParams<F, R>) -> Self {
+impl<F: Float> From<GpMixtureValidParams<F>> for GpMixtureParams<F> {
+    fn from(item: GpMixtureValidParams<F>) -> Self {
         GpMixtureParams(item)
     }
 }
