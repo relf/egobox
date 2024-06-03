@@ -405,6 +405,9 @@ fn predict_smooth(
 }
 
 /// Mixture of gaussian process experts
+/// Implementation note: the structure is not generic over 'F: Float' to be able to
+/// implement use serde easily as deserialization of generic impls is not supported yet
+/// See https://github.com/dtolnay/typetag/issues/1
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub struct GpMixture {
     /// The mode of recombination to get the output prediction from experts prediction
