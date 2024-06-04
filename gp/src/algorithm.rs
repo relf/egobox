@@ -7,15 +7,11 @@ use crate::{correlation_models::*, ThetaTuning};
 
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
-#[cfg(not(feature = "blas"))]
-use linfa_linalg::norm::Norm;
+
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
 use ndarray::{Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
-
-#[cfg(feature = "blas")]
-use ndarray_linalg::Norm;
 
 use ndarray_rand::rand_distr::Normal;
 use ndarray_rand::RandomExt;
@@ -393,57 +389,78 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         (self.xtrain.ncols(), self.ytrain.ncols())
     }
 
-    /// Used only for leave one out cross validation quality below
+    /// Used only for leave one out cross validation quality below to avoid theta optimization
     /// Predict output values at n given `x` points of nx components specified as a (n, nx) matrix
     /// given another set of training data
     /// Returns n scalar output values as (n, 1) column vector.
-    fn predict_with_training_data(
-        &self,
-        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-        xtrain: NormalizedData<F>,
-        ytrain: NormalizedData<F>,
-    ) -> Result<Array2<F>> {
-        let x_distances = DistanceMatrix::new(&xtrain.data);
-        let fx = self.params.mean.value(&xtrain.data);
-        let rxx = self
-            .params
-            .corr
-            .value(&x_distances.d, &self.theta, &self.w_star);
-        let nugget = F::cast(100.0) * F::epsilon();
-        let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, nugget)?;
+    // fn predict_with_training_data(
+    //     &self,
+    //     x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    //     xtrain: NormalizedData<F>,
+    //     ytrain: NormalizedData<F>,
+    // ) -> Result<Array2<F>> {
+    //     let x_distances = DistanceMatrix::new(&xtrain.data);
+    //     let fx = self.params.mean.value(&xtrain.data);
+    //     let rxx = self
+    //         .params
+    //         .corr
+    //         .value(&x_distances.d, &self.theta, &self.w_star);
+    //     let nugget = F::cast(100.0) * F::epsilon();
+    //     let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, nugget)?;
 
-        let xnorm = (x - &xtrain.mean) / &xtrain.std;
-        // Compute the mean term at x
-        let f = self.params.mean.value(&xnorm);
-        // Compute the correlation term at x
-        // Get pairwise componentwise L1-distances to the input training set
-        let dx = pairwise_differences(&xnorm, &xtrain.data);
-        // Compute the correlation function
-        let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
-        let n_obs = xnorm.nrows();
-        let nt = xtrain.data.nrows();
-        let corr = r.into_shape((n_obs, nt)).unwrap().to_owned();
-        // Scaled predictor
-        let mut y_ = f.dot(&inner_params.beta);
-        y_ += &corr.dot(&inner_params.gamma);
-        // Predictor
-        Ok(&y_ * &ytrain.std + &ytrain.mean)
-    }
+    //     let xnorm = (x - &xtrain.mean) / &xtrain.std;
+    //     // Compute the mean term at x
+    //     let f = self.params.mean.value(&xnorm);
+    //     // Compute the correlation term at x
+    //     // Get pairwise componentwise L1-distances to the input training set
+    //     let dx = pairwise_differences(&xnorm, &xtrain.data);
+    //     // Compute the correlation function
+    //     let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
+    //     let n_obs = xnorm.nrows();
+    //     let nt = xtrain.data.nrows();
+    //     let corr = r.into_shape((n_obs, nt)).unwrap().to_owned();
+    //     // Scaled predictor
+    //     let mut y_ = f.dot(&inner_params.beta);
+    //     y_ += &corr.dot(&inner_params.gamma);
+    //     // Predictor
+    //     Ok(&y_ * &ytrain.std + &ytrain.mean)
+    // }
 
     /// Compute quality metric based on leave one out cross validation
-    pub fn cv_quality(&self) -> F {
-        let dataset = Dataset::new(self.xtrain.data.to_owned(), self.ytrain.data.to_owned());
+    // pub fn cv_quality(&self) -> F {
+    //     let dataset = Dataset::new(self.xtrain.orig.to_owned(), self.ytrain.orig.to_owned());
+    //     let mut err = F::zero();
+    //     let n = self.xtrain.data.nrows();
+    //     for (train, valid) in dataset.fold(n).into_iter() {
+    //         let xtrain = NormalizedData::new(train.records());
+    //         let ytrain = NormalizedData::new(train.targets());
+    //         if let Ok(pred) = self.predict_with_training_data(valid.records(), xtrain, ytrain) {
+    //             err += (valid.targets() - pred).mapv(|v| v * v).sum();
+    //         } else {
+    //             err += F::infinity();
+    //         }
+    //     }
+    //     (err / F::cast(n)).sqrt() / self.ytrain.mean[0]
+    // }
+
+    /// Compute quality metric based on leave one out cross validation
+    /// Warning: Leave one out is applied considering theta hyperparameter fixed
+    /// only coviance is reevaluated
+    pub fn loocv_score(&self) -> F {
+        let dataset = Dataset::new(self.xtrain.orig.to_owned(), self.ytrain.orig.to_owned());
         let mut error = F::zero();
-        for (train, valid) in dataset.fold(self.xtrain.data.nrows()).into_iter() {
-            let xtrain = NormalizedData::new(train.records());
-            let ytrain = NormalizedData::new(train.targets());
-            if let Ok(pred) = self.predict_with_training_data(valid.records(), xtrain, ytrain) {
-                error += (valid.targets() - pred).norm_l2();
+        let n = self.xtrain.orig.nrows();
+        for (train, valid) in dataset.fold(n).into_iter() {
+            let model = GpParams::new_from_valid(&self.params)
+                .fit(&train)
+                .expect("cross-validation: sub model fitted");
+            if let Ok(pred) = model.predict(valid.records()) {
+                error += (valid.targets() - pred).mapv(|v| v * v).sum();
             } else {
                 error += F::infinity();
             }
         }
-        error
+        (error / F::cast(n)).sqrt() / self.ytrain.mean[0]
     }
 
     /// Predict derivatives of the output prediction
@@ -1142,6 +1159,8 @@ mod tests {
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
     use linfa::prelude::Predict;
+    #[cfg(not(feature = "blas"))]
+    use linfa_linalg::norm::Norm;
     use ndarray::{arr2, array, Array, Zip};
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
@@ -1223,7 +1242,7 @@ mod tests {
                     let file_path = format!("{}/{}.npy", test_dir, gp_vars_file);
                     write_npy(file_path, &gpr_vars).expect("gp vars saved");
 
-                    println!("quality = {}", gp.cv_quality());
+                    println!("LOOCV = {}", gp.loocv_score());
                 }
             }
         };

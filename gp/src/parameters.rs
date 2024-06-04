@@ -137,6 +137,10 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
         })
     }
 
+    pub fn new_from_valid(params: &GpValidParams<F, Mean, Corr>) -> Self {
+        Self(params.clone())
+    }
+
     /// Set mean model.
     pub fn mean(mut self, mean: Mean) -> Self {
         self.0.mean = mean;

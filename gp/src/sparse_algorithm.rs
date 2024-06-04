@@ -293,34 +293,25 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         (self.xtrain.ncols(), self.ytrain.ncols())
     }
 
-    // fn predict_with_training_data(
-    //     &self,
-    //     x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    //     xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    //     ytrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    // ) -> Result<Array2<F>> {
-    //     let kx = self.compute_k(x, &self.inducings, &self.w_star, &self.theta, self.sigma2);
-    //     let mu = kx.dot(&self.w_data.vec);
-    //     Ok(mu)
-    // }
-
-    // /// Compute quality metric based on leave one out cross validation
-    // /// Warning: Leave one out is applied considering theta hyperparameter fixed
-    // /// only coviance is reevaluated
-    // pub fn cv_quality(&self) -> F {
-    //     let dataset = Dataset::new(self.xtrain.to_owned(), self.ytrain.to_owned());
-    //     let mut error = F::zero();
-    //     for (train, valid) in dataset.fold(self.xtrain.nrows()).into_iter() {
-    //         if let Ok(pred) =
-    //             self.predict_with_training_data(valid.records(), train.records(), train.targets())
-    //         {
-    //             error += (valid.targets() - pred).norm_l2();
-    //         } else {
-    //             error += F::infinity();
-    //         }
-    //     }
-    //     error
-    // }
+    /// Compute quality metric based on leave one out cross validation
+    /// Warning: Leave one out is applied considering theta hyperparameter fixed
+    /// only coviance is reevaluated
+    pub fn loocv_score(&self) -> F {
+        let dataset = Dataset::new(self.xtrain.to_owned(), self.ytrain.to_owned());
+        let mut error = F::zero();
+        let n = self.xtrain.nrows();
+        for (train, valid) in dataset.fold(n).into_iter() {
+            let model = SgpParams::new_from_valid(&self.params)
+                .fit(&train)
+                .expect("cross-validation: sub model fitted");
+            if let Ok(pred) = model.predict(valid.records()) {
+                error += (valid.targets() - pred).mapv(|v| v * v).sum();
+            } else {
+                error += F::infinity();
+            }
+        }
+        (error / F::cast(n)).sqrt() / self.ytrain.mean().unwrap()
+    }
 
     pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.ncols()));
