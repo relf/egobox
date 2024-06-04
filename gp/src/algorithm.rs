@@ -2,7 +2,7 @@ use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
 use crate::parameters::{GpParams, GpValidParams};
-use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedMatrix};
+use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedData};
 use crate::{correlation_models::*, ThetaTuning};
 
 use linfa::dataset::{WithLapack, WithoutLapack};
@@ -173,9 +173,9 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     /// Weights in case of KPLS dimension reduction coming from PLS regression (orig_dim, kpls_dim)
     w_star: Array2<F>,
     /// Training inputs
-    xtrain: NormalizedMatrix<F>,
+    xtrain: NormalizedData<F>,
     /// Training outputs
-    ytrain: NormalizedMatrix<F>,
+    ytrain: NormalizedData<F>,
     /// Parameters used to fit this model
     params: GpValidParams<F, Mean, Corr>,
 }
@@ -400,8 +400,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     fn predict_with_training_data(
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-        xtrain: NormalizedMatrix<F>,
-        ytrain: NormalizedMatrix<F>,
+        xtrain: NormalizedData<F>,
+        ytrain: NormalizedData<F>,
     ) -> Result<Array2<F>> {
         let x_distances = DistanceMatrix::new(&xtrain.data);
         let fx = self.params.mean.value(&xtrain.data);
@@ -435,8 +435,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let dataset = Dataset::new(self.xtrain.data.to_owned(), self.ytrain.data.to_owned());
         let mut error = F::zero();
         for (train, valid) in dataset.fold(self.xtrain.data.nrows()).into_iter() {
-            let xtrain = NormalizedMatrix::new(train.records());
-            let ytrain = NormalizedMatrix::new(train.targets());
+            let xtrain = NormalizedData::new(train.records());
+            let ytrain = NormalizedData::new(train.targets());
             if let Ok(pred) = self.predict_with_training_data(valid.records(), xtrain, ytrain) {
                 error += (valid.targets() - pred).norm_l2();
             } else {
@@ -796,8 +796,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             };
         }
 
-        let xtrain = NormalizedMatrix::new(x);
-        let ytrain = NormalizedMatrix::new(y);
+        let xtrain = NormalizedData::new(x);
+        let ytrain = NormalizedData::new(y);
 
         let mut w_star = Array2::eye(x.ncols());
         if let Some(n_components) = self.kpls_dim() {
@@ -932,7 +932,7 @@ fn reduced_likelihood<F: Float>(
     fx: &ArrayBase<impl Data<Elem = F>, Ix2>,
     rxx: ArrayBase<impl Data<Elem = F>, Ix2>,
     x_distances: &DistanceMatrix<F>,
-    ytrain: &NormalizedMatrix<F>,
+    ytrain: &NormalizedData<F>,
     nugget: F,
 ) -> Result<(F, GpInnerParams<F>)> {
     // Set up R
@@ -1003,7 +1003,7 @@ fn reduced_likelihood<F: Float>(
     fx: &ArrayBase<impl Data<Elem = F>, Ix2>,
     rxx: ArrayBase<impl Data<Elem = F>, Ix2>,
     x_distances: &DistanceMatrix<F>,
-    ytrain: &NormalizedMatrix<F>,
+    ytrain: &NormalizedData<F>,
     nugget: F,
 ) -> Result<(F, GpInnerParams<F>)> {
     // Set up R

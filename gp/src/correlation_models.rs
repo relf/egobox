@@ -461,7 +461,7 @@ impl fmt::Display for Matern52Corr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{DistanceMatrix, NormalizedMatrix};
+    use crate::utils::{DistanceMatrix, NormalizedData};
     use approx::assert_abs_diff_eq;
     use ndarray::{arr1, array};
     use paste::paste;
@@ -535,7 +535,7 @@ mod tests {
                         [-6.875, -9.375],
                         [-3.125, 6.875]
                     ];
-                    let xtrain = NormalizedMatrix::new(&xt);
+                    let xtrain = NormalizedData::new(&xt);
                     let xnorm = (x.to_owned() - &xtrain.mean) / &xtrain.std;
                     let (theta, weights) = if $kpls {
                         (array![0.31059002],

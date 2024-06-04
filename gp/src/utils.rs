@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 /// A structure to store (n, xdim) matrix data and its mean and standard deviation vectors.
 #[derive(Debug)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub(crate) struct NormalizedMatrix<F: Float> {
-    /// data
+pub(crate) struct NormalizedData<F: Float> {
+    /// original data
+    pub orig: Array2<F>,
+    /// normalized data
     pub data: Array2<F>,
     /// mean vector computed from data
     pub mean: Array1<F>,
@@ -15,9 +17,10 @@ pub(crate) struct NormalizedMatrix<F: Float> {
     pub std: Array1<F>,
 }
 
-impl<F: Float> Clone for NormalizedMatrix<F> {
-    fn clone(&self) -> NormalizedMatrix<F> {
-        NormalizedMatrix {
+impl<F: Float> Clone for NormalizedData<F> {
+    fn clone(&self) -> NormalizedData<F> {
+        NormalizedData {
+            orig: self.orig.to_owned(),
             data: self.data.to_owned(),
             mean: self.mean.to_owned(),
             std: self.std.to_owned(),
@@ -25,11 +28,12 @@ impl<F: Float> Clone for NormalizedMatrix<F> {
     }
 }
 
-impl<F: Float> NormalizedMatrix<F> {
+impl<F: Float> NormalizedData<F> {
     /// Constructor
-    pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> NormalizedMatrix<F> {
+    pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> NormalizedData<F> {
         let (data, mean, std) = normalize(x);
-        NormalizedMatrix {
+        NormalizedData {
+            orig: x.to_owned(),
             data: data.to_owned(),
             mean: mean.to_owned(),
             std: std.to_owned(),
@@ -193,7 +197,7 @@ mod tests {
     #[test]
     fn test_normalized_matrix() {
         let x = array![[1., 2.], [3., 4.]];
-        let xnorm = NormalizedMatrix::new(&x);
+        let xnorm = NormalizedData::new(&x);
         assert_eq!(xnorm.ncols(), 2);
         assert_eq!(array![2., 3.], xnorm.mean);
         assert_eq!(array![f64::sqrt(2.), f64::sqrt(2.)], xnorm.std);
