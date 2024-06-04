@@ -187,6 +187,8 @@ impl GpMixtureValidParams<f64> {
                 recombination: recomb,
                 experts,
                 gmx: gmx.clone(),
+                xtrain: xt.to_owned(),
+                ytrain: yt.to_owned(),
                 params: self.clone(),
             })
         }
@@ -417,6 +419,10 @@ pub struct GpMixture {
     gmx: GaussianMixture<f64>,
     /// Gp type
     gp_type: GpType<f64>,
+    /// Training inputs
+    xtrain: Array2<f64>,
+    /// Training outputs
+    ytrain: Array2<f64>,
     /// Params used to fit this model
     params: GpMixtureValidParams<f64>,
 }
@@ -514,6 +520,23 @@ impl GpSurrogateExt for GpMixture {
             )));
         }
         self.sample_expert(0, x, n_traj)
+    }
+
+    fn loocv_score(&self) -> f64 {
+        let dataset = Dataset::new(self.xtrain.to_owned(), self.ytrain.to_owned());
+        let mut error = 0.;
+        let n = self.xtrain.nrows();
+        for (train, valid) in dataset.fold(n).into_iter() {
+            let model = GpMixtureParams::<f64>::from(self.params.clone())
+                .fit(&train)
+                .expect("cross-validation: sub model fitted");
+            if let Ok(pred) = model.predict(valid.records()) {
+                error += (valid.targets() - pred).mapv(|v| v * v).sum();
+            } else {
+                error += f64::INFINITY;
+            }
+        }
+        (error / n as f64).sqrt() / self.ytrain.mean().unwrap()
     }
 }
 
@@ -996,6 +1019,7 @@ mod tests {
             moe.predict(&array![[0.82]]).unwrap()[[0, 0]],
             epsilon = 1e-4
         );
+        println!("LOOCV = {}", moe.loocv_score());
     }
 
     #[test]

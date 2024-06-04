@@ -11,7 +11,7 @@ use egobox_moe::{
     GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
-use linfa::{DatasetBase, Float, ParamGuard};
+use linfa::{Dataset, DatasetBase, Float, ParamGuard};
 use ndarray::{s, Array, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
@@ -358,6 +358,9 @@ impl MixintMoeValidParams {
                 .unwrap(),
             xtypes: self.xtypes.clone(),
             work_in_folded_space: self.work_in_folded_space,
+            xtrain: xt.to_owned(),
+            ytrain: yt.to_owned(),
+            params: self.clone(),
         };
         Ok(mixmoe)
     }
@@ -383,6 +386,9 @@ impl MixintMoeValidParams {
                 .unwrap(),
             xtypes: self.xtypes.clone(),
             work_in_folded_space: self.work_in_folded_space,
+            xtrain: xt.to_owned(),
+            ytrain: yt.to_owned(),
+            params: self.clone(),
         };
         Ok(mixmoe)
     }
@@ -515,6 +521,12 @@ pub struct MixintMoe {
     /// whether training input data are in given in folded space (enum indexes) or not (enum masks)
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
     work_in_folded_space: bool,
+    /// Training inputs
+    xtrain: Array2<f64>,
+    /// Training outputs
+    ytrain: Array2<f64>,
+    /// Parameters used to trin this model
+    params: MixintMoeValidParams,
 }
 
 impl std::fmt::Display for MixintMoe {
@@ -612,6 +624,22 @@ impl GpSurrogateExt for MixintMoe {
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
         self.moe.sample(&xcast.view(), n_traj)
+    }
+    fn loocv_score(&self) -> f64 {
+        let dataset = Dataset::new(self.xtrain.to_owned(), self.ytrain.to_owned());
+        let mut error = 0.;
+        let n = self.xtrain.nrows();
+        for (train, valid) in dataset.fold(n).into_iter() {
+            let model = MixintGpMixtureParams::from(self.params.clone())
+                .fit(&train)
+                .expect("cross-validation: sub model fitted");
+            if let Ok(pred) = model.predict(&valid.records().view()) {
+                error += (valid.targets() - pred).mapv(|v| v * v).sum();
+            } else {
+                error += f64::INFINITY;
+            }
+        }
+        (error / n as f64).sqrt() / self.ytrain.mean().unwrap()
     }
 }
 
@@ -872,6 +900,7 @@ mod tests {
             yvar,
             epsilon = 1e-3
         );
+        println!("LOOCV = {}", mixi_moe.loocv_score());
     }
 
     fn ftest(x: &Array2<f64>) -> Array2<f64> {
