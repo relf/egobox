@@ -145,6 +145,10 @@ impl<F: Float> Clone for GpInnerParams<F> {
 ///
 /// # Reference:
 ///
+/// Mohamed Amine Bouhlel, John T. Hwang, Nathalie Bartoli, Rémi Lafage, Joseph Morlier, Joaquim R.R.A. Martins,
+/// [A Python surrogate modeling framework with derivatives](https://doi.org/10.1016/j.advengsoft.2019.03.005),
+/// Advances in Engineering Software, Volume 135, 2019, 102662, ISSN 0965-9978.
+///
 /// Bouhlel, Mohamed Amine, et al. [Improving kriging surrogates of high-dimensional design
 /// models by Partial Least Squares dimension reduction](https://hal.archives-ouvertes.fr/hal-01232938/document)
 /// Structural and Multidisciplinary Optimization 53.5 (2016): 935-952.
@@ -172,6 +176,8 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     xtrain: NormalizedData<F>,
     /// Training outputs
     ytrain: NormalizedData<F>,
+    /// Training dataset (input, output)
+    training_data: (Array2<F>, Array2<F>),
     /// Parameters used to fit this model
     params: GpValidParams<F, Mean, Corr>,
 }
@@ -201,6 +207,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
             w_star: self.w_star.to_owned(),
             xtrain: self.xtrain.clone(),
             ytrain: self.ytrain.clone(),
+            training_data: self.training_data.clone(),
             params: self.params.clone(),
         }
     }
@@ -447,9 +454,12 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Warning: Leave one out is applied considering theta hyperparameter fixed
     /// only coviance is reevaluated
     pub fn loocv_score(&self) -> F {
-        let dataset = Dataset::new(self.xtrain.orig.to_owned(), self.ytrain.orig.to_owned());
+        let dataset = Dataset::new(
+            self.training_data.0.to_owned(),
+            self.training_data.1.to_owned(),
+        );
         let mut error = F::zero();
-        let n = self.xtrain.orig.nrows();
+        let n = self.training_data.0.nrows();
         for (train, valid) in dataset.fold(n).into_iter() {
             let model = GpParams::new_from_valid(&self.params)
                 .fit(&train)
@@ -933,6 +943,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             w_star,
             xtrain,
             ytrain,
+            training_data: (x.to_owned(), y.to_owned()),
             params: self.clone(),
         })
     }

@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub(crate) struct NormalizedData<F: Float> {
-    /// original data
-    pub orig: Array2<F>,
     /// normalized data
     pub data: Array2<F>,
     /// mean vector computed from data
@@ -20,7 +18,6 @@ pub(crate) struct NormalizedData<F: Float> {
 impl<F: Float> Clone for NormalizedData<F> {
     fn clone(&self) -> NormalizedData<F> {
         NormalizedData {
-            orig: self.orig.to_owned(),
             data: self.data.to_owned(),
             mean: self.mean.to_owned(),
             std: self.std.to_owned(),
@@ -33,7 +30,6 @@ impl<F: Float> NormalizedData<F> {
     pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> NormalizedData<F> {
         let (data, mean, std) = normalize(x);
         NormalizedData {
-            orig: x.to_owned(),
             data: data.to_owned(),
             mean: mean.to_owned(),
             std: std.to_owned(),

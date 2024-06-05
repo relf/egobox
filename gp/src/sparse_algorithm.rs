@@ -125,6 +125,10 @@ impl<F: Float> Clone for WoodburyData<F> {
 ///
 /// # Reference
 ///
+/// Valayer, H.; Bartoli, N.; Castaño-Aguirre, M.; Lafage, R.; Lefebvre, T.; López-Lopera, A.F.; Mouton, S.
+/// [A Python Toolbox for Data-Driven Aerodynamic Modeling Using Sparse Gaussian Processes](https://doi.org/10.3390/aerospace11040260)
+/// Aerospace 2024, 11, 260.
+///
 /// Matthias Bauer, Mark van der Wilk, and Carl Edward Rasmussen.
 /// [Understanding Probabilistic Sparse Gaussian Process Approximations](https://arxiv.org/pdf/1606.04820.pdf).
 /// In: Advances in Neural Information Processing Systems. Ed. by D. Lee et al. Vol. 29. Curran Associates, Inc., 2016
@@ -154,14 +158,12 @@ pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
     likelihood: F,
     /// Weights in case of KPLS dimension reduction coming from PLS regression (orig_dim, kpls_dim)
     w_star: Array2<F>,
-    /// Training inputs
-    xtrain: Array2<F>,
-    /// Training outputs
-    ytrain: Array2<F>,
     /// Inducing points
     inducings: Array2<F>,
     /// Data used for prediction
     w_data: WoodburyData<F>,
+    /// Training data (input, output)
+    training_data: (Array2<F>, Array2<F>),
     /// Parameters used to fit this model
     params: SgpValidParams<F, Corr>,
 }
@@ -185,10 +187,9 @@ impl<F: Float, Corr: CorrelationModel<F>> Clone for SparseGaussianProcess<F, Cor
             noise: self.noise,
             likelihood: self.likelihood,
             w_star: self.w_star.to_owned(),
-            xtrain: self.xtrain.clone(),
-            ytrain: self.xtrain.clone(),
             inducings: self.inducings.clone(),
             w_data: self.w_data.clone(),
+            training_data: self.training_data.clone(),
             params: self.params.clone(),
         }
     }
@@ -281,7 +282,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
 
     /// Retrieve number of PLS components 1 <= n <= x dimension
     pub fn kpls_dim(&self) -> Option<usize> {
-        if self.w_star.ncols() < self.xtrain.ncols() {
+        if self.w_star.ncols() < self.training_data.0.ncols() {
             Some(self.w_star.ncols())
         } else {
             None
@@ -290,16 +291,19 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
 
     /// Retrieve input and output dimensions
     pub fn dims(&self) -> (usize, usize) {
-        (self.xtrain.ncols(), self.ytrain.ncols())
+        (self.training_data.0.ncols(), self.training_data.1.ncols())
     }
 
     /// Compute quality metric based on leave one out cross validation
     /// Warning: Leave one out is applied considering theta hyperparameter fixed
     /// only coviance is reevaluated
     pub fn loocv_score(&self) -> F {
-        let dataset = Dataset::new(self.xtrain.to_owned(), self.ytrain.to_owned());
+        let dataset = Dataset::new(
+            self.training_data.0.to_owned(),
+            self.training_data.1.to_owned(),
+        );
         let mut error = F::zero();
-        let n = self.xtrain.nrows();
+        let n = self.training_data.0.nrows();
         for (train, valid) in dataset.fold(n).into_iter() {
             let model = SgpParams::new_from_valid(&self.params)
                 .fit(&train)
@@ -310,11 +314,11 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
                 error += F::infinity();
             }
         }
-        (error / F::cast(n)).sqrt() / self.ytrain.mean().unwrap()
+        (error / F::cast(n)).sqrt() / self.training_data.1.mean().unwrap()
     }
 
     pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.ncols()));
+        let mut drv = Array2::<F>::zeros((x.nrows(), self.training_data.0.ncols()));
         let f = |x: &Array1<f64>| -> f64 {
             let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
             let v = self.predict(&x).unwrap()[[0, 0]];
@@ -330,7 +334,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         drv
     }
     pub fn predict_var_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.ncols()));
+        let mut drv = Array2::<F>::zeros((x.nrows(), self.training_data.0.ncols()));
         let f = |x: &Array1<f64>| -> f64 {
             let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
             let v = self.predict_var(&x).unwrap()[[0, 0]];
@@ -645,9 +649,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             likelihood: lkh,
             w_data,
             w_star,
-            xtrain: xtrain.to_owned(),
-            ytrain: ytrain.to_owned(),
             inducings: z.clone(),
+            training_data: (xtrain.to_owned(), ytrain.to_owned()),
             params: self.clone(),
         })
     }
@@ -751,7 +754,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
 
         // Compute marginal log-likelihood
         // constant term ignored in reduced likelihood
-        //let term0 = self.ytrain.nrows() * F::cast(2. * std::f64::consts::PI);
+        //let term0 = self.training_data.1.nrows() * F::cast(2. * std::f64::consts::PI);
         let term1 = nu.mapv(|v| v.ln()).sum();
         let term2 = F::cast(2.) * l.diag().mapv(|v| v.ln()).sum();
         let term3 = (a.t().to_owned()).dot(ytrain)[[0, 0]];
@@ -815,7 +818,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
 
         // Compute log-marginal likelihood
         // constant term ignored in reduced likelihood
-        //let term0 = self.ytrain.nrows() * (F::cast(2. * std::f64::consts::PI)
+        //let term0 = self.training_data.1.nrows() * (F::cast(2. * std::f64::consts::PI)
         let term1 = -F::cast(ytrain.nrows()) * beta.ln();
         let term2 = F::cast(2.) * l.diag().mapv(|v| v.ln()).sum();
         let term3 = beta * (ytrain.to_owned() * ytrain).sum();
