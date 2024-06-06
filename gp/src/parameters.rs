@@ -210,6 +210,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     }
 }
 
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>>
+    From<GpValidParams<F, Mean, Corr>> for GpParams<F, Mean, Corr>
+{
+    fn from(valid: GpValidParams<F, Mean, Corr>) -> Self {
+        GpParams(valid.clone())
+    }
+}
+
 impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> ParamGuard
     for GpParams<F, Mean, Corr>
 {

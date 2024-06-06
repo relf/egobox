@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use egobox_gp::{
-    correlation_models::*, mean_models::*, GaussianProcess, GpParams, SgpParams,
-    SparseGaussianProcess, SparseMethod, ThetaTuning,
+    correlation_models::*, mean_models::*, metrics::CrossValScore, GaussianProcess, GpParams,
+    SgpParams, SparseGaussianProcess, SparseMethod, ThetaTuning,
 };
 use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array1, Array2, ArrayView2};

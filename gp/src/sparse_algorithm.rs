@@ -163,9 +163,9 @@ pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
     /// Data used for prediction
     w_data: WoodburyData<F>,
     /// Training data (input, output)
-    training_data: (Array2<F>, Array2<F>),
+    pub(crate) training_data: (Array2<F>, Array2<F>),
     /// Parameters used to fit this model
-    params: SgpValidParams<F, Corr>,
+    pub(crate) params: SgpValidParams<F, Corr>,
 }
 
 /// Kriging as sparse GP special case when using squared exponential correlation
@@ -292,29 +292,6 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
     /// Retrieve input and output dimensions
     pub fn dims(&self) -> (usize, usize) {
         (self.training_data.0.ncols(), self.training_data.1.ncols())
-    }
-
-    /// Compute quality metric based on leave one out cross validation
-    /// Warning: Leave one out is applied considering theta hyperparameter fixed
-    /// only coviance is reevaluated
-    pub fn loocv_score(&self) -> F {
-        let dataset = Dataset::new(
-            self.training_data.0.to_owned(),
-            self.training_data.1.to_owned(),
-        );
-        let mut error = F::zero();
-        let n = self.training_data.0.nrows();
-        for (train, valid) in dataset.fold(n).into_iter() {
-            let model = SgpParams::new_from_valid(&self.params)
-                .fit(&train)
-                .expect("cross-validation: sub model fitted");
-            if let Ok(pred) = model.predict(valid.records()) {
-                error += (valid.targets() - pred).mapv(|v| v * v).sum();
-            } else {
-                error += F::infinity();
-            }
-        }
-        (error / F::cast(n)).sqrt() / self.training_data.1.mean().unwrap()
     }
 
     pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {

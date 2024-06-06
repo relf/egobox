@@ -177,9 +177,9 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     /// Training outputs
     yt_norm: NormalizedData<F>,
     /// Training dataset (input, output)
-    training_data: (Array2<F>, Array2<F>),
+    pub(crate) training_data: (Array2<F>, Array2<F>),
     /// Parameters used to fit this model
-    params: GpValidParams<F, Mean, Corr>,
+    pub(crate) params: GpValidParams<F, Mean, Corr>,
 }
 
 pub(crate) enum GpSamplingMethod {
@@ -394,83 +394,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Retrieve input and output dimensions
     pub fn dims(&self) -> (usize, usize) {
         (self.xt_norm.ncols(), self.yt_norm.ncols())
-    }
-
-    /// Used only for leave one out cross validation quality below to avoid theta optimization
-    /// Predict output values at n given `x` points of nx components specified as a (n, nx) matrix
-    /// given another set of training data
-    /// Returns n scalar output values as (n, 1) column vector.
-    // fn predict_with_training_data(
-    //     &self,
-    //     x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    //     xtrain: NormalizedData<F>,
-    //     ytrain: NormalizedData<F>,
-    // ) -> Result<Array2<F>> {
-    //     let x_distances = DistanceMatrix::new(&xtrain.data);
-    //     let fx = self.params.mean.value(&xtrain.data);
-    //     let rxx = self
-    //         .params
-    //         .corr
-    //         .value(&x_distances.d, &self.theta, &self.w_star);
-    //     let nugget = F::cast(100.0) * F::epsilon();
-    //     let (_, inner_params) = reduced_likelihood(&fx, rxx, &x_distances, &ytrain, nugget)?;
-
-    //     let xnorm = (x - &xtrain.mean) / &xtrain.std;
-    //     // Compute the mean term at x
-    //     let f = self.params.mean.value(&xnorm);
-    //     // Compute the correlation term at x
-    //     // Get pairwise componentwise L1-distances to the input training set
-    //     let dx = pairwise_differences(&xnorm, &xtrain.data);
-    //     // Compute the correlation function
-    //     let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
-    //     let n_obs = xnorm.nrows();
-    //     let nt = xtrain.data.nrows();
-    //     let corr = r.into_shape((n_obs, nt)).unwrap().to_owned();
-    //     // Scaled predictor
-    //     let mut y_ = f.dot(&inner_params.beta);
-    //     y_ += &corr.dot(&inner_params.gamma);
-    //     // Predictor
-    //     Ok(&y_ * &ytrain.std + &ytrain.mean)
-    // }
-
-    /// Compute quality metric based on leave one out cross validation
-    // pub fn cv_quality(&self) -> F {
-    //     let dataset = Dataset::new(self.xtrain.orig.to_owned(), self.ytrain.orig.to_owned());
-    //     let mut err = F::zero();
-    //     let n = self.xtrain.data.nrows();
-    //     for (train, valid) in dataset.fold(n).into_iter() {
-    //         let xtrain = NormalizedData::new(train.records());
-    //         let ytrain = NormalizedData::new(train.targets());
-    //         if let Ok(pred) = self.predict_with_training_data(valid.records(), xtrain, ytrain) {
-    //             err += (valid.targets() - pred).mapv(|v| v * v).sum();
-    //         } else {
-    //             err += F::infinity();
-    //         }
-    //     }
-    //     (err / F::cast(n)).sqrt() / self.ytrain.mean[0]
-    // }
-
-    /// Compute quality metric based on leave one out cross validation
-    /// Warning: Leave one out is applied considering theta hyperparameter fixed
-    /// only coviance is reevaluated
-    pub fn loocv_score(&self) -> F {
-        let dataset = Dataset::new(
-            self.training_data.0.to_owned(),
-            self.training_data.1.to_owned(),
-        );
-        let mut error = F::zero();
-        let n = self.training_data.0.nrows();
-        for (train, valid) in dataset.fold(n).into_iter() {
-            let model = GpParams::new_from_valid(&self.params)
-                .fit(&train)
-                .expect("cross-validation: sub model fitted");
-            if let Ok(pred) = model.predict(valid.records()) {
-                error += (valid.targets() - pred).mapv(|v| v * v).sum();
-            } else {
-                error += F::infinity();
-            }
-        }
-        (error / F::cast(n)).sqrt() / self.yt_norm.mean[0]
     }
 
     /// Predict derivatives of the output prediction
@@ -1252,8 +1175,6 @@ mod tests {
                     let gp_vars_file = stringify!([<gp_vars_ $regr:snake _ $corr:snake >]);
                     let file_path = format!("{}/{}.npy", test_dir, gp_vars_file);
                     write_npy(file_path, &gpr_vars).expect("gp vars saved");
-
-                    println!("LOOCV = {}", gp.loocv_score());
                 }
             }
         };

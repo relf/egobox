@@ -257,6 +257,12 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     }
 }
 
+impl<F: Float, Corr: CorrelationModel<F>> From<SgpValidParams<F, Corr>> for SgpParams<F, Corr> {
+    fn from(valid: SgpValidParams<F, Corr>) -> Self {
+        SgpParams(valid.clone())
+    }
+}
+
 impl<F: Float, Corr: CorrelationModel<F>> ParamGuard for SgpParams<F, Corr> {
     type Checked = SgpValidParams<F, Corr>;
     type Error = GpError;
