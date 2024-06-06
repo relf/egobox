@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use egobox_gp::{
-    correlation_models::*, mean_models::*, metrics::CrossValScore, GaussianProcess, GpParams,
-    SgpParams, SparseGaussianProcess, SparseMethod, ThetaTuning,
+    correlation_models::*, mean_models::*, GaussianProcess, GpParams, SgpParams,
+    SparseGaussianProcess, SparseMethod, ThetaTuning,
 };
 use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array1, Array2, ArrayView2};
@@ -68,8 +68,6 @@ pub trait GpSurrogateExt {
     fn predict_var_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Sample trajectories
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>>;
-    /// Compute leave-one-out cross-validation quality measure
-    fn loocv_score(&self) -> f64;
 }
 
 /// A trait for a GP surrogate.
@@ -181,9 +179,6 @@ macro_rules! declare_surrogate {
                 }
                 fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
                     Ok(self.0.sample(x, n_traj))
-                }
-                fn loocv_score(&self) -> f64 {
-                    self.0.loocv_score()
                 }
             }
 
@@ -337,9 +332,6 @@ macro_rules! declare_sgp_surrogate {
                 }
                 fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
                     Ok(self.0.sample(x, n_traj))
-                }
-                fn loocv_score(&self) -> f64 {
-                    self.0.loocv_score()
                 }
             }
 

@@ -11,10 +11,11 @@ use crate::{
 };
 
 /// A trait for cross validation score
-pub trait CrossValScore<F, P, O>
+pub trait CrossValScore<F, ER, P, O>
 where
     F: Float,
-    P: Fit<Array2<F>, Array2<F>, GpError, Object = O> + ParamGuard,
+    ER: std::error::Error + From<linfa::error::Error>,
+    P: Fit<Array2<F>, Array2<F>, ER, Object = O> + ParamGuard,
     O: PredictInplace<ArrayBase<OwnedRepr<F>, Ix2>, Array2<F>>,
 {
     fn training_data(&self) -> &(Array2<F>, Array2<F>);
@@ -43,7 +44,7 @@ where
     }
 }
 
-impl<F, Mean, Corr> CrossValScore<F, GpParams<F, Mean, Corr>, Self>
+impl<F, Mean, Corr> CrossValScore<F, GpError, GpParams<F, Mean, Corr>, Self>
     for GaussianProcess<F, Mean, Corr>
 where
     F: Float,
@@ -59,7 +60,7 @@ where
     }
 }
 
-impl<F, Corr> CrossValScore<F, SgpParams<F, Corr>, Self> for SparseGaussianProcess<F, Corr>
+impl<F, Corr> CrossValScore<F, GpError, SgpParams<F, Corr>, Self> for SparseGaussianProcess<F, Corr>
 where
     F: Float,
     Corr: correlation_models::CorrelationModel<F>,
