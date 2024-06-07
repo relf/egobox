@@ -7,6 +7,7 @@ use crate::surrogates::*;
 use crate::types::*;
 use crate::{expertise_macros::*, GpType};
 
+use egobox_gp::metrics::CrossValScore;
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess, SparseGaussianProcess};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict, PredictInplace};
@@ -187,7 +188,7 @@ impl GpMixtureValidParams<f64> {
                 recombination: recomb,
                 experts,
                 gmx: gmx.clone(),
-                output_dim: yt.ncols(),
+                training_data: (xt.to_owned(), yt.to_owned()),
                 params: self.clone(),
             })
         }
@@ -416,10 +417,10 @@ pub struct GpMixture {
     experts: Vec<Box<dyn FullGpSurrogate>>,
     /// The gaussian mixture allowing to predict cluster responsabilities for a given point
     gmx: GaussianMixture<f64>,
-    /// The dimension of the predicted output
-    output_dim: usize,
     /// Gp type
     gp_type: GpType<f64>,
+    /// Training inputs
+    training_data: (Array2<f64>, Array2<f64>),
     /// Params used to fit this model
     params: GpMixtureValidParams<f64>,
 }
@@ -463,6 +464,10 @@ impl Clustered for GpMixture {
 
 #[cfg_attr(feature = "serializable", typetag::serde)]
 impl GpSurrogate for GpMixture {
+    fn dims(&self) -> (usize, usize) {
+        self.experts[0].dims()
+    }
+
     fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_hard(x),
@@ -516,6 +521,16 @@ impl GpSurrogateExt for GpMixture {
     }
 }
 
+impl CrossValScore<f64, MoeError, GpMixtureParams<f64>, Self> for GpMixture {
+    fn training_data(&self) -> &(Array2<f64>, Array2<f64>) {
+        &self.training_data
+    }
+
+    fn params(&self) -> GpMixtureParams<f64> {
+        GpMixtureParams::<f64>::from(self.params.clone())
+    }
+}
+
 impl MixtureGpSurrogate for GpMixture {
     /// Selected experts in the mixture
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
@@ -544,9 +559,10 @@ impl GpMixture {
         &self.gmx
     }
 
-    /// Retrieve output dimensions from
+    /// Retrieve output dimension
     pub fn output_dim(&self) -> usize {
-        self.output_dim
+        let (_, res) = self.experts[0].dims();
+        res
     }
 
     /// Sets recombination mode
@@ -559,8 +575,19 @@ impl GpMixture {
         self
     }
 
-    pub fn set_gmx(&mut self, weights: Array1<f64>, means: Array2<f64>, covariances: Array3<f64>) {
+    pub fn set_gmx(
+        mut self,
+        weights: Array1<f64>,
+        means: Array2<f64>,
+        covariances: Array3<f64>,
+    ) -> Self {
         self.gmx = GaussianMixture::new(weights, means, covariances).unwrap();
+        self
+    }
+
+    pub fn set_experts(mut self, experts: Vec<Box<dyn FullGpSurrogate>>) -> Self {
+        self.experts = experts;
+        self
     }
 
     /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
@@ -827,6 +854,28 @@ impl GpMixture {
         <GpMixture as GpSurrogateExt>::sample(self, &x.view(), n_traj)
     }
 
+    // pub fn cv_quality(&self) -> f64 {
+    //     let dataset = Dataset::new(self.xtrain.to_owned(), self.ytrain.to_owned());
+    //     let mut error = 0.;
+    //     for (train, valid) in dataset.fold(self.xtrain.nrows()).into_iter() {
+    //         if let Ok(mixture) = GpMixtureParams::default()
+    //             .kpls_dim(self.kpls_dim)
+    //             .gmx(
+    //                 self.gmx.weights().to_owned(),
+    //                 self.gmx.means().to_owned(),
+    //                 self.gmx.covariances().to_owned(),
+    //             )
+    //             .fit(&train)
+    //         {
+    //             let pred = mixture.predict(valid.records()).unwrap();
+    //             error += (valid.targets() - pred).norm_l2();
+    //         } else {
+    //             error += f64::INFINITY;
+    //         }
+    //     }
+    //     error / self.ytrain.std(1.)
+    // }
+
     #[cfg(feature = "persistent")]
     /// Load Moe from given json file.
     pub fn load(path: &str) -> Result<Box<GpMixture>> {
@@ -863,7 +912,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for GpM
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.output_dim()))
+        Array2::zeros((x.nrows(), self.dims().1))
     }
 }
 
@@ -884,7 +933,7 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.0.output_dim()))
+        Array2::zeros((x.nrows(), self.0.dims().1))
     }
 }
 
@@ -961,6 +1010,7 @@ mod tests {
             moe.predict(&array![[0.82]]).unwrap()[[0, 0]],
             epsilon = 1e-4
         );
+        println!("LOOCV = {}", moe.loocv_score());
     }
 
     #[test]

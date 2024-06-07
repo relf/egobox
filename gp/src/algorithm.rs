@@ -2,11 +2,12 @@ use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
 use crate::parameters::{GpParams, GpValidParams};
-use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedMatrix};
+use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedData};
 use crate::{correlation_models::*, ThetaTuning};
 
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
+
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
@@ -144,6 +145,10 @@ impl<F: Float> Clone for GpInnerParams<F> {
 ///
 /// # Reference:
 ///
+/// Mohamed Amine Bouhlel, John T. Hwang, Nathalie Bartoli, Rémi Lafage, Joseph Morlier, Joaquim R.R.A. Martins,
+/// [A Python surrogate modeling framework with derivatives](https://doi.org/10.1016/j.advengsoft.2019.03.005),
+/// Advances in Engineering Software, Volume 135, 2019, 102662, ISSN 0965-9978.
+///
 /// Bouhlel, Mohamed Amine, et al. [Improving kriging surrogates of high-dimensional design
 /// models by Partial Least Squares dimension reduction](https://hal.archives-ouvertes.fr/hal-01232938/document)
 /// Structural and Multidisciplinary Optimization 53.5 (2016): 935-952.
@@ -153,8 +158,8 @@ impl<F: Float> Clone for GpInnerParams<F> {
     feature = "serializable",
     derive(Serialize, Deserialize),
     serde(bound(
-        serialize = "F: Serialize, Mean: Serialize",
-        deserialize = "F: Deserialize<'de>, Mean: Deserialize<'de>"
+        serialize = "F: Serialize, Mean: Serialize, Corr: Serialize",
+        deserialize = "F: Deserialize<'de>, Mean: Deserialize<'de>, Corr: Deserialize<'de>"
     ))
 )]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
@@ -168,15 +173,13 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     /// Weights in case of KPLS dimension reduction coming from PLS regression (orig_dim, kpls_dim)
     w_star: Array2<F>,
     /// Training inputs
-    xtrain: NormalizedMatrix<F>,
+    xt_norm: NormalizedData<F>,
     /// Training outputs
-    ytrain: NormalizedMatrix<F>,
+    yt_norm: NormalizedData<F>,
+    /// Training dataset (input, output)
+    pub(crate) training_data: (Array2<F>, Array2<F>),
     /// Parameters used to fit this model
-    #[cfg_attr(
-        feature = "serializable",
-        serde(bound(serialize = "Corr: Serialize", deserialize = "Corr: Deserialize<'de>"))
-    )]
-    params: GpValidParams<F, Mean, Corr>,
+    pub(crate) params: GpValidParams<F, Mean, Corr>,
 }
 
 pub(crate) enum GpSamplingMethod {
@@ -202,8 +205,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Clone
             likelihood: self.likelihood,
             inner_params: self.inner_params.clone(),
             w_star: self.w_star.to_owned(),
-            xtrain: self.xtrain.clone(),
-            ytrain: self.ytrain.clone(),
+            xt_norm: self.xt_norm.clone(),
+            yt_norm: self.yt_norm.clone(),
+            training_data: self.training_data.clone(),
             params: self.params.clone(),
         }
     }
@@ -237,7 +241,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Predict output values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n scalar output values as (n, 1) column vector.
     pub fn predict(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
-        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
         // Compute the mean term at x
         let f = self.params.mean.value(&xnorm);
         // Compute the correlation term at x
@@ -245,7 +249,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // Scaled predictor
         let y_ = &f.dot(&self.inner_params.beta) + &corr.dot(&self.inner_params.gamma);
         // Predictor
-        Ok(&y_ * &self.ytrain.std + &self.ytrain.mean)
+        Ok(&y_ * &self.yt_norm.std + &self.yt_norm.mean)
     }
 
     /// Predict variance values at n given `x` points of nx components specified as a (n, nx) matrix.
@@ -284,7 +288,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         &self,
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> (Array2<F>, Array2<F>, Array2<F>) {
-        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
         let corr = self._compute_correlation(&xnorm);
         let inners = &self.inner_params;
 
@@ -325,11 +329,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Compute correlation matrix given x points specified as a (n, nx) matrix
     fn _compute_correlation(&self, xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         // Get pairwise componentwise L1-distances to the input training set
-        let dx = pairwise_differences(xnorm, &self.xtrain.data);
+        let dx = pairwise_differences(xnorm, &self.xt_norm.data);
         // Compute the correlation function
         let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
         let n_obs = xnorm.nrows();
-        let nt = self.xtrain.data.nrows();
+        let nt = self.xt_norm.data.nrows();
         r.into_shape((n_obs, nt)).unwrap().to_owned()
     }
 
@@ -380,21 +384,16 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Retrieve number of PLS components 1 <= n <= x dimension
     pub fn kpls_dim(&self) -> Option<usize> {
-        if self.w_star.ncols() < self.xtrain.ncols() {
+        if self.w_star.ncols() < self.xt_norm.ncols() {
             Some(self.w_star.ncols())
         } else {
             None
         }
     }
 
-    /// Retrieve input dimension before kpls dimension reduction if any
-    pub fn input_dim(&self) -> usize {
-        self.xtrain.ncols()
-    }
-
-    /// Retrieve output dimension
-    pub fn output_dim(&self) -> usize {
-        self.ytrain.ncols()
+    /// Retrieve input and output dimensions
+    pub fn dims(&self) -> (usize, usize) {
+        (self.xt_norm.ncols(), self.yt_norm.ncols())
     }
 
     /// Predict derivatives of the output prediction
@@ -404,13 +403,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         x: &ArrayBase<impl Data<Elem = F>, Ix2>,
         kx: usize,
     ) -> Array1<F> {
-        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
         let corr = self._compute_correlation(&xnorm);
 
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
 
-        let df_dx_kx = if self.inner_params.beta.nrows() <= 1 + self.xtrain.data.ncols() {
+        let df_dx_kx = if self.inner_params.beta.nrows() <= 1 + self.xt_norm.data.ncols() {
             // for constant or linear: df/dx = cst ([0] or [1]) for all x, so takes use x[0] to get the constant
             let df = self.params.mean.jacobian(&x.row(0));
             let df_dx = df.t().row(kx).dot(beta);
@@ -429,7 +428,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         };
 
         let nr = x.nrows();
-        let nc = self.xtrain.data.nrows();
+        let nc = self.xt_norm.data.nrows();
         let d_dx_1 = &xnorm
             .column(kx)
             .to_owned()
@@ -440,7 +439,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .to_owned();
 
         let d_dx_2 = self
-            .xtrain
+            .xt_norm
             .data
             .column(kx)
             .to_owned()
@@ -459,15 +458,15 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // gamma = R^-1(ytrain - f.beta)
         // Warning: squared exponential only
         let res = (df_dx_kx - d_dx_corr.dot(gamma).map(|v| F::cast(2.) * theta[kx] * *v))
-            * self.ytrain.std[0]
-            / self.xtrain.std[kx];
+            * self.yt_norm.std[0]
+            / self.xt_norm.std[kx];
         res.column(0).to_owned()
     }
 
     /// Predict derivatives at a set of point `x` specified as a (n, nx) matrix where x has nx components.
     /// Returns a (n, nx) matrix containing output derivatives at x wrt each nx components
     pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let mut drv = Array2::<F>::zeros((x.nrows(), self.xtrain.data.ncols()));
+        let mut drv = Array2::<F>::zeros((x.nrows(), self.xt_norm.data.ncols()));
         Zip::from(drv.rows_mut())
             .and(x.rows())
             .for_each(|mut row, xi| {
@@ -483,7 +482,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let xx = x.to_owned().insert_axis(Axis(0));
         let mut jac = Array2::zeros((xx.ncols(), 1));
 
-        let xnorm = (xx - &self.xtrain.mean) / &self.xtrain.std;
+        let xnorm = (xx - &self.xt_norm.mean) / &self.xt_norm.std;
 
         let beta = &self.inner_params.beta;
         let gamma = &self.inner_params.gamma;
@@ -494,14 +493,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let dr =
             self.params
                 .corr
-                .jacobian(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star);
+                .jacobian(&xnorm.row(0), &self.xt_norm.data, &self.theta, &self.w_star);
 
         let dr_dx = df_dx + dr.t().dot(gamma);
         Zip::from(jac.rows_mut())
             .and(dr_dx.rows())
-            .and(&self.xtrain.std)
+            .and(&self.xt_norm.std)
             .for_each(|mut jc, dr_i, std_i| {
-                let jc_i = dr_i.map(|v| *v * self.ytrain.std[0] / *std_i);
+                let jc_i = dr_i.map(|v| *v * self.yt_norm.std[0] / *std_i);
                 jc.assign(&jc_i)
             });
 
@@ -516,8 +515,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
     ) -> Array1<F> {
         let x = &(x.to_owned().insert_axis(Axis(0)));
-        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
-        let dx = pairwise_differences(&xnorm, &self.xtrain.data);
+        let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
+        let dx = pairwise_differences(&xnorm, &self.xt_norm.data);
 
         let sigma2 = self.inner_params.sigma2;
         let r_chol = &self.inner_params.r_chol;
@@ -526,8 +525,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let dr =
             self.params
                 .corr
-                .jacobian(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star)
-                / &self.xtrain.std.to_owned().insert_axis(Axis(0));
+                .jacobian(&xnorm.row(0), &self.xt_norm.data, &self.theta, &self.w_star)
+                / &self.xt_norm.std.to_owned().insert_axis(Axis(0));
 
         // rho1 = Rc^-1 . r(x, X)
         let rho1 = r_chol.solve_triangular(&r, UPLO::Lower).unwrap();
@@ -541,7 +540,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let p2 = inv_kr.t().dot(&dr);
 
         let f_x = self.params.mean.value(&xnorm).t().to_owned();
-        let f_mean = self.params.mean.value(&self.xtrain.data);
+        let f_mean = self.params.mean.value(&self.xt_norm.data);
 
         // rho2 = Rc^-1 . F(X)
         let rho2 = r_chol.solve_triangular(&f_mean, UPLO::Lower).unwrap();
@@ -574,7 +573,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let two = F::cast(2.);
         let prime_t = (-p2 + p4).mapv(|v| two * v).t().to_owned();
 
-        let x_std = &self.xtrain.std;
+        let x_std = &self.xt_norm.std;
         let dvar = (prime_t / x_std).mapv(|v| v * sigma2);
         dvar.row(0).into_owned()
     }
@@ -689,7 +688,7 @@ where
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.output_dim()))
+        Array2::zeros((x.nrows(), self.dims().1))
     }
 }
 
@@ -720,7 +719,7 @@ where
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.0.output_dim()))
+        Array2::zeros((x.nrows(), self.0.dims().1))
     }
 }
 
@@ -747,8 +746,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             };
         }
 
-        let xtrain = NormalizedMatrix::new(x);
-        let ytrain = NormalizedMatrix::new(y);
+        let xtrain = NormalizedData::new(x);
+        let ytrain = NormalizedData::new(y);
 
         let mut w_star = Array2::eye(x.ncols());
         if let Some(n_components) = self.kpls_dim() {
@@ -865,8 +864,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             likelihood: lkh,
             inner_params,
             w_star,
-            xtrain,
-            ytrain,
+            xt_norm: xtrain,
+            yt_norm: ytrain,
+            training_data: (x.to_owned(), y.to_owned()),
             params: self.clone(),
         })
     }
@@ -883,7 +883,7 @@ fn reduced_likelihood<F: Float>(
     fx: &ArrayBase<impl Data<Elem = F>, Ix2>,
     rxx: ArrayBase<impl Data<Elem = F>, Ix2>,
     x_distances: &DistanceMatrix<F>,
-    ytrain: &NormalizedMatrix<F>,
+    ytrain: &NormalizedData<F>,
     nugget: F,
 ) -> Result<(F, GpInnerParams<F>)> {
     // Set up R
@@ -954,7 +954,7 @@ fn reduced_likelihood<F: Float>(
     fx: &ArrayBase<impl Data<Elem = F>, Ix2>,
     rxx: ArrayBase<impl Data<Elem = F>, Ix2>,
     x_distances: &DistanceMatrix<F>,
-    ytrain: &NormalizedMatrix<F>,
+    ytrain: &NormalizedData<F>,
     nugget: F,
 ) -> Result<(F, GpInnerParams<F>)> {
     // Set up R
@@ -1094,7 +1094,7 @@ mod tests {
     use egobox_doe::{Lhs, SamplingMethod};
     use linfa::prelude::Predict;
     #[cfg(not(feature = "blas"))]
-    use linfa_linalg::norm::*;
+    use linfa_linalg::norm::Norm;
     use ndarray::{arr2, array, Array, Zip};
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;

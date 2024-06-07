@@ -159,6 +159,10 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
         })
     }
 
+    pub fn new_from_valid(params: &SgpValidParams<F, Corr>) -> Self {
+        Self(params.clone())
+    }
+
     /// Set correlation model.
     pub fn corr(mut self, corr: Corr) -> Self {
         self.0.gp_params.corr = corr;
@@ -250,6 +254,12 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     pub fn seed(mut self, seed: Option<u64>) -> Self {
         self.0.seed = seed;
         self
+    }
+}
+
+impl<F: Float, Corr: CorrelationModel<F>> From<SgpValidParams<F, Corr>> for SgpParams<F, Corr> {
+    fn from(valid: SgpValidParams<F, Corr>) -> Self {
+        SgpParams(valid.clone())
     }
 }
 

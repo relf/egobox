@@ -197,6 +197,8 @@ pub struct EgorState<F: Float> {
     /// Constraint tolerance cstr < cstr_tol.
     /// It used to assess the validity of the param point and hence the corresponding cost
     pub(crate) cstr_tol: Array1<F>,
+    /// Infill criterion value
+    pub(crate) infill_value: f64,
 
     /// Current clusterings for objective and constraints GP mixture surrogate models
     pub(crate) clusterings: Option<Vec<Option<Clustering>>>,
@@ -357,6 +359,17 @@ where
         self.sampling.take()
     }
 
+    /// Set the infill criterion value    
+    pub fn infill_value(mut self, value: f64) -> Self {
+        self.infill_value = value;
+        self
+    }
+
+    /// Returns the infill criterion value
+    pub fn get_infill_value(&self) -> f64 {
+        self.infill_value
+    }
+
     /// Returns current cost (ie objective) function and constraint values.
     ///
     /// # Example
@@ -456,11 +469,13 @@ where
             prev_added: 0,
             no_point_added_retries: MAX_POINT_ADDITION_RETRY,
             lhs_optim: false,
+            cstr_tol: Array1::zeros(0),
+            infill_value: f64::INFINITY,
+
             clusterings: None,
             data: None,
             sampling: None,
             theta_inits: None,
-            cstr_tol: Array1::zeros(0),
         }
     }
 
