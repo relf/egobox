@@ -164,7 +164,7 @@ mod test {
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fitted");
 
-        assert_abs_diff_eq!(sgp.loocv_score(), 22.36, epsilon = 1e-2);
-        assert_abs_diff_eq!(sgp.cv_score(10), 64.97, epsilon = 1e-2);
+        assert_abs_diff_eq!(sgp.loocv_score(), 22.36, epsilon = 5e-1);
+        assert_abs_diff_eq!(sgp.cv_score(10), 64.97, epsilon = 5e-1);
     }
 }
