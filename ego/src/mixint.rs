@@ -289,7 +289,7 @@ pub type MoeBuilder = GpMixtureParams<f64>;
 ///
 /// It allows to implement continuous relaxation over continuous Moe builder.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct MixintMoeValidParams {
+pub struct MixintGpMixtureValidParams {
     /// The surrogate factory
     surrogate_builder: GpMixtureParams<f64>,
     /// The input specifications
@@ -299,7 +299,7 @@ pub struct MixintMoeValidParams {
     work_in_folded_space: bool,
 }
 
-impl MixintMoeValidParams {
+impl MixintGpMixtureValidParams {
     /// Sets whether we want to work in folded space that is whether
     /// If set, input training data has to be given in folded space
     pub fn work_in_folded_space(&self) -> bool {
@@ -314,12 +314,12 @@ impl MixintMoeValidParams {
 
 /// Parameters for mixture of experts surrogate model
 #[derive(Clone, Serialize, Deserialize)]
-pub struct MixintGpMixtureParams(MixintMoeValidParams);
+pub struct MixintGpMixtureParams(MixintGpMixtureValidParams);
 
 impl MixintGpMixtureParams {
     /// Constructor given `xtypes` specifications and given surrogate builder
     pub fn new(xtypes: &[XType], surrogate_builder: &MoeBuilder) -> Self {
-        MixintGpMixtureParams(MixintMoeValidParams {
+        MixintGpMixtureParams(MixintGpMixtureValidParams {
             surrogate_builder: surrogate_builder.clone(),
             xtypes: xtypes.to_vec(),
             work_in_folded_space: false,
@@ -338,19 +338,19 @@ impl MixintGpMixtureParams {
     }
 }
 
-impl MixintMoeValidParams {
+impl MixintGpMixtureValidParams {
     fn _train(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<MixintMoe> {
+    ) -> Result<MixintGpMixture> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, &xt.view())
         } else {
             xt.to_owned()
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        let mixmoe = MixintMoe {
+        let mixmoe = MixintGpMixture {
             moe: self
                 .surrogate_builder
                 .clone()
@@ -370,14 +370,14 @@ impl MixintMoeValidParams {
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         clustering: &egobox_moe::Clustering,
-    ) -> Result<MixintMoe> {
+    ) -> Result<MixintGpMixture> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, &xt.view())
         } else {
             xt.to_owned()
         };
         cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
-        let mixmoe = MixintMoe {
+        let mixmoe = MixintGpMixture {
             moe: self
                 .surrogate_builder
                 .clone()
@@ -400,7 +400,7 @@ impl SurrogateBuilder for MixintGpMixtureParams {
 
     /// Sets the allowed regression models used in gaussian processes.
     fn set_regression_spec(&mut self, regression_spec: RegressionSpec) {
-        self.0 = MixintMoeValidParams {
+        self.0 = MixintGpMixtureValidParams {
             surrogate_builder: self
                 .0
                 .surrogate_builder
@@ -413,7 +413,7 @@ impl SurrogateBuilder for MixintGpMixtureParams {
 
     /// Sets the allowed correlation models used in gaussian processes.
     fn set_correlation_spec(&mut self, correlation_spec: CorrelationSpec) {
-        self.0 = MixintMoeValidParams {
+        self.0 = MixintGpMixtureValidParams {
             surrogate_builder: self
                 .0
                 .surrogate_builder
@@ -426,7 +426,7 @@ impl SurrogateBuilder for MixintGpMixtureParams {
 
     /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
     fn set_kpls_dim(&mut self, kpls_dim: Option<usize>) {
-        self.0 = MixintMoeValidParams {
+        self.0 = MixintGpMixtureValidParams {
             surrogate_builder: self.0.surrogate_builder.clone().kpls_dim(kpls_dim),
             xtypes: self.0.xtypes.clone(),
             work_in_folded_space: self.0.work_in_folded_space,
@@ -435,7 +435,7 @@ impl SurrogateBuilder for MixintGpMixtureParams {
 
     /// Sets the number of clusters used by the mixture of surrogate experts.
     fn set_n_clusters(&mut self, n_clusters: usize) {
-        self.0 = MixintMoeValidParams {
+        self.0 = MixintGpMixtureValidParams {
             surrogate_builder: self.0.surrogate_builder.clone().n_clusters(n_clusters),
             xtypes: self.0.xtypes.clone(),
             work_in_folded_space: self.0.work_in_folded_space,
@@ -444,7 +444,7 @@ impl SurrogateBuilder for MixintGpMixtureParams {
 
     /// Sets the theta hyperparameter tuning strategy
     fn set_theta_tunings(&mut self, theta_tunings: &[ThetaTuning<f64>]) {
-        self.0 = MixintMoeValidParams {
+        self.0 = MixintGpMixtureValidParams {
             surrogate_builder: self
                 .0
                 .surrogate_builder
@@ -476,9 +476,9 @@ impl SurrogateBuilder for MixintGpMixtureParams {
 }
 
 impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, EgoError>
-    for MixintMoeValidParams
+    for MixintGpMixtureValidParams
 {
-    type Object = MixintMoe;
+    type Object = MixintGpMixture;
 
     fn fit(
         &self,
@@ -491,7 +491,7 @@ impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, EgoError>
 }
 
 impl ParamGuard for MixintGpMixtureParams {
-    type Checked = MixintMoeValidParams;
+    type Checked = MixintGpMixtureValidParams;
     type Error = EgoError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {
@@ -504,15 +504,15 @@ impl ParamGuard for MixintGpMixtureParams {
     }
 }
 
-impl From<MixintMoeValidParams> for MixintGpMixtureParams {
-    fn from(item: MixintMoeValidParams) -> Self {
+impl From<MixintGpMixtureValidParams> for MixintGpMixtureParams {
+    fn from(item: MixintGpMixtureValidParams) -> Self {
         MixintGpMixtureParams(item)
     }
 }
 
 /// The Moe model that takes into account XType specifications
 #[derive(Serialize, Deserialize)]
-pub struct MixintMoe {
+pub struct MixintGpMixture {
     /// the decorated Moe
     moe: GpMixture,
     /// The input specifications
@@ -523,10 +523,10 @@ pub struct MixintMoe {
     /// Training inputs
     training_data: (Array2<f64>, Array2<f64>),
     /// Parameters used to trin this model
-    params: MixintMoeValidParams,
+    params: MixintGpMixtureValidParams,
 }
 
-impl std::fmt::Display for MixintMoe {
+impl std::fmt::Display for MixintGpMixture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let prefix = if crate::utils::discrete(&self.xtypes) {
             "MixInt"
@@ -537,7 +537,7 @@ impl std::fmt::Display for MixintMoe {
     }
 }
 
-impl Clustered for MixintMoe {
+impl Clustered for MixintGpMixture {
     fn n_clusters(&self) -> usize {
         self.moe.n_clusters()
     }
@@ -553,7 +553,7 @@ impl Clustered for MixintMoe {
 }
 
 #[typetag::serde]
-impl GpSurrogate for MixintMoe {
+impl GpSurrogate for MixintGpMixture {
     fn dims(&self) -> (usize, usize) {
         self.moe.dims()
     }
@@ -592,7 +592,7 @@ impl GpSurrogate for MixintMoe {
 }
 
 #[typetag::serde]
-impl GpSurrogateExt for MixintMoe {
+impl GpSurrogateExt for MixintGpMixture {
     fn predict_gradients(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
@@ -624,7 +624,7 @@ impl GpSurrogateExt for MixintMoe {
     }
 }
 
-impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintMoe {
+impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array2<f64>) {
         &self.training_data
     }
@@ -634,13 +634,13 @@ impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintMoe {
     }
 }
 
-impl MixtureGpSurrogate for MixintMoe {
+impl MixtureGpSurrogate for MixintGpMixture {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
         self.moe.experts()
     }
 }
 
-impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for MixintMoe {
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for MixintGpMixture {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
         assert_eq!(
             x.nrows(),
@@ -648,7 +648,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Mix
             "The number of data points must match the number of output targets."
         );
 
-        let values = self.moe.predict(x).expect("MixintMoE prediction");
+        let values = self.moe.predict(x).expect("MixintGpMixture prediction");
         *y = values;
     }
 
@@ -671,7 +671,7 @@ impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
         let values = self
             .0
             .predict_var(x)
-            .expect("MixintMoE variances prediction");
+            .expect("MixintGpMixture variances prediction");
         *y = values;
     }
 
@@ -758,7 +758,7 @@ impl MixintContext {
         &self,
         surrogate_builder: &MoeBuilder,
         dataset: &DatasetBase<Array2<f64>, Array2<f64>>,
-    ) -> Result<MixintMoe> {
+    ) -> Result<MixintGpMixture> {
         let mut params = MixintGpMixtureParams::new(&self.xtypes, surrogate_builder);
         let params = params.work_in_folded_space(self.work_in_folded_space);
         params.fit(dataset)
