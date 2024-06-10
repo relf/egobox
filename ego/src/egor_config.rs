@@ -7,6 +7,25 @@ use ndarray::Array2;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct TregoConfig {
+    d: (f64, f64),
+    beta: f64,
+    gamma: f64,
+    sigma0: f64,
+}
+
+impl Default for TregoConfig {
+    fn default() -> Self {
+        TregoConfig {
+            d: (1e-6, 1.),
+            beta: 0.9,
+            gamma: 10. / 9.,
+            sigma0: 1e-1,
+        }
+    }
+}
+
 /// Egor optimizer configuration
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct EgorConfig {
@@ -60,6 +79,8 @@ pub struct EgorConfig {
     pub(crate) xtypes: Vec<XType>,
     /// A random generator seed used to get reproductible results.
     pub(crate) seed: Option<u64>,
+    /// Trego parameterization
+    pub(crate) trego: TregoConfig,
 }
 
 impl Default for EgorConfig {
@@ -85,6 +106,7 @@ impl Default for EgorConfig {
             hot_start: false,
             xtypes: vec![],
             seed: None,
+            trego: TregoConfig::default(),
         }
     }
 }
