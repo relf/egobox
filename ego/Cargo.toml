@@ -64,3 +64,7 @@ criterion = "0.5"
 approx = "0.4"
 argmin_testfunctions = "0.2"
 serial_test = "3.1.0"
+
+[[bench]]
+name = "ego"
+harness = false
