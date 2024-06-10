@@ -197,6 +197,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
                 x_hist: x_data,
                 y_hist: y_data,
+                state: result.state,
             }
         } else {
             let x_data = to_discrete_space(&xtypes, &x_data.view());
@@ -214,6 +215,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
                 x_hist: x_data,
                 y_hist: y_data,
+                state: result.state,
             }
         };
         info!("Optim Result: min f(x)={} at x={}", res.y_opt, res.x_opt);
@@ -280,12 +282,14 @@ mod tests {
                     .max_iters(20)
                     .regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
+                    .seed(1)
             })
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+        assert_eq!(9, res.state.get_last_best_iter())
     }
 
     #[test]
@@ -321,13 +325,7 @@ mod tests {
         let xlimits = array![[0.0, 25.0]];
         let doe = Lhs::new(&xlimits).sample(10);
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| {
-                config
-                    .max_iters(15)
-                    .doe(&doe)
-                    .outdir(outdir)
-                    .random_seed(42)
-            })
+            .configure(|config| config.max_iters(15).doe(&doe).outdir(outdir).seed(42))
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
@@ -335,13 +333,7 @@ mod tests {
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
 
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| {
-                config
-                    .max_iters(5)
-                    .outdir(outdir)
-                    .hot_start(true)
-                    .random_seed(42)
-            })
+            .configure(|config| config.max_iters(5).outdir(outdir).hot_start(true).seed(42))
             .min_within(&xlimits)
             .run()
             .expect("Egor should minimize xsinx");
@@ -375,7 +367,7 @@ mod tests {
                     .regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
                     .target(1e-2)
-                    .random_seed(42)
+                    .seed(42)
             })
             .min_within(&xlimits)
             .run()
@@ -395,7 +387,7 @@ mod tests {
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
         let res = EgorBuilder::optimize(rosenb)
-            .configure(|config| config.doe(&doe).max_iters(20).random_seed(42))
+            .configure(|config| config.doe(&doe).max_iters(20).seed(42))
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
@@ -445,7 +437,7 @@ mod tests {
                     .doe(&doe)
                     .max_iters(20)
                     .cstr_tol(array![2e-6, 1e-6])
-                    .random_seed(42)
+                    .seed(42)
             })
             .min_within(&xlimits)
             .run()
@@ -474,7 +466,7 @@ mod tests {
                     .doe(&doe)
                     .target(-5.5030)
                     .max_iters(30)
-                    .random_seed(42)
+                    .seed(42)
             })
             .min_within(&xlimits)
             .run()
@@ -508,7 +500,7 @@ mod tests {
                     .max_iters(max_iters)
                     .target(-15.1)
                     .infill_strategy(InfillStrategy::EI)
-                    .random_seed(42)
+                    .seed(42)
             })
             .min_within_mixint_space(&xtypes)
             .run()
@@ -530,7 +522,7 @@ mod tests {
                     .max_iters(max_iters)
                     .target(-15.1)
                     .infill_strategy(InfillStrategy::EI)
-                    .random_seed(42)
+                    .seed(42)
             })
             .min_within_mixint_space(&xtypes)
             .run()
@@ -550,7 +542,7 @@ mod tests {
                     .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
                     .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
                     .max_iters(max_iters)
-                    .random_seed(42)
+                    .seed(42)
             })
             .min_within_mixint_space(&xtypes)
             .run()
@@ -601,7 +593,7 @@ mod tests {
                     .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
                     .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
                     .max_iters(max_iters)
-                    .random_seed(42)
+                    .seed(42)
             })
             .min_within_mixint_space(&xtypes)
             .run()
@@ -632,7 +624,7 @@ mod tests {
         let xlimits = as_continuous_limits::<f64>(&xtypes);
 
         EgorBuilder::optimize(mixobj)
-            .configure(|config| config.outdir(outdir).max_iters(1).random_seed(42))
+            .configure(|config| config.outdir(outdir).max_iters(1).seed(42))
             .min_within_mixint_space(&xtypes)
             .run()
             .unwrap();
@@ -644,13 +636,7 @@ mod tests {
         // Check that with no iteration, obj function is never called
         // as the DOE does not need to be evaluated!
         EgorBuilder::optimize(|_x| panic!("Should not call objective function!"))
-            .configure(|config| {
-                config
-                    .outdir(outdir)
-                    .hot_start(true)
-                    .max_iters(0)
-                    .random_seed(42)
-            })
+            .configure(|config| config.outdir(outdir).hot_start(true).max_iters(0).seed(42))
             .min_within_mixint_space(&xtypes)
             .run()
             .unwrap();

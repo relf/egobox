@@ -468,7 +468,7 @@ impl Egor {
             config = config.outdir(outdir);
         };
         if let Some(seed) = self.seed {
-            config = config.random_seed(seed);
+            config = config.seed(seed);
         };
         config
     }

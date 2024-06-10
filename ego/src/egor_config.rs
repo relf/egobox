@@ -240,7 +240,7 @@ impl EgorConfig {
 
     /// Allow to specify a seed for random number generator to allow
     /// reproducible runs.
-    pub fn random_seed(mut self, seed: u64) -> Self {
+    pub fn seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
     }

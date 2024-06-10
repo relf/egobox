@@ -156,7 +156,7 @@ mod tests {
                 conf.regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
                     .infill_strategy(InfillStrategy::EI)
-                    .random_seed(42)
+                    .seed(42)
             })
             .min_within(&array![[0., 25.]]);
 
