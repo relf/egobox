@@ -1,4 +1,4 @@
-use crate::errors::Result;
+use crate::{errors::Result, EgorState};
 use argmin::core::CostFunction;
 use egobox_moe::{Clustering, MixtureGpSurrogate, ThetaTuning};
 use linfa::Float;
@@ -19,6 +19,8 @@ pub struct OptimResult<F: Float> {
     pub x_hist: Array2<F>,
     /// History of successive y values (e.g f(x_hist))
     pub y_hist: Array2<F>,
+    /// EgorSolver final state
+    pub state: EgorState<F>,
 }
 
 /// Infill criterion used to select next promising point
