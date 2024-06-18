@@ -75,7 +75,7 @@
 //!         config.doe(&doe)  // we pass the initial doe
 //!               .max_iters(max_iters)
 //!               .infill_strategy(InfillStrategy::EI)
-//!               .random_seed(42))     
+//!               .seed(42))     
 //!     .min_within_mixint_space(&xtypes)  // We build a mixed-integer optimizer
 //!     .run()
 //!     .expect("Egor minimization");
