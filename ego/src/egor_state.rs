@@ -395,7 +395,7 @@ where
     /// # use egobox_ego::EgorState;
     /// # use argmin::core::{State, ArgminFloat};
     /// # let state: EgorState<f64> = EgorState::new();
-    /// # assert_eq!(state.max_iters, std::u64::MAX);
+    /// # assert_eq!(state.max_iters, u64::MAX);
     /// let state = state.max_iters(1000);
     /// # assert_eq!(state.max_iters, 1000);
     /// ```
@@ -560,7 +560,7 @@ where
     /// # assert_eq!(state.target_cost, f64::NEG_INFINITY);
     /// # assert_eq!(state.iter, 0);
     /// # assert_eq!(state.last_best_iter, 0);
-    /// # assert_eq!(state.max_iters, std::u64::MAX);
+    /// # assert_eq!(state.max_iters, u64::MAX);
     /// # assert_eq!(state.counts, HashMap::new());
     /// # assert_eq!(state.time.unwrap(), instant::Duration::new(0, 0));
     /// # assert_eq!(state.termination_status, TerminationStatus::NotTerminated);
@@ -580,7 +580,7 @@ where
 
             iter: 0,
             last_best_iter: 0,
-            max_iters: std::u64::MAX,
+            max_iters: u64::MAX,
             counts: HashMap::new(),
             time: Some(instant::Duration::new(0, 0)),
             termination_status: TerminationStatus::NotTerminated,
