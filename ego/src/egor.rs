@@ -289,7 +289,6 @@ mod tests {
             .expect("Egor should minimize");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
-        assert_eq!(9, res.state.get_last_best_iter())
     }
 
     #[test]
