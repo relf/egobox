@@ -4,7 +4,7 @@ use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationSt
 use egobox_doe::Lhs;
 use egobox_moe::Clustering;
 use linfa::Float;
-use ndarray::{array, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{array, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,63 @@ use std::{collections::HashMap, iter::zip};
 /// if new point is too close to a previous point in the growing doe used
 /// to train surrogate models modeling objective and constraints functions.
 pub(crate) const MAX_POINT_ADDITION_RETRY: i32 = 3;
+
+fn cstr_sum<F: Float>(y: &ArrayBase<impl Data<Elem = F>, Ix1>, cstr_tol: &Array1<F>) -> F {
+    y.slice(s![1..])
+        .iter()
+        .enumerate()
+        .filter(|(i, &c)| c > cstr_tol[*i])
+        .fold(F::zero(), |acc, (i, &c)| acc + (c - cstr_tol[i]).abs())
+}
+
+pub fn cstr_min<F: Float>(
+    (_, y1): (usize, &ArrayBase<impl Data<Elem = F>, Ix1>),
+    (_, y2): (usize, &ArrayBase<impl Data<Elem = F>, Ix1>),
+    cstr_tol: &Array1<F>,
+) -> std::cmp::Ordering {
+    if y1.len() > 1 {
+        let sum_c1 = cstr_sum(y1, cstr_tol);
+        let sum_c2 = cstr_sum(y2, cstr_tol);
+        if sum_c1 > F::zero() && sum_c2 > F::zero() {
+            sum_c1.partial_cmp(&sum_c2).unwrap()
+        } else if sum_c1 == F::zero() && sum_c2 == F::zero() {
+            y1[0].partial_cmp(&y2[0]).unwrap()
+        } else if sum_c1 == F::zero() {
+            std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Greater
+        }
+    } else {
+        // unconstrained optimization
+        y1[0].partial_cmp(&y2[0]).unwrap()
+    }
+}
+
+/// This method find the best result in ydata wrt cstr_min partial order
+/// given the current best index of the current best and the offset index
+/// the starting index of the new data to compare  
+///
+/// This method supposes indexes consistency: current_index < offset_index < ydata.nrows()
+pub fn find_best_result_index_from<F: Float>(
+    current_index: usize, /* current best index */
+    offset_index: usize,
+    ydata: &ArrayBase<impl Data<Elem = F>, Ix2>, /* the whole data so far */
+    cstr_tol: &Array1<F>,
+) -> usize {
+    let new_ydata = ydata.slice(s![offset_index.., ..]);
+
+    let best = ydata.row(current_index);
+    let min = new_ydata
+        .outer_iter()
+        .enumerate()
+        .fold((usize::MAX, best), |a, b| {
+            std::cmp::min_by(a, b, |(i, u), (j, v)| cstr_min((*i, u), (*j, v), cstr_tol))
+        });
+    match min {
+        (usize::MAX, _) => current_index,
+        (index, _) => offset_index + index,
+    }
+}
 
 /// Find best (eg minimal) cost value (y_data\[0\]) with valid constraints (y_data\[1..\] < cstr_tol).
 /// y_data containing ns samples [objective, cstr_1, ... cstr_nc] is given as a matrix (ns, nc + 1)  
@@ -86,6 +143,38 @@ mod tests {
     use approx::assert_abs_diff_eq;
 
     #[test]
+    fn test_cstr_min() {
+        // cstr respected, y1 > y2
+        let (y1, y2) = (array![1.0, -0.15], array![-1.0, -0.01]);
+        let cstr_tol = Array1::from_elem(1, 0.1);
+        assert_eq!(
+            std::cmp::Ordering::Greater,
+            cstr_min((0, &y1), (1, &y2), &cstr_tol)
+        );
+        // cstr respected, y1 > y2
+        let (y1, y2) = (array![-1.0, -0.01], array![-2.0, -0.2]);
+        let cstr_tol = Array1::from_elem(1, 0.1);
+        assert_eq!(
+            std::cmp::Ordering::Greater,
+            cstr_min((0, &y1), (1, &y2), &cstr_tol)
+        );
+        // cstr out of tolerance, y1 < y2
+        let (y1, y2) = (array![-2.0, 1.], array![-1.0, 2.]);
+        let cstr_tol = Array1::from_elem(1, 0.1);
+        assert_eq!(
+            std::cmp::Ordering::Less,
+            cstr_min((0, &y1), (1, &y2), &cstr_tol)
+        );
+        // cstr1 out of tolerance, y1 > y2
+        let (y1, y2) = (array![-2.0, 1.], array![-1.0, 0.01]);
+        let cstr_tol = Array1::from_elem(1, 0.1);
+        assert_eq!(
+            std::cmp::Ordering::Greater,
+            cstr_min((0, &y1), (1, &y2), &cstr_tol)
+        );
+    }
+
+    #[test]
     fn test_find_best_obj() {
         // respect constraint (0, 1, 2) and minimize obj (1)
         let ydata = array![[1.0, -0.15], [-1.0, -0.01], [2.0, -0.2], [-3.0, 2.0]];
@@ -138,6 +227,36 @@ mod tests {
         let cstr_tol = Array1::from_vec(vec![1e-6; 2]); // this is the default
         let index = find_best_result_index(&y_data, &cstr_tol);
         assert_eq!(11, index);
+        let cstr_tol = Array1::from_vec(vec![2e-6; 2]);
+        let index = find_best_result_index(&y_data, &cstr_tol);
+        assert_eq!(17, index);
+    }
+
+    #[test]
+    fn test_find_best_result2() {
+        let y_data = array![
+            [-1.05044744051, -3.854157649246, 0.03068950747],
+            [-2.74965213562, -1.955703115787, -0.70939921583],
+            [-2.35364705246, 0.322760821911, -31.26001920874],
+            [-4.30684045535, -0.188609601161, 0.12375208631],
+            [-2.66585377971, -1.665992782883, -3.31489212502],
+            [-5.76598597442, 1.767753631322, -0.23219495778],
+            [-3.84677718652, -0.164470342807, -0.43935857142],
+            [-4.23672675117, -2.343687786724, -0.86266607911],
+            [-1.23999705899, -1.653209288978, -12.42363834689],
+            [-5.81590801801, -11.725502513342, 2.72175031293],
+            [-5.57379997815, -0.075893786744, 0.12260068082],
+            [-5.26821022904, -0.093334332384, -0.29931405911],
+            [-5.50558228637, -0.008847697249, 0.00015874647],
+            [-5.50802373110, -2.479726473358e-5, 2.46930218281e-5],
+            [-5.50802210236, -2.586721399788e-5, 2.28386911871e-5],
+            [-5.50801726964, 2.607167473023e-7, 5.50684865174e-6],
+            [-5.50801509642, 1.951629235996e-7, 2.48275059533e-6],
+            [-5.50801399313, -6.707576982734e-8, 1.03991762046e-6]
+        ];
+        let cstr_tol = Array1::from_vec(vec![2e-6; 2]);
+        let index = find_best_result_index_from(11, 12, &y_data, &cstr_tol);
+        assert_eq!(17, index);
         let cstr_tol = Array1::from_vec(vec![2e-6; 2]);
         let index = find_best_result_index(&y_data, &cstr_tol);
         assert_eq!(17, index);
@@ -207,6 +326,8 @@ pub struct EgorState<F: Float> {
     pub(crate) theta_inits: Option<Vec<Option<Array2<F>>>>,
     /// Historic data (params, objective and constraints)
     pub(crate) data: Option<(Array2<F>, Array2<F>)>,
+    /// index of best result in data
+    pub(crate) best_index: Option<usize>,
     /// Sampling method used to generate space filling samples
     pub(crate) sampling: Option<Lhs<F, Xoshiro256Plus>>,
 }
@@ -274,7 +395,7 @@ where
     /// # use egobox_ego::EgorState;
     /// # use argmin::core::{State, ArgminFloat};
     /// # let state: EgorState<f64> = EgorState::new();
-    /// # assert_eq!(state.max_iters, std::u64::MAX);
+    /// # assert_eq!(state.max_iters, u64::MAX);
     /// let state = state.max_iters(1000);
     /// # assert_eq!(state.max_iters, 1000);
     /// ```
@@ -439,7 +560,7 @@ where
     /// # assert_eq!(state.target_cost, f64::NEG_INFINITY);
     /// # assert_eq!(state.iter, 0);
     /// # assert_eq!(state.last_best_iter, 0);
-    /// # assert_eq!(state.max_iters, std::u64::MAX);
+    /// # assert_eq!(state.max_iters, u64::MAX);
     /// # assert_eq!(state.counts, HashMap::new());
     /// # assert_eq!(state.time.unwrap(), instant::Duration::new(0, 0));
     /// # assert_eq!(state.termination_status, TerminationStatus::NotTerminated);
@@ -459,7 +580,7 @@ where
 
             iter: 0,
             last_best_iter: 0,
-            max_iters: std::u64::MAX,
+            max_iters: u64::MAX,
             counts: HashMap::new(),
             time: Some(instant::Duration::new(0, 0)),
             termination_status: TerminationStatus::NotTerminated,
@@ -474,6 +595,7 @@ where
 
             clusterings: None,
             data: None,
+            best_index: None,
             sampling: None,
             theta_inits: None,
         }
@@ -506,35 +628,24 @@ where
     /// assert!(state.is_best());
     /// ```
     fn update(&mut self) {
-        // TODO: better implementation should only track
-        // current and best index in data and compare just them
-        // without finding best in data each time
-        let data = self.data.as_ref();
-        match data {
-            None => {
-                // should not occur data should be some
-                println!("Warning: update should occur after data initialization");
-            }
-            Some((x_data, y_data)) => {
-                let best_index = find_best_result_index(y_data, &self.cstr_tol);
-                let best_iter = best_index.saturating_sub(self.doe_size) as u64 + 1;
-                if best_iter > self.last_best_iter {
-                    let param = x_data.row(best_index).to_owned();
-                    std::mem::swap(&mut self.prev_best_param, &mut self.best_param);
-                    self.best_param = Some(param);
+        if let Some((x_data, y_data)) = self.data.as_ref() {
+            let best_index = self
+                .best_index
+                .unwrap_or_else(|| find_best_result_index(y_data, &self.cstr_tol));
 
-                    let cost = y_data.row(best_index).to_owned();
-                    std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
-                    self.best_cost = Some(cost);
-                    if best_index > self.doe_size {
-                        self.last_best_iter = best_iter;
-                    } else {
-                        // best point in doe => self.last_best_iter remains 0
-                    }
-                }
-                if self.best_cost.is_none() {}
+            let param = x_data.row(best_index).to_owned();
+            std::mem::swap(&mut self.prev_best_param, &mut self.best_param);
+            self.best_param = Some(param);
+
+            let cost = y_data.row(best_index).to_owned();
+            std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
+            self.best_cost = Some(cost);
+            if best_index > self.doe_size {
+                self.last_best_iter = (best_index + 1 - self.doe_size) as u64;
+            } else {
+                // best point in doe => self.last_best_iter remains 0
             }
-        };
+        }
     }
 
     /// Returns a reference to the current parameter vector

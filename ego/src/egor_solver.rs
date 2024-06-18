@@ -109,7 +109,7 @@ use crate::egor_config::EgorConfig;
 use crate::egor_state::{find_best_result_index, EgorState, MAX_POINT_ADDITION_RETRY};
 use crate::errors::{EgoError, Result};
 
-use crate::mixint::*;
+use crate::{find_best_result_index_from, mixint::*};
 
 use crate::optimizer::*;
 
@@ -361,7 +361,7 @@ where
         let no_point_added_retries = MAX_POINT_ADDITION_RETRY;
 
         let mut initial_state = state
-            .data((x_data, y_data))
+            .data((x_data, y_data.clone()))
             .clusterings(clusterings)
             .theta_inits(theta_inits)
             .sampling(sampling);
@@ -375,6 +375,10 @@ where
             .clone()
             .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
         initial_state.target_cost = self.config.target;
+
+        let best_index = find_best_result_index(&y_data, &initial_state.cstr_tol);
+        initial_state.best_index = Some(best_index);
+        initial_state.last_best_iter = 0;
         debug!("INITIAL STATE = {:?}", initial_state);
         Ok((initial_state, None))
     }
@@ -437,7 +441,7 @@ where
 
             let (x_dat, y_dat, infill_value) = self.next_points(
                 init,
-                new_state.get_iter(),
+                state.get_iter(),
                 recluster,
                 &mut clusterings,
                 &mut theta_inits,
@@ -532,16 +536,26 @@ where
             info!("Save doe shape {:?} in {:?}", doe.shape(), filepath);
             write_npy(filepath, &doe).expect("Write current doe");
         }
-        let best_index = find_best_result_index(&y_data, &new_state.cstr_tol);
+
+        let best_index = find_best_result_index_from(
+            state.best_index.unwrap(),
+            y_data.nrows() - add_count as usize,
+            &y_data,
+            &new_state.cstr_tol,
+        );
+        // let best = find_best_result_index(&y_data, &new_state.cstr_tol);
+        // assert!(best_index == best);
+        new_state.best_index = Some(best_index);
         info!(
             "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
-            new_state.get_iter() + 1,
-            new_state.get_max_iters(),
+            state.get_iter() + 1,
+            state.get_max_iters(),
             now.elapsed().as_secs_f64(),
             y_data.row(best_index),
             x_data.row(best_index)
         );
         new_state = new_state.data((x_data, y_data.clone()));
+
         Ok((new_state, None))
     }
 
@@ -549,6 +563,8 @@ where
         debug!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> end iteration");
         debug!("Current Cost {:?}", state.get_cost());
         debug!("Best cost {:?}", state.get_best_cost());
+        debug!("Best index {:?}", state.best_index);
+        debug!("Data {:?}", state.data.as_ref().unwrap());
 
         TerminationStatus::NotTerminated
     }
