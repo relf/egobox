@@ -7,6 +7,7 @@ use ndarray::Array2;
 
 use serde::{Deserialize, Serialize};
 
+/// A structure to handle TREGO methods parameterization
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TregoConfig {
     d: (f64, f64),
