@@ -1,39 +1,19 @@
-use crate::egor_config::EgorConfig;
 use crate::egor_state::{EgorState, MAX_POINT_ADDITION_RETRY};
-use crate::errors::{EgoError, Result};
-use crate::mixint::*;
 use crate::solver::egor_solver::EgorSolver;
 use crate::utils::{find_best_result_index, find_best_result_index_from};
 
-use crate::optimizer::*;
-
 use crate::types::*;
-use crate::utils::{compute_cstr_scales, update_data};
+use crate::utils::update_data;
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
-use egobox_gp::ThetaTuning;
-use egobox_moe::{
-    Clustering, CorrelationSpec, GpMixtureParams, MixtureGpSurrogate, RegressionSpec,
-};
-use env_logger::{Builder, Env};
-use finitediff::FiniteDiff;
-use linfa::ParamGuard;
 use log::{debug, info, warn};
-use ndarray::{
-    concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
-};
+use ndarray::{concatenate, s, Array1, Array2, Axis, Zip};
 use ndarray_npy::{read_npy, write_npy};
-use ndarray_stats::QuantileExt;
-
-use rand_xoshiro::Xoshiro256Plus;
 
 use argmin::argmin_error_closure;
 use argmin::core::{
     CostFunction, Problem, Solver, State, TerminationReason, TerminationStatus, KV,
 };
-
-use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use std::time::Instant;
 

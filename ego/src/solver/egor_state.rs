@@ -1,14 +1,13 @@
 /// Implementation of `argmin::IterState` for Egor optimizer
-use crate::{sort_axis::*, utils::find_best_result_index};
+use crate::utils::find_best_result_index;
 use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationStatus};
 use egobox_doe::Lhs;
 use egobox_moe::Clustering;
 use linfa::Float;
-use ndarray::{array, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
-use ndarray_stats::QuantileExt;
+use ndarray::{Array1, Array2};
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, iter::zip};
+use std::collections::HashMap;
 
 /// Max number of retry when adding a new point. Point addition may fail
 /// if new point is too close to a previous point in the growing doe used
