@@ -178,11 +178,9 @@
 mod criteria;
 mod egor;
 mod egor_config;
-mod egor_service;
-mod egor_solver;
-mod egor_state;
 mod errors;
 mod mixint;
+mod solver;
 mod types;
 
 mod lhs_optimizer;
@@ -193,9 +191,8 @@ mod utils;
 pub use crate::criteria::*;
 pub use crate::egor::*;
 pub use crate::egor_config::*;
-pub use crate::egor_service::*;
-pub use crate::egor_solver::*;
-pub use crate::egor_state::*;
 pub use crate::errors::*;
 pub use crate::mixint::*;
+pub use crate::solver::*;
 pub use crate::types::*;
+pub use crate::utils::find_best_result_index;

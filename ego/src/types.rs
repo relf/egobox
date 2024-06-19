@@ -1,4 +1,4 @@
-use crate::{errors::Result, EgorState};
+use crate::{egor_state::EgorState, errors::Result};
 use argmin::core::CostFunction;
 use egobox_moe::{Clustering, MixtureGpSurrogate, ThetaTuning};
 use linfa::Float;

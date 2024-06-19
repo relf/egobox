@@ -1,5 +1,5 @@
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_ego::EgorServiceBuilder;
+use egobox_ego::egor_service::EgorServiceBuilder;
 use ndarray::{array, concatenate, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Zip};
 
 // Objective
