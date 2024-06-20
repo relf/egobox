@@ -38,7 +38,7 @@ impl<F: Float> Display for Recombination<F> {
 }
 
 bitflags! {
-    /// Flags to specify tested regression models during experts selection (see [`regression_spec()`](SgpParams::regression_spec)).
+    /// Flags to specify tested regression models during experts selection (see [`regression_spec()`](egobox_moe::GpMixtureParams::regression_spec)).
     ///
     /// Flags can be combine with bit-wise `or` operator to select two or more models.
     /// ```ignore
@@ -63,7 +63,7 @@ bitflags! {
 }
 
 bitflags! {
-    /// Flags to specify tested correlation models during experts selection (see [`correlation_spec()`](SgpParams::correlation_spec)).
+    /// Flags to specify tested correlation models during experts selection (see [`correlation_spec()`](egobox_moe::GpMixtureParams::correlation_spec)).
     ///
     /// Flags can be combine with bit-wise `or` operator to select two or more models.
     /// ```ignore

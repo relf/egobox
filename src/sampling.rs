@@ -1,6 +1,6 @@
 use crate::types::*;
 use egobox_doe::{LhsKind, SamplingMethod};
-use egobox_ego::MixintContext;
+use egobox_ego::gpmix::mixint::MixintContext;
 use numpy::{IntoPyArray, PyArray2};
 use pyo3::prelude::*;
 

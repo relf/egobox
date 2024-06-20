@@ -1,3 +1,4 @@
+use crate::gpmix::spec::*;
 use crate::{errors::Result, EgorState};
 use argmin::core::CostFunction;
 use egobox_moe::{Clustering, MixtureGpSurrogate, ThetaTuning};
@@ -6,7 +7,7 @@ use ndarray::{Array1, Array2, ArrayView2};
 use serde::{Deserialize, Serialize};
 
 /// Enums for regression and correlation selection
-pub use egobox_moe::{CorrelationSpec, RegressionSpec};
+//pub use egobox_moe::{CorrelationSpec, RegressionSpec};
 
 /// Optimization result
 #[derive(Clone, Debug)]

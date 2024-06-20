@@ -1,4 +1,4 @@
-use crate::lhs_optimizer::LhsOptimizer;
+use crate::optimizers::LhsOptimizer;
 use crate::ObjData;
 use ndarray::{arr1, Array1, Array2, ArrayView1};
 

@@ -90,10 +90,10 @@
 //! ```
 //!
 use crate::egor_config::*;
-use crate::egor_solver::*;
 use crate::errors::Result;
-use crate::mixint::*;
+use crate::gpmix::mixint::*;
 use crate::types::*;
+use crate::{to_xtypes, EgorSolver};
 
 use egobox_moe::GpMixtureParams;
 use log::info;
@@ -236,6 +236,8 @@ mod tests {
 
     use serial_test::serial;
     use std::time::Instant;
+
+    use crate::{gpmix::spec::*, DOE_FILE, DOE_INITIAL_FILE};
 
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
