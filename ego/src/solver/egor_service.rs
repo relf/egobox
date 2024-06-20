@@ -40,9 +40,9 @@
 //! ```
 //!
 use crate::egor_config::*;
-use crate::egor_solver::*;
-use crate::mixint::*;
+use crate::gpmix::mixint::*;
 use crate::types::*;
+use crate::{to_xtypes, EgorSolver};
 
 use egobox_moe::GpMixtureParams;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
@@ -140,6 +140,7 @@ impl<SB: SurrogateBuilder> EgorService<SB> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gpmix::spec::*;
     use approx::assert_abs_diff_eq;
     use ndarray::{array, concatenate, ArrayView2, Axis};
 

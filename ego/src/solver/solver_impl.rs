@@ -1,6 +1,6 @@
-use crate::egor_state::{EgorState, MAX_POINT_ADDITION_RETRY};
 use crate::solver::egor_solver::EgorSolver;
 use crate::utils::{find_best_result_index, find_best_result_index_from};
+use crate::{EgorState, MAX_POINT_ADDITION_RETRY};
 
 use crate::types::*;
 use crate::utils::update_data;

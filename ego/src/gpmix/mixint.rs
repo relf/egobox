@@ -1,5 +1,6 @@
-//! This library implements continuous relaxation functions,
-//! it is a port of [SMT mixed integer module](https://smt.readthedocs.io/en/latest/_src_docs/applications/mixed_integer.html)
+//! Mixed-integer mixture of Gaussian processes
+//!
+//! This module exposes a GP mixture model featuring continuous relaxation to handle mixed-interger variables
 
 #![allow(dead_code)]
 use crate::errors::{EgoError, Result};

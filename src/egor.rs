@@ -313,7 +313,7 @@ impl Egor {
         let doe = concatenate(Axis(1), &[x_doe.view(), y_doe.view()]).unwrap();
         let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
 
-        let mixintegor = egobox_ego::egor_service::EgorServiceBuilder::optimize()
+        let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
             .configure(|config| self.apply_config(config, Some(1), Some(&doe)))
             .min_within_mixint_space(&xtypes);
 

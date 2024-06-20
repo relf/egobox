@@ -175,24 +175,21 @@
 //! integer-valued variables in Bayesian Optimization with Gaussian processes.
 //!
 //!
-mod criteria;
+pub mod criteria;
+pub mod gpmix;
+
 mod egor;
 mod egor_config;
 mod errors;
-mod mixint;
 mod solver;
 mod types;
 
-mod lhs_optimizer;
-mod optimizer;
-mod sort_axis;
-mod utils;
-
-pub use crate::criteria::*;
 pub use crate::egor::*;
 pub use crate::egor_config::*;
 pub use crate::errors::*;
-pub use crate::mixint::*;
 pub use crate::solver::*;
 pub use crate::types::*;
 pub use crate::utils::find_best_result_index;
+
+mod optimizers;
+mod utils;

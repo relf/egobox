@@ -108,9 +108,9 @@
 use crate::egor_config::EgorConfig;
 use crate::errors::{EgoError, Result};
 
-use crate::optimizer::*;
+use crate::optimizers::*;
 
-use crate::mixint::{as_continuous_limits, to_discrete_space};
+use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 
 use crate::types::*;
 use crate::utils::compute_cstr_scales;
@@ -535,8 +535,8 @@ where
             self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
 
         let algorithm = match self.config.infill_optimizer {
-            InfillOptimizer::Slsqp => crate::optimizer::Algorithm::Slsqp,
-            InfillOptimizer::Cobyla => crate::optimizer::Algorithm::Cobyla,
+            InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
+            InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
         };
 
         let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {

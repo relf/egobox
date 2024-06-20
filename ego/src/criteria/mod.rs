@@ -1,5 +1,6 @@
-pub mod ei;
-pub mod wb2;
+//! Available infill criteria to be used by Egor solver
+mod ei;
+mod wb2;
 
 pub use ei::{ExpectedImprovement, EI};
 pub use wb2::{WB2Criterion, WB2, WB2S};
