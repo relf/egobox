@@ -187,6 +187,7 @@ mod types;
 pub use crate::egor::*;
 pub use crate::egor_config::*;
 pub use crate::errors::*;
+pub use crate::gpmix::spec::{CorrelationSpec, RegressionSpec};
 pub use crate::solver::*;
 pub use crate::types::*;
 pub use crate::utils::find_best_result_index;
