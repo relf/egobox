@@ -50,7 +50,7 @@ pub struct EgorState<F: Float> {
     /// Evaluation counts
     pub counts: HashMap<String, u64>,
     /// Time required so far
-    pub time: Option<instant::Duration>,
+    pub time: Option<web_time::Duration>,
     /// Optimization status
     pub termination_status: TerminationStatus,
 
@@ -333,7 +333,7 @@ where
             last_best_iter: 0,
             max_iters: u64::MAX,
             counts: HashMap::new(),
-            time: Some(instant::Duration::new(0, 0)),
+            time: Some(web_time::Duration::new(0, 0)),
             termination_status: TerminationStatus::NotTerminated,
 
             doe_size: 0,
@@ -473,7 +473,7 @@ where
     /// let state = state.time(Some(instant::Duration::new(0, 12)));
     /// # assert_eq!(state.time.unwrap(), instant::Duration::new(0, 12));
     /// ```
-    fn time(&mut self, time: Option<instant::Duration>) -> &mut Self {
+    fn time(&mut self, time: Option<web_time::Duration>) -> &mut Self {
         self.time = time;
         self
     }
@@ -629,7 +629,7 @@ where
     /// let time = state.get_time();
     /// # assert_eq!(time.unwrap(), instant::Duration::new(0, 0));
     /// ```
-    fn get_time(&self) -> Option<instant::Duration> {
+    fn get_time(&self) -> Option<web_time::Duration> {
         self.time
     }
 
