@@ -293,8 +293,8 @@ where
     /// # Example
     ///
     /// ```
-    /// # extern crate instant;
-    /// # use instant;
+    /// # extern crate web_time;
+    /// # use web_time;
     /// # use std::collections::HashMap;
     /// # use argmin::core::{State, TerminationStatus};
     /// use egobox_ego::EgorState;
@@ -313,7 +313,7 @@ where
     /// # assert_eq!(state.last_best_iter, 0);
     /// # assert_eq!(state.max_iters, u64::MAX);
     /// # assert_eq!(state.counts, HashMap::new());
-    /// # assert_eq!(state.time.unwrap(), instant::Duration::new(0, 0));
+    /// # assert_eq!(state.time.unwrap(), web_time::Duration::new(0, 0));
     /// # assert_eq!(state.termination_status, TerminationStatus::NotTerminated);
     /// ```
     fn new() -> Self {
@@ -465,13 +465,13 @@ where
     /// # Example
     ///
     /// ```
-    /// # extern crate instant;
-    /// # use instant;
+    /// # extern crate web_time;
+    /// # use web_time;
     /// # use egobox_ego::EgorState;
     /// # use argmin::core::{State, ArgminFloat, TerminationReason};
     /// # let mut state: EgorState<f64> = EgorState::new();
-    /// let state = state.time(Some(instant::Duration::new(0, 12)));
-    /// # assert_eq!(state.time.unwrap(), instant::Duration::new(0, 12));
+    /// let state = state.time(Some(web_time::Duration::new(0, 12)));
+    /// # assert_eq!(state.time.unwrap(), web_time::Duration::new(0, 12));
     /// ```
     fn time(&mut self, time: Option<web_time::Duration>) -> &mut Self {
         self.time = time;
@@ -621,13 +621,13 @@ where
     /// # Example
     ///
     /// ```
-    /// # extern crate instant;
-    /// # use instant;
+    /// # extern crate web_time;
+    /// # use web_time;
     /// # use egobox_ego::EgorState;
     /// # use argmin::core::{State, ArgminFloat};
     /// # let mut state: EgorState<f64> = EgorState::new();
     /// let time = state.get_time();
-    /// # assert_eq!(time.unwrap(), instant::Duration::new(0, 0));
+    /// # assert_eq!(time.unwrap(), web_time::Duration::new(0, 0));
     /// ```
     fn get_time(&self) -> Option<web_time::Duration> {
         self.time
