@@ -72,10 +72,10 @@ Depending on the sub-packages you want to use, you have to add following declara
 
 ```text
 [dependencies]
-egobox-doe = { version = "0.19" }
-egobox-gp  = { version = "0.19" }
-egobox-moe = { version = "0.19" }
-egobox-ego = { version = "0.19" }
+egobox-doe = { version = "0.20" }
+egobox-gp  = { version = "0.20" }
+egobox-moe = { version = "0.20" }
+egobox-ego = { version = "0.20" }
 ```
 
 ### Features
@@ -139,7 +139,7 @@ Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you coul
 
 ```text
 [dependencies]
-egobox-gp = { version = "0.19", features = ["blas", "linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.20", features = ["blas", "linfa/intel-mkl-static"] }
 ```
 
 or you could run the `gp` example as follows:
