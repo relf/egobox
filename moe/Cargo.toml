@@ -55,7 +55,7 @@ typetag = { version = "0.2", optional = true }
 
 [dev-dependencies]
 criterion = "0.5"
-approx = "0.4"
+approx = "0.5"
 ndarray-npy = "0.8"
 ndarray-csv = "0.5"
 csv = "1.1"

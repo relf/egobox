@@ -32,7 +32,7 @@ serde = { version = "1", optional = true }
 [dev-dependencies]
 criterion = "0.5"
 serde_json = "1"
-approx = "0.4"
+approx = "0.5"
 
 [[bench]]
 name = "lhs"

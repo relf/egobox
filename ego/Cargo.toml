@@ -61,7 +61,7 @@ derive_more = "0.99"
 
 [dev-dependencies]
 criterion = "0.5"
-approx = "0.4"
+approx = "0.5"
 argmin_testfunctions = "0.2"
 serial_test = "3.1.0"
 
