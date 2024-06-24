@@ -1,6 +1,6 @@
 [package]
 name = "egobox-gp"
-version = "0.19.0"
+version = "0.20.0"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2021"
 description = "A library for gaussian process modeling"
@@ -18,7 +18,7 @@ persistent = ["serializable", "serde_json"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.19.0", path = "../doe" }
+egobox-doe = { version = "0.20.0", path = "../doe" }
 
 linfa = { version = "0.7", default-features = false }
 linfa-pls = { version = "0.7", default-features = false }
