@@ -12,7 +12,7 @@ pub struct WB2Criterion(pub Option<f64>);
 #[typetag::serde]
 impl InfillCriterion for WB2Criterion {
     fn name(&self) -> &'static str {
-        if self.0.is_some() {
+        if self.0.is_some() && self.0.unwrap() != 1. {
             "WB2S"
         } else {
             "WB2"
