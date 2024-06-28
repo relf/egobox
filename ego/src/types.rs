@@ -148,9 +148,9 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
 pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 
-/// Data used by internal infill criteria to be optimized
+/// Data used by internal infill criteria optimization
 #[derive(Clone)]
-pub(crate) struct ObjData<F> {
+pub(crate) struct InfillObjData<F> {
     pub scale_infill_obj: F,
     pub scale_cstr: Array1<F>,
     pub scale_wb2: F,

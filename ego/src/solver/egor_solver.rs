@@ -544,12 +544,15 @@ where
             InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
         };
 
-        let obj = |x: &[f64], gradient: Option<&mut [f64]>, params: &mut ObjData<f64>| -> f64 {
+        let obj = |x: &[f64],
+                   gradient: Option<&mut [f64]>,
+                   params: &mut InfillObjData<f64>|
+         -> f64 {
             // Defensive programming NlOpt::Cobyla may pass NaNs
             if x.iter().any(|x| x.is_nan()) {
                 return f64::INFINITY;
             }
-            let ObjData {
+            let InfillObjData {
                 scale_infill_obj,
                 scale_wb2,
                 ..
@@ -575,7 +578,7 @@ where
                 let index = i;
                 let cstr = move |x: &[f64],
                                  gradient: Option<&mut [f64]>,
-                                 params: &mut ObjData<f64>|
+                                 params: &mut InfillObjData<f64>|
                       -> f64 {
                     if let Some(grad) = gradient {
                         if self.is_grad_impl_available() {
@@ -615,17 +618,17 @@ where
                 };
                 #[cfg(feature = "nlopt")]
                 {
-                    Box::new(cstr) as Box<dyn nlopt::ObjFn<ObjData<f64>> + Sync>
+                    Box::new(cstr) as Box<dyn nlopt::ObjFn<InfillObjData<f64>> + Sync>
                 }
                 #[cfg(not(feature = "nlopt"))]
                 {
-                    Box::new(cstr) as Box<dyn crate::types::ObjFn<ObjData<f64>> + Sync>
+                    Box::new(cstr) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>
                 }
             })
             .collect();
         let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
         info!("Optimize infill criterion...");
-        let obj_data = ObjData {
+        let obj_data = InfillObjData {
             scale_infill_obj,
             scale_cstr: scale_cstr.to_owned(),
             scale_wb2,
