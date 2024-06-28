@@ -175,7 +175,7 @@ where
                 None
             };
 
-            let (x_dat, y_dat, infill_value) = self.next_points(
+            let (x_dat, y_dat, infill_value, models) = self.next_points(
                 init,
                 state.get_iter(),
                 recluster,
@@ -279,6 +279,17 @@ where
             &y_data,
             &new_state.cstr_tol,
         );
+
+        let fx_new = y_data[[best_index, 0]];
+        let fx_old = y_data[[state.best_index.unwrap(), 0]];
+        let rho = state.sigma * state.sigma;
+        let best_index = if fx_new < fx_old - rho {
+            best_index
+        } else {
+            //crate::solver::trego::local_step()
+            0
+        };
+
         // let best = find_best_result_index(&y_data, &new_state.cstr_tol);
         // assert!(best_index == best);
         new_state.best_index = Some(best_index);

@@ -258,7 +258,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             .cstr_tol
             .clone()
             .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
-        let (x_dat, _, _) = self.next_points(
+        let (x_dat, _, _, _) = self.next_points(
             true,
             0,
             false, // done anyway
@@ -384,11 +384,17 @@ where
         cstr_tol: &Array1<f64>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
-    ) -> (Array2<f64>, Array2<f64>, f64) {
+    ) -> (
+        Array2<f64>,
+        Array2<f64>,
+        f64,
+        Vec<std::boxed::Box<dyn egobox_moe::MixtureGpSurrogate>>,
+    ) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
         let mut infill_val = f64::INFINITY;
+        let mut models: Vec<std::boxed::Box<dyn egobox_moe::MixtureGpSurrogate>> = vec![];
         for i in 0..self.config.q_points {
             let (xt, yt) = if i == 0 {
                 (x_data.to_owned(), y_data.to_owned())
@@ -400,27 +406,26 @@ where
             };
 
             info!("Train surrogates with {} points...", xt.nrows());
-            let models: Vec<std::boxed::Box<dyn egobox_moe::MixtureGpSurrogate>> =
-                (0..=self.config.n_cstr)
-                    .into_par_iter()
-                    .map(|k| {
-                        let name = if k == 0 {
-                            "Objective".to_string()
-                        } else {
-                            format!("Constraint[{k}]")
-                        };
-                        self.make_clustered_surrogate(
-                            &xt,
-                            &yt.slice(s![.., k..k + 1]).to_owned(),
-                            init && i == 0,
-                            iter,
-                            recluster,
-                            clusterings[k].as_ref(),
-                            theta_inits[k].as_ref(),
-                            &name,
-                        )
-                    })
-                    .collect();
+            models = (0..=self.config.n_cstr)
+                .into_par_iter()
+                .map(|k| {
+                    let name = if k == 0 {
+                        "Objective".to_string()
+                    } else {
+                        format!("Constraint[{k}]")
+                    };
+                    self.make_clustered_surrogate(
+                        &xt,
+                        &yt.slice(s![.., k..k + 1]).to_owned(),
+                        init && i == 0,
+                        iter,
+                        recluster,
+                        clusterings[k].as_ref(),
+                        theta_inits[k].as_ref(),
+                        &name,
+                    )
+                })
+                .collect();
             (0..=self.config.n_cstr).for_each(|k| {
                 clusterings[k] = Some(models[k].to_clustering());
                 let mut thetas_k = Array2::zeros((
@@ -472,7 +477,7 @@ where
                 }
             }
         }
-        (x_dat, y_dat, infill_val)
+        (x_dat, y_dat, infill_val, models)
     }
 
     /// True whether surrogate gradient computation implemented
@@ -754,7 +759,7 @@ where
 
     /// Compute infill criterion objective expected to be minimized
     /// meaning infill criterion objective is negative infill criterion
-    /// the latter is expected to be maximised
+    /// the latter is expected to be maximized
     fn eval_infill_obj(
         &self,
         x: &[f64],
