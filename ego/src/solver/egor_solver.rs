@@ -480,11 +480,6 @@ where
         (x_dat, y_dat, infill_val, models)
     }
 
-    /// True whether surrogate gradient computation implemented
-    fn is_grad_impl_available(&self) -> bool {
-        true
-    }
-
     fn compute_scaling(
         &self,
         sampling: &Lhs<f64, Xoshiro256Plus>,
@@ -544,34 +539,25 @@ where
             InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
         };
 
-        let obj = |x: &[f64],
-                   gradient: Option<&mut [f64]>,
-                   params: &mut InfillObjData<f64>|
-         -> f64 {
-            // Defensive programming NlOpt::Cobyla may pass NaNs
-            if x.iter().any(|x| x.is_nan()) {
-                return f64::INFINITY;
-            }
-            let InfillObjData {
-                scale_infill_obj,
-                scale_wb2,
-                ..
-            } = params;
-            if let Some(grad) = gradient {
-                if self.is_grad_impl_available() {
-                    let grd = self
-                        .eval_grad_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
-                        .to_vec();
-                    grad[..].copy_from_slice(&grd);
-                } else {
+        let obj =
+            |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
+                // Defensive programming NlOpt::Cobyla may pass NaNs
+                if x.iter().any(|x| x.is_nan()) {
+                    return f64::INFINITY;
+                }
+                let InfillObjData {
+                    scale_infill_obj,
+                    scale_wb2,
+                    ..
+                } = params;
+                if let Some(grad) = gradient {
                     let f = |x: &Vec<f64>| -> f64 {
                         self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
                     };
                     grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
                 }
-            }
-            self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
-        };
+                self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
+            };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
             .map(|i| {
@@ -581,31 +567,17 @@ where
                                  params: &mut InfillObjData<f64>|
                       -> f64 {
                     if let Some(grad) = gradient {
-                        if self.is_grad_impl_available() {
-                            let grd = cstr_models[i]
-                                .predict_gradients(
-                                    &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                        .unwrap()
-                                        .view(),
-                                )
-                                .unwrap()
-                                .row(0)
-                                .mapv(|v| v / params.scale_cstr[index])
-                                .to_vec();
-                            grad[..].copy_from_slice(&grd);
-                        } else {
-                            let f = |x: &Vec<f64>| -> f64 {
-                                cstr_models[i]
-                                    .predict(
-                                        &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                            .unwrap()
-                                            .view(),
-                                    )
-                                    .unwrap()[[0, 0]]
-                                    / params.scale_cstr[index]
-                            };
-                            grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-                        }
+                        let grd = cstr_models[i]
+                            .predict_gradients(
+                                &Array::from_shape_vec((1, x.len()), x.to_vec())
+                                    .unwrap()
+                                    .view(),
+                            )
+                            .unwrap()
+                            .row(0)
+                            .mapv(|v| v / params.scale_cstr[index])
+                            .to_vec();
+                        grad[..].copy_from_slice(&grd);
                     }
                     cstr_models[index]
                         .predict(
