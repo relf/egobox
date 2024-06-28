@@ -81,6 +81,9 @@ pub struct EgorState<F: Float> {
     pub(crate) best_index: Option<usize>,
     /// Sampling method used to generate space filling samples
     pub(crate) sampling: Option<Lhs<F, Xoshiro256Plus>>,
+
+    /// Trego state
+    pub(crate) sigma: F,
 }
 
 impl<F> EgorState<F>
@@ -349,6 +352,8 @@ where
             best_index: None,
             sampling: None,
             theta_inits: None,
+
+            sigma: F::cast(1e-1),
         }
     }
 
