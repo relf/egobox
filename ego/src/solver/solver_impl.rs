@@ -1,5 +1,4 @@
 use crate::solver::egor_solver::EgorSolver;
-use crate::solver::trego::TregoStep;
 use crate::utils::{find_best_result_index, find_best_result_index_from};
 use crate::{EgorState, MAX_POINT_ADDITION_RETRY};
 
@@ -281,69 +280,16 @@ where
             &new_state.cstr_tol,
         );
 
-        let y_new = y_data[[best_index, 0]];
-        let y_old = y_data[[state.best_index.unwrap(), 0]];
-        let rho = |sigma| sigma * sigma;
-        let best_index = if y_new < y_old - rho(new_state.sigma) {
-            info!("Ego global step successful!");
-            best_index
-        } else {
-            info!("Trego local step");
-            let mut new_best_index = best_index;
-            (0..self.config.trego.n_local_steps).for_each(|_| {
-                let (obj_model, cstr_models) = models.split_first().unwrap();
-                let xbest = x_data.row(best_index);
-                let x_opt = self.trego_step(
-                    &y_data.view(),
-                    &sampling,
-                    obj_model.as_ref(),
-                    cstr_models,
-                    &xbest,
-                    (
-                        state.sigma * self.config.trego.d.0,
-                        state.sigma * self.config.trego.d.1,
-                    ),
-                );
-                let x_new = x_opt.insert_axis(Axis(0));
-                let y_new = self.eval_obj(fobj, &x_new);
-                info!(
-                    "y_old-y_new={}, rho={}",
-                    y_old - y_new[[0, 0]],
-                    rho(new_state.sigma)
-                );
-                if y_new[[0, 0]] < y_old - rho(new_state.sigma) {
-                    let new_index = update_data(&mut x_data, &mut y_data, &x_new, &y_new);
-                    if new_index.len() == 1 {
-                        let new_index = find_best_result_index_from(
-                            best_index,
-                            y_data.len() - 1,
-                            &y_data,
-                            &state.cstr_tol,
-                        );
-                        if new_index == y_data.len() - 1 {
-                            // trego local step successful
-                            new_best_index = new_index;
-                        }
-                    }
-                }
-                if new_best_index == best_index {
-                    let old = new_state.sigma;
-                    new_state.sigma *= self.config.trego.beta;
-                    info!(
-                        "Local step not successful: sigma {} -> {}",
-                        old, new_state.sigma
-                    );
-                } else {
-                    let old = new_state.sigma;
-                    new_state.sigma *= self.config.trego.gamma;
-                    info!(
-                        "Local step successful: sigma {} -> {}",
-                        old, new_state.sigma
-                    );
-                }
-            });
-            new_best_index
-        };
+        let best_index = self.trego_step(
+            fobj,
+            models,
+            sampling,
+            best_index,
+            &mut x_data,
+            &mut y_data,
+            &state,
+            &mut new_state,
+        );
 
         // let best = find_best_result_index(&y_data, &new_state.cstr_tol);
         // assert!(best_index == best);

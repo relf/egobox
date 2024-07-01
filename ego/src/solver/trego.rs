@@ -1,32 +1,105 @@
 use crate::optimizers::*;
+use crate::utils::find_best_result_index_from;
+use crate::utils::update_data;
 use crate::EgorSolver;
+use crate::EgorState;
 use crate::InfillObjData;
 use crate::InfillOptimizer;
 use crate::SurrogateBuilder;
 
+use argmin::core::CostFunction;
+use argmin::core::Problem;
 use egobox_doe::Lhs;
 use egobox_moe::MixtureGpSurrogate;
 use finitediff::FiniteDiff;
 use linfa_linalg::norm::*;
+use log::info;
 use ndarray::s;
+use ndarray::Array2;
+use ndarray::Axis;
 use ndarray::{Array, Array1, ArrayView1, ArrayView2};
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 
-pub trait TregoStep {
-    fn trego_step(
-        &self,
-        y_data: &ArrayView2<f64>,
-        sampling: &Lhs<f64, Xoshiro256Plus>,
-        obj_model: &dyn MixtureGpSurrogate,
-        cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        xbest: &ArrayView1<f64>,
-        local_bounds: (f64, f64),
-    ) -> Array1<f64>;
-}
+impl<SB: SurrogateBuilder> EgorSolver<SB> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn trego_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+        &mut self,
+        fobj: &mut Problem<O>,
+        models: Vec<Box<dyn MixtureGpSurrogate>>,
+        sampling: Lhs<f64, rand_xoshiro::Xoshiro256Plus>,
+        best_index: usize,
+        x_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
+        y_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
+        state: &EgorState<f64>,
+        new_state: &mut EgorState<f64>,
+    ) -> usize {
+        let y_new = y_data[[best_index, 0]];
+        let y_old = y_data[[state.best_index.unwrap(), 0]];
+        let rho = |sigma| sigma * sigma;
+        if y_new < y_old - rho(new_state.sigma) {
+            info!("Ego global step successful!");
+            best_index
+        } else {
+            info!("Trego local step");
+            let mut new_best_index = best_index;
+            (0..self.config.trego.n_local_steps).for_each(|_| {
+                let (obj_model, cstr_models) = models.split_first().unwrap();
+                let xbest = x_data.row(best_index);
+                let x_opt = self.local_step(
+                    &y_data.view(),
+                    &sampling,
+                    obj_model.as_ref(),
+                    cstr_models,
+                    &xbest,
+                    (
+                        new_state.sigma * self.config.trego.d.0,
+                        new_state.sigma * self.config.trego.d.1,
+                    ),
+                );
+                let x_new = x_opt.insert_axis(Axis(0));
+                let y_new = self.eval_obj(fobj, &x_new);
+                info!(
+                    "y_old-y_new={}, rho={}",
+                    y_old - y_new[[0, 0]],
+                    rho(new_state.sigma)
+                );
+                if y_new[[0, 0]] < y_old - rho(new_state.sigma) {
+                    let new_index = update_data(x_data, y_data, &x_new, &y_new);
+                    if new_index.len() == 1 {
+                        let new_index = find_best_result_index_from(
+                            best_index,
+                            y_data.len() - 1,
+                            &*y_data,
+                            &state.cstr_tol,
+                        );
+                        if new_index == y_data.len() - 1 {
+                            // trego local step successful
+                            new_best_index = new_index;
+                        }
+                    }
+                }
+                if new_best_index == best_index {
+                    let old = new_state.sigma;
+                    new_state.sigma *= self.config.trego.beta;
+                    info!(
+                        "Local step not successful: sigma {} -> {}",
+                        old, new_state.sigma
+                    );
+                } else {
+                    let old = new_state.sigma;
+                    new_state.sigma *= self.config.trego.gamma;
+                    info!(
+                        "Local step successful: sigma {} -> {}",
+                        old, new_state.sigma
+                    );
+                }
+            });
+            new_best_index
+        }
+    }
 
-impl<SB: SurrogateBuilder> TregoStep for EgorSolver<SB> {
-    fn trego_step(
+    fn local_step(
         &self,
         y_data: &ArrayView2<f64>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
