@@ -10,15 +10,17 @@ use serde::{Deserialize, Serialize};
 /// A structure to handle TREGO methods parameterization
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TregoConfig {
-    d: (f64, f64),
-    beta: f64,
-    gamma: f64,
-    sigma0: f64,
+    pub n_local_steps: usize,
+    pub d: (f64, f64),
+    pub beta: f64,
+    pub gamma: f64,
+    pub sigma0: f64,
 }
 
 impl Default for TregoConfig {
     fn default() -> Self {
         TregoConfig {
+            n_local_steps: 4,
             d: (1e-6, 1.),
             beta: 0.9,
             gamma: 10. / 9.,

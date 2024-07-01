@@ -372,6 +372,7 @@ where
     /// from surrogate models (taking into account qei strategy if q_parallel)
     /// infill criterion value is also returned
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::type_complexity)]
     pub fn next_points(
         &self,
         init: bool,
@@ -480,7 +481,7 @@ where
         (x_dat, y_dat, infill_val, models)
     }
 
-    fn compute_scaling(
+    pub(crate) fn compute_scaling(
         &self,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
@@ -735,7 +736,7 @@ where
     /// Compute infill criterion objective expected to be minimized
     /// meaning infill criterion objective is negative infill criterion
     /// the latter is expected to be maximized
-    fn eval_infill_obj(
+    pub(crate) fn eval_infill_obj(
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
