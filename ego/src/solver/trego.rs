@@ -58,6 +58,11 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                     ),
                 );
                 let x_new = x_opt.insert_axis(Axis(0));
+                info!(
+                    "x_old={} x_new={}",
+                    x_data.row(state.best_index.unwrap()),
+                    x_data.row(best_index)
+                );
                 let y_new = self.eval_obj(fobj, &x_new);
                 info!(
                     "y_old-y_new={}, rho={}",

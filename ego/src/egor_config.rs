@@ -7,19 +7,21 @@ use ndarray::Array2;
 
 use serde::{Deserialize, Serialize};
 
-/// A structure to handle TREGO methods parameterization
+/// A structure to handle TREGO method parameterization
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct TregoConfig {
-    pub n_local_steps: usize,
-    pub d: (f64, f64),
-    pub beta: f64,
-    pub gamma: f64,
-    pub sigma0: f64,
+pub(crate) struct TregoConfig {
+    pub(crate) activated: bool,
+    pub(crate) n_local_steps: usize,
+    pub(crate) d: (f64, f64),
+    pub(crate) beta: f64,
+    pub(crate) gamma: f64,
+    pub(crate) sigma0: f64,
 }
 
 impl Default for TregoConfig {
     fn default() -> Self {
         TregoConfig {
+            activated: true,
             n_local_steps: 4,
             d: (1e-6, 1.),
             beta: 0.9,
@@ -273,6 +275,12 @@ impl EgorConfig {
     /// Define design space with given x types
     pub fn xtypes(mut self, xtypes: &[XType]) -> Self {
         self.xtypes = xtypes.into();
+        self
+    }
+
+    /// Activate TREGO method
+    pub fn trego(mut self, activated: bool) -> Self {
+        self.trego.activated = activated;
         self
     }
 

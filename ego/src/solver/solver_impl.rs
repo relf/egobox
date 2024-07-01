@@ -280,16 +280,20 @@ where
             &new_state.cstr_tol,
         );
 
-        let best_index = self.trego_step(
-            fobj,
-            models,
-            sampling,
-            best_index,
-            &mut x_data,
-            &mut y_data,
-            &state,
-            &mut new_state,
-        );
+        let best_index = if self.config.trego.activated {
+            self.trego_step(
+                fobj,
+                models,
+                sampling,
+                best_index,
+                &mut x_data,
+                &mut y_data,
+                &state,
+                &mut new_state,
+            )
+        } else {
+            best_index
+        };
 
         // let best = find_best_result_index(&y_data, &new_state.cstr_tol);
         // assert!(best_index == best);
