@@ -10,7 +10,9 @@ use crate::SurrogateBuilder;
 use argmin::core::CostFunction;
 use argmin::core::Problem;
 use egobox_doe::Lhs;
+use egobox_doe::SamplingMethod;
 use egobox_moe::MixtureGpSurrogate;
+
 use finitediff::FiniteDiff;
 use linfa_linalg::norm::*;
 use log::info;
@@ -19,7 +21,9 @@ use ndarray::Array2;
 use ndarray::Axis;
 use ndarray::{Array, Array1, ArrayView1, ArrayView2};
 use ndarray_stats::QuantileExt;
+
 use rand_xoshiro::Xoshiro256Plus;
+use rayon::prelude::*;
 
 impl<SB: SurrogateBuilder> EgorSolver<SB> {
     #[allow(clippy::too_many_arguments)]
@@ -226,12 +230,23 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             scale_wb2,
         };
 
-        let (_, x_opt) = Optimizer::new(algorithm, &obj, &cons, &obj_data, &self.xlimits)
-            .xinit(&xbest.view())
-            .max_eval(200)
-            .ftol_rel(1e-4)
-            .ftol_abs(1e-4)
-            .minimize();
+        let x_start = sampling.sample(self.config.n_start);
+
+        let (_, x_opt) = (0..self.config.n_start)
+            .into_par_iter()
+            .map(|i| {
+                Optimizer::new(algorithm, &obj, &cstr_refs, &obj_data, &self.xlimits)
+                    .xinit(&x_start.row(i))
+                    .max_eval(200)
+                    .ftol_rel(1e-4)
+                    .ftol_abs(1e-4)
+                    .minimize()
+            })
+            .reduce(
+                || (f64::INFINITY, Array::ones((xbest.len(),))),
+                |a, b| if b.0 < a.0 { b } else { a },
+            );
+
         x_opt
     }
 }
