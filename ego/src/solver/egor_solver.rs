@@ -105,15 +105,11 @@
 //! println!("G24 min result = {:?}", res.state);
 //! ```
 //!
-use crate::egor_config::EgorConfig;
 use crate::errors::{EgoError, Result};
-
-use crate::optimizers::*;
-
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
-
 use crate::types::*;
 use crate::utils::compute_cstr_scales;
+use crate::{optimizers::*, EgorConfig};
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_gp::ThetaTuning;

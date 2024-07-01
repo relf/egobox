@@ -39,10 +39,8 @@
 //! println!("Rosenbrock min result = {:?}", doe);
 //! ```
 //!
-use crate::egor_config::*;
 use crate::gpmix::mixint::*;
-use crate::types::*;
-use crate::{to_xtypes, EgorSolver};
+use crate::{to_xtypes, types::*, EgorConfig, EgorSolver};
 
 use egobox_moe::GpMixtureParams;
 use ndarray::{Array2, ArrayBase, Data, Ix2};

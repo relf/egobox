@@ -179,13 +179,11 @@ pub mod criteria;
 pub mod gpmix;
 
 mod egor;
-mod egor_config;
 mod errors;
 mod solver;
 mod types;
 
 pub use crate::egor::*;
-pub use crate::egor_config::*;
 pub use crate::errors::*;
 pub use crate::gpmix::spec::{CorrelationSpec, RegressionSpec};
 pub use crate::solver::*;

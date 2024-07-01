@@ -89,10 +89,10 @@
 //! println!("G24 min result = {:?}", res);
 //! ```
 //!
-use crate::egor_config::*;
 use crate::errors::Result;
 use crate::gpmix::mixint::*;
 use crate::types::*;
+use crate::EgorConfig;
 use crate::{to_xtypes, EgorSolver};
 
 use egobox_moe::GpMixtureParams;
