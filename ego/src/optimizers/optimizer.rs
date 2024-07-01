@@ -1,5 +1,5 @@
 use crate::optimizers::LhsOptimizer;
-use crate::ObjData;
+use crate::InfillObjData;
 use ndarray::{arr1, Array1, Array2, ArrayView1};
 
 #[cfg(not(feature = "nlopt"))]
@@ -23,11 +23,11 @@ pub enum Algorithm {
 /// Facade for various optimization algorithms
 pub(crate) struct Optimizer<'a> {
     algo: Algorithm,
-    fun: &'a (dyn ObjFn<ObjData<f64>> + Sync),
-    cons: Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
+    fun: &'a (dyn ObjFn<InfillObjData<f64>> + Sync),
+    cons: Vec<&'a (dyn ObjFn<InfillObjData<f64>> + Sync)>,
     cstr_tol: Option<Array1<f64>>,
     bounds: Array2<f64>,
-    user_data: &'a ObjData<f64>,
+    user_data: &'a InfillObjData<f64>,
     max_eval: usize,
     xinit: Option<Array1<f64>>,
     ftol_abs: Option<f64>,
@@ -38,9 +38,9 @@ pub(crate) struct Optimizer<'a> {
 impl<'a> Optimizer<'a> {
     pub fn new(
         algo: Algorithm,
-        fun: &'a (dyn ObjFn<ObjData<f64>> + Sync),
-        cons: &[&'a (dyn ObjFn<ObjData<f64>> + Sync)],
-        user_data: &'a ObjData<f64>,
+        fun: &'a (dyn ObjFn<InfillObjData<f64>> + Sync),
+        cons: &[&'a (dyn ObjFn<InfillObjData<f64>> + Sync)],
+        user_data: &'a InfillObjData<f64>,
         bounds: &Array2<f64>,
     ) -> Self {
         Optimizer {
@@ -159,13 +159,13 @@ impl<'a> Optimizer<'a> {
                         .enumerate()
                         .map(|(i, f)| {
                             let cstr_tol = cstr_tol[i];
-                            move |x: &[f64], u: &mut ObjData<f64>| {
+                            move |x: &[f64], u: &mut InfillObjData<f64>| {
                                 -(*f)(x, None, u) + cstr_tol / u.scale_cstr[i]
                             }
                         })
                         .collect();
                     let res = cobyla::minimize(
-                        |x: &[f64], u: &mut ObjData<f64>| (self.fun)(x, None, u),
+                        |x: &[f64], u: &mut InfillObjData<f64>| (self.fun)(x, None, u),
                         &xinit,
                         &bounds,
                         &cstrs,
@@ -203,7 +203,7 @@ impl<'a> Optimizer<'a> {
                         .enumerate()
                         .map(|(i, f)| {
                             let cstr_tol = cstr_tol[i];
-                            move |x: &[f64], g: Option<&mut [f64]>, u: &mut ObjData<f64>| {
+                            move |x: &[f64], g: Option<&mut [f64]>, u: &mut InfillObjData<f64>| {
                                 (*f)(x, g, u) - cstr_tol / u.scale_cstr[i]
                             }
                         })
