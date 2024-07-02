@@ -78,11 +78,11 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                     if new_index.len() == 1 {
                         let new_index = find_best_result_index_from(
                             best_index,
-                            y_data.len() - 1,
+                            y_data.nrows() - 1,
                             &*y_data,
                             &state.cstr_tol,
                         );
-                        if new_index == y_data.len() - 1 {
+                        if new_index == y_data.nrows() - 1 {
                             // trego local step successful
                             new_best_index = new_index;
                         }
