@@ -264,20 +264,11 @@ where
         );
         let now = Instant::now();
         match self.global_step(&state, fobj) {
-            Ok((
-                sampling,
-                mut x_data,
-                mut y_data,
-                mut new_state,
-                models,
-                infill_data,
-                best_index,
-            )) => {
+            Ok((mut x_data, mut y_data, mut new_state, models, infill_data, best_index)) => {
                 let best_index = if self.config.trego.activated {
                     self.trego_step(
                         fobj,
                         models,
-                        sampling,
                         best_index,
                         &mut x_data,
                         &mut y_data,

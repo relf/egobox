@@ -162,12 +162,12 @@ where
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn global_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &mut self,
         state: &EgorState<f64>,
         fobj: &mut Problem<O>,
     ) -> Result<(
-        Lhs<f64, Xoshiro256Plus>,
         ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         EgorState<f64>,
@@ -314,15 +314,7 @@ where
             &y_data,
             &new_state.cstr_tol,
         );
-        Ok((
-            sampling,
-            x_data,
-            y_data,
-            new_state,
-            models,
-            infill_data,
-            best_index,
-        ))
+        Ok((x_data, y_data, new_state, models, infill_data, best_index))
     }
 
     /// Returns next promising x points together with virtual (predicted) y values

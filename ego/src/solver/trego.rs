@@ -14,11 +14,11 @@ use egobox_doe::SamplingMethod;
 use egobox_moe::MixtureGpSurrogate;
 
 use finitediff::FiniteDiff;
-use linfa_linalg::norm::*;
 use log::{debug, info};
+use ndarray::aview1;
+use ndarray::Zip;
 use ndarray::{s, Array, Array1, Array2, ArrayView1, Axis};
 
-use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 
 impl<SB: SurrogateBuilder> EgorSolver<SB> {
@@ -27,7 +27,6 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         &mut self,
         fobj: &mut Problem<O>,
         models: Vec<Box<dyn MixtureGpSurrogate>>,
-        sampling: Lhs<f64, rand_xoshiro::Xoshiro256Plus>,
         best_index: usize,
         x_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         y_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
@@ -44,70 +43,68 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         } else {
             debug!("Trego local step");
             let mut new_best_index = best_index;
-            (0..self.config.trego.n_local_steps).for_each(|_| {
-                let (obj_model, cstr_models) = models.split_first().unwrap();
-                let xbest = x_data.row(best_index);
-                let x_opt = self.local_step(
-                    &sampling,
-                    obj_model.as_ref(),
-                    cstr_models,
-                    &xbest,
-                    (
-                        new_state.sigma * self.config.trego.d.0,
-                        new_state.sigma * self.config.trego.d.1,
-                    ),
-                    infill_data,
-                );
-                let x_new = x_opt.insert_axis(Axis(0));
-                debug!(
-                    "x_old={} x_new={}",
-                    x_data.row(state.best_index.unwrap()),
-                    x_data.row(best_index)
-                );
-                let y_new = self.eval_obj(fobj, &x_new);
-                debug!(
-                    "y_old-y_new={}, rho={}",
-                    y_old - y_new[[0, 0]],
-                    rho(new_state.sigma)
-                );
-                if y_new[[0, 0]] < y_old - rho(new_state.sigma) {
-                    let new_index = update_data(x_data, y_data, &x_new, &y_new);
-                    if new_index.len() == 1 {
-                        let new_index = find_best_result_index_from(
-                            best_index,
-                            y_data.nrows() - 1,
-                            &*y_data,
-                            &state.cstr_tol,
-                        );
-                        if new_index == y_data.nrows() - 1 {
-                            // trego local step successful
-                            new_best_index = new_index;
-                        }
+            let (obj_model, cstr_models) = models.split_first().unwrap();
+            let xbest = x_data.row(best_index).to_owned();
+
+            let x_opt = self.local_step(
+                obj_model.as_ref(),
+                cstr_models,
+                &xbest.view(),
+                (
+                    new_state.sigma * self.config.trego.d.0,
+                    new_state.sigma * self.config.trego.d.1,
+                ),
+                infill_data,
+            );
+            let x_new = x_opt.insert_axis(Axis(0));
+            debug!(
+                "x_old={} x_new={}",
+                x_data.row(state.best_index.unwrap()),
+                x_data.row(best_index)
+            );
+            let y_new = self.eval_obj(fobj, &x_new);
+            debug!(
+                "y_old-y_new={}, rho={}",
+                y_old - y_new[[0, 0]],
+                rho(new_state.sigma)
+            );
+            if y_new[[0, 0]] < y_old - rho(new_state.sigma) {
+                let new_index = update_data(x_data, y_data, &x_new, &y_new);
+                if new_index.len() == 1 {
+                    let new_index = find_best_result_index_from(
+                        best_index,
+                        y_data.nrows() - 1,
+                        &*y_data,
+                        &state.cstr_tol,
+                    );
+                    if new_index == y_data.nrows() - 1 {
+                        // trego local step successful
+                        new_best_index = new_index;
                     }
                 }
-                if new_best_index == best_index {
-                    let old = new_state.sigma;
-                    new_state.sigma *= self.config.trego.beta;
-                    debug!(
-                        "Trego Local step not successful: sigma {} -> {}",
-                        old, new_state.sigma
-                    );
-                } else {
-                    let old = new_state.sigma;
-                    new_state.sigma *= self.config.trego.gamma;
-                    info!(
-                        "Trego local step successful: sigma {} -> {}",
-                        old, new_state.sigma
-                    );
-                }
-            });
+            }
+            if new_best_index == best_index {
+                let old = new_state.sigma;
+                new_state.sigma *= self.config.trego.beta;
+                debug!(
+                    "Trego Local step not successful: sigma {} -> {}",
+                    old, new_state.sigma
+                );
+            } else {
+                let old = new_state.sigma;
+                new_state.sigma *= self.config.trego.gamma;
+                info!(
+                    "Trego local step successful: sigma {} -> {}",
+                    old, new_state.sigma
+                );
+            }
+
             new_best_index
         }
     }
 
     fn local_step(
         &self,
-        sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
         xbest: &ArrayView1<f64>,
@@ -183,37 +180,37 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             .collect();
         let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
 
-        let cstr_up = Box::new(
-            |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut InfillObjData<f64>| -> f64 {
-                let f = |x: &Vec<f64>| -> f64 {
-                    let x = Array1::from_shape_vec((x.len(),), x.to_vec()).unwrap();
-                    let d = (&x - xbest).norm_l2();
-                    d - local_bounds.1
-                };
-                if let Some(grad) = gradient {
-                    grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-                }
-                f(&x.to_vec())
-            },
-        ) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>;
+        // let cstr_up = Box::new(
+        //     |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut InfillObjData<f64>| -> f64 {
+        //         let f = |x: &Vec<f64>| -> f64 {
+        //             let x = Array1::from_shape_vec((x.len(),), x.to_vec()).unwrap();
+        //             let d = (&x - xbest).norm_l1();
+        //             d - local_bounds.1
+        //         };
+        //         if let Some(grad) = gradient {
+        //             grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+        //         }
+        //         f(&x.to_vec())
+        //     },
+        // ) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>;
 
-        let cstr_lo = Box::new(
-            |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut InfillObjData<f64>| -> f64 {
-                let f = |x: &Vec<f64>| -> f64 {
-                    let x = Array1::from_shape_vec((x.len(),), x.to_vec()).unwrap();
-                    let d = (&x - xbest).norm_l2();
-                    local_bounds.0 - d
-                };
-                if let Some(grad) = gradient {
-                    grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-                }
-                f(&x.to_vec())
-            },
-        ) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>;
+        // let cstr_lo = Box::new(
+        //     |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut InfillObjData<f64>| -> f64 {
+        //         let f = |x: &Vec<f64>| -> f64 {
+        //             let x = Array1::from_shape_vec((x.len(),), x.to_vec()).unwrap();
+        //             let d = (&x - xbest).norm_l1();
+        //             local_bounds.0 - d
+        //         };
+        //         if let Some(grad) = gradient {
+        //             grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+        //         }
+        //         f(&x.to_vec())
+        //     },
+        // ) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>;
 
-        let mut cons = cstr_refs.to_vec();
-        cons.push(&cstr_lo);
-        cons.push(&cstr_up);
+        // let mut cons = cstr_refs.to_vec();
+        // cons.push(&cstr_lo);
+        // cons.push(&cstr_up);
 
         let mut scale_cstr_ext = Array1::zeros(scale_cstr.len() + 2);
         scale_cstr_ext
@@ -224,13 +221,31 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             ..*infill_data
         };
 
-        let x_start = sampling.sample(self.config.n_start);
+        // local_area = intersection(trust_region, xlimits)
+        let mut local_area = Array2::zeros((self.xlimits.nrows(), self.xlimits.ncols()));
+        Zip::from(local_area.rows_mut())
+            .and(xbest)
+            .and(self.xlimits.rows())
+            .for_each(|mut row, xb, xlims| {
+                let (lo, up) = (
+                    xlims[0].max(xb - local_bounds.0),
+                    xlims[1].min(xb + local_bounds.1),
+                );
+                row.assign(&aview1(&[lo, up]))
+            });
+
+        // Draw n_start initial points (multistart optim)
+        let rng = self.rng.clone();
+        let lhs = Lhs::new(&local_area)
+            .kind(egobox_doe::LhsKind::Maximin)
+            .with_rng(rng);
+        let x_start = lhs.sample(self.config.n_start);
 
         let algorithm = crate::optimizers::Algorithm::Slsqp;
         let (_, x_opt) = (0..self.config.n_start)
             .into_par_iter()
             .map(|i| {
-                Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &self.xlimits)
+                Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &local_area)
                     .xinit(&x_start.row(i))
                     .max_eval(200)
                     .ftol_rel(1e-4)
