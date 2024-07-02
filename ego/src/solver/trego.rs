@@ -122,11 +122,6 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let (scale_infill_obj, scale_cstr, scale_wb2) =
             self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
 
-        let algorithm = match self.config.infill_optimizer {
-            InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
-            InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
-        };
-
         let obj =
             |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
                 // Defensive programming NlOpt::Cobyla may pass NaNs
@@ -232,6 +227,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 
         let x_start = sampling.sample(self.config.n_start);
 
+        let algorithm = crate::optimizers::Algorithm::Slsqp;
         let (_, x_opt) = (0..self.config.n_start)
             .into_par_iter()
             .map(|i| {
