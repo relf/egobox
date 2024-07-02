@@ -1,11 +1,13 @@
 use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
-use crate::types::*;
-use crate::utils::compute_cstr_scales;
+use crate::utils::{compute_cstr_scales, find_best_result_index_from, update_data};
 use crate::{optimizers::*, EgorConfig};
-use crate::{EgorSolver, DEFAULT_CSTR_TOL};
+use crate::{types::*, EgorState};
+use crate::{EgorSolver, DEFAULT_CSTR_TOL, DOE_FILE, MAX_POINT_ADDITION_RETRY};
 
-use argmin::core::{CostFunction, Problem};
+use argmin::argmin_error_closure;
+use argmin::core::{CostFunction, Problem, State};
+
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_gp::ThetaTuning;
 use env_logger::{Builder, Env};
@@ -16,6 +18,7 @@ use log::{debug, info, warn};
 use ndarray::{
     concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
 };
+use ndarray_npy::write_npy;
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
@@ -157,6 +160,169 @@ where
                 .expect("GP training failure");
             model
         }
+    }
+
+    pub fn global_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+        &mut self,
+        state: &EgorState<f64>,
+        fobj: &mut Problem<O>,
+    ) -> Result<(
+        Lhs<f64, Xoshiro256Plus>,
+        ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
+        ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
+        EgorState<f64>,
+        Vec<Box<dyn MixtureGpSurrogate>>,
+        InfillObjData<f64>,
+        usize,
+    )> {
+        let mut clusterings =
+            state
+                .clone()
+                .take_clusterings()
+                .ok_or_else(argmin_error_closure!(
+                    PotentialBug,
+                    "EgorSolver: No clustering!"
+                ))?;
+        let mut theta_inits =
+            state
+                .clone()
+                .take_theta_inits()
+                .ok_or_else(argmin_error_closure!(
+                    PotentialBug,
+                    "EgorSolver: No theta inits!"
+                ))?;
+        let sampling = state
+            .clone()
+            .take_sampling()
+            .ok_or_else(argmin_error_closure!(
+                PotentialBug,
+                "EgorSolver: No sampling!"
+            ))?;
+        let (mut x_data, mut y_data) = state
+            .clone()
+            .take_data()
+            .ok_or_else(argmin_error_closure!(PotentialBug, "EgorSolver: No data!"))?;
+        let mut new_state = state.clone();
+        let (rejected_count, models, infill_data) = loop {
+            let recluster = self.have_to_recluster(new_state.added, new_state.prev_added);
+            let init = new_state.get_iter() == 0;
+            let lhs_optim_seed = if new_state.no_point_added_retries == 0 {
+                debug!("Try Lhs optimization!");
+                Some(new_state.added as u64)
+            } else {
+                debug!(
+                    "Try point addition {}/{}",
+                    MAX_POINT_ADDITION_RETRY - new_state.no_point_added_retries,
+                    MAX_POINT_ADDITION_RETRY
+                );
+                None
+            };
+
+            let (x_dat, y_dat, infill_value, infill_data, models) = self.next_points(
+                init,
+                state.get_iter(),
+                recluster,
+                &mut clusterings,
+                &mut theta_inits,
+                &x_data,
+                &y_data,
+                &state.cstr_tol,
+                &sampling,
+                lhs_optim_seed,
+            );
+
+            debug!("Try adding {}", x_dat);
+            let added_indices = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
+
+            new_state = new_state
+                .clusterings(clusterings.clone())
+                .theta_inits(theta_inits.clone())
+                .data((x_data.clone(), y_data.clone()))
+                .infill_value(infill_value)
+                .sampling(sampling.clone())
+                .param(x_dat.row(0).to_owned())
+                .cost(y_dat.row(0).to_owned());
+            info!(
+                "Infill criterion max value {} = {}",
+                self.config.infill_criterion.name(),
+                state.get_infill_value()
+            );
+
+            let rejected_count = x_dat.nrows() - added_indices.len();
+            for i in 0..x_dat.nrows() {
+                debug!(
+                    "  {} {}",
+                    if added_indices.contains(&i) { "A" } else { "R" },
+                    x_dat.row(i)
+                );
+            }
+            if rejected_count > 0 {
+                info!(
+                    "Reject {}/{} point{} too close to previous ones",
+                    rejected_count,
+                    x_dat.nrows(),
+                    if rejected_count > 1 { "s" } else { "" }
+                );
+            }
+            if rejected_count == x_dat.nrows() {
+                new_state.no_point_added_retries -= 1;
+                if new_state.no_point_added_retries == 0 {
+                    info!("Max number of retries ({}) without adding point", 3);
+                    info!("Use LHS optimization to ensure a point addition");
+                }
+                if new_state.no_point_added_retries < 0 {
+                    // no luck with LHS optimization
+                    warn!("Fail to add another point to improve the surrogate models. Abort!");
+                    return Err(EgoError::GlobalStepNoPointError);
+                }
+            } else {
+                // ok point added we can go on, just output number of rejected point
+                break (rejected_count, models, infill_data);
+            }
+        };
+        let add_count = (self.config.q_points - rejected_count) as i32;
+        let x_to_eval = x_data.slice(s![-add_count.., ..]).to_owned();
+        debug!(
+            "Eval {} point{} {}",
+            add_count,
+            if add_count > 1 { "s" } else { "" },
+            if new_state.no_point_added_retries == 0 {
+                " from sampling"
+            } else {
+                ""
+            }
+        );
+        new_state.prev_added = new_state.added;
+        new_state.added += add_count as usize;
+        info!("+{} point(s), total: {} points", add_count, new_state.added);
+        new_state.no_point_added_retries = MAX_POINT_ADDITION_RETRY;
+        let y_actual = self.eval_obj(fobj, &x_to_eval);
+        Zip::from(y_data.slice_mut(s![-add_count.., ..]).rows_mut())
+            .and(y_actual.rows())
+            .for_each(|mut y, val| y.assign(&val));
+        let doe = concatenate![Axis(1), x_data, y_data];
+        if self.config.outdir.is_some() {
+            let path = self.config.outdir.as_ref().unwrap();
+            std::fs::create_dir_all(path)?;
+            let filepath = std::path::Path::new(path).join(DOE_FILE);
+            info!("Save doe shape {:?} in {:?}", doe.shape(), filepath);
+            write_npy(filepath, &doe).expect("Write current doe");
+        }
+        let best_index = find_best_result_index_from(
+            state.best_index.unwrap(),
+            y_data.nrows() - add_count as usize,
+            &y_data,
+            &new_state.cstr_tol,
+        );
+        Ok((
+            sampling,
+            x_data,
+            y_data,
+            new_state,
+            models,
+            infill_data,
+            best_index,
+        ))
     }
 
     /// Returns next promising x points together with virtual (predicted) y values
