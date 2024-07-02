@@ -186,11 +186,7 @@ mod tests {
         let cstrs = vec![];
 
         let xlimits = array![[-1., 1.]];
-        let obj_data = InfillObjData {
-            scale_infill_obj: 1.,
-            scale_cstr: array![],
-            scale_wb2: 1.,
-        };
+        let obj_data = Default::default();
 
         let (_, res) = LhsOptimizer::new(&xlimits, &obj, &cstrs, &obj_data)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))

@@ -58,7 +58,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             .cstr_tol
             .clone()
             .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
-        let (x_dat, _, _, _) = self.next_points(
+        let (x_dat, _, _, _, _) = self.next_points(
             true,
             0,
             false, // done anyway
@@ -180,12 +180,14 @@ where
         Array2<f64>,
         Array2<f64>,
         f64,
+        InfillObjData<f64>,
         Vec<std::boxed::Box<dyn egobox_moe::MixtureGpSurrogate>>,
     ) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
         let mut infill_val = f64::INFINITY;
+        let mut infill_data = Default::default();
         let mut models: Vec<std::boxed::Box<dyn egobox_moe::MixtureGpSurrogate>> = vec![];
         for i in 0..self.config.q_points {
             let (xt, yt) = if i == 0 {
@@ -233,6 +235,16 @@ where
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
 
+            let f_min = y_data.min().unwrap();
+            let (scale_infill_obj, scale_cstr, scale_wb2) =
+                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, *f_min);
+            infill_data = InfillObjData {
+                scale_infill_obj,
+                scale_cstr: Some(scale_cstr.to_owned()),
+                scale_wb2,
+                fmin: *y_data.min().unwrap_or(&f64::INFINITY),
+            };
+
             match self.find_best_point(
                 x_data,
                 y_data,
@@ -241,6 +253,7 @@ where
                 cstr_models,
                 cstr_tol,
                 lhs_optim,
+                &infill_data,
             ) {
                 Ok((infill_obj, xk)) => {
                     match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
@@ -269,7 +282,7 @@ where
                 }
             }
         }
-        (x_dat, y_dat, infill_val, models)
+        (x_dat, y_dat, infill_val, infill_data, models)
     }
 
     pub(crate) fn compute_scaling(
@@ -315,6 +328,7 @@ where
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
         cstr_tol: &Array1<f64>,
         lhs_optim_seed: Option<u64>,
+        infill_data: &InfillObjData<f64>,
     ) -> Result<(f64, Array1<f64>)> {
         let f_min = y_data.min().unwrap();
 
@@ -322,9 +336,6 @@ where
         let mut n_optim = 1;
         let n_max_optim = 3;
         let mut best_x = None;
-
-        let (scale_infill_obj, scale_cstr, scale_wb2) =
-            self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
 
         let algorithm = match self.config.infill_optimizer {
             InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
@@ -359,6 +370,7 @@ where
                                  params: &mut InfillObjData<f64>|
                       -> f64 {
                     if let Some(grad) = gradient {
+                        let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
                         let grd = cstr_models[i]
                             .predict_gradients(
                                 &Array::from_shape_vec((1, x.len()), x.to_vec())
@@ -367,10 +379,11 @@ where
                             )
                             .unwrap()
                             .row(0)
-                            .mapv(|v| v / params.scale_cstr[index])
+                            .mapv(|v| v / scale_cstr)
                             .to_vec();
                         grad[..].copy_from_slice(&grd);
                     }
+                    let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[index];
                     cstr_models[index]
                         .predict(
                             &Array::from_shape_vec((1, x.len()), x.to_vec())
@@ -378,7 +391,7 @@ where
                                 .view(),
                         )
                         .unwrap()[[0, 0]]
-                        / params.scale_cstr[index]
+                        / scale_cstr
                 };
                 #[cfg(feature = "nlopt")]
                 {
@@ -392,17 +405,12 @@ where
             .collect();
         let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
         info!("Optimize infill criterion...");
-        let obj_data = InfillObjData {
-            scale_infill_obj,
-            scale_cstr: scale_cstr.to_owned(),
-            scale_wb2,
-        };
         while !success && n_optim <= n_max_optim {
             let x_start = sampling.sample(self.config.n_start);
 
             if let Some(seed) = lhs_optim_seed {
                 let (y_opt, x_opt) =
-                    Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &obj_data, &self.xlimits)
+                    Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &self.xlimits)
                         .cstr_tol(cstr_tol.to_owned())
                         .seed(seed)
                         .minimize();
@@ -415,7 +423,7 @@ where
                 let res = (0..self.config.n_start)
                     .into_par_iter()
                     .map(|i| {
-                        Optimizer::new(algorithm, &obj, &cstr_refs, &obj_data, &self.xlimits)
+                        Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &self.xlimits)
                             .xinit(&x_start.row(i))
                             .max_eval(200)
                             .ftol_rel(1e-4)
@@ -438,7 +446,7 @@ where
             if n_optim == n_max_optim && best_x.is_none() {
                 info!("All optimizations fail => Trigger LHS optimization");
                 let (y_opt, x_opt) =
-                    Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &obj_data, &self.xlimits)
+                    Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &self.xlimits)
                         .minimize();
 
                 info!("LHS optimization best_x {}", x_opt);

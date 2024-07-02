@@ -160,7 +160,9 @@ impl<'a> Optimizer<'a> {
                         .map(|(i, f)| {
                             let cstr_tol = cstr_tol[i];
                             move |x: &[f64], u: &mut InfillObjData<f64>| {
-                                -(*f)(x, None, u) + cstr_tol / u.scale_cstr[i]
+                                let scale_cstr =
+                                    u.scale_cstr.as_ref().expect("constraint scaling")[i];
+                                -(*f)(x, None, u) + cstr_tol / scale_cstr
                             }
                         })
                         .collect();
@@ -204,7 +206,9 @@ impl<'a> Optimizer<'a> {
                         .map(|(i, f)| {
                             let cstr_tol = cstr_tol[i];
                             move |x: &[f64], g: Option<&mut [f64]>, u: &mut InfillObjData<f64>| {
-                                (*f)(x, g, u) - cstr_tol / u.scale_cstr[i]
+                                let scale_cstr =
+                                    u.scale_cstr.as_ref().expect("constraint scaling")[i];
+                                (*f)(x, g, u) - cstr_tol / scale_cstr
                             }
                         })
                         .collect();

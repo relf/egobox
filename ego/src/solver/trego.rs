@@ -4,23 +4,19 @@ use crate::utils::update_data;
 use crate::EgorSolver;
 use crate::EgorState;
 use crate::InfillObjData;
-use crate::InfillOptimizer;
 use crate::SurrogateBuilder;
 
 use argmin::core::CostFunction;
 use argmin::core::Problem;
+
 use egobox_doe::Lhs;
 use egobox_doe::SamplingMethod;
 use egobox_moe::MixtureGpSurrogate;
 
 use finitediff::FiniteDiff;
 use linfa_linalg::norm::*;
-use log::info;
-use ndarray::s;
-use ndarray::Array2;
-use ndarray::Axis;
-use ndarray::{Array, Array1, ArrayView1, ArrayView2};
-use ndarray_stats::QuantileExt;
+use log::{debug, info};
+use ndarray::{s, Array, Array1, Array2, ArrayView1, Axis};
 
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
@@ -37,6 +33,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         y_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         state: &EgorState<f64>,
         new_state: &mut EgorState<f64>,
+        infill_data: &InfillObjData<f64>,
     ) -> usize {
         let y_new = y_data[[best_index, 0]];
         let y_old = y_data[[state.best_index.unwrap(), 0]];
@@ -45,13 +42,12 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             info!("Ego global step successful!");
             best_index
         } else {
-            info!("Trego local step");
+            debug!("Trego local step");
             let mut new_best_index = best_index;
             (0..self.config.trego.n_local_steps).for_each(|_| {
                 let (obj_model, cstr_models) = models.split_first().unwrap();
                 let xbest = x_data.row(best_index);
                 let x_opt = self.local_step(
-                    &y_data.view(),
                     &sampling,
                     obj_model.as_ref(),
                     cstr_models,
@@ -60,15 +56,16 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                         new_state.sigma * self.config.trego.d.0,
                         new_state.sigma * self.config.trego.d.1,
                     ),
+                    infill_data,
                 );
                 let x_new = x_opt.insert_axis(Axis(0));
-                info!(
+                debug!(
                     "x_old={} x_new={}",
                     x_data.row(state.best_index.unwrap()),
                     x_data.row(best_index)
                 );
                 let y_new = self.eval_obj(fobj, &x_new);
-                info!(
+                debug!(
                     "y_old-y_new={}, rho={}",
                     y_old - y_new[[0, 0]],
                     rho(new_state.sigma)
@@ -91,15 +88,15 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                 if new_best_index == best_index {
                     let old = new_state.sigma;
                     new_state.sigma *= self.config.trego.beta;
-                    info!(
-                        "Local step not successful: sigma {} -> {}",
+                    debug!(
+                        "Trego Local step not successful: sigma {} -> {}",
                         old, new_state.sigma
                     );
                 } else {
                     let old = new_state.sigma;
                     new_state.sigma *= self.config.trego.gamma;
                     info!(
-                        "Local step successful: sigma {} -> {}",
+                        "Trego local step successful: sigma {} -> {}",
                         old, new_state.sigma
                     );
                 }
@@ -110,18 +107,19 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 
     fn local_step(
         &self,
-        y_data: &ArrayView2<f64>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
         xbest: &ArrayView1<f64>,
         local_bounds: (f64, f64),
+        infill_data: &InfillObjData<f64>,
     ) -> Array1<f64> {
-        let f_min = y_data.min().unwrap();
-
-        let (scale_infill_obj, scale_cstr, scale_wb2) =
-            self.compute_scaling(sampling, obj_model, cstr_models, *f_min);
-
+        let InfillObjData {
+            fmin, scale_cstr, ..
+        } = infill_data;
+        let scale_cstr = scale_cstr
+            .clone()
+            .unwrap_or(Array1::from_elem(cstr_models.len(), 1.));
         let obj =
             |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
                 // Defensive programming NlOpt::Cobyla may pass NaNs
@@ -135,11 +133,11 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                 } = params;
                 if let Some(grad) = gradient {
                     let f = |x: &Vec<f64>| -> f64 {
-                        self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
+                        self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
                     };
                     grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
                 }
-                self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
+                self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
             };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
@@ -150,6 +148,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                                  params: &mut InfillObjData<f64>|
                       -> f64 {
                     if let Some(grad) = gradient {
+                        let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
                         let grd = cstr_models[i]
                             .predict_gradients(
                                 &Array::from_shape_vec((1, x.len()), x.to_vec())
@@ -158,10 +157,11 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                             )
                             .unwrap()
                             .row(0)
-                            .mapv(|v| v / params.scale_cstr[index])
+                            .mapv(|v| v / scale_cstr)
                             .to_vec();
                         grad[..].copy_from_slice(&grd);
                     }
+                    let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[index];
                     cstr_models[index]
                         .predict(
                             &Array::from_shape_vec((1, x.len()), x.to_vec())
@@ -169,7 +169,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                                 .view(),
                         )
                         .unwrap()[[0, 0]]
-                        / params.scale_cstr[index]
+                        / scale_cstr
                 };
                 #[cfg(feature = "nlopt")]
                 {
@@ -219,10 +219,9 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         scale_cstr_ext
             .slice_mut(s![..scale_cstr.len()])
             .assign(&scale_cstr);
-        let obj_data = InfillObjData {
-            scale_infill_obj,
-            scale_cstr: scale_cstr_ext,
-            scale_wb2,
+        let infill_data = InfillObjData {
+            scale_cstr: Some(scale_cstr_ext),
+            ..*infill_data
         };
 
         let x_start = sampling.sample(self.config.n_start);
@@ -231,7 +230,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let (_, x_opt) = (0..self.config.n_start)
             .into_par_iter()
             .map(|i| {
-                Optimizer::new(algorithm, &obj, &cstr_refs, &obj_data, &self.xlimits)
+                Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &self.xlimits)
                     .xinit(&x_start.row(i))
                     .max_eval(200)
                     .ftol_rel(1e-4)

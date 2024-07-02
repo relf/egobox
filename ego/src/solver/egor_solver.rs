@@ -295,7 +295,7 @@ where
             .ok_or_else(argmin_error_closure!(PotentialBug, "EgorSolver: No data!"))?;
 
         let mut new_state = state.clone();
-        let (rejected_count, models) = loop {
+        let (rejected_count, models, infill_data) = loop {
             let recluster = self.have_to_recluster(new_state.added, new_state.prev_added);
             let init = new_state.get_iter() == 0;
             let lhs_optim_seed = if new_state.no_point_added_retries == 0 {
@@ -310,7 +310,7 @@ where
                 None
             };
 
-            let (x_dat, y_dat, infill_value, models) = self.next_points(
+            let (x_dat, y_dat, infill_value, infill_data, models) = self.next_points(
                 init,
                 state.get_iter(),
                 recluster,
@@ -374,7 +374,7 @@ where
                 }
             } else {
                 // ok point added we can go on, just output number of rejected point
-                break (rejected_count, models);
+                break (rejected_count, models, infill_data);
             }
         };
 
@@ -425,6 +425,7 @@ where
                 &mut y_data,
                 &state,
                 &mut new_state,
+                &infill_data,
             )
         } else {
             best_index
