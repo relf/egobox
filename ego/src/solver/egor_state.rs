@@ -77,6 +77,8 @@ pub struct EgorState<F: Float> {
     pub(crate) theta_inits: Option<Vec<Option<Array2<F>>>>,
     /// Historic data (params, objective and constraints)
     pub(crate) data: Option<(Array2<F>, Array2<F>)>,
+    /// Previous index of best result in data
+    pub(crate) prev_best_index: Option<usize>,
     /// index of best result in data
     pub(crate) best_index: Option<usize>,
     /// Sampling method used to generate space filling samples
@@ -349,6 +351,7 @@ where
 
             clusterings: None,
             data: None,
+            prev_best_index: None,
             best_index: None,
             sampling: None,
             theta_inits: None,
@@ -397,7 +400,13 @@ where
             std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
             self.best_cost = Some(cost);
             if best_index > self.doe_size {
-                self.last_best_iter = (best_index + 1 - self.doe_size) as u64;
+                if let Some(prev_best_index) = self.prev_best_index {
+                    if best_index != prev_best_index {
+                        self.last_best_iter = self.iter + 1;
+                    }
+                } else {
+                    self.prev_best_index = Some(best_index);
+                }
             } else {
                 // best point in doe => self.last_best_iter remains 0
             }
