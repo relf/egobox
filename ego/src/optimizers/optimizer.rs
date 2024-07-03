@@ -114,12 +114,13 @@ impl<'a> Optimizer<'a> {
             .set_ftol_abs(self.ftol_abs.unwrap_or(0.0))
             .unwrap();
         self.cons.iter().enumerate().for_each(|(i, cstr)| {
+            let scale_cstr = self
+                .user_data
+                .scale_cstr
+                .as_ref()
+                .expect("constraint scaling")[i];
             optimizer
-                .add_inequality_constraint(
-                    cstr,
-                    self.user_data.clone(),
-                    cstr_tol[i] / self.user_data.scale_cstr[i],
-                )
+                .add_inequality_constraint(cstr, self.user_data.clone(), cstr_tol[i] / scale_cstr)
                 .unwrap();
         });
 
