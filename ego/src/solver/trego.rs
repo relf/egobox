@@ -27,16 +27,16 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         &mut self,
         fobj: &mut Problem<O>,
         models: Vec<Box<dyn MixtureGpSurrogate>>,
-        best_index: usize,
         x_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         y_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         new_state: &mut EgorState<f64>,
         infill_data: &InfillObjData<f64>,
     ) -> usize {
+        let best_index = new_state.best_index.unwrap();
         let y_new = y_data[[best_index, 0]];
         let y_old = y_data[[new_state.best_index.unwrap(), 0]];
         let rho = |sigma| sigma * sigma;
-        if y_new < y_old - rho(new_state.sigma) {
+        let new_best_index = if y_new < y_old - rho(new_state.sigma) {
             info!("Ego global step successful!");
             best_index
         } else {
@@ -97,9 +97,10 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                     old, new_state.sigma
                 );
             }
-
             new_best_index
-        }
+        };
+        new_state.best_index = Some(new_best_index);
+        new_best_index
     }
 
     fn local_step(

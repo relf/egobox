@@ -264,12 +264,13 @@ where
         );
         let now = Instant::now();
         match self.ego_step(state.clone(), fobj) {
-            Ok((mut x_data, mut y_data, mut new_state, models, infill_data, best_index)) => {
+            Ok((mut x_data, mut y_data, mut new_state, infill_data, best_index)) => {
                 let best_index = if self.config.trego.activated {
+                    new_state.update();
+                    let models = self.refresh_surrogates(&new_state);
                     self.trego_step(
                         fobj,
                         models,
-                        best_index,
                         &mut x_data,
                         &mut y_data,
                         &mut new_state,

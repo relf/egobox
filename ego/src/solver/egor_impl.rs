@@ -61,7 +61,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             .cstr_tol
             .clone()
             .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
-        let (x_dat, _, _, _, _) = self.next_points(
+        let (x_dat, _, _, _) = self.next_points(
             true,
             0,
             false, // done anyway
@@ -205,7 +205,6 @@ where
         ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         EgorState<f64>,
-        Vec<Box<dyn MixtureGpSurrogate>>,
         InfillObjData<f64>,
         usize,
     )> {
@@ -230,7 +229,7 @@ where
             .take_data()
             .ok_or_else(argmin_error_closure!(PotentialBug, "EgorSolver: No data!"))?;
 
-        let (rejected_count, models, infill_data) = loop {
+        let (rejected_count, infill_data) = loop {
             let recluster = self.have_to_recluster(new_state.added, new_state.prev_added);
             let init = new_state.get_iter() == 0;
             let lhs_optim_seed = if new_state.no_point_added_retries == 0 {
@@ -245,7 +244,7 @@ where
                 None
             };
 
-            let (x_dat, y_dat, infill_value, infill_data, models) = self.next_points(
+            let (x_dat, y_dat, infill_value, infill_data) = self.next_points(
                 init,
                 state.get_iter(),
                 recluster,
@@ -304,7 +303,7 @@ where
                 }
             } else {
                 // ok point added we can go on, just output number of rejected point
-                break (rejected_count, models, infill_data);
+                break (rejected_count, infill_data);
             }
         };
         let add_count = (self.config.q_points - rejected_count) as i32;
@@ -319,6 +318,7 @@ where
                 ""
             }
         );
+
         new_state.prev_added = new_state.added;
         new_state.added += add_count as usize;
         info!("+{} point(s), total: {} points", add_count, new_state.added);
@@ -327,6 +327,7 @@ where
         Zip::from(y_data.slice_mut(s![-add_count.., ..]).rows_mut())
             .and(y_actual.rows())
             .for_each(|mut y, val| y.assign(&val));
+
         let doe = concatenate![Axis(1), x_data, y_data];
         if self.config.outdir.is_some() {
             let path = self.config.outdir.as_ref().unwrap();
@@ -335,13 +336,16 @@ where
             info!("Save doe shape {:?} in {:?}", doe.shape(), filepath);
             write_npy(filepath, &doe).expect("Write current doe");
         }
+
         let best_index = find_best_result_index_from(
             state.best_index.unwrap(),
             y_data.nrows() - add_count as usize,
             &y_data,
             &new_state.cstr_tol,
         );
-        Ok((x_data, y_data, new_state, models, infill_data, best_index))
+        new_state.best_index = Some(best_index);
+
+        Ok((x_data, y_data, new_state, infill_data, best_index))
     }
 
     /// Returns next promising x points together with virtual (predicted) y values
@@ -361,19 +365,12 @@ where
         cstr_tol: &Array1<f64>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
-    ) -> (
-        Array2<f64>,
-        Array2<f64>,
-        f64,
-        InfillObjData<f64>,
-        Vec<std::boxed::Box<dyn egobox_moe::MixtureGpSurrogate>>,
-    ) {
+    ) -> (Array2<f64>, Array2<f64>, f64, InfillObjData<f64>) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
         let mut infill_val = f64::INFINITY;
         let mut infill_data = Default::default();
-        let mut models: Vec<std::boxed::Box<dyn egobox_moe::MixtureGpSurrogate>> = vec![];
         for i in 0..self.config.q_points {
             let (xt, yt) = if i == 0 {
                 (x_data.to_owned(), y_data.to_owned())
@@ -385,7 +382,7 @@ where
             };
 
             info!("Train surrogates with {} points...", xt.nrows());
-            models = (0..=self.config.n_cstr)
+            let models: Vec<Box<dyn egobox_moe::MixtureGpSurrogate>> = (0..=self.config.n_cstr)
                 .into_par_iter()
                 .map(|k| {
                     let name = if k == 0 {
@@ -468,7 +465,7 @@ where
                 }
             }
         }
-        (x_dat, y_dat, infill_val, infill_data, models)
+        (x_dat, y_dat, infill_val, infill_data)
     }
 
     pub(crate) fn compute_scaling(
