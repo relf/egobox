@@ -192,8 +192,12 @@ where
             .collect()
     }
 
+    /// This function is the main EGO algorithm iteration:
+    /// * Train surrogates
+    /// * Find next promising location(s) of optimum
+    /// * Update state: Evaluate true function, update doe and optimum
     #[allow(clippy::type_complexity)]
-    pub fn global_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+    pub fn ego_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &mut self,
         state: EgorState<f64>,
         fobj: &mut Problem<O>,

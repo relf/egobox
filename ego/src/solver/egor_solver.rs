@@ -263,7 +263,7 @@ where
             state.get_max_iters()
         );
         let now = Instant::now();
-        match self.global_step(state.clone(), fobj) {
+        match self.ego_step(state.clone(), fobj) {
             Ok((mut x_data, mut y_data, mut new_state, models, infill_data, best_index)) => {
                 let best_index = if self.config.trego.activated {
                     self.trego_step(
