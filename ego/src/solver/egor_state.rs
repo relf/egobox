@@ -55,37 +55,37 @@ pub struct EgorState<F: Float> {
     pub termination_status: TerminationStatus,
 
     /// Initial doe size
-    pub(crate) doe_size: usize,
+    pub doe_size: usize,
     /// Number of added points
-    pub(crate) added: usize,
+    pub added: usize,
     /// Previous number of added points
-    pub(crate) prev_added: usize,
+    pub prev_added: usize,
     /// Current number of retry without adding point
-    pub(crate) no_point_added_retries: i32,
+    pub no_point_added_retries: i32,
     /// Flag to trigger LHS optimization
-    pub(crate) lhs_optim: bool,
+    pub lhs_optim: bool,
     /// Constraint tolerance cstr < cstr_tol.
     /// It used to assess the validity of the param point and hence the corresponding cost
-    pub(crate) cstr_tol: Array1<F>,
+    pub cstr_tol: Array1<F>,
     /// Infill criterion value
-    pub(crate) infill_value: f64,
+    pub infill_value: F,
 
     /// Current clusterings for objective and constraints GP mixture surrogate models
-    pub(crate) clusterings: Option<Vec<Option<Clustering>>>,
+    pub clusterings: Option<Vec<Option<Clustering>>>,
     /// ThetaTunings controlled by n_optmod configuration triggering
     /// GP surrogate models hyperparameters optimization or reusing previous ones
-    pub(crate) theta_inits: Option<Vec<Option<Array2<F>>>>,
+    pub theta_inits: Option<Vec<Option<Array2<F>>>>,
     /// Historic data (params, objective and constraints)
-    pub(crate) data: Option<(Array2<F>, Array2<F>)>,
+    pub data: Option<(Array2<F>, Array2<F>)>,
     /// Previous index of best result in data
-    pub(crate) prev_best_index: Option<usize>,
+    pub prev_best_index: Option<usize>,
     /// index of best result in data
-    pub(crate) best_index: Option<usize>,
+    pub best_index: Option<usize>,
     /// Sampling method used to generate space filling samples
-    pub(crate) sampling: Option<Lhs<F, Xoshiro256Plus>>,
+    pub sampling: Option<Lhs<F, Xoshiro256Plus>>,
 
     /// Trego state
-    pub(crate) sigma: F,
+    pub sigma: F,
 }
 
 impl<F> EgorState<F>
@@ -219,7 +219,7 @@ where
     }
 
     /// Moves the current data out and replaces it internally with `None`.
-    pub fn take_data(mut self) -> Option<(Array2<F>, Array2<F>)> {
+    pub fn take_data(&mut self) -> Option<(Array2<F>, Array2<F>)> {
         self.data.take()
     }
 
@@ -232,18 +232,18 @@ where
     }
 
     /// Moves the current sampling out and replaces it internally with `None`.
-    pub fn take_sampling(mut self) -> Option<Lhs<F, Xoshiro256Plus>> {
+    pub fn take_sampling(&mut self) -> Option<Lhs<F, Xoshiro256Plus>> {
         self.sampling.take()
     }
 
     /// Set the infill criterion value    
-    pub fn infill_value(mut self, value: f64) -> Self {
+    pub fn infill_value(mut self, value: F) -> Self {
         self.infill_value = value;
         self
     }
 
     /// Returns the infill criterion value
-    pub fn get_infill_value(&self) -> f64 {
+    pub fn get_infill_value(&self) -> F {
         self.infill_value
     }
 
@@ -347,7 +347,7 @@ where
             no_point_added_retries: MAX_POINT_ADDITION_RETRY,
             lhs_optim: false,
             cstr_tol: Array1::zeros(0),
-            infill_value: f64::INFINITY,
+            infill_value: F::infinity(),
 
             clusterings: None,
             data: None,
@@ -373,17 +373,19 @@ where
     /// let mut state: EgorState<f64> = EgorState::new();
     ///
     /// // Simulating a new, better parameter vector
-    /// let mut state = state.data((array![[1.0f64], [2.0f64]], array![[10.0],[5.0]]));
+    /// let mut state = state.data((array![[1.0f64], [2.0f64], [3.0]], array![[10.0], [5.0], [0.5]]));
     /// state.iter = 2;
-    /// state.param = Some(array![2.0f64]);
+    /// state.prev_best_index = Some(0);
+    /// state.best_index = Some(2);
+    /// state.param = Some(array![10.0f64]);
     /// state.cost = Some(array![5.0]);
     ///
     /// // Calling update
     /// state.update();
     ///
     /// // Check if update was successful
-    /// assert_eq!(state.best_param.as_ref().unwrap()[0], 2.0f64);
-    /// assert_eq!(state.best_cost.as_ref().unwrap()[0], 5.0);
+    /// assert_eq!(state.best_param.as_ref().unwrap()[0], 3.0f64);
+    /// assert_eq!(state.best_cost.as_ref().unwrap()[0], 0.5);
     /// assert!(state.is_best());
     /// ```
     fn update(&mut self) {
@@ -721,7 +723,7 @@ where
     /// # use egobox_ego::EgorState;
     /// # use argmin::core::{State, ArgminFloat};
     /// # let mut state: EgorState<f64> = EgorState::new();
-    /// # state.last_best_iter = 12;
+    /// # state.last_best_iter = 13;
     /// # state.iter = 12;
     /// let is_best = state.is_best();
     /// # assert!(is_best);
@@ -731,6 +733,8 @@ where
     /// # assert!(!is_best);
     /// ```
     fn is_best(&self) -> bool {
-        self.last_best_iter == self.iter
+        // FIXME: last best iter is 1-based index while iter is 0-based
+        // This is done because last iter number is displayed in
+        self.last_best_iter == self.iter + 1
     }
 }
