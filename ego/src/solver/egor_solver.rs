@@ -263,7 +263,7 @@ where
             state.get_max_iters()
         );
         let now = Instant::now();
-        match self.global_step(&state, fobj) {
+        match self.global_step(state.clone(), fobj) {
             Ok((mut x_data, mut y_data, mut new_state, models, infill_data, best_index)) => {
                 let best_index = if self.config.trego.activated {
                     self.trego_step(
@@ -272,7 +272,6 @@ where
                         best_index,
                         &mut x_data,
                         &mut y_data,
-                        &state,
                         &mut new_state,
                         &infill_data,
                     )
@@ -284,8 +283,8 @@ where
                 new_state.best_index = Some(best_index);
                 info!(
                     "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
-                    state.get_iter() + 1,
-                    state.get_max_iters(),
+                    new_state.get_iter() + 1,
+                    new_state.get_max_iters(),
                     now.elapsed().as_secs_f64(),
                     y_data.row(best_index),
                     x_data.row(best_index)

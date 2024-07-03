@@ -93,14 +93,13 @@ where
     #[allow(clippy::too_many_arguments)]
     fn make_clustered_surrogate(
         &self,
+        model_name: &str,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        init: bool,
-        iter: u64,
-        recluster: bool,
+        make_clustering: bool,
+        optimize_theta: bool,
         clustering: Option<&Clustering>,
         theta_inits: Option<&Array2<f64>>,
-        model_name: &str,
     ) -> Box<dyn MixtureGpSurrogate> {
         let mut builder = self.surrogate_builder.clone();
         builder.set_kpls_dim(self.config.kpls_dim);
@@ -108,12 +107,10 @@ where
         builder.set_correlation_spec(self.config.correlation_spec);
         builder.set_n_clusters(self.config.n_clusters);
 
-        if init || recluster {
-            if recluster {
-                info!("{} reclustering and training...", model_name);
-            } else {
-                info!("{} initial clustering and training...", model_name);
-            }
+        if make_clustering
+        /* init || recluster */
+        {
+            info!("{} Clustering and training...", model_name);
             let model = builder
                 .train(&xt.view(), &yt.view())
                 .expect("GP training failure");
@@ -127,7 +124,7 @@ where
         } else {
             let clustering = clustering.unwrap();
 
-            let theta_tunings = if iter % (self.config.n_optmod as u64) == 0 {
+            let theta_tunings = if optimize_theta {
                 // set hyperparameters optimization
                 let inits = theta_inits
                     .unwrap()
@@ -162,10 +159,43 @@ where
         }
     }
 
+    /// Regenerate surrogate models from current state
+    /// This method supposes that clustering is done and thetas has to be optimized
+    pub fn refresh_surrogates(
+        &self,
+        state: &EgorState<f64>,
+    ) -> Vec<Box<dyn egobox_moe::MixtureGpSurrogate>> {
+        (0..=self.config.n_cstr)
+            .into_par_iter()
+            .map(|k| {
+                let name = if k == 0 {
+                    "Objective".to_string()
+                } else {
+                    format!("Constraint[{k}]")
+                };
+                self.make_clustered_surrogate(
+                    &name,
+                    &state.data.as_ref().unwrap().0,
+                    &state
+                        .data
+                        .as_ref()
+                        .unwrap()
+                        .1
+                        .slice(s![.., k..k + 1])
+                        .to_owned(),
+                    false,
+                    true,
+                    state.clusterings.as_ref().unwrap()[k].as_ref(),
+                    state.theta_inits.as_ref().unwrap()[k].as_ref(),
+                )
+            })
+            .collect()
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn global_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &mut self,
-        state: &EgorState<f64>,
+        state: EgorState<f64>,
         fobj: &mut Problem<O>,
     ) -> Result<(
         ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
@@ -175,34 +205,27 @@ where
         InfillObjData<f64>,
         usize,
     )> {
-        let mut clusterings =
-            state
-                .clone()
-                .take_clusterings()
-                .ok_or_else(argmin_error_closure!(
-                    PotentialBug,
-                    "EgorSolver: No clustering!"
-                ))?;
-        let mut theta_inits =
-            state
-                .clone()
-                .take_theta_inits()
-                .ok_or_else(argmin_error_closure!(
-                    PotentialBug,
-                    "EgorSolver: No theta inits!"
-                ))?;
-        let sampling = state
-            .clone()
-            .take_sampling()
+        let mut new_state = state.clone();
+        let mut clusterings = new_state
+            .take_clusterings()
             .ok_or_else(argmin_error_closure!(
                 PotentialBug,
-                "EgorSolver: No sampling!"
+                "EgorSolver: No clustering!"
             ))?;
-        let (mut x_data, mut y_data) = state
-            .clone()
+        let mut theta_inits = new_state
+            .take_theta_inits()
+            .ok_or_else(argmin_error_closure!(
+                PotentialBug,
+                "EgorSolver: No theta inits!"
+            ))?;
+        let sampling = new_state.take_sampling().ok_or_else(argmin_error_closure!(
+            PotentialBug,
+            "EgorSolver: No sampling!"
+        ))?;
+        let (mut x_data, mut y_data) = new_state
             .take_data()
             .ok_or_else(argmin_error_closure!(PotentialBug, "EgorSolver: No data!"))?;
-        let mut new_state = state.clone();
+
         let (rejected_count, models, infill_data) = loop {
             let recluster = self.have_to_recluster(new_state.added, new_state.prev_added);
             let init = new_state.get_iter() == 0;
@@ -366,15 +389,16 @@ where
                     } else {
                         format!("Constraint[{k}]")
                     };
+                    let make_clustering = (init && i == 0) || recluster;
+                    let optimize_theta = iter % (self.config.n_optmod as u64) == 0;
                     self.make_clustered_surrogate(
+                        &name,
                         &xt,
                         &yt.slice(s![.., k..k + 1]).to_owned(),
-                        init && i == 0,
-                        iter,
-                        recluster,
+                        make_clustering,
+                        optimize_theta,
                         clusterings[k].as_ref(),
                         theta_inits[k].as_ref(),
-                        &name,
                     )
                 })
                 .collect();
