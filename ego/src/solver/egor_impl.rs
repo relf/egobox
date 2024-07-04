@@ -199,15 +199,9 @@ where
     #[allow(clippy::type_complexity)]
     pub fn ego_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &mut self,
-        state: EgorState<f64>,
         fobj: &mut Problem<O>,
-    ) -> Result<(
-        ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
-        ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
-        EgorState<f64>,
-        InfillObjData<f64>,
-        usize,
-    )> {
+        state: EgorState<f64>,
+    ) -> Result<(EgorState<f64>, InfillObjData<f64>, usize)> {
         let mut new_state = state.clone();
         let mut clusterings = new_state
             .take_clusterings()
@@ -344,8 +338,9 @@ where
             &new_state.cstr_tol,
         );
         new_state.best_index = Some(best_index);
+        new_state = new_state.data((x_data.clone(), y_data.clone()));
 
-        Ok((x_data, y_data, new_state, infill_data, best_index))
+        Ok((new_state, infill_data, best_index))
     }
 
     /// Returns next promising x points together with virtual (predicted) y values

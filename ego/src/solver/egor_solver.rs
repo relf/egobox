@@ -263,8 +263,9 @@ where
             state.get_max_iters()
         );
         let now = Instant::now();
-        match self.ego_step(state.clone(), fobj) {
-            Ok((mut x_data, mut y_data, mut new_state, infill_data, best_index)) => {
+        match self.ego_step(fobj, state.clone()) {
+            Ok((mut new_state, infill_data, best_index)) => {
+                let (mut x_data, mut y_data) = new_state.clone().take_data().unwrap();
                 if self.config.trego.activated {
                     // we need to update the solver state before the local step
                     // otherwise it is done in the pattern method run of the
