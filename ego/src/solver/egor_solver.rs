@@ -266,7 +266,7 @@ where
         match self.ego_step(fobj, state.clone()) {
             Ok((mut new_state, infill_data, best_index)) => {
                 let (mut x_data, mut y_data) = new_state.clone().take_data().unwrap();
-                if self.config.trego.activated {
+                let mut new_state = if self.config.trego.activated {
                     // we need to update the solver state before the local step
                     // otherwise it is done in the pattern method run of the
                     // argmin framework executor
@@ -274,13 +274,15 @@ where
                     let models = self.refresh_surrogates(&new_state);
                     self.trego_step(
                         fobj,
+                        new_state,
                         models,
                         &mut x_data,
                         &mut y_data,
-                        &mut new_state,
                         &infill_data,
                     )
-                }
+                } else {
+                    new_state
+                };
                 info!(
                     "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
                     new_state.get_iter() + 1,
