@@ -28,12 +28,11 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         fobj: &mut Problem<O>,
         state: EgorState<f64>,
         models: Vec<Box<dyn MixtureGpSurrogate>>,
-        x_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
-        y_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
-
         infill_data: &InfillObjData<f64>,
     ) -> EgorState<f64> {
         let mut new_state = state.clone();
+        let (mut x_data, mut y_data) = new_state.take_data().expect("DOE data");
+
         let best_index = new_state.best_index.unwrap();
         let y_new = y_data[[best_index, 0]];
         let y_old = y_data[[new_state.best_index.unwrap(), 0]];
@@ -69,12 +68,12 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                 y_old - y_new[[0, 0]],
                 rho(new_state.sigma)
             );
-            let new_index = update_data(x_data, y_data, &x_new, &y_new);
+            let new_index = update_data(&mut x_data, &mut y_data, &x_new, &y_new);
             if y_new[[0, 0]] < y_old - rho(new_state.sigma) && new_index.len() == 1 {
                 let new_index = find_best_result_index_from(
                     best_index,
                     y_data.nrows() - 1,
-                    &*y_data,
+                    &y_data,
                     &new_state.cstr_tol,
                 );
                 if new_index == y_data.nrows() - 1 {
@@ -82,6 +81,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                     new_best_index = new_index;
                 }
             }
+            new_state = new_state.data((x_data, y_data));
             if new_best_index == best_index {
                 let old = new_state.sigma;
                 new_state.sigma *= self.config.trego.beta;

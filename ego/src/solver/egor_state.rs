@@ -4,6 +4,7 @@ use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationSt
 use egobox_doe::Lhs;
 use egobox_moe::Clustering;
 use linfa::Float;
+use log::info;
 use ndarray::{Array1, Array2};
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
@@ -394,6 +395,8 @@ where
                 .best_index
                 .unwrap_or_else(|| find_best_result_index(y_data, &self.cstr_tol));
 
+            info!("xdata.shape={:?}", x_data.shape());
+            info!("index={:?}", best_index);
             let param = x_data.row(best_index).to_owned();
             std::mem::swap(&mut self.prev_best_param, &mut self.best_param);
             self.best_param = Some(param);
