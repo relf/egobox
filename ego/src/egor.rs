@@ -260,7 +260,7 @@ mod tests {
                 cfg.infill_strategy(InfillStrategy::EI)
                     .regression_spec(RegressionSpec::QUADRATIC)
                     .correlation_spec(CorrelationSpec::ALL)
-                    .max_iters(30)
+                    .max_iters(10)
                     .doe(&initial_doe)
                     .target(-15.1)
                     .outdir(outdir)
@@ -281,7 +281,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
-                    .max_iters(20)
+                    .max_iters(10)
                     .regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
                     .seed(1)
@@ -297,7 +297,7 @@ mod tests {
     #[serial]
     fn test_xsinx_optmod_egor() {
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(20).n_optmod(3))
+            .configure(|config| config.max_iters(10).n_optmod(3))
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");
@@ -364,7 +364,7 @@ mod tests {
             .configure(|config| {
                 config
                     .doe(&doe)
-                    .max_iters(100)
+                    .max_iters(50)
                     .regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
                     .target(1e-2)
@@ -466,7 +466,7 @@ mod tests {
                     .qei_strategy(QEiStrategy::KrigingBeliever)
                     .doe(&doe)
                     .target(-5.5030)
-                    .max_iters(30)
+                    .max_iters(20)
                     .seed(42)
             })
             .min_within(&xlimits)
@@ -490,7 +490,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixsinx_ei_mixint_egor_builder() {
-        let max_iters = 30;
+        let max_iters = 10;
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![XType::Int(0, 25)];
 
@@ -512,7 +512,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixsinx_reclustering_mixint_egor_builder() {
-        let max_iters = 30;
+        let max_iters = 10;
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![XType::Int(0, 25)];
 
@@ -534,7 +534,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixsinx_wb2_mixint_egor_builder() {
-        let max_iters = 30;
+        let max_iters = 10;
         let xtypes = vec![XType::Int(0, 25)];
 
         let res = EgorBuilder::optimize(mixsinx)

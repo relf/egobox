@@ -31,7 +31,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         y_data: &mut ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         new_state: &mut EgorState<f64>,
         infill_data: &InfillObjData<f64>,
-    ) -> usize {
+    ) {
         let best_index = new_state.best_index.unwrap();
         let y_new = y_data[[best_index, 0]];
         let y_old = y_data[[new_state.best_index.unwrap(), 0]];
@@ -100,7 +100,6 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             new_best_index
         };
         new_state.best_index = Some(new_best_index);
-        new_best_index
     }
 
     fn local_step(

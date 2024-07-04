@@ -265,7 +265,10 @@ where
         let now = Instant::now();
         match self.ego_step(state.clone(), fobj) {
             Ok((mut x_data, mut y_data, mut new_state, infill_data, best_index)) => {
-                let best_index = if self.config.trego.activated {
+                if self.config.trego.activated {
+                    // we need to update the solver state before the local step
+                    // otherwise it is done in the pattern method run of the
+                    // argmin framework executor
                     new_state.update();
                     let models = self.refresh_surrogates(&new_state);
                     self.trego_step(
@@ -276,12 +279,7 @@ where
                         &mut new_state,
                         &infill_data,
                     )
-                } else {
-                    best_index
-                };
-                // let best = find_best_result_index(&y_data, &new_state.cstr_tol);
-                // assert!(best_index == best);
-                new_state.best_index = Some(best_index);
+                }
                 info!(
                     "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
                     new_state.get_iter() + 1,
