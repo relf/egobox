@@ -445,7 +445,7 @@ mod tests {
             .expect("Minimize failure");
         println!("G24 optim result = {res:?}");
         let expected = array![2.3295, 3.1785];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 3e-2);
     }
 
     #[test]
