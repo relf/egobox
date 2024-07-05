@@ -22,7 +22,7 @@ use ndarray::{s, Array, Array1, Array2, ArrayView1, Axis};
 use rayon::prelude::*;
 
 impl<SB: SurrogateBuilder> EgorSolver<SB> {
-    #[allow(clippy::too_many_arguments)]
+    /// Local step where infill criterion is optimized within trust region
     pub fn trego_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &mut self,
         fobj: &mut Problem<O>,
@@ -36,10 +36,10 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let best_index = new_state.best_index.unwrap();
         let y_old = y_data[[best_index, 0]];
         let rho = |sigma| sigma * sigma;
-        debug!("Trego local step");
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let xbest = x_data.row(best_index).to_owned();
 
+        // Optimize infill criterion
         let x_opt = self.local_step(
             obj_model.as_ref(),
             cstr_models,
@@ -63,6 +63,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             rho(new_state.sigma)
         );
 
+        // Update DOE and best point
         update_data(&mut x_data, &mut y_data, &x_new, &y_new);
         let new_best_index = find_best_result_index_from(
             best_index,
@@ -152,6 +153,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             .collect();
         let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
 
+        // Other way to constrain in trust-region with global l
         // let cstr_up = Box::new(
         //     |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut InfillObjData<f64>| -> f64 {
         //         let f = |x: &Vec<f64>| -> f64 {
