@@ -14,7 +14,7 @@ use egobox_doe::SamplingMethod;
 use egobox_moe::MixtureGpSurrogate;
 
 use finitediff::FiniteDiff;
-use log::{debug, info};
+use log::debug;
 use ndarray::aview1;
 use ndarray::Zip;
 use ndarray::{s, Array, Array1, Array2, ArrayView1, Axis};
@@ -34,71 +34,43 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let (mut x_data, mut y_data) = new_state.take_data().expect("DOE data");
 
         let best_index = new_state.best_index.unwrap();
-        let y_new = y_data[[best_index, 0]];
-        let y_old = y_data[[new_state.best_index.unwrap(), 0]];
+        let y_old = y_data[[best_index, 0]];
         let rho = |sigma| sigma * sigma;
-        let new_best_index = if y_new < y_old - rho(new_state.sigma) {
-            info!("Ego global step successful!");
-            best_index
-        } else {
-            debug!("Trego local step");
-            let mut new_best_index = best_index;
-            let (obj_model, cstr_models) = models.split_first().unwrap();
-            let xbest = x_data.row(best_index).to_owned();
+        debug!("Trego local step");
+        let (obj_model, cstr_models) = models.split_first().unwrap();
+        let xbest = x_data.row(best_index).to_owned();
 
-            let x_opt = self.local_step(
-                obj_model.as_ref(),
-                cstr_models,
-                &xbest.view(),
-                (
-                    new_state.sigma * self.config.trego.d.0,
-                    new_state.sigma * self.config.trego.d.1,
-                ),
-                infill_data,
-            );
-            let x_new = x_opt.insert_axis(Axis(0));
-            debug!(
-                "x_old={} x_new={}",
-                x_data.row(new_state.best_index.unwrap()),
-                x_data.row(best_index)
-            );
-            let y_new = self.eval_obj(fobj, &x_new);
-            debug!(
-                "y_old-y_new={}, rho={}",
-                y_old - y_new[[0, 0]],
-                rho(new_state.sigma)
-            );
-            let new_index = update_data(&mut x_data, &mut y_data, &x_new, &y_new);
-            if y_new[[0, 0]] < y_old - rho(new_state.sigma) && new_index.len() == 1 {
-                let new_index = find_best_result_index_from(
-                    best_index,
-                    y_data.nrows() - 1,
-                    &y_data,
-                    &new_state.cstr_tol,
-                );
-                if new_index == y_data.nrows() - 1 {
-                    // trego local step successful
-                    new_best_index = new_index;
-                }
-            }
-            new_state = new_state.data((x_data, y_data));
-            if new_best_index == best_index {
-                let old = new_state.sigma;
-                new_state.sigma *= self.config.trego.beta;
-                debug!(
-                    "Trego Local step not successful: sigma {} -> {}",
-                    old, new_state.sigma
-                );
-            } else {
-                let old = new_state.sigma;
-                new_state.sigma *= self.config.trego.gamma;
-                info!(
-                    "Trego local step successful: sigma {} -> {}",
-                    old, new_state.sigma
-                );
-            }
-            new_best_index
-        };
+        let x_opt = self.local_step(
+            obj_model.as_ref(),
+            cstr_models,
+            &xbest.view(),
+            (
+                new_state.sigma * self.config.trego.d.0,
+                new_state.sigma * self.config.trego.d.1,
+            ),
+            infill_data,
+        );
+        let x_new = x_opt.insert_axis(Axis(0));
+        debug!(
+            "x_old={} x_new={}",
+            x_data.row(new_state.best_index.unwrap()),
+            x_data.row(best_index)
+        );
+        let y_new = self.eval_obj(fobj, &x_new);
+        debug!(
+            "y_old-y_new={}, rho={}",
+            y_old - y_new[[0, 0]],
+            rho(new_state.sigma)
+        );
+
+        update_data(&mut x_data, &mut y_data, &x_new, &y_new);
+        let new_best_index = find_best_result_index_from(
+            best_index,
+            y_data.nrows() - 1,
+            &y_data,
+            &new_state.cstr_tol,
+        );
+        new_state = new_state.data((x_data, y_data));
         new_state.best_index = Some(new_best_index);
         new_state
     }

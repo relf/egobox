@@ -1,5 +1,5 @@
 /// Implementation of `argmin::IterState` for Egor optimizer
-use crate::utils::find_best_result_index;
+use crate::{utils::find_best_result_index, InfillObjData};
 use egobox_doe::Lhs;
 use egobox_moe::Clustering;
 
@@ -84,9 +84,13 @@ pub struct EgorState<F: Float> {
     pub best_index: Option<usize>,
     /// Sampling method used to generate space filling samples
     pub sampling: Option<Lhs<F, Xoshiro256Plus>>,
+    /// Infill data used to optimized infill criterion
+    pub infill_data: InfillObjData<F>,
 
     /// Trego state
     pub sigma: F,
+    /// Prev step
+    pub prev_step_ego: bool,
 }
 
 impl<F> EgorState<F>
@@ -356,8 +360,10 @@ where
             best_index: None,
             sampling: None,
             theta_inits: None,
+            infill_data: Default::default(),
 
             sigma: F::cast(1e-1),
+            prev_step_ego: false,
         }
     }
 

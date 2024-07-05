@@ -149,7 +149,7 @@ pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 
 /// Data used by internal infill criteria optimization
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InfillObjData<F: Float> {
     pub fmin: F,
     pub scale_infill_obj: F,

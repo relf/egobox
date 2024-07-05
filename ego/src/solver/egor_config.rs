@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub(crate) struct TregoConfig {
     pub(crate) activated: bool,
-    pub(crate) n_local_steps: usize,
+    pub(crate) n_local_steps: u64,
     pub(crate) d: (f64, f64),
     pub(crate) beta: f64,
     pub(crate) gamma: f64,

@@ -512,7 +512,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixsinx_reclustering_mixint_egor_builder() {
-        let max_iters = 10;
+        let max_iters = 20;
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![XType::Int(0, 25)];
 

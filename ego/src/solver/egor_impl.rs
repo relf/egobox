@@ -159,6 +159,26 @@ where
         }
     }
 
+    /// Refresh infill data used to optimize infill criterion
+    pub fn refresh_infill_data(
+        &self,
+        state: &EgorState<f64>,
+        models: &[Box<dyn egobox_moe::MixtureGpSurrogate>],
+    ) -> InfillObjData<f64> {
+        let y_data = state.data.as_ref().unwrap().1.clone();
+        let (obj_model, cstr_models) = models.split_first().unwrap();
+        let sampling = state.sampling.clone().unwrap();
+        let f_min = y_data.min().unwrap();
+        let (scale_infill_obj, scale_cstr, scale_wb2) =
+            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, *f_min);
+        InfillObjData {
+            fmin: *f_min,
+            scale_infill_obj,
+            scale_cstr: Some(scale_cstr.to_owned()),
+            scale_wb2,
+        }
+    }
+
     /// Regenerate surrogate models from current state
     /// This method supposes that clustering is done and thetas has to be optimized
     pub fn refresh_surrogates(
@@ -417,10 +437,10 @@ where
             let (scale_infill_obj, scale_cstr, scale_wb2) =
                 self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, *f_min);
             infill_data = InfillObjData {
+                fmin: *f_min,
                 scale_infill_obj,
                 scale_cstr: Some(scale_cstr.to_owned()),
                 scale_wb2,
-                fmin: *y_data.min().unwrap_or(&f64::INFINITY),
             };
 
             match self.find_best_point(

@@ -248,7 +248,7 @@ where
         let best_index = find_best_result_index(&y_data, &initial_state.cstr_tol);
         initial_state.best_index = Some(best_index);
         initial_state.last_best_iter = 0;
-        debug!("INITIAL STATE = {:?}", initial_state);
+        debug!("Initial State = {:?}", initial_state);
         Ok((initial_state, None))
     }
 
@@ -263,55 +263,21 @@ where
             state.get_max_iters()
         );
         let now = Instant::now();
-        match self.ego_step(fobj, state.clone()) {
-            Ok((mut new_state, infill_data, best_index)) => {
-                let mut new_state = if self.config.trego.activated {
-                    let (x_data, y_data) = new_state.data.clone().unwrap();
-                    info!(
-                        "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
-                        new_state.get_iter() + 1,
-                        new_state.get_max_iters(),
-                        now.elapsed().as_secs_f64(),
-                        y_data.row(best_index),
-                        x_data.row(best_index)
-                    );
-
-                    new_state.increment_iter();
-                    debug!(
-                        "********* Start iteration {}/{}",
-                        state.get_iter() + 1,
-                        state.get_max_iters()
-                    );
-                    // we need to update the solver state before the local step
-                    // otherwise it is done in the pattern method run of the
-                    // argmin framework executor
-                    new_state.update();
-                    let models = self.refresh_surrogates(&new_state);
-                    self.trego_step(fobj, new_state, models, &infill_data)
-                } else {
-                    new_state
-                };
-                let (x_data, y_data) = new_state.data.clone().unwrap();
-                info!(
-                    "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
-                    new_state.get_iter() + 1,
-                    new_state.get_max_iters(),
-                    now.elapsed().as_secs_f64(),
-                    y_data.row(best_index),
-                    x_data.row(best_index)
-                );
-                new_state = new_state.data((x_data, y_data.clone()));
-
-                Ok((new_state, None))
-            }
-            Err(EgoError::GlobalStepNoPointError) => Ok((
-                state.terminate_with(TerminationReason::SolverExit(
-                    "Even LHS optimization failed to add a new point".to_string(),
-                )),
-                None,
-            )),
-            Err(err) => Err(err.into()),
-        }
+        let res = if self.config.trego.activated {
+            self.trego_iteration(fobj, state)?
+        } else {
+            self.ego_iteration(fobj, state)?
+        };
+        let (x_data, y_data) = res.0.data.clone().unwrap();
+        info!(
+            "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
+            res.0.get_iter() + 1,
+            res.0.get_max_iters(),
+            now.elapsed().as_secs_f64(),
+            y_data.row(res.0.best_index.unwrap()),
+            x_data.row(res.0.best_index.unwrap())
+        );
+        Ok(res)
     }
 
     fn terminate(&mut self, state: &EgorState<f64>) -> TerminationStatus {
@@ -322,5 +288,82 @@ where
         debug!("Data {:?}", state.data.as_ref().unwrap());
 
         TerminationStatus::NotTerminated
+    }
+}
+
+impl<SB> EgorSolver<SB>
+where
+    SB: SurrogateBuilder,
+{
+    fn ego_iteration<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+        &mut self,
+        fobj: &mut Problem<O>,
+        state: EgorState<f64>,
+    ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
+        match self.ego_step(fobj, state.clone()) {
+            Ok((new_state, _, _)) => Ok((new_state, None)),
+            Err(EgoError::GlobalStepNoPointError) => Ok((
+                state.terminate_with(TerminationReason::SolverExit(
+                    "Even LHS optimization failed to add a new point".to_string(),
+                )),
+                None,
+            )),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    fn trego_iteration<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+        &mut self,
+        fobj: &mut Problem<O>,
+        state: EgorState<f64>,
+    ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
+        let rho = |sigma| sigma * sigma;
+        let (_, y_data) = state.data.as_ref().unwrap(); // initialized in init
+        let best = state.best_index.unwrap(); // initialized in init
+
+        // Check prev step success
+        let last_iter_success = if let Some(prev_best) = state.prev_best_index {
+            y_data[[best, 0]] < y_data[[prev_best, 0]] - rho(state.sigma)
+        } else {
+            false
+        };
+
+        let mut new_state = state.clone();
+        if !(state.prev_step_ego || !state.get_iter() == 0) {
+            // Check local step success
+            if last_iter_success {
+                let old = state.sigma;
+                new_state.sigma *= self.config.trego.gamma;
+                info!(
+                    "Trego local step successful: sigma {} -> {}",
+                    old, new_state.sigma
+                );
+            } else {
+                let old = state.sigma;
+                new_state.sigma *= self.config.trego.beta;
+                debug!(
+                    "Trego Local step not successful: sigma {} -> {}",
+                    old, new_state.sigma
+                );
+            }
+        }
+
+        let is_global_phase = (last_iter_success && state.prev_step_ego)
+            || (state.get_iter() % (1 + self.config.trego.n_local_steps) == 0);
+
+        if is_global_phase {
+            // Global step
+            info!(">>>>>>>>>>>>>>>>> GLOBAL STEP");
+            self.ego_iteration(fobj, new_state)
+        } else {
+            info!(">>>>>>>>>>>>>>>>> LOCAL STEP");
+            // Local step
+            let models = self.refresh_surrogates(&new_state);
+            let infill_data = self.refresh_infill_data(&new_state, &models);
+            let mut new_state = self.trego_step(fobj, new_state, models, &infill_data);
+
+            new_state.prev_step_ego = false;
+            Ok((new_state, None))
+        }
     }
 }
