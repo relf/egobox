@@ -295,6 +295,7 @@ impl<SB> EgorSolver<SB>
 where
     SB: SurrogateBuilder,
 {
+    /// Iteration of EGO algorithm
     fn ego_iteration<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &mut self,
         fobj: &mut Problem<O>,
@@ -312,6 +313,7 @@ where
         }
     }
 
+    /// Itertaion of TREGO algorithm
     fn trego_iteration<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &mut self,
         fobj: &mut Problem<O>,
@@ -335,14 +337,14 @@ where
                 let old = state.sigma;
                 new_state.sigma *= self.config.trego.gamma;
                 info!(
-                    "Trego local step successful: sigma {} -> {}",
+                    "Previous TREGO local step successful: sigma {} -> {}",
                     old, new_state.sigma
                 );
             } else {
                 let old = state.sigma;
                 new_state.sigma *= self.config.trego.beta;
-                debug!(
-                    "Trego Local step not successful: sigma {} -> {}",
+                info!(
+                    "Previous TREGO local step not successful: sigma {} -> {}",
                     old, new_state.sigma
                 );
             }
@@ -353,15 +355,16 @@ where
 
         if is_global_phase {
             // Global step
-            info!(">>>>>>>>>>>>>>>>> GLOBAL STEP");
-            self.ego_iteration(fobj, new_state)
+            info!(">>> TREGO global step (aka EGO)");
+            let mut res = self.ego_iteration(fobj, new_state)?;
+            res.0.prev_step_ego = true;
+            Ok(res)
         } else {
-            info!(">>>>>>>>>>>>>>>>> LOCAL STEP");
+            info!(">>> TREGO local step");
             // Local step
             let models = self.refresh_surrogates(&new_state);
             let infill_data = self.refresh_infill_data(&new_state, &models);
             let mut new_state = self.trego_step(fobj, new_state, models, &infill_data);
-
             new_state.prev_step_ego = false;
             Ok((new_state, None))
         }
