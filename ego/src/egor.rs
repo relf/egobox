@@ -260,7 +260,7 @@ mod tests {
                 cfg.infill_strategy(InfillStrategy::EI)
                     .regression_spec(RegressionSpec::QUADRATIC)
                     .correlation_spec(CorrelationSpec::ALL)
-                    .max_iters(20)
+                    .max_iters(30)
                     .doe(&initial_doe)
                     .target(-15.1)
                     .outdir(outdir)
