@@ -493,8 +493,12 @@ where
         let npts = (100 * self.xlimits.nrows()).min(1000);
         debug!("Use {npts} points to evaluate scalings");
         let scaling_points = sampling.sample(npts);
+        let scale_ic =
+            self.config
+                .infill_criterion
+                .scaling(&scaling_points.view(), obj_model, fmin);
         let scale_infill_obj =
-            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, f_min);
+            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, fmin, scale_ic);
         info!(
             "Infill criterion scaling is updated to {}",
             scale_infill_obj
@@ -506,10 +510,6 @@ where
             info!("Constraints scalings is updated to {}", scale_cstr);
             scale_cstr
         };
-        let scale_ic =
-            self.config
-                .infill_criterion
-                .scaling(&scaling_points.view(), obj_model, f_min);
         (scale_infill_obj, scale_cstr, scale_ic)
     }
 
