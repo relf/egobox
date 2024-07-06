@@ -25,12 +25,12 @@ impl InfillCriterion for WB2Criterion {
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         scale: Option<f64>,
     ) -> f64 {
         let scale = self.0.unwrap_or(scale.unwrap_or(1.0));
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-        let ei = EI.value(x, obj_model, f_min, None);
+        let ei = EI.value(x, obj_model, fmin, None);
         scale * ei - obj_model.predict(&pt).unwrap()[[0, 0]]
     }
 
@@ -40,12 +40,12 @@ impl InfillCriterion for WB2Criterion {
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         scale: Option<f64>,
     ) -> Array1<f64> {
         let scale = scale.unwrap_or(1.0);
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-        let grad_ei = EI.grad(x, obj_model, f_min, None) * scale;
+        let grad_ei = EI.grad(x, obj_model, fmin, None) * scale;
         grad_ei - obj_model.predict_gradients(&pt).unwrap().row(0)
     }
 
@@ -53,12 +53,12 @@ impl InfillCriterion for WB2Criterion {
         &self,
         x: &ndarray::ArrayView2<f64>,
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
     ) -> f64 {
         if let Some(scale) = self.0 {
             scale
         } else {
-            compute_wb2s_scale(x, obj_model, f_min)
+            compute_wb2s_scale(x, obj_model, fmin)
         }
     }
 }
@@ -67,12 +67,12 @@ impl InfillCriterion for WB2Criterion {
 pub(crate) fn compute_wb2s_scale(
     x: &ArrayView2<f64>,
     obj_model: &dyn MixtureGpSurrogate,
-    f_min: f64,
+    fmin: f64,
 ) -> f64 {
     let ratio = 100.; // TODO: make it a parameter
     let ei_x = x.map_axis(Axis(1), |xi| {
         let xi = xi.as_standard_layout();
-        let ei = EI.value(xi.as_slice().unwrap(), obj_model, f_min, None);
+        let ei = EI.value(xi.as_slice().unwrap(), obj_model, fmin, None);
         ei
     });
     let i_max = ei_x.argmax().unwrap();

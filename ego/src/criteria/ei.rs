@@ -22,7 +22,7 @@ impl InfillCriterion for ExpectedImprovement {
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         _scale: Option<f64>,
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
@@ -30,8 +30,8 @@ impl InfillCriterion for ExpectedImprovement {
             if let Ok(s) = obj_model.predict_var(&pt) {
                 let pred = p[[0, 0]];
                 let sigma = s[[0, 0]].sqrt();
-                let args0 = (f_min - pred) / sigma;
-                let args1 = (f_min - pred) * norm_cdf(args0);
+                let args0 = (fmin - pred) / sigma;
+                let args1 = (fmin - pred) * norm_cdf(args0);
                 let args2 = sigma * norm_pdf(args0);
                 args1 + args2
             } else {
@@ -48,7 +48,7 @@ impl InfillCriterion for ExpectedImprovement {
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         _scale: Option<f64>,
     ) -> Array1<f64> {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
@@ -59,8 +59,8 @@ impl InfillCriterion for ExpectedImprovement {
                     Array1::zeros(pt.len())
                 } else {
                     let pred = p[[0, 0]];
-                    let diff_y = f_min - pred;
-                    let arg = (f_min - pred) / sigma;
+                    let diff_y = fmin - pred;
+                    let arg = (fmin - pred) / sigma;
                     let y_prime = obj_model.predict_gradients(&pt).unwrap();
                     let y_prime = y_prime.row(0);
                     let sig_2_prime = obj_model.predict_var_gradients(&pt).unwrap();
@@ -89,7 +89,7 @@ impl InfillCriterion for ExpectedImprovement {
         &self,
         _x: &ndarray::ArrayView2<f64>,
         _obj_model: &dyn MixtureGpSurrogate,
-        _f_min: f64,
+        _fmin: f64,
     ) -> f64 {
         1.0
     }
