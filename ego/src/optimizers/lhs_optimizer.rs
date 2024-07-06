@@ -1,4 +1,4 @@
-use crate::types::ObjData;
+use crate::types::InfillObjData;
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
@@ -21,18 +21,18 @@ pub(crate) struct LhsOptimizer<'a, R: Rng + Clone + Sync + Send> {
     n_start: usize,
     n_points: usize,
     cstr_tol: f64,
-    obj: &'a (dyn ObjFn<ObjData<f64>> + Sync),
-    cstrs: &'a Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
-    obj_data: ObjData<f64>,
+    obj: &'a (dyn ObjFn<InfillObjData<f64>> + Sync),
+    cstrs: &'a Vec<&'a (dyn ObjFn<InfillObjData<f64>> + Sync)>,
+    obj_data: InfillObjData<f64>,
     rng: R,
 }
 
 impl<'a> LhsOptimizer<'a, Xoshiro256Plus> {
     pub fn new(
         xlimits: &Array2<f64>,
-        obj: &'a (dyn ObjFn<ObjData<f64>> + Sync),
-        cstrs: &'a Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
-        obj_data: &ObjData<f64>,
+        obj: &'a (dyn ObjFn<InfillObjData<f64>> + Sync),
+        cstrs: &'a Vec<&'a (dyn ObjFn<InfillObjData<f64>> + Sync)>,
+        obj_data: &InfillObjData<f64>,
     ) -> LhsOptimizer<'a, Xoshiro256Plus> {
         Self::new_with_rng(
             xlimits,
@@ -47,9 +47,9 @@ impl<'a> LhsOptimizer<'a, Xoshiro256Plus> {
 impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
     pub fn new_with_rng(
         xlimits: &Array2<f64>,
-        obj: &'a (dyn ObjFn<ObjData<f64>> + Sync),
-        cstrs: &'a Vec<&'a (dyn ObjFn<ObjData<f64>> + Sync)>,
-        obj_data: &ObjData<f64>,
+        obj: &'a (dyn ObjFn<InfillObjData<f64>> + Sync),
+        cstrs: &'a Vec<&'a (dyn ObjFn<InfillObjData<f64>> + Sync)>,
+        obj_data: &InfillObjData<f64>,
         rng: R,
     ) -> LhsOptimizer<'a, R> {
         LhsOptimizer {
@@ -180,17 +180,13 @@ mod tests {
 
     #[test]
     fn test_min_obj_only() {
-        let obj = |x: &[f64], _grad: Option<&mut [f64]>, _params: &mut ObjData<f64>| -> f64 {
+        let obj = |x: &[f64], _grad: Option<&mut [f64]>, _params: &mut InfillObjData<f64>| -> f64 {
             x[0] * x[0]
         };
         let cstrs = vec![];
 
         let xlimits = array![[-1., 1.]];
-        let obj_data = ObjData {
-            scale_infill_obj: 1.,
-            scale_cstr: array![],
-            scale_wb2: 1.,
-        };
+        let obj_data = Default::default();
 
         let (_, res) = LhsOptimizer::new(&xlimits, &obj, &cstrs, &obj_data)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))

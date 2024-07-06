@@ -148,10 +148,22 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
 pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 
-/// Data used by internal infill criteria to be optimized
-#[derive(Clone)]
-pub(crate) struct ObjData<F> {
+/// Data used by internal infill criteria optimization
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InfillObjData<F: Float> {
+    pub fmin: F,
     pub scale_infill_obj: F,
-    pub scale_cstr: Array1<F>,
+    pub scale_cstr: Option<Array1<F>>,
     pub scale_wb2: F,
+}
+
+impl<F: Float> Default for InfillObjData<F> {
+    fn default() -> Self {
+        Self {
+            fmin: F::infinity(),
+            scale_infill_obj: F::one(),
+            scale_cstr: None,
+            scale_wb2: F::one(),
+        }
+    }
 }

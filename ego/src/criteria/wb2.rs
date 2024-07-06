@@ -12,7 +12,7 @@ pub struct WB2Criterion(pub Option<f64>);
 #[typetag::serde]
 impl InfillCriterion for WB2Criterion {
     fn name(&self) -> &'static str {
-        if self.0.is_some() {
+        if self.0.is_some() && self.0.unwrap() != 1. {
             "WB2S"
         } else {
             "WB2"
@@ -28,7 +28,7 @@ impl InfillCriterion for WB2Criterion {
         f_min: f64,
         scale: Option<f64>,
     ) -> f64 {
-        let scale = scale.unwrap_or(1.0);
+        let scale = self.0.unwrap_or(scale.unwrap_or(1.0));
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         let ei = EI.value(x, obj_model, f_min, None);
         scale * ei - obj_model.predict(&pt).unwrap()[[0, 0]]

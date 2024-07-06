@@ -33,4 +33,7 @@ pub enum EgoError {
     /// When an Argmin framework is raised
     #[error(transparent)]
     ArgminError(#[from] argmin::core::Error),
+    /// When global EGO step cannot add any point
+    #[error("EGO exit (no more point)")]
+    GlobalStepNoPointError,
 }

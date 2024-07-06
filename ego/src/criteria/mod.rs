@@ -19,8 +19,8 @@ pub trait InfillCriterion: Clone + Sync {
     fn name(&self) -> &'static str;
 
     /// Criterion value at given point x with regards to given
-    /// surrogate of the objectove function, the current found min
-    /// and an optional acaling factor
+    /// surrogate of the objective function, the current found min
+    /// and an optional scaling factor
     fn value(
         &self,
         x: &[f64],

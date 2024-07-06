@@ -153,6 +153,7 @@ pub(crate) struct Egor {
     pub par_infill_strategy: ParInfillStrategy,
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
+    pub trego: bool,
     pub n_clusters: Option<usize>,
     pub n_optmod: usize,
     pub target: f64,
@@ -190,6 +191,7 @@ impl Egor {
         par_infill_strategy = ParInfillStrategy::Kb,
         infill_optimizer = InfillOptimizer::Cobyla,
         kpls_dim = None,
+        trego = false,
         n_clusters = 1,
         n_optmod = 1,
         target = f64::NEG_INFINITY,
@@ -213,6 +215,7 @@ impl Egor {
         par_infill_strategy: ParInfillStrategy,
         infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
+        trego: bool,
         n_clusters: Option<usize>,
         n_optmod: usize,
         target: f64,
@@ -235,6 +238,7 @@ impl Egor {
             par_infill_strategy,
             infill_optimizer,
             kpls_dim,
+            trego,
             n_clusters,
             n_optmod,
             target,
@@ -452,6 +456,7 @@ impl Egor {
             .q_points(self.q_points)
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
+            .trego(self.trego)
             .n_optmod(self.n_optmod)
             .target(self.target)
             .hot_start(self.hot_start); // when used as a service no hotstart

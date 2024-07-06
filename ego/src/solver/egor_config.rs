@@ -7,6 +7,30 @@ use ndarray::Array2;
 
 use serde::{Deserialize, Serialize};
 
+/// A structure to handle TREGO method parameterization
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub(crate) struct TregoConfig {
+    pub(crate) activated: bool,
+    pub(crate) n_local_steps: u64,
+    pub(crate) d: (f64, f64),
+    pub(crate) beta: f64,
+    pub(crate) gamma: f64,
+    pub(crate) sigma0: f64,
+}
+
+impl Default for TregoConfig {
+    fn default() -> Self {
+        TregoConfig {
+            activated: true,
+            n_local_steps: 4,
+            d: (1e-6, 1.),
+            beta: 0.9,
+            gamma: 10. / 9.,
+            sigma0: 1e-1,
+        }
+    }
+}
+
 /// Egor optimizer configuration
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct EgorConfig {
@@ -60,6 +84,8 @@ pub struct EgorConfig {
     pub(crate) xtypes: Vec<XType>,
     /// A random generator seed used to get reproductible results.
     pub(crate) seed: Option<u64>,
+    /// Trego parameterization
+    pub(crate) trego: TregoConfig,
 }
 
 impl Default for EgorConfig {
@@ -85,6 +111,7 @@ impl Default for EgorConfig {
             hot_start: false,
             xtypes: vec![],
             seed: None,
+            trego: TregoConfig::default(),
         }
     }
 }
@@ -248,6 +275,12 @@ impl EgorConfig {
     /// Define design space with given x types
     pub fn xtypes(mut self, xtypes: &[XType]) -> Self {
         self.xtypes = xtypes.into();
+        self
+    }
+
+    /// Activate TREGO method
+    pub fn trego(mut self, activated: bool) -> Self {
+        self.trego.activated = activated;
         self
     }
 
