@@ -168,11 +168,11 @@ where
         let y_data = state.data.as_ref().unwrap().1.clone();
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let sampling = state.sampling.clone().unwrap();
-        let f_min = y_data.min().unwrap();
+        let fmin = y_data.min().unwrap();
         let (scale_infill_obj, scale_cstr, scale_wb2) =
-            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, *f_min);
+            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, *fmin);
         InfillObjData {
-            fmin: *f_min,
+            fmin: *fmin,
             scale_infill_obj,
             scale_cstr: Some(scale_cstr.to_owned()),
             scale_wb2,
@@ -433,11 +433,11 @@ where
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
 
-            let f_min = y_data.min().unwrap();
+            let fmin = y_data.min().unwrap();
             let (scale_infill_obj, scale_cstr, scale_wb2) =
-                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, *f_min);
+                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, *fmin);
             infill_data = InfillObjData {
-                fmin: *f_min,
+                fmin: *fmin,
                 scale_infill_obj,
                 scale_cstr: Some(scale_cstr.to_owned()),
                 scale_wb2,
@@ -488,7 +488,7 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        f_min: f64,
+        fmin: f64,
     ) -> (f64, Array1<f64>, f64) {
         let npts = (100 * self.xlimits.nrows()).min(1000);
         debug!("Use {npts} points to evaluate scalings");
@@ -528,7 +528,7 @@ where
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
     ) -> Result<(f64, Array1<f64>)> {
-        let f_min = y_data.min().unwrap();
+        let fmin = y_data.min().unwrap();
 
         let mut success = false;
         let mut n_optim = 1;
@@ -553,11 +553,11 @@ where
                 } = params;
                 if let Some(grad) = gradient {
                     let f = |x: &Vec<f64>| -> f64 {
-                        self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
+                        self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
                     };
                     grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
                 }
-                self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
+                self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
             };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
@@ -700,12 +700,13 @@ where
         &self,
         x: &ArrayView2<f64>,
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
+        scale_ic: f64,
     ) -> f64 {
         let mut crit_vals = Array1::zeros(x.nrows());
         let (mut nan_count, mut inf_count) = (0, 0);
         Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
-            let val = self.eval_infill_obj(&x.to_vec(), obj_model, f_min, 1.0, 1.0);
+            let val = self.eval_infill_obj(&x.to_vec(), obj_model, fmin, 1.0, scale_ic);
             *c = if val.is_nan() {
                 nan_count += 1;
                 1.0
@@ -737,7 +738,7 @@ where
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         scale: f64,
         scale_ic: f64,
     ) -> f64 {
@@ -745,7 +746,7 @@ where
         let obj = -(self
             .config
             .infill_criterion
-            .value(&x_f, obj_model, f_min, Some(scale_ic)));
+            .value(&x_f, obj_model, fmin, Some(scale_ic)));
         obj / scale
     }
 
@@ -753,7 +754,7 @@ where
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         scale: f64,
         scale_ic: f64,
     ) -> Vec<f64> {
@@ -761,7 +762,7 @@ where
         let grad = -(self
             .config
             .infill_criterion
-            .grad(&x_f, obj_model, f_min, Some(scale_ic)));
+            .grad(&x_f, obj_model, fmin, Some(scale_ic)));
         (grad / scale).to_vec()
     }
 
