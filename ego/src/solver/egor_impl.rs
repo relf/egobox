@@ -553,11 +553,11 @@ where
                 } = params;
                 if let Some(grad) = gradient {
                     let f = |x: &Vec<f64>| -> f64 {
-                        self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
+                        self.eval_infill_obj(x, obj_model, *fmin, *scale_wb2, *scale_infill_obj)
                     };
                     grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
                 }
-                self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
+                self.eval_infill_obj(x, obj_model, *fmin, *scale_wb2, *scale_infill_obj)
             };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
@@ -739,8 +739,8 @@ where
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
         fmin: f64,
-        scale: f64,
         scale_ic: f64,
+        scale: f64,
     ) -> f64 {
         let x_f = x.to_vec();
         let obj = -(self
