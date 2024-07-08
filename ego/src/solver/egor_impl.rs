@@ -361,6 +361,7 @@ where
             &y_data,
             &new_state.cstr_tol,
         );
+        new_state.prev_best_index = state.best_index;
         new_state.best_index = Some(best_index);
         new_state = new_state.data((x_data.clone(), y_data.clone()));
 
@@ -497,8 +498,20 @@ where
         let npts = (100 * self.xlimits.nrows()).min(1000);
         debug!("Use {npts} points to evaluate scalings");
         let scaling_points = sampling.sample(npts);
+
+        let scale_ic = if self.config.infill_criterion.name() == "WB2S" {
+            let scale_ic =
+                self.config
+                    .infill_criterion
+                    .scaling(&scaling_points.view(), obj_model, fmin);
+            info!("WBS2 scaling factor = {}", scale_ic);
+            scale_ic
+        } else {
+            1.
+        };
+
         let scale_infill_obj =
-            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, fmin);
+            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, fmin, scale_ic);
         info!(
             "Infill criterion scaling is updated to {}",
             scale_infill_obj
@@ -510,10 +523,6 @@ where
             info!("Constraints scalings is updated to {}", scale_cstr);
             scale_cstr
         };
-        let scale_ic =
-            self.config
-                .infill_criterion
-                .scaling(&scaling_points.view(), obj_model, fmin);
         (scale_infill_obj, scale_cstr, scale_ic)
     }
 
@@ -706,11 +715,12 @@ where
         x: &ArrayView2<f64>,
         obj_model: &dyn MixtureGpSurrogate,
         fmin: f64,
+        scale_ic: f64,
     ) -> f64 {
         let mut crit_vals = Array1::zeros(x.nrows());
         let (mut nan_count, mut inf_count) = (0, 0);
         Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
-            let val = self.eval_infill_obj(&x.to_vec(), obj_model, fmin, 1.0, 1.0);
+            let val = self.eval_infill_obj(&x.to_vec(), obj_model, fmin, 1.0, scale_ic);
             *c = if val.is_nan() {
                 nan_count += 1;
                 1.0
