@@ -12,14 +12,14 @@ pub struct WB2Criterion(pub Option<f64>);
 #[typetag::serde]
 impl InfillCriterion for WB2Criterion {
     fn name(&self) -> &'static str {
-        if self.0.is_some() && self.0.unwrap() != 1. {
-            "WB2S"
-        } else {
+        if let Some(1.) = self.0 {
             "WB2"
+        } else {
+            "WB2S"
         }
     }
 
-    /// Compute WBS2 infill criterion at given `x` point using the surrogate model `obj_model`
+    /// Compute WB2S infill criterion at given `x` point using the surrogate model `obj_model`
     /// and the current minimum of the objective function.
     fn value(
         &self,
@@ -28,13 +28,13 @@ impl InfillCriterion for WB2Criterion {
         fmin: f64,
         scale: Option<f64>,
     ) -> f64 {
-        let scale = self.0.unwrap_or(scale.unwrap_or(1.0));
+        let scale = scale.unwrap_or(self.0.unwrap_or(1.0));
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         let ei = EI.value(x, obj_model, fmin, None);
         scale * ei - obj_model.predict(&pt).unwrap()[[0, 0]]
     }
 
-    /// Computes derivatives of WS2 infill criterion wrt to x components at given `x` point
+    /// Computes derivatives of WB2S infill criterion wrt to x components at given `x` point
     /// using the surrogate model `obj_model` and the current minimum of the objective function.
     fn grad(
         &self,
@@ -43,7 +43,7 @@ impl InfillCriterion for WB2Criterion {
         fmin: f64,
         scale: Option<f64>,
     ) -> Array1<f64> {
-        let scale = scale.unwrap_or(1.0);
+        let scale = scale.unwrap_or(self.0.unwrap_or(1.0));
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         let grad_ei = EI.grad(x, obj_model, fmin, None) * scale;
         grad_ei - obj_model.predict_gradients(&pt).unwrap().row(0)
