@@ -168,7 +168,10 @@ where
         let y_data = state.data.as_ref().unwrap().1.clone();
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let sampling = state.sampling.clone().unwrap();
-        let fmin = y_data.min().unwrap();
+
+        let fobj = y_data.column(0);
+        let fmin = fobj.min().unwrap();
+
         let (scale_infill_obj, scale_cstr, scale_wb2) =
             self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, *fmin);
         InfillObjData {
@@ -438,7 +441,8 @@ where
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
 
-            let fmin = y_data.min().unwrap();
+            let fobj = y_data.column(0);
+            let fmin = fobj.min().unwrap();
             let (scale_infill_obj, scale_cstr, scale_wb2) =
                 self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, *fmin);
             infill_data = InfillObjData {
@@ -542,7 +546,8 @@ where
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
     ) -> Result<(f64, Array1<f64>)> {
-        let fmin = y_data.min().unwrap();
+        let fobj = y_data.column(0);
+        let fmin = fobj.min().unwrap();
 
         let mut success = false;
         let mut n_optim = 1;
