@@ -41,7 +41,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         let xbest = x_data.row(best_index).to_owned();
 
         // Optimize infill criterion
-        let x_opt = self.local_step(
+        let (infill_obj, x_opt) = self.local_step(
             obj_model.as_ref(),
             cstr_models,
             &xbest.view(),
@@ -51,6 +51,13 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             ),
             infill_data,
         );
+        let mut new_state = new_state.infill_value(-infill_obj);
+        info!(
+            "Infill criterion {} max found = {}",
+            self.config.infill_criterion.name(),
+            state.get_infill_value()
+        );
+
         let x_new = x_opt.insert_axis(Axis(0));
         debug!(
             "x_old={} x_new={}",
@@ -81,11 +88,6 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             &new_state.cstr_tol,
         );
         new_state = new_state.data((x_data, y_data));
-        info!(
-            "+{} point(s), total: {} points",
-            added.len(),
-            new_state.data.as_ref().unwrap().0.nrows()
-        );
         new_state.best_index = Some(new_best_index);
         new_state
     }
@@ -97,7 +99,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         xbest: &ArrayView1<f64>,
         local_bounds: (f64, f64),
         infill_data: &InfillObjData<f64>,
-    ) -> Array1<f64> {
+    ) -> (f64, Array1<f64>) {
         let InfillObjData {
             fmin, scale_cstr, ..
         } = infill_data;
@@ -229,8 +231,13 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             .with_rng(rng);
         let x_start = lhs.sample(self.config.n_start);
 
+        // Find best x promising points by optimizing the chosen infill criterion
+        // The optimized value of the criterion is returned together with the
+        // optimum location
+        // Returns (infill_obj, x_opt)
         let algorithm = crate::optimizers::Algorithm::Slsqp;
-        let (_, x_opt) = (0..self.config.n_start)
+        info!("Optimize infill criterion...");
+        let (infill_obj, x_opt) = (0..self.config.n_start)
             .into_par_iter()
             .map(|i| {
                 Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &local_area)
@@ -245,6 +252,6 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                 |a, b| if b.0 < a.0 { b } else { a },
             );
 
-        x_opt
+        (infill_obj, x_opt)
     }
 }

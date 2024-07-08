@@ -287,7 +287,7 @@ where
                 .param(x_dat.row(0).to_owned())
                 .cost(y_dat.row(0).to_owned());
             info!(
-                "Infill criterion max value {} = {}",
+                "Infill criterion {} max found = {}",
                 self.config.infill_criterion.name(),
                 state.get_infill_value()
             );
@@ -520,6 +520,7 @@ where
     /// Find best x promising points by optimizing the chosen infill criterion
     /// The optimized value of the criterion is returned together with the
     /// optimum location
+    /// Returns (infill_obj, x_opt)
     #[allow(clippy::too_many_arguments)]
     fn find_best_point(
         &self,
