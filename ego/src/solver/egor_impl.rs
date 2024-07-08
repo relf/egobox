@@ -185,6 +185,10 @@ where
         &self,
         state: &EgorState<f64>,
     ) -> Vec<Box<dyn egobox_moe::MixtureGpSurrogate>> {
+        info!(
+            "Train surrogates with {} points...",
+            &state.data.as_ref().unwrap().0.nrows()
+        );
         (0..=self.config.n_cstr)
             .into_par_iter()
             .map(|k| {
