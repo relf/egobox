@@ -15,6 +15,7 @@ use egobox_moe::MixtureGpSurrogate;
 
 use finitediff::FiniteDiff;
 use log::debug;
+use log::info;
 use ndarray::aview1;
 use ndarray::Zip;
 use ndarray::{s, Array, Array1, Array2, ArrayView1, Axis};
@@ -64,7 +65,15 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
         );
 
         // Update DOE and best point
-        update_data(&mut x_data, &mut y_data, &x_new, &y_new);
+        let added = update_data(&mut x_data, &mut y_data, &x_new, &y_new);
+        new_state.prev_added = new_state.added;
+        new_state.added += added.len();
+        info!(
+            "+{} point(s), total: {} points",
+            added.len(),
+            new_state.added
+        );
+
         let new_best_index = find_best_result_index_from(
             best_index,
             y_data.nrows() - 1,
@@ -72,6 +81,11 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             &new_state.cstr_tol,
         );
         new_state = new_state.data((x_data, y_data));
+        info!(
+            "+{} point(s), total: {} points",
+            added.len(),
+            new_state.data.as_ref().unwrap().0.nrows()
+        );
         new_state.best_index = Some(new_best_index);
         new_state
     }
