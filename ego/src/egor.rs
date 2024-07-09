@@ -96,33 +96,6 @@
 //!            .run()
 //!            .expect("g24 minimized");
 //! println!("G24 min result = {:?}", res);
-//!
-//! References
-//!
-//! Bartoli, N., Lefebvre, T., Dubreuil, S., Olivanti, R., Priem, R., Bons, N., Martins, J. R. R. A.,
-//! & Morlier, J. (2019). Adaptive modeling strategy for constrained global optimization with
-//! application to aerodynamic wing design. Aerospace Science and Technology, 90, 85–102.
-//! https://doi.org/10.1016/j.ast.2019.03.041
-//!
-//! Bouhlel, M. A., Bartoli, N., Otsmane, A., & Morlier, J. (2016). Improving kriging surrogates
-//! of high-dimensional design models by partial least squares dimension reduction.
-//! Structural and Multidisciplinary Optimization, 53(5), 935–952. https://doi.org/10.1007/s00158-015-1395-9
-//!
-//! Bouhlel, M. A., Hwang, J. T., Bartoli, N., Lafage, R., Morlier, J., & Martins, J. R. R. A.
-//! (2019). A python surrogate modeling framework with derivatives. Advances in Engineering
-//! Software, 102662. https://doi.org/10.1016/j.advengsoft.2019.03.005
-//!
-//! Dubreuil, S., Bartoli, N., Gogu, C., & Lefebvre, T. (2020). Towards an efficient global multi-
-//! disciplinary design optimization algorithm. Structural and Multidisciplinary Optimization,
-//! 62(4), 1739–1765. https://doi.org/10.1007/s00158-020-02514-6
-//!
-//! Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive
-//! black-box functions. Journal of Global Optimization, 13(4), 455–492.
-//!
-//! Diouane, Youssef, et al. "TREGO: a trust-region framework for efficient global optimization."
-//! Journal of Global Optimization 86.1 (2023): 1-23.
-//!
-//! smtorg. (2018). Surrogate modeling toolbox. In GitHub repository. GitHub. https://github.com/SMTOrg/smt
 //! ```
 //!
 use crate::errors::Result;
