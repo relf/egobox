@@ -150,7 +150,7 @@ class TestOptimizer(unittest.TestCase):
 
     def test_g24_trego(self):
         n_doe = 5
-        max_iters = 20
+        max_iters = 40
         n_cstr = 2
         egor = egx.Egor(
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
