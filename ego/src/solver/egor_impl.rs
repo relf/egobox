@@ -1,7 +1,7 @@
 use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::utils::{compute_cstr_scales, find_best_result_index_from, update_data};
-use crate::{optimizers::*, EgorConfig};
+use crate::{find_best_result_index, optimizers::*, EgorConfig};
 use crate::{types::*, EgorState};
 use crate::{EgorSolver, DEFAULT_CSTR_TOL, DOE_FILE, MAX_POINT_ADDITION_RETRY};
 
@@ -72,6 +72,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             &cstr_tol,
             &sampling,
             None,
+            find_best_result_index(y_data, &cstr_tol),
         );
         x_dat
     }
@@ -169,13 +170,12 @@ where
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let sampling = state.sampling.clone().unwrap();
 
-        let fobj = y_data.column(0);
-        let fmin = fobj.min().unwrap();
+        let fmin = y_data[[state.best_index.unwrap(), 0]];
 
         let (scale_infill_obj, scale_cstr, scale_wb2) =
-            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, *fmin);
+            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, fmin);
         InfillObjData {
-            fmin: *fmin,
+            fmin,
             scale_infill_obj,
             scale_cstr: Some(scale_cstr.to_owned()),
             scale_wb2,
@@ -276,6 +276,7 @@ where
                 &state.cstr_tol,
                 &sampling,
                 lhs_optim_seed,
+                state.best_index.unwrap(),
             );
 
             debug!("Try adding {}", x_dat);
@@ -388,6 +389,7 @@ where
         cstr_tol: &Array1<f64>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
+        best_index: usize,
     ) -> (Array2<f64>, Array2<f64>, f64, InfillObjData<f64>) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
@@ -441,20 +443,17 @@ where
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
 
-            let fobj = y_data.column(0);
-            let fmin = fobj.min().unwrap();
+            let fmin = y_data[[best_index, 0]];
             let (scale_infill_obj, scale_cstr, scale_wb2) =
-                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, *fmin);
+                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, fmin);
             infill_data = InfillObjData {
-                fmin: *fmin,
+                fmin,
                 scale_infill_obj,
                 scale_cstr: Some(scale_cstr.to_owned()),
                 scale_wb2,
             };
 
             match self.find_best_point(
-                x_data,
-                y_data,
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,
@@ -534,11 +533,8 @@ where
     /// The optimized value of the criterion is returned together with the
     /// optimum location
     /// Returns (infill_obj, x_opt)
-    #[allow(clippy::too_many_arguments)]
     fn find_best_point(
         &self,
-        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
@@ -546,8 +542,7 @@ where
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
     ) -> Result<(f64, Array1<f64>)> {
-        let fobj = y_data.column(0);
-        let fmin = fobj.min().unwrap();
+        let fmin = infill_data.fmin;
 
         let mut success = false;
         let mut n_optim = 1;
@@ -572,11 +567,11 @@ where
                 } = params;
                 if let Some(grad) = gradient {
                     let f = |x: &Vec<f64>| -> f64 {
-                        self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
+                        self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
                     };
                     grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
                 }
-                self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
+                self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
             };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
@@ -636,7 +631,6 @@ where
                 best_x = Some((y_opt, x_opt));
                 success = true;
             } else {
-                let dim = x_data.ncols();
                 let res = (0..self.config.n_start)
                     .into_par_iter()
                     .map(|i| {
@@ -648,7 +642,7 @@ where
                             .minimize()
                     })
                     .reduce(
-                        || (f64::INFINITY, Array::ones((dim,))),
+                        || (f64::INFINITY, Array::ones((self.xlimits.nrows(),))),
                         |a, b| if b.0 < a.0 { b } else { a },
                     );
 
