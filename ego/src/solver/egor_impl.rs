@@ -1,7 +1,7 @@
 use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::utils::{compute_cstr_scales, find_best_result_index_from, update_data};
-use crate::{optimizers::*, EgorConfig};
+use crate::{find_best_result_index, optimizers::*, EgorConfig};
 use crate::{types::*, EgorState};
 use crate::{EgorSolver, DEFAULT_CSTR_TOL, DOE_FILE, MAX_POINT_ADDITION_RETRY};
 
@@ -72,6 +72,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             &cstr_tol,
             &sampling,
             None,
+            find_best_result_index(y_data, &cstr_tol),
         );
         x_dat
     }
@@ -168,11 +169,13 @@ where
         let y_data = state.data.as_ref().unwrap().1.clone();
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let sampling = state.sampling.clone().unwrap();
-        let f_min = y_data.min().unwrap();
+
+        let fmin = y_data[[state.best_index.unwrap(), 0]];
+
         let (scale_infill_obj, scale_cstr, scale_wb2) =
-            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, *f_min);
+            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, fmin);
         InfillObjData {
-            fmin: *f_min,
+            fmin,
             scale_infill_obj,
             scale_cstr: Some(scale_cstr.to_owned()),
             scale_wb2,
@@ -273,6 +276,7 @@ where
                 &state.cstr_tol,
                 &sampling,
                 lhs_optim_seed,
+                state.best_index.unwrap(),
             );
 
             debug!("Try adding {}", x_dat);
@@ -361,6 +365,7 @@ where
             &y_data,
             &new_state.cstr_tol,
         );
+        new_state.prev_best_index = state.best_index;
         new_state.best_index = Some(best_index);
         new_state = new_state.data((x_data.clone(), y_data.clone()));
 
@@ -384,6 +389,7 @@ where
         cstr_tol: &Array1<f64>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
+        best_index: usize,
     ) -> (Array2<f64>, Array2<f64>, f64, InfillObjData<f64>) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
@@ -437,19 +443,17 @@ where
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
 
-            let f_min = y_data.min().unwrap();
+            let fmin = y_data[[best_index, 0]];
             let (scale_infill_obj, scale_cstr, scale_wb2) =
-                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, *f_min);
+                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, fmin);
             infill_data = InfillObjData {
-                fmin: *f_min,
+                fmin,
                 scale_infill_obj,
                 scale_cstr: Some(scale_cstr.to_owned()),
                 scale_wb2,
             };
 
             match self.find_best_point(
-                x_data,
-                y_data,
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,
@@ -492,13 +496,25 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        f_min: f64,
+        fmin: f64,
     ) -> (f64, Array1<f64>, f64) {
         let npts = (100 * self.xlimits.nrows()).min(1000);
         debug!("Use {npts} points to evaluate scalings");
         let scaling_points = sampling.sample(npts);
+
+        let scale_ic = if self.config.infill_criterion.name() == "WB2S" {
+            let scale_ic =
+                self.config
+                    .infill_criterion
+                    .scaling(&scaling_points.view(), obj_model, fmin);
+            info!("WBS2 scaling factor = {}", scale_ic);
+            scale_ic
+        } else {
+            1.
+        };
+
         let scale_infill_obj =
-            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, f_min);
+            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, fmin, scale_ic);
         info!(
             "Infill criterion scaling is updated to {}",
             scale_infill_obj
@@ -510,10 +526,6 @@ where
             info!("Constraints scalings is updated to {}", scale_cstr);
             scale_cstr
         };
-        let scale_ic =
-            self.config
-                .infill_criterion
-                .scaling(&scaling_points.view(), obj_model, f_min);
         (scale_infill_obj, scale_cstr, scale_ic)
     }
 
@@ -521,11 +533,8 @@ where
     /// The optimized value of the criterion is returned together with the
     /// optimum location
     /// Returns (infill_obj, x_opt)
-    #[allow(clippy::too_many_arguments)]
     fn find_best_point(
         &self,
-        x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
@@ -533,7 +542,7 @@ where
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
     ) -> Result<(f64, Array1<f64>)> {
-        let f_min = y_data.min().unwrap();
+        let fmin = infill_data.fmin;
 
         let mut success = false;
         let mut n_optim = 1;
@@ -558,11 +567,11 @@ where
                 } = params;
                 if let Some(grad) = gradient {
                     let f = |x: &Vec<f64>| -> f64 {
-                        self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
+                        self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
                     };
                     grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
                 }
-                self.eval_infill_obj(x, obj_model, *f_min, *scale_infill_obj, *scale_wb2)
+                self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
             };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
@@ -622,7 +631,6 @@ where
                 best_x = Some((y_opt, x_opt));
                 success = true;
             } else {
-                let dim = x_data.ncols();
                 let res = (0..self.config.n_start)
                     .into_par_iter()
                     .map(|i| {
@@ -634,7 +642,7 @@ where
                             .minimize()
                     })
                     .reduce(
-                        || (f64::INFINITY, Array::ones((dim,))),
+                        || (f64::INFINITY, Array::ones((self.xlimits.nrows(),))),
                         |a, b| if b.0 < a.0 { b } else { a },
                     );
 
@@ -705,12 +713,13 @@ where
         &self,
         x: &ArrayView2<f64>,
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
+        scale_ic: f64,
     ) -> f64 {
         let mut crit_vals = Array1::zeros(x.nrows());
         let (mut nan_count, mut inf_count) = (0, 0);
         Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
-            let val = self.eval_infill_obj(&x.to_vec(), obj_model, f_min, 1.0, 1.0);
+            let val = self.eval_infill_obj(&x.to_vec(), obj_model, fmin, 1.0, scale_ic);
             *c = if val.is_nan() {
                 nan_count += 1;
                 1.0
@@ -742,7 +751,7 @@ where
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         scale: f64,
         scale_ic: f64,
     ) -> f64 {
@@ -750,7 +759,7 @@ where
         let obj = -(self
             .config
             .infill_criterion
-            .value(&x_f, obj_model, f_min, Some(scale_ic)));
+            .value(&x_f, obj_model, fmin, Some(scale_ic)));
         obj / scale
     }
 
@@ -758,7 +767,7 @@ where
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         scale: f64,
         scale_ic: f64,
     ) -> Vec<f64> {
@@ -766,7 +775,7 @@ where
         let grad = -(self
             .config
             .infill_criterion
-            .grad(&x_f, obj_model, f_min, Some(scale_ic)));
+            .grad(&x_f, obj_model, fmin, Some(scale_ic)));
         (grad / scale).to_vec()
     }
 

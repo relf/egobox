@@ -88,6 +88,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             &new_state.cstr_tol,
         );
         new_state = new_state.data((x_data, y_data));
+        new_state.prev_best_index = new_state.best_index;
         new_state.best_index = Some(new_best_index);
         new_state
     }

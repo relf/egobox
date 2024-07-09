@@ -20,7 +20,6 @@ fn main() {
                 .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
                 .infill_strategy(InfillStrategy::WB2S)
                 .max_iters(200)
-                .target(5e-1)
         })
         .min_within(&xlimits)
         .run()

@@ -247,6 +247,7 @@ where
 
         let best_index = find_best_result_index(&y_data, &initial_state.cstr_tol);
         initial_state.best_index = Some(best_index);
+        initial_state.prev_best_index = Some(best_index);
         initial_state.last_best_iter = 0;
         debug!("Initial State = {:?}", initial_state);
         Ok((initial_state, None))
@@ -322,17 +323,20 @@ where
         let rho = |sigma| sigma * sigma;
         let (_, y_data) = state.data.as_ref().unwrap(); // initialized in init
         let best = state.best_index.unwrap(); // initialized in init
+        let prev_best = state.prev_best_index.unwrap(); // initialized in init
 
         // Check prev step success
-        let last_iter_success = if let Some(prev_best) = state.prev_best_index {
-            y_data[[best, 0]] < y_data[[prev_best, 0]] - rho(state.sigma)
-        } else {
-            false
-        };
-
+        info!(
+            "success = {} as {} < {} - {}",
+            y_data[[best, 0]] < (y_data[[prev_best, 0]] - rho(state.sigma)),
+            y_data[[best, 0]],
+            y_data[[prev_best, 0]],
+            rho(state.sigma)
+        );
+        let last_iter_success = y_data[[best, 0]] < (y_data[[prev_best, 0]] - rho(state.sigma));
         let mut new_state = state.clone();
-        if !(state.prev_step_ego || !state.get_iter() == 0) {
-            // Check local step success
+        if !state.prev_step_ego && state.get_iter() != 0 {
+            // Adjust trust region wrt local step success
             if last_iter_success {
                 let old = state.sigma;
                 new_state.sigma *= self.config.trego.gamma;
@@ -351,7 +355,7 @@ where
         }
 
         let is_global_phase = (last_iter_success && state.prev_step_ego)
-            || (state.get_iter() % (1 + self.config.trego.n_local_steps) == 0);
+            || ((state.get_iter() % (1 + self.config.trego.n_local_steps)) == 0);
 
         if is_global_phase {
             // Global step

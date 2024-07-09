@@ -408,13 +408,12 @@ where
             let cost = y_data.row(best_index).to_owned();
             std::mem::swap(&mut self.prev_best_cost, &mut self.best_cost);
             self.best_cost = Some(cost);
+
             if best_index > self.doe_size {
                 if let Some(prev_best_index) = self.prev_best_index {
                     if best_index != prev_best_index {
                         self.last_best_iter = self.iter + 1;
                     }
-                } else {
-                    self.prev_best_index = Some(best_index);
                 }
             } else {
                 // best point in doe => self.last_best_iter remains 0

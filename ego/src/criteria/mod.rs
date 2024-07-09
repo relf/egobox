@@ -25,7 +25,7 @@ pub trait InfillCriterion: Clone + Sync {
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         scale: Option<f64>,
     ) -> f64;
 
@@ -34,12 +34,12 @@ pub trait InfillCriterion: Clone + Sync {
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
-        f_min: f64,
+        fmin: f64,
         scale: Option<f64>,
     ) -> Array1<f64>;
 
     /// Scaling factor computation
-    fn scaling(&self, x: &ArrayView2<f64>, obj_model: &dyn MixtureGpSurrogate, f_min: f64) -> f64;
+    fn scaling(&self, x: &ArrayView2<f64>, obj_model: &dyn MixtureGpSurrogate, fmin: f64) -> f64;
 }
 
 impl std::fmt::Debug for dyn InfillCriterion {
