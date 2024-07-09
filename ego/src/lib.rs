@@ -153,10 +153,9 @@
 //! # Implementation notes
 //!
 //! * Mixture of experts and PLS dimension reduction is explained in \[[Bartoli2019](#Bartoli2019)\]
-//! * Parallel optimization is available through the selection of a qei strategy.
-//! More information in \[[Ginsbourger2010](#Ginsbourger2010)\]
-//! * Mixed integer approach is implemented using continuous relaxation.
-//! More information in \[[Garrido2018](#Garrido2018)\]
+//! * Parallel optimization is available through the selection of a qei strategy. See in \[[Ginsbourger2010](#Ginsbourger2010)\]
+//! * Mixed integer approach is implemented using continuous relaxation. See \[[Garrido2018](#Garrido2018)\]
+//! * TREGO algorithm can is enabled by default. See \[[Diouane2023](#Diouane2023)\]
 //!
 //! # References
 //!
@@ -173,6 +172,26 @@
 //!  
 //! \[<a id="Garrido2018">Garrido2018</a>\]: E.C. Garrido-Merchan and D. Hernandez-Lobato. Dealing with categorical and
 //! integer-valued variables in Bayesian Optimization with Gaussian processes.
+//!
+//! Bouhlel, M. A., Bartoli, N., Otsmane, A., & Morlier, J. (2016). [Improving kriging surrogates
+//! of high-dimensional design models by partial least squares dimension reduction.](https://doi.org/10.1007/s00158-015-1395-9)
+//! Structural and Multidisciplinary Optimization, 53(5), 935–952.
+//!
+//! Bouhlel, M. A., Hwang, J. T., Bartoli, N., Lafage, R., Morlier, J., & Martins, J. R. R. A.
+//! (2019). [A python surrogate modeling framework with derivatives](https://doi.org/10.1016/j.advengsoft.2019.03.005).
+//! Advances in Engineering Software, 102662.
+//!
+//! Dubreuil, S., Bartoli, N., Gogu, C., & Lefebvre, T. (2020). (Towards an efficient global multi-
+//! disciplinary design optimization algorithm)[https://doi.org/10.1007/s00158-020-02514-6].
+//! Structural and Multidisciplinary Optimization, 62(4), 1739–1765.
+//!
+//! Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive
+//! black-box functions. Journal of Global Optimization, 13(4), 455–492.
+//!
+//! \[<a id="Diouane2023">Diouane(2023)</a>\]: Diouane, Youssef, et al. "TREGO: a trust-region framework for efficient global optimization."
+//! Journal of Global Optimization 86.1 (2023): 1-23.
+//!
+//! smtorg. (2018). Surrogate modeling toolbox. In [GitHub repository](https://github.com/SMTOrg/smt)
 //!
 //!
 pub mod criteria;

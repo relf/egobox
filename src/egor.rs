@@ -114,6 +114,9 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
+///     trego (bool)
+///         When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
+///
 ///     n_clusters (int >= 0)
 ///         Number of clusters used by the mixture of surrogate experts.
 ///         When set to 0, the number of cluster is determined automatically and refreshed every

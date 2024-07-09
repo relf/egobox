@@ -18,6 +18,7 @@ It is a Rust port of EGO of the [SMT](https://smt.readthedocs.io) Python library
 * Infill criteria: EI, WB2, WB2S
 * Basic handling of negative constraints
 * Mixed integer optimization available through continuous relaxation
+* Trust region EGO algorithm
 
 ## Examples
 

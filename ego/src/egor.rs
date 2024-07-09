@@ -1,4 +1,13 @@
-//! Egor optimizer implements EGO algorithm with basic handling of constraints.
+//! Egor optimizer implements EGO algorithm with basic handling of constraints
+//! with the following features:
+//!
+//! * Mixture of Gaussian processes
+//! * Mixed-integer variables handling through continuous relaxation
+//! * Trust-region EGO optional activation
+//! * Infill criteria: EI, WB2, WB2S
+//! * Multi-point infill strategy (aka qEI)
+//!
+//! See refences below.
 //!
 //! ```no_run
 //! # use ndarray::{array, Array2, ArrayView1, ArrayView2, Zip};
