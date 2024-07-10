@@ -507,7 +507,7 @@ where
                 self.config
                     .infill_criterion
                     .scaling(&scaling_points.view(), obj_model, fmin);
-            info!("WBS2 scaling factor = {}", scale_ic);
+            info!("WB2S scaling factor = {}", scale_ic);
             scale_ic
         } else {
             1.
@@ -516,7 +516,8 @@ where
         let scale_infill_obj =
             self.compute_infill_obj_scale(&scaling_points.view(), obj_model, fmin, scale_ic);
         info!(
-            "Infill criterion scaling is updated to {}",
+            "Infill criterion {} scaling is updated to {}",
+            self.config.infill_criterion.name(),
             scale_infill_obj
         );
         let scale_cstr = if cstr_models.is_empty() {
