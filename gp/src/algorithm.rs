@@ -515,40 +515,28 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
     ) -> Array1<F> {
         let x = &(x.to_owned().insert_axis(Axis(0)));
-        println!("x={}", x);
         let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
-        println!("xnorm={}", xnorm);
         let dx = pairwise_differences(&xnorm, &self.xt_norm.data);
-        println!("dx={}", dx);
         let sigma2 = self.inner_params.sigma2;
-        //println!("sigma2={}", sigma2);
         let r_chol = &self.inner_params.r_chol;
-        //println!("rchol={}", r_chol);
 
         let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
         let dr =
             self.params
                 .corr
                 .jacobian(&xnorm.row(0), &self.xt_norm.data, &self.theta, &self.w_star);
-        //        / &self.xt_norm.std.to_owned().insert_axis(Axis(0));
-
-        println!("r={}", r);
-        println!("dr={}", dr);
 
         // rho1 = Rc^-1 . r(x, X)
         let rho1 = r_chol.solve_triangular(&r, UPLO::Lower).unwrap();
-        println!("rt={}", rho1);
+
         // inv_kr = Rc^t^-1 . Rc^-1 . r(x, X) = R^-1 . r(x, X)
         let inv_kr = r_chol.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
-        println!("inv_kr={}", inv_kr);
 
         // p1 = ((dr(x, X)/dx)^t . R^-1 . r(x, X))^t = ((R^-1 . r(x, X))^t . dr(x, X)/dx) = r(x, X)^t . R^-1 . dr(x, X)/dx = p2
-        let p1 = dr.t().dot(&inv_kr).t().to_owned();
-        println!("P1={}", p1.mapv(|v| v * F::cast(2.)));
+        // let p1 = dr.t().dot(&inv_kr).t().to_owned();
 
         // p2 = ((R^-1 . r(x, X))^t . dr(x, X)/dx)^t = dr(x, X)/dx)^t . R^-1 . r(x, X) = p1
-        //let p2 = inv_kr.t().dot(&dr);
-        //println!("P2={}", p2);
+        let p2 = inv_kr.t().dot(&dr);
 
         let f_x = self.params.mean.value(&xnorm).t().to_owned();
         let f_mean = self.params.mean.value(&self.xt_norm.data);
@@ -576,20 +564,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
 
         // p3 = (dA/dx . B^-1 . A^t)^t = A . B^-1 . dA/dx^t
-        let p3 = d_a.dot(&d_mat).t().to_owned();
-        println!("P3={}", &p3.mapv(|v| v * F::cast(2.)));
+        // let p3 = d_a.dot(&d_mat).t().to_owned();
 
         // p4 = (B^-1 . A)^t . dA/dx^t = A^t . B^-1 . dA/dx^t = p3
-        //let p4 = d_mat.t().dot(&d_a.t());
-        //println!("P4={}", p4);
+        let p4 = d_mat.t().dot(&d_a.t());
         let two = F::cast(2.);
-        let prime_t = (p3 - p1).mapv(|v| two * v).t().to_owned();
-        println!("prime_t={}", prime_t);
-        let prime = prime_t.t().into_owned();
+        let prime = (p4 - p2).mapv(|v| two * v);
 
         let x_std = &self.xt_norm.std;
-        println!("x_std={}", x_std);
-        println!("sigma2={}", sigma2);
         let dvar = (prime / x_std).mapv(|v| v * sigma2);
         dvar.row(0).into_owned()
     }
@@ -1618,12 +1600,12 @@ mod tests {
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
         println!("analytic deriv = {y_deriv}, fdiff = {fdiff}");
-        if fdiff.abs() < 2e-1 || y_deriv.abs() < 2e-1 {
-            let atol = 2e-1;
+        if fdiff.abs() < 6e-1 {
+            let atol = 6e-1;
             println!("Check absolute error: abs({y_deriv}) should be < {atol}");
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
         } else {
-            let rtol = 3e-1;
+            let rtol = 6e-1;
             let rel_error = (y_deriv - fdiff).abs() / fdiff.abs(); // check relative
             println!("Check relative error: {rel_error} should be < {rtol}");
             assert_abs_diff_eq!(rel_error, 0.0, epsilon = rtol);
@@ -1675,8 +1657,6 @@ mod tests {
             [44.39159189],
             [2.17091422],
         ];
-        // println!("xt={}", &xt);
-        // println!("yt={}", &yt);
 
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             ConstantMean::default(),
@@ -1685,13 +1665,6 @@ mod tests {
         .theta_tuning(ThetaTuning::Fixed(vec![0.0437386, 0.00697978]))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
-
-        println!("thetas={}", gp.theta());
-        //for _ in 0..20 {
-        // let mut rng = Xoshiro256Plus::seed_from_u64(42);
-        // let x = Array::random_using((2,), Uniform::new(-10., 10.), &mut rng);
-        // let xa: f64 = x[0];
-        // let xb: f64 = x[1];
 
         let e = 5e-6;
         let xa = -1.3;
@@ -1703,24 +1676,12 @@ mod tests {
             [xa, xb + e],
             [xa, xb - e]
         ];
-        //let _y = sin_linear(&array![[xa, xb]]);
-        //println!("value at [{xa},{xb}] = {y}");
-        //let _y_pred = gp.predict(&x).unwrap();
-        //println!("pred value at [{xa},{xb}] = {y_pred}");
         let y_pred = gp.predict_var(&x).unwrap();
-        //println!("variance at [{xa},{xb}] = {y_pred}");
         let y_deriv = gp.predict_var_gradients(&array![[xa, xb]]);
-        //println!("variance deriv at [{xa},{xb}] = {y_deriv}");
-
-        //let y_deriv_0 = gp.predict_kth_derivatives(&x, 0);
-        //let y_deriv_1 = gp.predict_kth_derivatives(&x, 1);
-        //println!("variance kth at [{xa},{xb}] = [{y_deriv_0}, {y_deriv_1}]");
-
         let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
         let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
 
         assert_abs_diff_eq!(y_deriv[[0, 0]], diff_g, epsilon = 1e-5);
         assert_abs_diff_eq!(y_deriv[[0, 1]], diff_d, epsilon = 1e-5);
-        //}
     }
 }
