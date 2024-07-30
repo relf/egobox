@@ -89,7 +89,7 @@ impl<F: Float, R: Rng + Clone> SamplingMethod<F> for Lhs<F, R> {
 impl<F: Float, R: Rng + Clone> Lhs<F, R> {
     /// Constructor with given design space and random generator.
     /// * `xlimits`: (nx, 2) matrix where nx is the dimension of the samples and the ith row
-    /// is the definition interval of the ith component of x.
+    ///   is the definition interval of the ith component of x.
     /// * `rng`: random generator used for [LhsKind::Classic] and [LhsKind::Optimized] LHS
     pub fn new_with_rng(xlimits: &ArrayBase<impl Data<Elem = F>, Ix2>, rng: R) -> Self {
         if xlimits.ncols() != 2 {
