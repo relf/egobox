@@ -7,23 +7,23 @@
 //!
 //! The recombination between the GP models can be either:
 //! * `hard`: one GP model is being responsible to provide the predicted value
-//! at the given point. GP selection is done by taking the largest probability of the
-//! given point being part of the cluster corresponding to the expert GP.
-//! In hard mode, transition between models leads to discontinuity.
+//!   at the given point. GP selection is done by taking the largest probability of the
+//!   given point being part of the cluster corresponding to the expert GP.
+//!   In hard mode, transition between models leads to discontinuity.
 //! * `smooth`: all GPs models are taken and their predicted values at a given point are
-//! weighted regarding their responsability (probability of the given point being part
-//! of the cluster corresponding to the expert GP). In this case the MoE model is continuous.
-//! The smoothness is automatically adjusted using a factor, the heaviside factor,
-//! which can also be set manually.
+//!   weighted regarding their responsability (probability of the given point being part
+//!   of the cluster corresponding to the expert GP). In this case the MoE model is continuous.
+//!   The smoothness is automatically adjusted using a factor, the heaviside factor,
+//!    which can also be set manually.
 //!
 //! # Implementation
 //!
 //! * Clusters are defined by clustering the training data with
-//! [linfa-clustering](https://docs.rs/linfa-clustering/latest/linfa_clustering/)
-//! gaussian mixture model.
+//!   [linfa-clustering](https://docs.rs/linfa-clustering/latest/linfa_clustering/)
+//!   gaussian mixture model.
 //! * This library is a port of the
-//! [SMT MoE method](https://smt.readthedocs.io/en/latest/_src_docs/applications/moe.html)
-//! using egobox GP models as experts.
+//!   [SMT MoE method](https://smt.readthedocs.io/en/latest/_src_docs/applications/moe.html)
+//!   using egobox GP models as experts.
 //! * It leverages on the egobox GP PLS reduction feature to handle high dimensional problems.
 //! * MoE trained model can be save to disk and reloaded. See
 //!  
