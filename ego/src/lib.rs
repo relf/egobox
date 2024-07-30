@@ -96,8 +96,8 @@
 //! Some of the most useful options are:
 //!
 //! * Specification of the size of the initial DoE. The default is nx+1 where nx is the dimension of x.
-//! If your objective function is not expensive you can take `3*nx` to help the optimizer
-//! approximating your objective function.
+//!   If your objective function is not expensive you can take `3*nx` to help the optimizer
+//!   approximating your objective function.
 //!
 //! ```no_run
 //! # use egobox_ego::{EgorConfig};
@@ -108,8 +108,8 @@
 //! You can also provide your initial doe though the `egor.doe(your_doe)` method.
 //!
 //! * As the dimension increase the gaussian process surrogate building may take longer or even fail
-//! in this case you can specify a PLS dimension reduction \[[Bartoli2019](#Bartoli2019)\].
-//! Gaussian process will be built using the `ndim` (usually 3 or 4) main components in the PLS projected space.
+//!   in this case you can specify a PLS dimension reduction \[[Bartoli2019](#Bartoli2019)\].
+//!   Gaussian process will be built using the `ndim` (usually 3 or 4) main components in the PLS projected space.
 //!
 //! ```no_run
 //! # let egor_config = egobox_ego::EgorConfig::default();
@@ -117,8 +117,8 @@
 //! ```
 //!
 //! * Specifications of constraints (expected to be negative at the end of the optimization)
-//! In this example below we specify that 2 constraints will be computed with the objective values meaning
-//! the objective function is expected to return an array '\[nsamples, 1 obj value + 2 const values\]'.
+//!   In this example below we specify that 2 constraints will be computed with the objective values meaning
+//!   the objective function is expected to return an array '\[nsamples, 1 obj value + 2 const values\]'.
 //!
 //! ```no_run
 //! # let egor_config = egobox_ego::EgorConfig::default();
@@ -126,8 +126,8 @@
 //! ```
 //!
 //! * If the default infill strategy (WB2, Watson and Barnes 2nd criterion),
-//! you can switch for either EI (Expected Improvement) or WB2S (scaled version of WB2).
-//! See \[[Priem2019](#Priem2019)\]
+//!   you can switch for either EI (Expected Improvement) or WB2S (scaled version of WB2).
+//!   See \[[Priem2019](#Priem2019)\]
 //!
 //! ```no_run
 //! # use egobox_ego::{EgorConfig, InfillStrategy};
@@ -136,9 +136,9 @@
 //! ```
 //!
 //! * The default gaussian process surrogate is parameterized with a constant trend and a squared exponential correlation kernel, also
-//! known as Kriging. The optimizer use such surrogates to approximate objective and constraint functions. The kind of surrogate
-//! can be changed using `regression_spec` and `correlation_spec()` methods to specify trend and kernels tested to get the best
-//! approximation (quality tested through cross validation).
+//!   known as Kriging. The optimizer use such surrogates to approximate objective and constraint functions. The kind of surrogate
+//!   can be changed using `regression_spec` and `correlation_spec()` methods to specify trend and kernels tested to get the best
+//!   approximation (quality tested through cross validation).
 //!
 //! ```no_run
 //! # use egobox_ego::{EgorConfig, RegressionSpec, CorrelationSpec};

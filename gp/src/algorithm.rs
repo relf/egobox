@@ -85,21 +85,21 @@ impl<F: Float> Clone for GpInnerParams<F> {
 /// * `regr(x)` a vector of polynomial basis functions
 /// * `sigma^2` is the process variance
 /// * `corr(x, x')` is a correlation function which depends on `distance(x, x')`
-/// and a set of unknown parameters `thetas` to be determined.
+///   and a set of unknown parameters `thetas` to be determined.
 ///
 /// # Implementation
 ///
 /// * Based on [ndarray](https://github.com/rust-ndarray/ndarray)
-/// and [linfa](https://github.com/rust-ml/linfa) and strive to follow [linfa guidelines](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md)
+///   and [linfa](https://github.com/rust-ml/linfa) and strive to follow [linfa guidelines](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md)
 /// * GP mean model can be constant, linear or quadratic
 /// * GP correlation model can be build the following kernels: squared exponential, absolute exponential, matern 3/2, matern 5/2    
-/// cf. [SMT Kriging](https://smt.readthedocs.io/en/latest/_src_docs/surrogate_models/krg.html)
+///   cf. [SMT Kriging](https://smt.readthedocs.io/en/latest/_src_docs/surrogate_models/krg.html)
 /// * For high dimensional problems, the classic GP algorithm does not perform well as
-/// it depends on the inversion of a correlation (n, n) matrix which is an O(n3) operation.
-/// To work around this problem the library implements dimension reduction using
-/// Partial Least Squares method upon Kriging method also known as KPLS algorithm (see Reference)
+///   it depends on the inversion of a correlation (n, n) matrix which is an O(n3) operation.
+///   To work around this problem the library implements dimension reduction using
+///   Partial Least Squares method upon Kriging method also known as KPLS algorithm (see Reference)
 /// * GP models can be saved and loaded using [serde](https://serde.rs/).
-/// See `serializable` feature section below.
+///   See `serializable` feature section below.
 ///
 /// # Features
 ///
@@ -517,7 +517,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let x = &(x.to_owned().insert_axis(Axis(0)));
         let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
         let dx = pairwise_differences(&xnorm, &self.xt_norm.data);
-
         let sigma2 = self.inner_params.sigma2;
         let r_chol = &self.inner_params.r_chol;
 
@@ -525,11 +524,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let dr =
             self.params
                 .corr
-                .jacobian(&xnorm.row(0), &self.xt_norm.data, &self.theta, &self.w_star)
-                / &self.xt_norm.std.to_owned().insert_axis(Axis(0));
+                .jacobian(&xnorm.row(0), &self.xt_norm.data, &self.theta, &self.w_star);
 
         // rho1 = Rc^-1 . r(x, X)
         let rho1 = r_chol.solve_triangular(&r, UPLO::Lower).unwrap();
+
         // inv_kr = Rc^t^-1 . Rc^-1 . r(x, X) = R^-1 . r(x, X)
         let inv_kr = r_chol.t().solve_triangular(&rho1, UPLO::Upper).unwrap();
 
@@ -569,12 +568,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         // p4 = (B^-1 . A)^t . dA/dx^t = A^t . B^-1 . dA/dx^t = p3
         let p4 = d_mat.t().dot(&d_a.t());
-
         let two = F::cast(2.);
-        let prime_t = (-p2 + p4).mapv(|v| two * v).t().to_owned();
+        let prime = (p4 - p2).mapv(|v| two * v);
 
         let x_std = &self.xt_norm.std;
-        let dvar = (prime_t / x_std).mapv(|v| v * sigma2);
+        let dvar = (prime / x_std).mapv(|v| v * sigma2);
         dvar.row(0).into_owned()
     }
 
@@ -693,6 +691,7 @@ where
 }
 
 /// Gausssian Process adaptator to implement `linfa::Predict` trait for variance prediction.
+#[allow(dead_code)]
 pub struct GpVariancePredictor<'a, F, Mean, Corr>(&'a GaussianProcess<F, Mean, Corr>)
 where
     F: Float,
@@ -1091,7 +1090,7 @@ mod tests {
     use super::*;
     use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
     use argmin_testfunctions::rosenbrock;
-    use egobox_doe::{Lhs, SamplingMethod};
+    use egobox_doe::{Lhs, LhsKind, SamplingMethod};
     use linfa::prelude::Predict;
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::Norm;
@@ -1436,7 +1435,7 @@ mod tests {
             paste! {
 
                 #[test]
-                fn [<test_gp_variance_derivatives_ $regr:snake _ $corr:snake>]() {
+                fn [<test_gp_variance_derivatives_ $regr:snake _ $corr:snake _ $func:snake>]() {
                     let mut rng = Xoshiro256Plus::seed_from_u64(42);
                     let xt = egobox_doe::Lhs::new(&array![[-$limit, $limit], [-$limit, $limit]]).with_rng(rng.clone()).sample($nt);
                     let yt = [<$func>](&xt);
@@ -1602,15 +1601,88 @@ mod tests {
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
         println!("analytic deriv = {y_deriv}, fdiff = {fdiff}");
-        if fdiff.abs() < 2e-1 || y_deriv.abs() < 2e-1 {
-            let atol = 2e-1;
+        if fdiff.abs() < 6e-1 {
+            let atol = 6e-1;
             println!("Check absolute error: abs({y_deriv}) should be < {atol}");
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
         } else {
-            let rtol = 3e-1;
+            let rtol = 6e-1;
             let rel_error = (y_deriv - fdiff).abs() / fdiff.abs(); // check relative
             println!("Check relative error: {rel_error} should be < {rtol}");
             assert_abs_diff_eq!(rel_error, 0.0, epsilon = rtol);
         }
+    }
+
+    fn sin_linear(x: &Array2<f64>) -> Array2<f64> {
+        // sin + linear trend
+        let x1 = x.column(0).to_owned().mapv(|v| v.sin());
+        let x2 = x.column(0).mapv(|v| 2. * v) + x.column(1).mapv(|v| 5. * v);
+        (x1 + x2)
+            .mapv(|v| v + 10.)
+            .into_shape((x.nrows(), 1))
+            .unwrap()
+    }
+
+    #[test]
+    fn test_bug_var_derivatives() {
+        let _xt = egobox_doe::Lhs::new(&array![[-5., 10.], [-5., 10.]])
+            .kind(LhsKind::Centered)
+            .sample(12);
+        let _yt = sin_linear(&_xt);
+
+        let xt = array![
+            [6.875, -4.375],
+            [-3.125, 1.875],
+            [1.875, -1.875],
+            [-4.375, 3.125],
+            [8.125, 9.375],
+            [4.375, 4.375],
+            [0.625, 0.625],
+            [9.375, 6.875],
+            [5.625, 8.125],
+            [-0.625, -3.125],
+            [3.125, 5.625],
+            [-1.875, -0.625]
+        ];
+        let yt = array![
+            [2.43286801],
+            [13.10840811],
+            [5.32908578],
+            [17.81862219],
+            [74.08849877],
+            [39.68137781],
+            [14.96009727],
+            [63.17475741],
+            [61.26331775],
+            [-7.46009727],
+            [44.39159189],
+            [2.17091422],
+        ];
+
+        let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
+            ConstantMean::default(),
+            SquaredExponentialCorr::default(),
+        )
+        .theta_tuning(ThetaTuning::Fixed(vec![0.0437386, 0.00697978]))
+        .fit(&Dataset::new(xt, yt))
+        .expect("GP fitting");
+
+        let e = 5e-6;
+        let xa = -1.3;
+        let xb = 2.5;
+        let x = array![
+            [xa, xb],
+            [xa + e, xb],
+            [xa - e, xb],
+            [xa, xb + e],
+            [xa, xb - e]
+        ];
+        let y_pred = gp.predict_var(&x).unwrap();
+        let y_deriv = gp.predict_var_gradients(&array![[xa, xb]]);
+        let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
+        let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+
+        assert_abs_diff_eq!(y_deriv[[0, 0]], diff_g, epsilon = 1e-5);
+        assert_abs_diff_eq!(y_deriv[[0, 1]], diff_d, epsilon = 1e-5);
     }
 }

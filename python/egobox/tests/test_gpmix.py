@@ -50,7 +50,7 @@ class TestGpMix(unittest.TestCase):
             1.1204, gpx.predict_gradients(np.array([[1.1]])).item(), delta=1e-3
         )
         self.assertAlmostEqual(
-            0.0092, gpx.predict_var_gradients(np.array([[1.1]])).item(), delta=1e-3
+            0.0145, gpx.predict_var_gradients(np.array([[1.1]])).item(), delta=1e-3
         )
 
     def test_gpx_save_load(self):
