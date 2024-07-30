@@ -85,21 +85,21 @@ impl<F: Float> Clone for GpInnerParams<F> {
 /// * `regr(x)` a vector of polynomial basis functions
 /// * `sigma^2` is the process variance
 /// * `corr(x, x')` is a correlation function which depends on `distance(x, x')`
-/// and a set of unknown parameters `thetas` to be determined.
+///   and a set of unknown parameters `thetas` to be determined.
 ///
 /// # Implementation
 ///
 /// * Based on [ndarray](https://github.com/rust-ndarray/ndarray)
-/// and [linfa](https://github.com/rust-ml/linfa) and strive to follow [linfa guidelines](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md)
+///   and [linfa](https://github.com/rust-ml/linfa) and strive to follow [linfa guidelines](https://github.com/rust-ml/linfa/blob/master/CONTRIBUTE.md)
 /// * GP mean model can be constant, linear or quadratic
 /// * GP correlation model can be build the following kernels: squared exponential, absolute exponential, matern 3/2, matern 5/2    
-/// cf. [SMT Kriging](https://smt.readthedocs.io/en/latest/_src_docs/surrogate_models/krg.html)
+///   cf. [SMT Kriging](https://smt.readthedocs.io/en/latest/_src_docs/surrogate_models/krg.html)
 /// * For high dimensional problems, the classic GP algorithm does not perform well as
-/// it depends on the inversion of a correlation (n, n) matrix which is an O(n3) operation.
-/// To work around this problem the library implements dimension reduction using
-/// Partial Least Squares method upon Kriging method also known as KPLS algorithm (see Reference)
+///   it depends on the inversion of a correlation (n, n) matrix which is an O(n3) operation.
+///   To work around this problem the library implements dimension reduction using
+///   Partial Least Squares method upon Kriging method also known as KPLS algorithm (see Reference)
 /// * GP models can be saved and loaded using [serde](https://serde.rs/).
-/// See `serializable` feature section below.
+///   See `serializable` feature section below.
 ///
 /// # Features
 ///
