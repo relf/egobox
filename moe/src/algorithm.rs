@@ -917,6 +917,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for GpM
 }
 
 /// Adaptator to implement `linfa::Predict` for variance prediction
+#[allow(dead_code)]
 pub struct MoeVariancePredictor<'a>(&'a GpMixture);
 impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
     for MoeVariancePredictor<'a>

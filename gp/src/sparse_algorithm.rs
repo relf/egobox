@@ -377,6 +377,7 @@ where
 }
 
 /// Sparse Gausssian Process adaptator to implement `linfa::Predict` trait for variance prediction.
+#[allow(dead_code)]
 pub struct SparseGpVariancePredictor<'a, F, Corr>(&'a SparseGaussianProcess<F, Corr>)
 where
     F: Float,
