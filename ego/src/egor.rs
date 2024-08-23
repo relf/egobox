@@ -390,14 +390,14 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_rosenbrock_2d_infill_target_egor_builder() {
+    fn test_rosenbrock_2d_trego_egor_builder() {
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
         let res = EgorBuilder::optimize(rosenb)
-            .configure(|config| config.doe(&doe).max_iters(20).seed(42))
+            .configure(|config| config.doe(&doe).max_iters(20).seed(42).trego(true))
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
