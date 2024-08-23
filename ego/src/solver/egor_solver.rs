@@ -352,6 +352,18 @@ where
                     old, new_state.sigma
                 );
             }
+        } else if state.get_iter() != 0 {
+            // Adjust trust region wrt global step success
+            if last_iter_success {
+                let old = state.sigma;
+                new_state.sigma *= self.config.trego.gamma;
+                info!(
+                    "Previous EGO global step successful: sigma {} -> {}",
+                    old, new_state.sigma
+                );
+            } else {
+                info!("Previous EGO global step not successful");
+            }
         }
 
         let is_global_phase = (last_iter_success && state.prev_step_ego)
