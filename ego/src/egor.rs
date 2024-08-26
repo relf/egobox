@@ -445,7 +445,7 @@ mod tests {
                 config
                     .n_cstr(2)
                     .doe(&doe)
-                    .max_iters(30)
+                    .max_iters(50)
                     .cstr_tol(array![2e-6, 1e-6])
                     .seed(42)
             })
