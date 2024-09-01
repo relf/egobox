@@ -195,7 +195,7 @@ Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization
 black-box functions. Journal of Global Optimization, 13(4), 455–492.
 
 Diouane, Youssef, et al. "TREGO: a trust-region framework for efficient global optimization."
-Journal of Global Optimization 86.1 (2023): 1-23.
+Journal of Global Optimization 86.1 (2023): 1-23. <https://arxiv.org/pdf/2101.06808>
 
 smtorg. (2018). Surrogate modeling toolbox. In GitHub repository. GitHub. <https://github.com/SMTOrg/smt>
 

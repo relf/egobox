@@ -326,14 +326,16 @@ where
         let prev_best = state.prev_best_index.unwrap(); // initialized in init
 
         // Check prev step success
+        let diff = y_data[[prev_best, 0]] - rho(state.sigma);
+        let last_iter_success = y_data[[best, 0]] < diff;
         info!(
-            "success = {} as {} < {} - {}",
-            y_data[[best, 0]] < (y_data[[prev_best, 0]] - rho(state.sigma)),
+            "success = {} as {} {} {} - {}",
+            last_iter_success,
             y_data[[best, 0]],
+            if last_iter_success { "<" } else { ">=" },
             y_data[[prev_best, 0]],
             rho(state.sigma)
         );
-        let last_iter_success = y_data[[best, 0]] < (y_data[[prev_best, 0]] - rho(state.sigma));
         let mut new_state = state.clone();
         if !state.prev_step_ego && state.get_iter() != 0 {
             // Adjust trust region wrt local step success
@@ -351,6 +353,18 @@ where
                     "Previous TREGO local step not successful: sigma {} -> {}",
                     old, new_state.sigma
                 );
+            }
+        } else if state.get_iter() != 0 {
+            // Adjust trust region wrt global step success
+            if last_iter_success {
+                let old = state.sigma;
+                new_state.sigma *= self.config.trego.gamma;
+                info!(
+                    "Previous EGO global step successful: sigma {} -> {}",
+                    old, new_state.sigma
+                );
+            } else {
+                info!("Previous EGO global step not successful");
             }
         }
 

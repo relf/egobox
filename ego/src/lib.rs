@@ -38,7 +38,7 @@
 //! The implementation relies on [Mixture of Experts](egobox_moe).
 //!
 //!
-//! ## Mixed-integer optmization
+//! ## Mixed-integer optimization
 //!
 //! While [Egor] optimizer works with continuous data (i.e floats), the optimizer
 //! allows to make basic mixed-integer optimization. The configuration of the Optimizer
@@ -181,14 +181,15 @@
 //! (2019). [A python surrogate modeling framework with derivatives](https://doi.org/10.1016/j.advengsoft.2019.03.005).
 //! Advances in Engineering Software, 102662.
 //!
-//! Dubreuil, S., Bartoli, N., Gogu, C., & Lefebvre, T. (2020). (Towards an efficient global multi-
-//! disciplinary design optimization algorithm)[https://doi.org/10.1007/s00158-020-02514-6].
+//! Dubreuil, S., Bartoli, N., Gogu, C., & Lefebvre, T. (2020). [Towards an efficient global multi-
+//! disciplinary design optimization algorithm](https://doi.org/10.1007/s00158-020-02514-6).
 //! Structural and Multidisciplinary Optimization, 62(4), 1739–1765.
 //!
 //! Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive
 //! black-box functions. Journal of Global Optimization, 13(4), 455–492.
 //!
-//! \[<a id="Diouane2023">Diouane(2023)</a>\]: Diouane, Youssef, et al. "TREGO: a trust-region framework for efficient global optimization."
+//! \[<a id="Diouane2023">Diouane(2023)</a>\]: Diouane, Youssef, et al.
+//! [TREGO: a trust-region framework for efficient global optimization](https://arxiv.org/pdf/2101.06808)
 //! Journal of Global Optimization 86.1 (2023): 1-23.
 //!
 //! smtorg. (2018). Surrogate modeling toolbox. In [GitHub repository](https://github.com/SMTOrg/smt)
