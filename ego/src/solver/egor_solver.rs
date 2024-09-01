@@ -270,6 +270,16 @@ where
             self.ego_iteration(fobj, state)?
         };
         let (x_data, y_data) = res.0.data.clone().unwrap();
+
+        if self.config.outdir.is_some() {
+            let doe = concatenate![Axis(1), x_data, y_data];
+            let path = self.config.outdir.as_ref().unwrap();
+            std::fs::create_dir_all(path)?;
+            let filepath = std::path::Path::new(path).join(DOE_FILE);
+            info!("Save doe shape {:?} in {:?}", doe.shape(), filepath);
+            write_npy(filepath, &doe).expect("Write current doe");
+        }
+
         info!(
             "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
             res.0.get_iter() + 1,
