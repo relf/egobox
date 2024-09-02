@@ -246,7 +246,7 @@ mod tests {
     use serial_test::serial;
     use std::time::Instant;
 
-    use crate::{gpmix::spec::*, DOE_FILE, DOE_INITIAL_FILE};
+    use crate::{gpmix::spec::*, DOE_FILE};
 
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
@@ -261,7 +261,7 @@ mod tests {
     #[serial]
     fn test_xsinx_ei_quadratic_egor_builder() {
         let outdir = "target/test_egor_builder_01";
-        let outfile = format!("{outdir}/{DOE_INITIAL_FILE}");
+        let outfile = format!("{outdir}/{DOE_FILE}");
         let _ = std::fs::remove_file(&outfile);
         let initial_doe = array![[0.], [7.], [25.]];
         let res = EgorBuilder::optimize(xsinx)
@@ -281,7 +281,7 @@ mod tests {
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
         let saved_doe: Array2<f64> = read_npy(&outfile).unwrap();
         let _ = std::fs::remove_file(&outfile);
-        assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
+        assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, 1..2]), epsilon = 1e-6);
     }
 
     #[test]
@@ -330,7 +330,6 @@ mod tests {
     #[serial]
     fn test_xsinx_with_hotstart_egor_builder() {
         let outdir = "target/test_hotstart_01";
-        let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
         let xlimits = array![[0.0, 25.0]];
         let doe = array![[0.], [7.], [23.]];
@@ -352,7 +351,6 @@ mod tests {
         let doe2: Array2<f64> = read_npy(&filepath).expect("file read");
         assert_eq!(doe2.nrows(), doe.nrows() + 3);
 
-        let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
@@ -397,7 +395,7 @@ mod tests {
     #[serial]
     fn test_rosenbrock_2d_no_trego_egor_builder() {
         let outdir = "target/test_trego";
-        let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
+
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
@@ -642,9 +640,8 @@ mod tests {
         builder.try_init().ok();
 
         let outdir = "target/test_hotstart_02";
-        let outfile = format!("{outdir}/{DOE_INITIAL_FILE}");
-        let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
-        let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
+        let outfile = format!("{outdir}/{DOE_FILE}");
+        let _ = std::fs::remove_file(&outfile);
 
         let xtypes = vec![
             XType::Cont(-5., 5.),
@@ -662,7 +659,7 @@ mod tests {
 
         // Check saved DOE has continuous (unfolded) dimension + one output
         let saved_doe: Array2<f64> = read_npy(outfile).unwrap();
-        assert_eq!(saved_doe.shape()[1], xlimits.nrows() + 1);
+        assert_eq!(saved_doe.shape()[1], xlimits.nrows() + 2); // row: [n_iter, x, y]
 
         // Check that with no iteration, obj function is never called
         // as the DOE does not need to be evaluated!

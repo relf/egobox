@@ -123,8 +123,6 @@ use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
-/// Numpy filename for initial DOE dump
-pub const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 /// Numpy Filename for current DOE dump
 pub const DOE_FILE: &str = "egor_doe.npy";
 
@@ -179,11 +177,11 @@ where
                 let filepath = std::path::Path::new(&path).join(DOE_FILE);
                 if filepath.is_file() {
                     info!("Reading DOE from {:?}", filepath);
-                    Some(read_npy(filepath)?)
-                } else if std::path::Path::new(&path).join(DOE_INITIAL_FILE).is_file() {
-                    let filepath = std::path::Path::new(&path).join(DOE_INITIAL_FILE);
-                    info!("Reading DOE from {:?}", filepath);
-                    Some(read_npy(filepath)?)
+                    Some(
+                        read_npy::<_, Array2<f64>>(filepath)?
+                            .slice(s![.., 1..]) // remove iternb first column
+                            .to_owned(),
+                    )
                 } else {
                     None
                 }
@@ -194,7 +192,9 @@ where
         let doe = hstart_doe.as_ref().or(self.config.doe.as_ref());
 
         let (y_data, x_data) = if let Some(doe) = doe {
-            if doe.ncols() == self.xlimits.nrows() {
+            let xend = self.xlimits.nrows(); // x index end
+            println!("DOE={}", doe);
+            if doe.ncols() == xend {
                 // only x are specified
                 info!("Compute initial DOE on specified {} points", doe.nrows());
                 (self.eval_obj(problem, doe), doe.to_owned())
@@ -202,8 +202,8 @@ where
                 // split doe in x and y
                 info!("Use specified DOE {} samples", doe.nrows());
                 (
-                    doe.slice(s![.., self.xlimits.nrows()..]).to_owned(),
-                    doe.slice(s![.., ..self.xlimits.nrows()]).to_owned(),
+                    doe.slice(s![.., xend..]).to_owned(),
+                    doe.slice(s![.., ..xend]).to_owned(),
                 )
             }
         } else {
@@ -216,11 +216,15 @@ where
             let x = sampling.sample(n_doe);
             (self.eval_obj(problem, &x), x)
         };
-        let doe = concatenate![Axis(1), x_data, y_data];
+
+        // DOE row format: [iter, x, y] where y = f_obj, cstr1, ..., cstrn
+        let iters = Array2::zeros((x_data.nrows(), 1));
+        let doe = concatenate![Axis(1), iters, x_data, y_data];
+
         if self.config.outdir.is_some() {
             let path = self.config.outdir.as_ref().unwrap();
             std::fs::create_dir_all(path)?;
-            let filepath = std::path::Path::new(path).join(DOE_INITIAL_FILE);
+            let filepath = std::path::Path::new(path).join(DOE_FILE);
             info!("Save initial doe shape {:?} in {:?}", doe.shape(), filepath);
             write_npy(filepath, &doe).expect("Write initial doe");
         }
@@ -272,8 +276,22 @@ where
         let (x_data, y_data) = res.0.data.clone().unwrap();
 
         if self.config.outdir.is_some() {
-            let doe = concatenate![Axis(1), x_data, y_data];
-            let path = self.config.outdir.as_ref().unwrap();
+            // DOE row format: [iter, x, y] where y = f_obj, cstr1, ..., cstrn
+            let path: &String = self.config.outdir.as_ref().unwrap();
+            let filepath = std::path::Path::new(&path).join(DOE_FILE);
+            let prev_doe: Array2<f64> = read_npy(filepath)?;
+
+            let mut iters = Array1::zeros(x_data.nrows());
+            let added = x_data.nrows() - prev_doe.nrows();
+            iters
+                .slice_mut(s![..prev_doe.nrows()])
+                .assign(&prev_doe.column(0));
+            let new_iters = Array1::from_vec(vec![(res.0.get_iter() + 1) as f64; added]);
+            iters.slice_mut(s![prev_doe.nrows()..]).assign(&new_iters);
+            let iters = iters.into_shape((x_data.nrows(), 1)).unwrap();
+
+            let doe = concatenate![Axis(1), iters, x_data, y_data];
+            //let path = self.config.outdir.as_ref().unwrap();
             std::fs::create_dir_all(path)?;
             let filepath = std::path::Path::new(path).join(DOE_FILE);
             info!("Save doe shape {:?} in {:?}", doe.shape(), filepath);
