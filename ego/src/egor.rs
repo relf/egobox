@@ -333,22 +333,27 @@ mod tests {
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
         let xlimits = array![[0.0, 25.0]];
-        let doe = Lhs::new(&xlimits).sample(10);
-        let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(15).doe(&doe).outdir(outdir).seed(42))
+        let doe = array![[0.], [7.], [23.]];
+        let _ = EgorBuilder::optimize(xsinx)
+            .configure(|config| config.max_iters(2).doe(&doe).outdir(outdir).seed(42))
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
-        let expected = array![18.9];
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+
+        let filepath = std::path::Path::new(&outdir).join(DOE_FILE);
+        assert!(filepath.exists());
+        let doe: Array2<f64> = read_npy(&filepath).expect("file read");
 
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(5).outdir(outdir).hot_start(true).seed(42))
+            .configure(|config| config.max_iters(3).outdir(outdir).hot_start(true).seed(42))
             .min_within(&xlimits)
             .run()
             .expect("Egor should minimize xsinx");
-        let _ = std::fs::remove_file(format!("target/test_egor_builder/{DOE_INITIAL_FILE}"));
-        let _ = std::fs::remove_file(format!("target/test_egor_builder/{DOE_FILE}"));
+        let doe2: Array2<f64> = read_npy(&filepath).expect("file read");
+        assert_eq!(doe2.nrows(), doe.nrows() + 3);
+
+        let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
+        let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
@@ -390,17 +395,33 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_rosenbrock_2d_trego_egor_builder() {
+    fn test_rosenbrock_2d_no_trego_egor_builder() {
+        let outdir = "target/test_trego";
+        let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
+        let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
         let now = Instant::now();
         let xlimits = array![[-2., 2.], [-2., 2.]];
-        let doe = Lhs::new(&xlimits)
+        let init_doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
+        let max_iters = 20;
         let res = EgorBuilder::optimize(rosenb)
-            .configure(|config| config.doe(&doe).max_iters(20).seed(42).trego(true))
+            .configure(|config| {
+                config
+                    .doe(&init_doe)
+                    .max_iters(max_iters)
+                    .outdir(outdir)
+                    .seed(42)
+                    .trego(false)
+            })
             .min_within(&xlimits)
             .run()
             .expect("Minimize failure");
+        let filepath = std::path::Path::new(&outdir).join(DOE_FILE);
+        assert!(filepath.exists());
+        let doe: Array2<f64> = read_npy(&filepath).expect("file read");
+        assert_eq!(doe.nrows(), init_doe.nrows() + max_iters); // we get one point per iter
+
         println!("Rosenbrock optim result = {res:?}");
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];
