@@ -170,40 +170,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             .collect();
         let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
 
-        // Other way to constrain in trust-region with global l
-        // let cstr_up = Box::new(
-        //     |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut InfillObjData<f64>| -> f64 {
-        //         let f = |x: &Vec<f64>| -> f64 {
-        //             let x = Array1::from_shape_vec((x.len(),), x.to_vec()).unwrap();
-        //             let d = (&x - xbest).norm_l1();
-        //             d - local_bounds.1
-        //         };
-        //         if let Some(grad) = gradient {
-        //             grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-        //         }
-        //         f(&x.to_vec())
-        //     },
-        // ) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>;
-
-        // let cstr_lo = Box::new(
-        //     |x: &[f64], gradient: Option<&mut [f64]>, _params: &mut InfillObjData<f64>| -> f64 {
-        //         let f = |x: &Vec<f64>| -> f64 {
-        //             let x = Array1::from_shape_vec((x.len(),), x.to_vec()).unwrap();
-        //             let d = (&x - xbest).norm_l1();
-        //             local_bounds.0 - d
-        //         };
-        //         if let Some(grad) = gradient {
-        //             grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-        //         }
-        //         f(&x.to_vec())
-        //     },
-        // ) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>;
-
-        // let mut cons = cstr_refs.to_vec();
-        // cons.push(&cstr_lo);
-        // cons.push(&cstr_up);
-
-        let mut scale_cstr_ext = Array1::zeros(scale_cstr.len() + 2);
+        let mut scale_cstr_ext = Array1::zeros(scale_cstr.len());
         scale_cstr_ext
             .slice_mut(s![..scale_cstr.len()])
             .assign(&scale_cstr);
@@ -212,6 +179,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
             ..*infill_data
         };
 
+        // Draw n_start initial points (multistart optim) in the local_area
         // local_area = intersection(trust_region, xlimits)
         let mut local_area = Array2::zeros((self.xlimits.nrows(), self.xlimits.ncols()));
         Zip::from(local_area.rows_mut())
@@ -224,8 +192,6 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
                 );
                 row.assign(&aview1(&[lo, up]))
             });
-
-        // Draw n_start initial points (multistart optim)
         let rng = self.rng.clone();
         let lhs = Lhs::new(&local_area)
             .kind(egobox_doe::LhsKind::Maximin)

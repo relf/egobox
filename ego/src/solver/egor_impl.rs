@@ -3,7 +3,7 @@ use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::utils::{compute_cstr_scales, find_best_result_index_from, update_data};
 use crate::{find_best_result_index, optimizers::*, EgorConfig};
 use crate::{types::*, EgorState};
-use crate::{EgorSolver, DEFAULT_CSTR_TOL, DOE_FILE, MAX_POINT_ADDITION_RETRY};
+use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
 
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
@@ -18,7 +18,7 @@ use log::{debug, info, warn};
 use ndarray::{
     concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
 };
-use ndarray_npy::write_npy;
+
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
@@ -349,15 +349,6 @@ where
         Zip::from(y_data.slice_mut(s![-add_count.., ..]).rows_mut())
             .and(y_actual.rows())
             .for_each(|mut y, val| y.assign(&val));
-
-        let doe = concatenate![Axis(1), x_data, y_data];
-        if self.config.outdir.is_some() {
-            let path = self.config.outdir.as_ref().unwrap();
-            std::fs::create_dir_all(path)?;
-            let filepath = std::path::Path::new(path).join(DOE_FILE);
-            info!("Save doe shape {:?} in {:?}", doe.shape(), filepath);
-            write_npy(filepath, &doe).expect("Write current doe");
-        }
 
         let best_index = find_best_result_index_from(
             state.best_index.unwrap(),
