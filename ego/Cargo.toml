@@ -41,6 +41,7 @@ nlopt = { version = "0.7.0", optional = true }
 
 rand_xoshiro = { version = "0.6", features = ["serde1"] }
 argmin = { version = "0.10.0", features = ["serde1", "ctrlc"] }
+argmin-checkpointing-file = { version = "0.1.0" }
 web-time = "1.1.0"
 libm = "0.2.6"
 finitediff = { version = "0.1", features = ["ndarray"] }

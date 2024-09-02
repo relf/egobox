@@ -21,8 +21,9 @@ use ndarray::Zip;
 use ndarray::{s, Array, Array1, Array2, ArrayView1, Axis};
 
 use rayon::prelude::*;
+use serde::de::DeserializeOwned;
 
-impl<SB: SurrogateBuilder> EgorSolver<SB> {
+impl<SB: SurrogateBuilder + DeserializeOwned> EgorSolver<SB> {
     /// Local step where infill criterion is optimized within trust region
     pub fn trego_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &mut self,

@@ -46,6 +46,7 @@ use egobox_moe::GpMixtureParams;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
+use serde::de::DeserializeOwned;
 
 /// EGO optimizer service builder allowing to use Egor optimizer
 /// as a service.
@@ -114,11 +115,11 @@ impl EgorServiceBuilder {
 
 /// Egor optimizer service.
 #[derive(Clone)]
-pub struct EgorService<SB: SurrogateBuilder> {
+pub struct EgorService<SB: SurrogateBuilder + DeserializeOwned> {
     solver: EgorSolver<SB>,
 }
 
-impl<SB: SurrogateBuilder> EgorService<SB> {
+impl<SB: SurrogateBuilder + DeserializeOwned> EgorService<SB> {
     /// Given an evaluated doe (x, y) data, return the next promising x point
     /// where optimum may be located with regard to the infill criterion.
     /// This function inverses the control of the optimization and can be used

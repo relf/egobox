@@ -120,7 +120,7 @@ use argmin::core::{
 };
 
 use rand_xoshiro::Xoshiro256Plus;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::time::Instant;
 
 /// Numpy filename for initial DOE dump
@@ -161,7 +161,7 @@ pub fn to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> 
 impl<O, SB> Solver<O, EgorState<f64>> for EgorSolver<SB>
 where
     O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>,
-    SB: SurrogateBuilder,
+    SB: SurrogateBuilder + DeserializeOwned,
 {
     const NAME: &'static str = "Egor";
 
@@ -304,7 +304,7 @@ where
 
 impl<SB> EgorSolver<SB>
 where
-    SB: SurrogateBuilder,
+    SB: SurrogateBuilder + DeserializeOwned,
 {
     /// Iteration of EGO algorithm
     fn ego_iteration<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(

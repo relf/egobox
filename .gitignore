@@ -25,7 +25,9 @@ input.txt
 output.txt
 mopta08.exe
 mopta08_elf64.bin
+**/.checkpoints
 
 # JOSS
 joss/paper.jats
 joss/paper.pdf
+
