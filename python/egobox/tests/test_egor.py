@@ -87,8 +87,6 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
     def test_xsinx_with_hotstart(self):
-        if os.path.exists("./test_dir/egor_initial_doe.npy"):
-            os.remove("./test_dir/egor_initial_doe.npy")
         if os.path.exists("./test_dir/egor_doe.npy"):
             os.remove("./test_dir/egor_doe.npy")
         xlimits = egx.to_specs([[0.0, 25.0]])
@@ -105,8 +103,6 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-2)
 
-        self.assertTrue(os.path.exists("./test_dir/egor_initial_doe.npy"))
-        os.remove("./test_dir/egor_initial_doe.npy")
         self.assertTrue(os.path.exists("./test_dir/egor_doe.npy"))
         os.remove("./test_dir/egor_doe.npy")
 
