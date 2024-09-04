@@ -125,7 +125,7 @@ use std::time::Instant;
 
 /// Numpy filename for initial DOE dump
 pub const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
-/// Numpy Filename for current DOE dump
+/// Numpy filename for current DOE dump
 pub const DOE_FILE: &str = "egor_doe.npy";
 
 /// Default tolerance value for constraints to be satisfied (ie cstr < tol)

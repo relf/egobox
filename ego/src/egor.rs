@@ -102,15 +102,22 @@ use crate::errors::Result;
 use crate::gpmix::mixint::*;
 use crate::types::*;
 use crate::EgorConfig;
+use crate::EgorState;
 use crate::{to_xtypes, EgorSolver};
 
+use argmin::core::observers::ObserverMode;
 use egobox_moe::GpMixtureParams;
 use log::info;
-use ndarray::{concatenate, ArrayBase, Axis, Data, Ix2};
+use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
-use argmin::core::{Executor, State};
+use argmin::core::{observers::Observe, Error, Executor, State, KV};
+
+/// Json filename for configuration
+pub const CONFIG_FILE: &str = "egor_config.json";
+/// Numpy filename for optimization history
+pub const HISTORY_FILE: &str = "egor_history.npy";
 
 /// EGO optimizer builder allowing to specify function to be minimized
 /// subject to constraints intended to be negative.
@@ -194,13 +201,25 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
     pub fn run(&self) -> Result<OptimResult<f64>> {
         let xtypes = self.solver.config.xtypes.clone();
         info!("{:?}", self.solver.config);
+        if let Some(outdir) = self.solver.config.outdir.as_ref() {
+            std::fs::create_dir_all(outdir)?;
+            let filepath = std::path::Path::new(outdir).join(CONFIG_FILE);
+            let json = serde_json::to_string(&self.solver.config).unwrap();
+            std::fs::write(filepath, json).expect("Unable to write file");
+        }
 
-        let result = Executor::new(self.fobj.clone(), self.solver.clone()).run()?;
+        let exec = Executor::new(self.fobj.clone(), self.solver.clone());
+        let result = if let Some(outdir) = self.solver.config.outdir.as_ref() {
+            let hist = OptimizationObserver::new(outdir.clone());
+            exec.add_observer(hist, ObserverMode::Always).run()?
+        } else {
+            exec.run()?
+        };
         info!("{}", result);
         let (x_data, y_data) = result.state().clone().take_data().unwrap();
 
         let res = if !self.solver.config.discrete() {
-            info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
+            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data]);
             OptimResult {
                 x_opt: result.state.get_best_param().unwrap().to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
@@ -210,7 +229,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             }
         } else {
             let x_data = to_discrete_space(&xtypes, &x_data.view());
-            info!("History: \n{}", concatenate![Axis(1), x_data, y_data]);
+            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data]);
 
             let x_opt = result
                 .state
@@ -230,6 +249,73 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
         info!("Optim Result: min f(x)={} at x={}", res.y_opt, res.x_opt);
 
         Ok(res)
+    }
+}
+
+// The optimization observer collects best costs ans params
+// during the optimization execution allowing to get optimization history
+// saved as a numpy array for further analysis
+// Note: the observer is activated only when outdir is specified
+#[derive(Default)]
+struct OptimizationObserver {
+    pub dir: String,
+    pub best_params: Option<Array2<f64>>,
+    pub best_costs: Option<Array2<f64>>,
+}
+
+impl OptimizationObserver {
+    fn new(dir: String) -> Self {
+        Self {
+            dir,
+            best_params: None,
+            best_costs: None,
+        }
+    }
+}
+
+impl Observe<EgorState<f64>> for OptimizationObserver {
+    fn observe_init(
+        &mut self,
+        _name: &str,
+        state: &EgorState<f64>,
+        _kv: &KV,
+    ) -> std::result::Result<(), Error> {
+        let bp = state.get_best_param().unwrap().to_owned();
+        self.best_params = Some(bp.insert_axis(Axis(0)));
+        let bc = state.get_full_best_cost().unwrap().to_owned();
+        self.best_costs = Some(bc.insert_axis(Axis(0)));
+        Ok(())
+    }
+
+    fn observe_iter(&mut self, state: &EgorState<f64>, _kv: &KV) -> std::result::Result<(), Error> {
+        let bp = state
+            .get_best_param()
+            .unwrap()
+            .to_owned()
+            .insert_axis(Axis(0));
+        self.best_params = Some(concatenate![Axis(0), self.best_params.take().unwrap(), bp]);
+        let bc = state
+            .get_full_best_cost()
+            .unwrap()
+            .to_owned()
+            .insert_axis(Axis(0));
+        self.best_costs = Some(concatenate![Axis(0), self.best_costs.take().unwrap(), bc]);
+
+        Ok(())
+    }
+
+    fn observe_final(&mut self, _state: &EgorState<f64>) -> std::result::Result<(), Error> {
+        let hist = concatenate![
+            Axis(1),
+            self.best_costs.take().unwrap(),
+            self.best_params.take().unwrap(),
+        ];
+        std::fs::create_dir_all(&self.dir)?;
+        let filepath = std::path::Path::new(&self.dir).join(HISTORY_FILE);
+        info!("Save history {:?} in {:?}", hist.shape(), filepath);
+        info!("History: {}", hist);
+        ndarray_npy::write_npy(filepath, &hist).expect("Write history");
+        Ok(())
     }
 }
 
@@ -280,7 +366,6 @@ mod tests {
         let expected = array![-15.1];
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
         let saved_doe: Array2<f64> = read_npy(&outfile).unwrap();
-        let _ = std::fs::remove_file(&outfile);
         assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
     }
 
