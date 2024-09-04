@@ -17,9 +17,9 @@ pub struct OptimResult<F: Float> {
     /// Optimum y value (e.g. f(x_opt))
     pub y_opt: Array1<F>,
     /// History of successive x values
-    pub x_hist: Array2<F>,
-    /// History of successive y values (e.g f(x_hist))
-    pub y_hist: Array2<F>,
+    pub x_doe: Array2<F>,
+    /// History of successive y values (e.g f(x_doe))
+    pub y_doe: Array2<F>,
     /// EgorSolver final state
     pub state: EgorState<F>,
 }

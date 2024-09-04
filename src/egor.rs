@@ -133,9 +133,9 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         Known optimum used as stopping criterion.
 ///
 ///     outdir (String)
-///         Directory to write optimization history and used as search path for hot start doe
+///         Directory to write optimization history and used as search path for warm start doe
 ///
-///     hot_start (bool)
+///     warm_start (bool)
 ///         Start by loading initial doe from <outdir> directory
 ///
 ///     seed (int >= 0)
@@ -161,7 +161,7 @@ pub(crate) struct Egor {
     pub n_optmod: usize,
     pub target: f64,
     pub outdir: Option<String>,
-    pub hot_start: bool,
+    pub warm_start: bool,
     pub seed: Option<u64>,
 }
 
@@ -172,9 +172,9 @@ pub(crate) struct OptimResult {
     #[pyo3(get)]
     y_opt: Py<PyArray1<f64>>,
     #[pyo3(get)]
-    x_hist: Py<PyArray2<f64>>,
+    x_doe: Py<PyArray2<f64>>,
     #[pyo3(get)]
-    y_hist: Py<PyArray2<f64>>,
+    y_doe: Py<PyArray2<f64>>,
 }
 
 #[pymethods]
@@ -199,7 +199,7 @@ impl Egor {
         n_optmod = 1,
         target = f64::NEG_INFINITY,
         outdir = None,
-        hot_start = false,
+        warm_start = false,
         seed = None
     ))]
     #[allow(clippy::too_many_arguments)]
@@ -223,7 +223,7 @@ impl Egor {
         n_optmod: usize,
         target: f64,
         outdir: Option<String>,
-        hot_start: bool,
+        warm_start: bool,
         seed: Option<u64>,
     ) -> Self {
         let doe = doe.map(|x| x.to_owned_array());
@@ -246,7 +246,7 @@ impl Egor {
             n_optmod,
             target,
             outdir,
-            hot_start,
+            warm_start,
             seed,
         }
     }
@@ -286,13 +286,13 @@ impl Egor {
         });
         let x_opt = res.x_opt.into_pyarray_bound(py).to_owned();
         let y_opt = res.y_opt.into_pyarray_bound(py).to_owned();
-        let x_hist = res.x_hist.into_pyarray_bound(py).to_owned();
-        let y_hist = res.y_hist.into_pyarray_bound(py).to_owned();
+        let x_doe = res.x_doe.into_pyarray_bound(py).to_owned();
+        let y_doe = res.y_doe.into_pyarray_bound(py).to_owned();
         Ok(OptimResult {
             x_opt: x_opt.into(),
             y_opt: y_opt.into(),
-            x_hist: x_hist.into(),
-            y_hist: y_hist.into(),
+            x_doe: x_doe.into(),
+            y_doe: y_doe.into(),
         })
     }
 
@@ -367,13 +367,13 @@ impl Egor {
         let idx = find_best_result_index(&y_doe, &self.cstr_tol());
         let x_opt = x_doe.row(idx).to_pyarray_bound(py).into();
         let y_opt = y_doe.row(idx).to_pyarray_bound(py).into();
-        let x_hist = x_doe.to_pyarray_bound(py).into();
-        let y_hist = y_doe.to_pyarray_bound(py).into();
+        let x_doe = x_doe.to_pyarray_bound(py).into();
+        let y_doe = y_doe.to_pyarray_bound(py).into();
         OptimResult {
             x_opt,
             y_opt,
-            x_hist,
-            y_hist,
+            x_doe,
+            y_doe,
         }
     }
 }
@@ -462,7 +462,7 @@ impl Egor {
             .trego(self.trego)
             .n_optmod(self.n_optmod)
             .target(self.target)
-            .hot_start(self.hot_start); // when used as a service no hotstart
+            .warm_start(self.warm_start); // when used as a service no warmstart
         if let Some(doe) = doe {
             config = config.doe(doe);
         };

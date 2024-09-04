@@ -11,7 +11,7 @@
 //! * specify the initial doe,
 //! * parameterize internal optimization,
 //! * parameterize mixture of experts,
-//! * save intermediate results and allow hot restart,
+//! * save intermediate results and allow warm restart,
 //!
 //! # Examples
 //!

@@ -276,7 +276,7 @@ fn main() -> anyhow::Result<()> {
                 .infill_optimizer(InfillOptimizer::Slsqp)
                 .kpls_dim(kpls_dim)
                 .outdir(outdir)
-                .hot_start(true)
+                .warm_start(true)
         })
         .min_within(&xlimits)
         .run()

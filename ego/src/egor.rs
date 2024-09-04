@@ -223,8 +223,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             OptimResult {
                 x_opt: result.state.get_best_param().unwrap().to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
-                x_hist: x_data,
-                y_hist: y_data,
+                x_doe: x_data,
+                y_doe: y_data,
                 state: result.state,
             }
         } else {
@@ -241,8 +241,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             OptimResult {
                 x_opt: x_opt.row(0).to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
-                x_hist: x_data,
-                y_hist: y_data,
+                x_doe: x_data,
+                y_doe: y_data,
                 state: result.state,
             }
         };
@@ -413,8 +413,8 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_xsinx_with_hotstart_egor_builder() {
-        let outdir = "target/test_hotstart_01";
+    fn test_xsinx_with_warmstart_egor_builder() {
+        let outdir = "target/test_warmstart_01";
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
         let xlimits = array![[0.0, 25.0]];
@@ -430,7 +430,7 @@ mod tests {
         let doe: Array2<f64> = read_npy(&filepath).expect("file read");
 
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(3).outdir(outdir).hot_start(true).seed(42))
+            .configure(|config| config.max_iters(3).outdir(outdir).warm_start(true).seed(42))
             .min_within(&xlimits)
             .run()
             .expect("Egor should minimize xsinx");
@@ -720,13 +720,13 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_mixobj_mixint_hotstart_egor_builder() {
+    fn test_mixobj_mixint_warmstart_egor_builder() {
         let env = env_logger::Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = env_logger::Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();
 
-        let outdir = "target/test_hotstart_02";
+        let outdir = "target/test_warmstart_02";
         let outfile = format!("{outdir}/{DOE_INITIAL_FILE}");
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
@@ -752,7 +752,7 @@ mod tests {
         // Check that with no iteration, obj function is never called
         // as the DOE does not need to be evaluated!
         EgorBuilder::optimize(|_x| panic!("Should not call objective function!"))
-            .configure(|config| config.outdir(outdir).hot_start(true).max_iters(0).seed(42))
+            .configure(|config| config.outdir(outdir).warm_start(true).max_iters(0).seed(42))
             .min_within_mixint_space(&xtypes)
             .run()
             .unwrap();
