@@ -86,7 +86,7 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
-    def test_xsinx_with_hotstart(self):
+    def test_xsinx_with_warmstart(self):
         if os.path.exists("./test_dir/egor_initial_doe.npy"):
             os.remove("./test_dir/egor_initial_doe.npy")
         if os.path.exists("./test_dir/egor_doe.npy"):
@@ -99,7 +99,7 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
-        egor = egx.Egor(xlimits, outdir="./test_dir", hot_start=True)
+        egor = egx.Egor(xlimits, outdir="./test_dir", warm_start=True)
         res = egor.minimize(xsinx, max_iters=5)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-2)
