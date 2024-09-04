@@ -172,9 +172,9 @@ pub(crate) struct OptimResult {
     #[pyo3(get)]
     y_opt: Py<PyArray1<f64>>,
     #[pyo3(get)]
-    x_hist: Py<PyArray2<f64>>,
+    x_doe: Py<PyArray2<f64>>,
     #[pyo3(get)]
-    y_hist: Py<PyArray2<f64>>,
+    y_doe: Py<PyArray2<f64>>,
 }
 
 #[pymethods]
@@ -286,13 +286,13 @@ impl Egor {
         });
         let x_opt = res.x_opt.into_pyarray_bound(py).to_owned();
         let y_opt = res.y_opt.into_pyarray_bound(py).to_owned();
-        let x_hist = res.x_hist.into_pyarray_bound(py).to_owned();
-        let y_hist = res.y_hist.into_pyarray_bound(py).to_owned();
+        let x_doe = res.x_doe.into_pyarray_bound(py).to_owned();
+        let y_doe = res.y_doe.into_pyarray_bound(py).to_owned();
         Ok(OptimResult {
             x_opt: x_opt.into(),
             y_opt: y_opt.into(),
-            x_hist: x_hist.into(),
-            y_hist: y_hist.into(),
+            x_doe: x_doe.into(),
+            y_doe: y_doe.into(),
         })
     }
 
@@ -367,13 +367,13 @@ impl Egor {
         let idx = find_best_result_index(&y_doe, &self.cstr_tol());
         let x_opt = x_doe.row(idx).to_pyarray_bound(py).into();
         let y_opt = y_doe.row(idx).to_pyarray_bound(py).into();
-        let x_hist = x_doe.to_pyarray_bound(py).into();
-        let y_hist = y_doe.to_pyarray_bound(py).into();
+        let x_doe = x_doe.to_pyarray_bound(py).into();
+        let y_doe = y_doe.to_pyarray_bound(py).into();
         OptimResult {
             x_opt,
             y_opt,
-            x_hist,
-            y_hist,
+            x_doe,
+            y_doe,
         }
     }
 }

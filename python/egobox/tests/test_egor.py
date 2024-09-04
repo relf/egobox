@@ -129,8 +129,8 @@ class TestOptimizer(unittest.TestCase):
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(2.3295, res.x_opt[0], delta=1e-2)
         self.assertAlmostEqual(3.1785, res.x_opt[1], delta=1e-2)
-        self.assertEqual((n_doe + max_iters, 2), res.x_hist.shape)
-        self.assertEqual((n_doe + max_iters, 1 + n_cstr), res.y_hist.shape)
+        self.assertEqual((n_doe + max_iters, 2), res.x_doe.shape)
+        self.assertEqual((n_doe + max_iters, 1 + n_cstr), res.y_doe.shape)
 
     def test_g24_kpls(self):
         egor = egx.Egor(

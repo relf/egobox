@@ -223,8 +223,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             OptimResult {
                 x_opt: result.state.get_best_param().unwrap().to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
-                x_hist: x_data,
-                y_hist: y_data,
+                x_doe: x_data,
+                y_doe: y_data,
                 state: result.state,
             }
         } else {
@@ -241,8 +241,8 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
             OptimResult {
                 x_opt: x_opt.row(0).to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
-                x_hist: x_data,
-                y_hist: y_data,
+                x_doe: x_data,
+                y_doe: y_data,
                 state: result.state,
             }
         };
