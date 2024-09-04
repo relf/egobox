@@ -23,7 +23,7 @@ serializable = ["serde", "rand_xoshiro/serde1"]
 [dependencies]
 linfa = { version = "0.7", default-features = false }
 ndarray = { version = "0.15", features = ["rayon", "approx"] }
-ndarray-stats = "0.5"
+ndarray-stats = "0.6"
 ndarray-rand = "0.14"
 rand_xoshiro = "0.6"
 num-traits = "0.2"
