@@ -133,9 +133,9 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         Known optimum used as stopping criterion.
 ///
 ///     outdir (String)
-///         Directory to write optimization history and used as search path for hot start doe
+///         Directory to write optimization history and used as search path for warm start doe
 ///
-///     hot_start (bool)
+///     warm_start (bool)
 ///         Start by loading initial doe from <outdir> directory
 ///
 ///     seed (int >= 0)
@@ -161,7 +161,7 @@ pub(crate) struct Egor {
     pub n_optmod: usize,
     pub target: f64,
     pub outdir: Option<String>,
-    pub hot_start: bool,
+    pub warm_start: bool,
     pub seed: Option<u64>,
 }
 
@@ -199,7 +199,7 @@ impl Egor {
         n_optmod = 1,
         target = f64::NEG_INFINITY,
         outdir = None,
-        hot_start = false,
+        warm_start = false,
         seed = None
     ))]
     #[allow(clippy::too_many_arguments)]
@@ -223,7 +223,7 @@ impl Egor {
         n_optmod: usize,
         target: f64,
         outdir: Option<String>,
-        hot_start: bool,
+        warm_start: bool,
         seed: Option<u64>,
     ) -> Self {
         let doe = doe.map(|x| x.to_owned_array());
@@ -246,7 +246,7 @@ impl Egor {
             n_optmod,
             target,
             outdir,
-            hot_start,
+            warm_start,
             seed,
         }
     }
@@ -462,7 +462,7 @@ impl Egor {
             .trego(self.trego)
             .n_optmod(self.n_optmod)
             .target(self.target)
-            .hot_start(self.hot_start); // when used as a service no hotstart
+            .warm_start(self.warm_start); // when used as a service no warmstart
         if let Some(doe) = doe {
             config = config.doe(doe);
         };

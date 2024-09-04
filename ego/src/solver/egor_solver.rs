@@ -174,7 +174,7 @@ where
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
 
         let hstart_doe: Option<Array2<f64>> =
-            if self.config.hot_start && self.config.outdir.is_some() {
+            if self.config.warm_start && self.config.outdir.is_some() {
                 let path: &String = self.config.outdir.as_ref().unwrap();
                 let filepath = std::path::Path::new(&path).join(DOE_FILE);
                 if filepath.is_file() {

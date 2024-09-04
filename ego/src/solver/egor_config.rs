@@ -79,7 +79,7 @@ pub struct EgorConfig {
     /// Directory to save intermediate results: inital doe + evalutions at each iteration
     pub(crate) outdir: Option<String>,
     /// If true use `outdir` to retrieve and start from previous results
-    pub(crate) hot_start: bool,
+    pub(crate) warm_start: bool,
     /// List of x types allowing the handling of discrete input variables
     pub(crate) xtypes: Vec<XType>,
     /// A random generator seed used to get reproductible results.
@@ -108,7 +108,7 @@ impl Default for EgorConfig {
             n_clusters: 1,
             target: f64::NEG_INFINITY,
             outdir: None,
-            hot_start: false,
+            warm_start: false,
             xtypes: vec![],
             seed: None,
             trego: TregoConfig::default(),
@@ -248,7 +248,7 @@ impl EgorConfig {
         self
     }
 
-    /// Sets a directory to write optimization history and used as search path for hot start doe
+    /// Sets a directory to write optimization history and used as search path for warm start doe
     pub fn outdir(mut self, outdir: impl Into<String>) -> Self {
         self.outdir = Some(outdir.into());
         self
@@ -260,8 +260,8 @@ impl EgorConfig {
     }
 
     /// Whether we start by loading last DOE saved in `outdir` as initial DOE
-    pub fn hot_start(mut self, hot_start: bool) -> Self {
-        self.hot_start = hot_start;
+    pub fn warm_start(mut self, warm_start: bool) -> Self {
+        self.warm_start = warm_start;
         self
     }
 
