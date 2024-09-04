@@ -1,24 +1,34 @@
 # Changes
 
+## Version 0.22.0 - 04/09/2024
+
+* `ego`:
+  * Save config and optim history by @relf in <https://github.com/relf/egobox/pull/190>
+  * Move the DOE save after the algo the iteration (fixes #182) by @relf in <https://github.com/relf/egobox/pull/185>
+* Maintainance by @relf in <https://github.com/relf/egobox/pull/183>
+
 ## Version 0.21.1 - 31/07/2024
 
 * `gp`: Fix variance gradient computation by @relf in <https://github.com/relf/egobox/pull/177>
 
 ## Version 0.21.0 - 09/07/2024
 
-* Implement [TREGO algorithm](https://arxiv.org/abs/2101.06808) by @relf in <https://github.com/relf/egobox/pull/173>
-* Fix added point count in TREGO local step by @relf in <https://github.com/relf/egobox/pull/174>
-* Fix WB2S criteria scaling factor and fmin computation by @relf in <https://github.com/relf/egobox/pull/175>
+* `ego`:
+  * Implement [TREGO algorithm](https://arxiv.org/abs/2101.06808) by @relf in <https://github.com/relf/egobox/pull/173>
+  * Fix added point count in TREGO local step by @relf in <https://github.com/relf/egobox/pull/174>
+  * Fix WB2S criteria scaling factor and fmin computation by @relf in <https://github.com/relf/egobox/pull/175>
 * Prepare release 0.21 by @relf in <https://github.com/relf/egobox/pull/176>
 
 ## Version 0.20.0 - 25/06/2024
 
-* Make `n_optmod` option available in Python by @relf in <https://github.com/relf/egobox/pull/161>
+* `gp`:
+  * Save original parameters in trained `gp` models  by @relf in <https://github.com/relf/egobox/pull/166>
+  * Implement cross validation metric for surrogates by @relf in <https://github.com/relf/egobox/pull/167>
+* `ego`:
+  * Make `n_optmod` option available in Python by @relf in <https://github.com/relf/egobox/pull/161>
+  * Better `Egor` solver state handling by @relf in <https://github.com/relf/egobox/pull/168>
+  * Refactor `ego` module by @relf in <https://github.com/relf/egobox/pull/169>
 * Add dependabot cargo ecosystem check by @relf in <https://github.com/relf/egobox/pull/163>
-* Save original parameters in trained `gp` models  by @relf in <https://github.com/relf/egobox/pull/166>
-* Implement cross validation metric for surrogates by @relf in <https://github.com/relf/egobox/pull/167>
-* Better `Egor` solver state handling by @relf in <https://github.com/relf/egobox/pull/168>
-* Refactor `ego` module by @relf in <https://github.com/relf/egobox/pull/169>
 
 ## Version 0.19.0 - 15/05/2024
 
