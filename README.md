@@ -2,6 +2,7 @@
   <img
     width="100"
     src="./doc/LOGO_EGOBOX_v4_100x100.png"
+    alt="Efficient Global Optimization toolbox in Rust"
   />
 </p>
 
