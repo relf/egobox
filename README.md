@@ -12,16 +12,15 @@
 [![linting](https://github.com/relf/egobox/workflows/lint/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Alint)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.04737/status.svg)](https://doi.org/10.21105/joss.04737)
 
-Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt).
+Rust toolbox for Efficient Global Optimization inspired by [the EGO implementation](https://smt.readthedocs.io/en/stable/_src_docs/applications/ego.html)
+in the [SMT](https://github.com/SMTorg/smt) Python library.
 
-`egobox` is twofold:
+The `egobox` package is twofold:
 
 1. for end-users: [a Python module](#the-python-module), the Python binding of the optimizer named `Egor` and the surrogate model `Gpx`, mixture of Gaussian processes, written in Rust.
 2. for developers: [a set of Rust libraries](#the-rust-libraries) useful to implement bayesian optimization (EGO-like) algorithms,
 
 ## The Python module
-
-Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions.
 
 ### Installation
 
