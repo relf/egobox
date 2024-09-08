@@ -4,7 +4,6 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/relf/egobox/blob/master/doc/Egor_Tutorial.ipynb)
 
-
 ## Mixture of Gaussian process surrogates: _Gpx_
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/relf/egobox/blob/master/doc/Gpx_Tutorial.ipynb)
