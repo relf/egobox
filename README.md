@@ -198,7 +198,7 @@ disciplinary design optimization algorithm. Structural and Multidisciplinary Opt
 62(4), 1739–1765. <https://doi.org/10.1007/s00158-020-02514-6>
 
 Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive
-black-box functions. Journal of Global Optimization, 13(4), 455–492.
+black-box functions. Journal of Global Optimization, 13(4), 455–492. <https://www.researchgate.net/publication/235709802_Efficient_Global_Optimization_of_Expensive_Black-Box_Functions>
 
 Diouane, Youssef, et al. "TREGO: a trust-region framework for efficient global optimization."
 Journal of Global Optimization 86.1 (2023): 1-23. <https://arxiv.org/pdf/2101.06808>
