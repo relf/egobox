@@ -1,4 +1,4 @@
-# EGObox [![EGObox](https://github.com/relf/egobox/blob/logo/doc/LOGO_EGOBOX_v4_100x100.png)](https://github.com/OneraHub/WhatsOpt)
+# EGObox [![EGObox](./doc/LOGO_EGOBOX_v4_100x100.png)](https://github.com/OneraHub/WhatsOpt)
 
 [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
 [![pytests](https://github.com/relf/egobox/workflows/pytests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Apytests)
