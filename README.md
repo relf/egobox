@@ -1,4 +1,11 @@
-# EGObox [![EGObox](./doc/LOGO_EGOBOX_v4_100x100.png)](https://github.com/OneraHub/WhatsOpt)
+<p align="center">
+  <img
+    width="100"
+    src="./doc/LOGO_EGOBOX_v4_100x100.png"
+  />
+</p>
+
+# EGObox - Efficient Global Optimization toolbox
 
 [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
 [![pytests](https://github.com/relf/egobox/workflows/pytests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Apytests)
