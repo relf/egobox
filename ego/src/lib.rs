@@ -155,7 +155,7 @@
 //! * Mixture of experts and PLS dimension reduction is explained in \[[Bartoli2019](#Bartoli2019)\]
 //! * Parallel optimization is available through the selection of a qei strategy. See in \[[Ginsbourger2010](#Ginsbourger2010)\]
 //! * Mixed integer approach is implemented using continuous relaxation. See \[[Garrido2018](#Garrido2018)\]
-//! * TREGO algorithm can is enabled by default. See \[[Diouane2023](#Diouane2023)\]
+//! * TREGO algorithm is enabled by default. See \[[Diouane2023](#Diouane2023)\]
 //!
 //! # References
 //!
@@ -185,8 +185,9 @@
 //! disciplinary design optimization algorithm](https://doi.org/10.1007/s00158-020-02514-6).
 //! Structural and Multidisciplinary Optimization, 62(4), 1739–1765.
 //!
-//! Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive
-//! black-box functions. Journal of Global Optimization, 13(4), 455–492.
+//! Jones, D. R., Schonlau, M., & Welch, W. J. (1998). [Efficient global optimization of expensive
+//! black-box functions](https://www.researchgate.net/publication/235709802_Efficient_Global_Optimization_of_Expensive_Black-Box_Functions).
+//! Journal of Global Optimization, 13(4), 455–492.
 //!
 //! \[<a id="Diouane2023">Diouane(2023)</a>\]: Diouane, Youssef, et al.
 //! [TREGO: a trust-region framework for efficient global optimization](https://arxiv.org/pdf/2101.06808)

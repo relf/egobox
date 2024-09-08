@@ -1,20 +1,27 @@
-# egobox
+<p align="center">
+  <img
+    width="100"
+    src="./doc/LOGO_EGOBOX_v4_100x100.png"
+    alt="Efficient Global Optimization toolbox in Rust"
+  />
+</p>
+
+# EGObox - Efficient Global Optimization toolbox
 
 [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
 [![pytests](https://github.com/relf/egobox/workflows/pytests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Apytests)
 [![linting](https://github.com/relf/egobox/workflows/lint/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Alint)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.04737/status.svg)](https://doi.org/10.21105/joss.04737)
 
-Rust toolbox for Efficient Global Optimization algorithms inspired from [SMT](https://github.com/SMTorg/smt).
+Rust toolbox for Efficient Global Optimization inspired by [the EGO implementation](https://smt.readthedocs.io/en/stable/_src_docs/applications/ego.html)
+in the [SMT](https://github.com/SMTorg/smt) Python library.
 
-`egobox` is twofold:
+The `egobox` package is twofold:
 
 1. for end-users: [a Python module](#the-python-module), the Python binding of the optimizer named `Egor` and the surrogate model `Gpx`, mixture of Gaussian processes, written in Rust.
 2. for developers: [a set of Rust libraries](#the-rust-libraries) useful to implement bayesian optimization (EGO-like) algorithms,
 
 ## The Python module
-
-Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions.
 
 ### Installation
 
@@ -192,7 +199,7 @@ disciplinary design optimization algorithm. Structural and Multidisciplinary Opt
 62(4), 1739–1765. <https://doi.org/10.1007/s00158-020-02514-6>
 
 Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive
-black-box functions. Journal of Global Optimization, 13(4), 455–492.
+black-box functions. Journal of Global Optimization, 13(4), 455–492. <https://www.researchgate.net/publication/235709802_Efficient_Global_Optimization_of_Expensive_Black-Box_Functions>
 
 Diouane, Youssef, et al. "TREGO: a trust-region framework for efficient global optimization."
 Journal of Global Optimization 86.1 (2023): 1-23. <https://arxiv.org/pdf/2101.06808>
