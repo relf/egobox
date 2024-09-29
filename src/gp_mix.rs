@@ -10,6 +10,7 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
 //!
 use crate::types::*;
+use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{Clustered, MixtureGpSurrogate, ThetaTuning};
 #[allow(unused_imports)] // Avoid linting problem
 use egobox_moe::{GpMixture, GpSurrogate, GpSurrogateExt};
@@ -354,6 +355,31 @@ impl Gpx {
             .sample(&x.as_array(), n_traj)
             .unwrap()
             .into_pyarray_bound(py)
+    }
+
+    /// Get the input and output dimensions of the surrogate
+    ///
+    /// Returns
+    ///     the couple (nx, ny)
+    ///
+    fn dims(&self) -> (usize, usize) {
+        self.0.dims()
+    }
+
+    /// Get the nt training data points used to fit the surrogate
+    ///
+    /// Returns
+    ///     the couple (ndarray[nt, nx], ndarray[nt, ny])
+    ///
+    fn training_data<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> (Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>) {
+        let (xdata, ydata) = self.0.training_data();
+        (
+            xdata.to_owned().into_pyarray_bound(py),
+            ydata.to_owned().into_pyarray_bound(py),
+        )
     }
 
     /// Get optimized thetas hyperparameters (ie once GP experts are fitted)
