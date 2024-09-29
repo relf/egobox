@@ -22,11 +22,11 @@ def griewank(x):
 
 class TestGpMix(unittest.TestCase):
     def setUp(self):
-        xt = np.array([[0.0, 1.0, 2.0, 3.0, 4.0]]).T
-        yt = np.array([[0.0, 1.0, 1.5, 0.9, 1.0]]).T
+        self.xt = np.array([[0.0, 1.0, 2.0, 3.0, 4.0]]).T
+        self.yt = np.array([[0.0, 1.0, 1.5, 0.9, 1.0]]).T
 
         gpmix = egx.GpMix()  # or egx.Gpx.builder()
-        self.gpx = gpmix.fit(xt, yt)
+        self.gpx = gpmix.fit(self.xt, self.yt)
 
     def test_gpx_kriging(self):
         gpx = self.gpx
@@ -76,6 +76,12 @@ class TestGpMix(unittest.TestCase):
             0.0, gpx2.predict_var(np.array([[1.1]])).item(), delta=1e-3
         )
 
+    def test_training_params(self):
+        self.assertEquals(self.gpx.dims(), (1, 1))
+        (xdata, ydata) = self.gpx.training_data()
+        np.testing.assert_array_equal(xdata, self.xt)
+        np.testing.assert_array_equal(ydata, self.yt)
+
     def test_kpls_griewank(self):
         lb = -600
         ub = 600
@@ -106,6 +112,7 @@ class TestGpMix(unittest.TestCase):
         for builder in builders:
             gpx = builder.fit(x_train, y_train)
             y_pred = gpx.predict(x_test)
+            self.assertEqual(100, gpx.dims()[0])
             error = np.linalg.norm(y_pred - y_test) / np.linalg.norm(y_test)
             print("   RMS error: " + str(error))
 
