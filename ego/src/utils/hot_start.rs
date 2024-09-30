@@ -1,6 +1,6 @@
 pub use argmin::core::checkpointing::{Checkpoint, CheckpointingFrequency};
 use argmin::core::Error;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use crate::EgorState;
 
 /// An enum to specify hot start mode
-#[derive(Clone, Eq, PartialEq, Debug, Hash, Default)]
+#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, Serialize, Deserialize)]
 pub enum HotStartMode {
     /// Hot start checkpoints are not saved
     #[default]
@@ -20,12 +20,16 @@ pub enum HotStartMode {
     ExtendedIters(u64),
 }
 
-impl std::convert::From<u64> for HotStartMode {
-    fn from(value: u64) -> Self {
-        if value == 0 {
-            HotStartMode::Enabled
+impl std::convert::From<Option<u64>> for HotStartMode {
+    fn from(value: Option<u64>) -> Self {
+        if let Some(ext_iters) = value {
+            if ext_iters == 0 {
+                HotStartMode::Enabled
+            } else {
+                HotStartMode::ExtendedIters(ext_iters)
+            }
         } else {
-            HotStartMode::ExtendedIters(value)
+            HotStartMode::Disabled
         }
     }
 }
@@ -61,10 +65,10 @@ impl HotStartCheckpoint {
         directory: N,
         name: N,
         frequency: CheckpointingFrequency,
-        ext_iters: u64,
+        ext_iters: HotStartMode,
     ) -> Self {
         HotStartCheckpoint {
-            mode: ext_iters.into(),
+            mode: ext_iters,
             frequency,
             directory: PathBuf::from(directory.as_ref()),
             filename: PathBuf::from(format!("{}.arg", name.as_ref())),

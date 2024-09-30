@@ -1,6 +1,7 @@
 //! Egor optimizer configuration.
 use crate::criteria::*;
 use crate::types::*;
+use crate::HotStartMode;
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::Array1;
 use ndarray::Array2;
@@ -81,7 +82,7 @@ pub struct EgorConfig {
     /// If true use `outdir` to retrieve and start from previous results
     pub(crate) warm_start: bool,
     /// If some enable checkpointing allowing to restart for given ext_iters number of iteration from last checkpointed iteration
-    pub(crate) hot_start: Option<u64>,
+    pub(crate) hot_start: HotStartMode,
     /// List of x types allowing the handling of discrete input variables
     pub(crate) xtypes: Vec<XType>,
     /// A random generator seed used to get reproductible results.
@@ -111,7 +112,7 @@ impl Default for EgorConfig {
             target: f64::NEG_INFINITY,
             outdir: None,
             warm_start: false,
-            hot_start: None,
+            hot_start: HotStartMode::Disabled,
             xtypes: vec![],
             seed: None,
             trego: TregoConfig::default(),
@@ -269,7 +270,7 @@ impl EgorConfig {
     }
 
     /// Whether checkpointing is enabled allowing hot start from previous checkpointed iteration if any
-    pub fn hot_start(mut self, hot_start: Option<u64>) -> Self {
+    pub fn hot_start(mut self, hot_start: HotStartMode) -> Self {
         self.hot_start = hot_start;
         self
     }

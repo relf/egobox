@@ -476,7 +476,7 @@ impl Egor {
             .n_optmod(self.n_optmod)
             .target(self.target)
             .warm_start(self.warm_start)
-            .hot_start(self.hot_start);
+            .hot_start(self.hot_start.into());
         if let Some(doe) = doe {
             config = config.doe(doe);
         };
