@@ -7,11 +7,34 @@ use std::path::PathBuf;
 
 use crate::EgorState;
 
+/// An enum to specify hot start mode
+#[derive(Clone, Eq, PartialEq, Debug, Hash, Default)]
+pub enum HotStartMode {
+    /// Hot start checkpoints are not saved
+    #[default]
+    Disabled,
+    /// Hot start checkpoints are saved and optionally used if it already exists
+    Enabled,
+    /// Hot start checkpoints are saved and optionally used if it already exists
+    /// and optimization is run with an extended iteration budget
+    ExtendedIters(u64),
+}
+
+impl std::convert::From<u64> for HotStartMode {
+    fn from(value: u64) -> Self {
+        if value == 0 {
+            HotStartMode::Enabled
+        } else {
+            HotStartMode::ExtendedIters(value)
+        }
+    }
+}
+
 /// Handles saving a checkpoint to disk as a binary file.
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
 pub struct HotStartCheckpoint {
     /// Extended iteration number
-    pub extension_iters: u64,
+    pub mode: HotStartMode,
     /// Indicates how often a checkpoint is created
     pub frequency: CheckpointingFrequency,
     /// Directory where the checkpoints are saved to
@@ -24,7 +47,7 @@ impl Default for HotStartCheckpoint {
     /// Create a default `HotStartCheckpoint` instance.
     fn default() -> HotStartCheckpoint {
         HotStartCheckpoint {
-            extension_iters: 0,
+            mode: HotStartMode::default(),
             frequency: CheckpointingFrequency::default(),
             directory: PathBuf::from(".checkpoints"),
             filename: PathBuf::from("egor.arg"),
@@ -41,7 +64,7 @@ impl HotStartCheckpoint {
         ext_iters: u64,
     ) -> Self {
         HotStartCheckpoint {
-            extension_iters: ext_iters,
+            mode: ext_iters.into(),
             frequency,
             directory: PathBuf::from(directory.as_ref()),
             filename: PathBuf::from(format!("{}.arg", name.as_ref())),
@@ -81,7 +104,9 @@ where
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         let (solver, mut state): (_, EgorState<_>) = bincode::deserialize_from(reader)?;
-        state.extend_max_iters(self.extension_iters);
+        if let HotStartMode::ExtendedIters(n_iters) = self.mode {
+            state.extend_max_iters(n_iters);
+        }
         Ok(Some((solver, state)))
     }
 

@@ -6,6 +6,7 @@
 //! * Trust-region EGO optional activation
 //! * Infill criteria: EI, WB2, WB2S
 //! * Multi-point infill strategy (aka qEI)
+//! * Warm/hot start
 //!
 //! See refences below.
 //!
