@@ -138,9 +138,10 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///     warm_start (bool)
 ///         Start by loading initial doe from <outdir> directory
 ///
-///     hot_start (bool)
-///         Start from last checkpoint if any and save optimizer state at each iteration allowing further hot start
-///         Checkpoint information is stored in .checkpoint directory
+///     hot_start (u64 or None)
+///         Start from last checkpoint if any for a given number of iterations beyond initial max_iters
+///         and save optimizer state at each iteration allowing further hot start
+///         Checkpoint information is stored in .checkpoint directory.
 ///
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
@@ -166,7 +167,7 @@ pub(crate) struct Egor {
     pub target: f64,
     pub outdir: Option<String>,
     pub warm_start: bool,
-    pub hot_start: bool,
+    pub hot_start: Option<u64>,
     pub seed: Option<u64>,
 }
 
@@ -205,7 +206,7 @@ impl Egor {
         target = f64::NEG_INFINITY,
         outdir = None,
         warm_start = false,
-        hot_start = false,
+        hot_start = None,
         seed = None
     ))]
     #[allow(clippy::too_many_arguments)]
@@ -230,7 +231,7 @@ impl Egor {
         target: f64,
         outdir: Option<String>,
         warm_start: bool,
-        hot_start: bool,
+        hot_start: Option<u64>,
         seed: Option<u64>,
     ) -> Self {
         let doe = doe.map(|x| x.to_owned_array());

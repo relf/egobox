@@ -21,7 +21,7 @@ pub(crate) struct TregoConfig {
 impl Default for TregoConfig {
     fn default() -> Self {
         TregoConfig {
-            activated: true,
+            activated: false,
             n_local_steps: 4,
             d: (1e-6, 1.),
             beta: 0.9,
@@ -80,8 +80,8 @@ pub struct EgorConfig {
     pub(crate) outdir: Option<String>,
     /// If true use `outdir` to retrieve and start from previous results
     pub(crate) warm_start: bool,
-    /// If true enable checkpointing allowing to restart from last checkpointed iteration
-    pub(crate) hot_start: bool,
+    /// If some enable checkpointing allowing to restart for given ext_iters number of iteration from last checkpointed iteration
+    pub(crate) hot_start: Option<u64>,
     /// List of x types allowing the handling of discrete input variables
     pub(crate) xtypes: Vec<XType>,
     /// A random generator seed used to get reproductible results.
@@ -111,7 +111,7 @@ impl Default for EgorConfig {
             target: f64::NEG_INFINITY,
             outdir: None,
             warm_start: false,
-            hot_start: false,
+            hot_start: None,
             xtypes: vec![],
             seed: None,
             trego: TregoConfig::default(),
@@ -269,7 +269,7 @@ impl EgorConfig {
     }
 
     /// Whether checkpointing is enabled allowing hot start from previous checkpointed iteration if any
-    pub fn hot_start(mut self, hot_start: bool) -> Self {
+    pub fn hot_start(mut self, hot_start: Option<u64>) -> Self {
         self.hot_start = hot_start;
         self
     }

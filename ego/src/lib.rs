@@ -209,7 +209,9 @@ pub use crate::errors::*;
 pub use crate::gpmix::spec::{CorrelationSpec, RegressionSpec};
 pub use crate::solver::*;
 pub use crate::types::*;
-pub use crate::utils::find_best_result_index;
+pub use crate::utils::{
+    find_best_result_index, Checkpoint, CheckpointingFrequency, HotStartCheckpoint,
+};
 
 mod optimizers;
 mod utils;

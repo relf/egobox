@@ -104,10 +104,9 @@ use crate::types::*;
 use crate::EgorConfig;
 use crate::EgorState;
 use crate::{to_xtypes, EgorSolver};
+use crate::{CheckpointingFrequency, HotStartCheckpoint};
 
 use argmin::core::observers::ObserverMode;
-use argmin_checkpointing_file::CheckpointingFrequency;
-use argmin_checkpointing_file::FileCheckpoint;
 
 use egobox_moe::GpMixtureParams;
 use log::info;
@@ -212,15 +211,27 @@ impl<O: GroupFunc, SB: SurrogateBuilder + DeserializeOwned> Egor<O, SB> {
             std::fs::write(filepath, json).expect("Unable to write file");
         }
 
-        let checkpoint =
-            FileCheckpoint::new(".checkpoints", "egor", CheckpointingFrequency::Always);
         let exec = Executor::new(self.fobj.clone(), self.solver.clone());
+
+        let exec = if let Some(ext_iters) = self.solver.config.hot_start {
+            let checkpoint = HotStartCheckpoint::new(
+                ".checkpoints",
+                "egor",
+                CheckpointingFrequency::Always,
+                ext_iters,
+            );
+            exec.checkpointing(checkpoint)
+        } else {
+            exec
+        };
+
         let result = if let Some(outdir) = self.solver.config.outdir.as_ref() {
             let hist = OptimizationObserver::new(outdir.clone());
             exec.add_observer(hist, ObserverMode::Always).run()?
         } else {
-            exec.checkpointing(checkpoint).run()?
+            exec.run()?
         };
+
         info!("{}", result);
         let (x_data, y_data) = result.state().clone().take_data().unwrap();
 
@@ -408,31 +419,36 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_checkpoint_egor() {
+        let _ = std::fs::remove_file(".checkpoints/egor.arg");
+        let n_iter = 1;
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(5).hot_start(true))
+            .configure(|config| config.max_iters(n_iter).seed(42).hot_start(Some(0)))
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");
-        let expected = array![17.4];
+        let expected = array![19.1];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
 
         // without hostart we reach the same point
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(5).hot_start(false))
+            .configure(|config| config.max_iters(n_iter).seed(42).hot_start(None))
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");
-        let expected = array![17.4];
+        let expected = array![19.1];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
 
         // with hot start we continue
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+        let ext_iters = 3;
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(5).hot_start(true))
+            .configure(|config| config.seed(42).hot_start(Some(ext_iters)))
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+        assert_eq!(n_iter as u64 + ext_iters, res.state.get_iter());
+        let _ = std::fs::remove_file(".checkpoints/egor.arg");
     }
 
     #[test]
