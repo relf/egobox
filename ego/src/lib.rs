@@ -11,7 +11,9 @@
 //! * specify the initial doe,
 //! * parameterize internal optimization,
 //! * parameterize mixture of experts,
-//! * save intermediate results and allow warm restart,
+//! * save intermediate results and allow warm/hot restart,
+//! * handling of mixed-integer variables
+//! * activation of TREGO algorithm variation
 //!
 //! # Examples
 //!
@@ -149,13 +151,47 @@
 //! In the above example all GP with combinations of regression and correlation will be tested and the best combination for
 //! each modeled function will be retained. You can also simply specify `RegressionSpec::ALL` and `CorrelationSpec::ALL` to
 //! test all available combinations but remember that the more you test the slower it runs.
+//!
+//! * the TREGO algorithm described in \[[Diouane2023](#Diouane2023)\] can be activated
+//!
+//! ```no_run
+//! # use egobox_ego::{EgorConfig, RegressionSpec, CorrelationSpec};
+//! # let egor_config = EgorConfig::default();
+//!     egor_config.trego(true);
+//! ```
+//!
+//! * Intermediate results can be logged at each iteration when `outdir` directory is specified.
+//!   The following files :
+//!   * egor_config.json: Egor configuration,
+//!   * egor_initial_doe.npy: initial DOE (x, y) as numpy array,
+//!   * egor_doe.npy: DOE (x, y) as numpy array,
+//!   * egor_history.npy: best (x, y) wrt to iteration number as (n_iters, nx + ny) numpy array   
 //!  
+//! ```no_run
+//! # use egobox_ego::EgorConfig;
+//! # let egor_config = EgorConfig::default();
+//!     egor_config.outdir("./.output");  
+//! ```
+//! If warm_start is set to `true`, the algorithm starts from the saved `egor_doe.npy`
+//!
+//! * Hot start checkpointing can be enabled with `hot_start` option specifying a number of
+//!   extra iterations beyond max iters. This mechanism allows to restart after an interruption
+//!   from the last saved checkpoint. While warm_start restart from saved doe for another max_iters
+//!   iterations, hot start allows to continue from the last saved optimizer state till max_iters
+//!   is reached with optinal extra iterations.
+//!
+//! ```no_run
+//! # use egobox_ego::{EgorConfig, HotStartMode};
+//! # let egor_config = EgorConfig::default();
+//!     egor_config.hot_start(HotStartMode::Enabled);
+//! ```
+//!
 //! # Implementation notes
 //!
 //! * Mixture of experts and PLS dimension reduction is explained in \[[Bartoli2019](#Bartoli2019)\]
 //! * Parallel optimization is available through the selection of a qei strategy. See in \[[Ginsbourger2010](#Ginsbourger2010)\]
 //! * Mixed integer approach is implemented using continuous relaxation. See \[[Garrido2018](#Garrido2018)\]
-//! * TREGO algorithm is enabled by default. See \[[Diouane2023](#Diouane2023)\]
+//! * TREGO algorithm is not enabled by default. See \[[Diouane2023](#Diouane2023)\]
 //!
 //! # References
 //!
@@ -210,7 +246,7 @@ pub use crate::gpmix::spec::{CorrelationSpec, RegressionSpec};
 pub use crate::solver::*;
 pub use crate::types::*;
 pub use crate::utils::{
-    find_best_result_index, Checkpoint, CheckpointingFrequency, HotStartCheckpoint,
+    find_best_result_index, Checkpoint, CheckpointingFrequency, HotStartCheckpoint, HotStartMode,
 };
 
 mod optimizers;

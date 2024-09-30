@@ -138,7 +138,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///     warm_start (bool)
 ///         Start by loading initial doe from <outdir> directory
 ///
-///     hot_start (int or None)
+///     hot_start (int >= 0 or None)
 ///         When hot_start>=0 saves optimizer state at each iteration and starts from a previous checkpoint
 ///         if any for the given hot_start number of iterations beyond the max_iters nb of iterations.
 ///         In an unstable environment were there can be crashes it allows to restart the optimization
@@ -476,7 +476,7 @@ impl Egor {
             .n_optmod(self.n_optmod)
             .target(self.target)
             .warm_start(self.warm_start)
-            .hot_start(self.hot_start);
+            .hot_start(self.hot_start.into());
         if let Some(doe) = doe {
             config = config.doe(doe);
         };

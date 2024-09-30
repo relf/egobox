@@ -6,6 +6,7 @@
 //! * Trust-region EGO optional activation
 //! * Infill criteria: EI, WB2, WB2S
 //! * Multi-point infill strategy (aka qEI)
+//! * Warm/hot start
 //!
 //! See refences below.
 //!
@@ -103,6 +104,7 @@ use crate::gpmix::mixint::*;
 use crate::types::*;
 use crate::EgorConfig;
 use crate::EgorState;
+use crate::HotStartMode;
 use crate::{to_xtypes, EgorSolver};
 use crate::{CheckpointingFrequency, HotStartCheckpoint};
 
@@ -213,12 +215,12 @@ impl<O: GroupFunc, SB: SurrogateBuilder + DeserializeOwned> Egor<O, SB> {
 
         let exec = Executor::new(self.fobj.clone(), self.solver.clone());
 
-        let exec = if let Some(ext_iters) = self.solver.config.hot_start {
+        let exec = if self.solver.config.hot_start != HotStartMode::Disabled {
             let checkpoint = HotStartCheckpoint::new(
                 ".checkpoints",
                 "egor",
                 CheckpointingFrequency::Always,
-                ext_iters,
+                self.solver.config.hot_start.clone(),
             );
             exec.checkpointing(checkpoint)
         } else {
@@ -423,7 +425,12 @@ mod tests {
         let _ = std::fs::remove_file(".checkpoints/egor.arg");
         let n_iter = 1;
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(n_iter).seed(42).hot_start(Some(0)))
+            .configure(|config| {
+                config
+                    .max_iters(n_iter)
+                    .seed(42)
+                    .hot_start(HotStartMode::Enabled)
+            })
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");
@@ -432,7 +439,12 @@ mod tests {
 
         // without hostart we reach the same point
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(n_iter).seed(42).hot_start(None))
+            .configure(|config| {
+                config
+                    .max_iters(n_iter)
+                    .seed(42)
+                    .hot_start(HotStartMode::Disabled)
+            })
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");
@@ -442,7 +454,11 @@ mod tests {
         // with hot start we continue
         let ext_iters = 3;
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.seed(42).hot_start(Some(ext_iters)))
+            .configure(|config| {
+                config
+                    .seed(42)
+                    .hot_start(HotStartMode::ExtendedIters(ext_iters))
+            })
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");
