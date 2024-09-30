@@ -104,8 +104,10 @@ use crate::types::*;
 use crate::EgorConfig;
 use crate::EgorState;
 use crate::{to_xtypes, EgorSolver};
+use crate::{CheckpointingFrequency, HotStartCheckpoint};
 
 use argmin::core::observers::ObserverMode;
+
 use egobox_moe::GpMixtureParams;
 use log::info;
 use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
@@ -113,6 +115,7 @@ use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
 use argmin::core::{observers::Observe, Error, Executor, State, KV};
+use serde::de::DeserializeOwned;
 
 /// Json filename for configuration
 pub const CONFIG_FILE: &str = "egor_config.json";
@@ -191,12 +194,12 @@ impl<O: GroupFunc> EgorBuilder<O> {
 /// Egor optimizer structure used to parameterize the underlying `argmin::Solver`
 /// and trigger the optimization using `argmin::Executor`.
 #[derive(Clone)]
-pub struct Egor<O: GroupFunc, SB: SurrogateBuilder> {
+pub struct Egor<O: GroupFunc, SB: SurrogateBuilder + DeserializeOwned> {
     fobj: ObjFunc<O>,
     solver: EgorSolver<SB>,
 }
 
-impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
+impl<O: GroupFunc, SB: SurrogateBuilder + DeserializeOwned> Egor<O, SB> {
     /// Runs the (constrained) optimization of the objective function.
     pub fn run(&self) -> Result<OptimResult<f64>> {
         let xtypes = self.solver.config.xtypes.clone();
@@ -209,12 +212,26 @@ impl<O: GroupFunc, SB: SurrogateBuilder> Egor<O, SB> {
         }
 
         let exec = Executor::new(self.fobj.clone(), self.solver.clone());
+
+        let exec = if let Some(ext_iters) = self.solver.config.hot_start {
+            let checkpoint = HotStartCheckpoint::new(
+                ".checkpoints",
+                "egor",
+                CheckpointingFrequency::Always,
+                ext_iters,
+            );
+            exec.checkpointing(checkpoint)
+        } else {
+            exec
+        };
+
         let result = if let Some(outdir) = self.solver.config.outdir.as_ref() {
             let hist = OptimizationObserver::new(outdir.clone());
             exec.add_observer(hist, ObserverMode::Always).run()?
         } else {
             exec.run()?
         };
+
         info!("{}", result);
         let (x_data, y_data) = result.state().clone().take_data().unwrap();
 
@@ -397,6 +414,41 @@ mod tests {
             .expect("Egor should minimize");
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+    }
+
+    #[test]
+    #[serial]
+    fn test_xsinx_checkpoint_egor() {
+        let _ = std::fs::remove_file(".checkpoints/egor.arg");
+        let n_iter = 1;
+        let res = EgorBuilder::optimize(xsinx)
+            .configure(|config| config.max_iters(n_iter).seed(42).hot_start(Some(0)))
+            .min_within(&array![[0.0, 25.0]])
+            .run()
+            .expect("Egor should minimize");
+        let expected = array![19.1];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+
+        // without hostart we reach the same point
+        let res = EgorBuilder::optimize(xsinx)
+            .configure(|config| config.max_iters(n_iter).seed(42).hot_start(None))
+            .min_within(&array![[0.0, 25.0]])
+            .run()
+            .expect("Egor should minimize");
+        let expected = array![19.1];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+
+        // with hot start we continue
+        let ext_iters = 3;
+        let res = EgorBuilder::optimize(xsinx)
+            .configure(|config| config.seed(42).hot_start(Some(ext_iters)))
+            .min_within(&array![[0.0, 25.0]])
+            .run()
+            .expect("Egor should minimize");
+        let expected = array![18.9];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+        assert_eq!(n_iter as u64 + ext_iters, res.state.get_iter());
+        let _ = std::fs::remove_file(".checkpoints/egor.arg");
     }
 
     #[test]

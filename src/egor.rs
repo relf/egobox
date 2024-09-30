@@ -138,6 +138,15 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///     warm_start (bool)
 ///         Start by loading initial doe from <outdir> directory
 ///
+///     hot_start (int or None)
+///         When hot_start>=0 saves optimizer state at each iteration and starts from a previous checkpoint
+///         if any for the given hot_start number of iterations beyond the max_iters nb of iterations.
+///         In an unstable environment were there can be crashes it allows to restart the optimization
+///         from the last iteration till stopping criterion is reached. Just use hot_start=0 in this case.
+///         When specifying an extended nb of iterations (hot_start > 0) it can allow to continue till max_iters +
+///         hot_start nb of iters is reached (provided the stopping criterion is max_iters)
+///         Checkpoint information is stored in .checkpoint/egor.arg binary file.
+///
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///      
@@ -162,6 +171,7 @@ pub(crate) struct Egor {
     pub target: f64,
     pub outdir: Option<String>,
     pub warm_start: bool,
+    pub hot_start: Option<u64>,
     pub seed: Option<u64>,
 }
 
@@ -200,6 +210,7 @@ impl Egor {
         target = f64::NEG_INFINITY,
         outdir = None,
         warm_start = false,
+        hot_start = None,
         seed = None
     ))]
     #[allow(clippy::too_many_arguments)]
@@ -224,6 +235,7 @@ impl Egor {
         target: f64,
         outdir: Option<String>,
         warm_start: bool,
+        hot_start: Option<u64>,
         seed: Option<u64>,
     ) -> Self {
         let doe = doe.map(|x| x.to_owned_array());
@@ -247,6 +259,7 @@ impl Egor {
             target,
             outdir,
             warm_start,
+            hot_start,
             seed,
         }
     }
@@ -462,7 +475,8 @@ impl Egor {
             .trego(self.trego)
             .n_optmod(self.n_optmod)
             .target(self.target)
-            .warm_start(self.warm_start); // when used as a service no warmstart
+            .warm_start(self.warm_start)
+            .hot_start(self.hot_start);
         if let Some(doe) = doe {
             config = config.doe(doe);
         };

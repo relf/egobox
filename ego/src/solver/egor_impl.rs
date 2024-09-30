@@ -22,8 +22,9 @@ use ndarray::{
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
+use serde::de::DeserializeOwned;
 
-impl<SB: SurrogateBuilder> EgorSolver<SB> {
+impl<SB: SurrogateBuilder + DeserializeOwned> EgorSolver<SB> {
     /// Constructor of the optimization of the function `f` with specified random generator
     /// to get reproducibility.
     ///
@@ -80,7 +81,7 @@ impl<SB: SurrogateBuilder> EgorSolver<SB> {
 
 impl<SB> EgorSolver<SB>
 where
-    SB: SurrogateBuilder,
+    SB: SurrogateBuilder + DeserializeOwned,
 {
     pub fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
         self.config.n_clusters == 0 && (added != 0 && added % 10 == 0 && added - prev_added > 0)

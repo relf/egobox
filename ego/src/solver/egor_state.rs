@@ -289,6 +289,16 @@ where
     }
 }
 
+impl<F> EgorState<F>
+where
+    F: Float + ArgminFloat,
+{
+    /// Allow hot start feature by extending current max_iters
+    pub fn extend_max_iters(&mut self, ext_iters: u64) {
+        self.max_iters += ext_iters;
+    }
+}
+
 impl<F> State for EgorState<F>
 where
     F: Float + ArgminFloat,
