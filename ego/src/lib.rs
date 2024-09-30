@@ -157,7 +157,7 @@
 //! ```no_run
 //! # use egobox_ego::{EgorConfig, RegressionSpec, CorrelationSpec};
 //! # let egor_config = EgorConfig::default();
-//!     egor_config.trego(true)
+//!     egor_config.trego(true);
 //! ```
 //!
 //! * Intermediate results can be logged at each iteration when `outdir` directory is specified.
@@ -170,7 +170,7 @@
 //! ```no_run
 //! # use egobox_ego::EgorConfig;
 //! # let egor_config = EgorConfig::default();
-//!     egor_config.outdir("./.output")  
+//!     egor_config.outdir("./.output");  
 //! ```
 //! If warm_start is set to `true`, the algorithm starts from the saved `egor_doe.npy`
 //!
@@ -181,9 +181,9 @@
 //!   is reached with optinal extra iterations.
 //!
 //! ```no_run
-//! # use egobox_ego::EgorConfig;
+//! # use egobox_ego::{EgorConfig, HotStartMode};
 //! # let egor_config = EgorConfig::default();
-//!     egor_config.hot_start(HotStartMode::Enabled)
+//!     egor_config.hot_start(HotStartMode::Enabled);
 //! ```
 //!
 //! # Implementation notes
@@ -246,7 +246,7 @@ pub use crate::gpmix::spec::{CorrelationSpec, RegressionSpec};
 pub use crate::solver::*;
 pub use crate::types::*;
 pub use crate::utils::{
-    find_best_result_index, Checkpoint, CheckpointingFrequency, HotStartCheckpoint,
+    find_best_result_index, Checkpoint, CheckpointingFrequency, HotStartCheckpoint, HotStartMode,
 };
 
 mod optimizers;
