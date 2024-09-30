@@ -388,13 +388,14 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_xsinx_wb2_egor_builder() {
+    fn test_xsinx_trego_wb2_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
                     .max_iters(20)
                     .regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)
+                    .trego(true)
                     .seed(1)
             })
             .min_within(&array![[0.0, 25.0]])
@@ -418,7 +419,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_xsinx_checkpoint_egor() {
+    fn test_xsinx_hot_start_egor() {
         let _ = std::fs::remove_file(".checkpoints/egor.arg");
         let n_iter = 1;
         let res = EgorBuilder::optimize(xsinx)
@@ -532,7 +533,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_rosenbrock_2d_no_trego_egor_builder() {
+    fn test_rosenbrock_2d_trego_egor_builder() {
         let outdir = "target/test_trego";
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
@@ -549,7 +550,7 @@ mod tests {
                     .max_iters(max_iters)
                     .outdir(outdir)
                     .seed(42)
-                    .trego(false)
+                    .trego(true)
             })
             .min_within(&xlimits)
             .run()
@@ -557,7 +558,7 @@ mod tests {
         let filepath = std::path::Path::new(&outdir).join(DOE_FILE);
         assert!(filepath.exists());
         let doe: Array2<f64> = read_npy(&filepath).expect("file read");
-        assert_eq!(doe.nrows(), init_doe.nrows() + max_iters); // we get one point per iter
+        assert!(doe.nrows() > max_iters);
 
         println!("Rosenbrock optim result = {res:?}");
         println!("Elapsed = {:?}", now.elapsed());
