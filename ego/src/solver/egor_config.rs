@@ -21,7 +21,7 @@ pub(crate) struct TregoConfig {
 impl Default for TregoConfig {
     fn default() -> Self {
         TregoConfig {
-            activated: false,
+            activated: true,
             n_local_steps: 4,
             d: (1e-6, 1.),
             beta: 0.9,
