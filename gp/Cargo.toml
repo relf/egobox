@@ -22,7 +22,7 @@ egobox-doe = { version = "0.23.0", path = "../doe" }
 
 linfa = { version = "0.7", default-features = false }
 linfa-pls = { version = "0.7", default-features = false }
-linfa-linalg = { version = "0.1", default-features = false }
+linfa-linalg = { version = "0.2", default-features = false }
 
 ndarray = { version = "0.15", features = ["rayon", "approx"] }
 ndarray-linalg = { version = "0.15", optional = true }
