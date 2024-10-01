@@ -77,7 +77,7 @@ class TestGpMix(unittest.TestCase):
         )
 
     def test_training_params(self):
-        self.assertEquals(self.gpx.dims(), (1, 1))
+        self.assertEqual(self.gpx.dims(), (1, 1))
         (xdata, ydata) = self.gpx.training_data()
         np.testing.assert_array_equal(xdata, self.xt)
         np.testing.assert_array_equal(ydata, self.yt)

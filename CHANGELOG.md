@@ -1,5 +1,14 @@
 # Changes
 
+## Version 0.23.0 - 01/10/2024
+
+* Add EGObox logo by @relf in <https://github.com/relf/egobox/pull/193>
+* `gp`: Add training infos getters at Python level by @relf in <https://github.com/relf/egobox/pull/196>
+* `ego`:
+  * Add checkpointing and hot start by @relf in <https://github.com/relf/egobox/pull/197>
+  * Do not activate TREGO by default by @relf in <https://github.com/relf/egobox/pull/198>
+  * Improve hot start API by @relf in <https://github.com/relf/egobox/pull/199>
+  
 ## Version 0.22.0 - 04/09/2024
 
 * `ego`:
