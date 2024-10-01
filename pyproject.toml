@@ -30,8 +30,8 @@ authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 packages = [{ include = "egobox", from = "python" }]
 
 [tool.poetry.dependencies]
-numpy = ">=1.18"
-python = ">=3.8"
+numpy = ">=1.18, <2"
+python = ">=3.9"
 
 [tool.poetry.dev-dependencies]
 pytest = ">=6"
