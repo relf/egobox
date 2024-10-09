@@ -9,7 +9,7 @@
 # EGObox - Efficient Global Optimization toolbox
 
 [![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
-[![pytests](https://github.com/relf/egobox/workflows/pytests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Apytests)
+[![pytests](https://github.com/relf/egobox/workflows/pytest/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Apytest)
 [![linting](https://github.com/relf/egobox/workflows/lint/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Alint)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.04737/status.svg)](https://doi.org/10.21105/joss.04737)
 
