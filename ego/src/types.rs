@@ -63,8 +63,8 @@ pub enum QEiStrategy {
 ///
 /// The function is expected to return a matrix allowing nrows evaluations at once.
 /// A row of the output matrix is expected to contain [objective, cstr_1, ... cstr_n] values.
-pub trait GroupFunc: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
-impl<T> GroupFunc for T where T: Send + Sync + 'static + Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
+pub trait GroupFunc: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
+impl<T> GroupFunc for T where T: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
 /// As structure to handle the objective and constraints functions for implementing
 /// `argmin::CostFunction` to be used with argmin framework.
