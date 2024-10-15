@@ -277,12 +277,11 @@ impl Egor {
     ///
     #[pyo3(signature = (fun, max_iters = 20))]
     fn minimize(&self, py: Python, fun: PyObject, max_iters: usize) -> PyResult<OptimResult> {
-        let fun = fun.to_object(py);
-        let obj = move |x: &ArrayView2<f64>| -> Array2<f64> {
+        let obj = |x: &ArrayView2<f64>| -> Array2<f64> {
             Python::with_gil(|py| {
                 let args = (x.to_owned().into_pyarray_bound(py),);
-                let res = fun.call1(py, args).unwrap();
-                let pyarray: &PyArray2<f64> = res.extract(py).unwrap();
+                let res = fun.bind(py).call1(args).unwrap();
+                let pyarray = res.downcast_into::<PyArray2<f64>>().unwrap();
                 pyarray.to_owned_array()
             })
         };
