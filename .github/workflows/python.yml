@@ -28,7 +28,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --find-interpreter  -- --package ndarray:0.16.1 --precise 0.15.6
           sccache: 'true'
           manylinux: auto
       - name: Upload wheels
@@ -52,7 +52,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --find-interpreter  -- --package ndarray:0.16.1 --precise 0.15.6
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v3
@@ -74,7 +74,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --find-interpreter -- --package ndarray:0.16.1 --precise 0.15.6
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v3
@@ -90,7 +90,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --sdist --out dist --release
+          args: --sdist --out dist --release -- --package ndarray:0.16.1 --precise 0.15.6
       - name: Upload sdist
         uses: actions/upload-artifact@v3
         with:
