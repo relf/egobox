@@ -41,12 +41,6 @@ jobs:
       - name: Log active toolchain
         run: rustup show
 
-      - name: Run cargo update for ndarray 0.15
-        uses: actions-rs/cargo@v1
-        with:
-          command: update 
-          args: --package ndarray:0.16.1 --precise 0.15.6
-
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
         with:
@@ -77,12 +71,6 @@ jobs:
 
       - name: Log active toolchain
         run: rustup show
-
-      - name: Run cargo update for ndarray 0.15
-        uses: actions-rs/cargo@v1
-        with:
-          command: update 
-          args: --package ndarray:0.16.1 --precise 0.15.6
 
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
