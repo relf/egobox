@@ -4,8 +4,8 @@ use egobox_ego::gpmix::mixint::MixintContext;
 use numpy::{IntoPyArray, PyArray2};
 use pyo3::prelude::*;
 
-#[pyclass(rename_all = "SCREAMING_SNAKE_CASE")]
-#[derive(Debug, Clone, Copy)]
+#[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Sampling {
     Lhs = 1,
     FullFactorial = 2,
@@ -28,6 +28,7 @@ pub enum Sampling {
 ///    ndarray of shape (n_samples, n_variables)
 ///
 #[pyfunction]
+#[pyo3(signature = (method, xspecs, n_samples, seed=None))]
 pub fn sampling(
     py: Python<'_>,
     method: Sampling,
@@ -89,6 +90,7 @@ pub fn sampling(
 ///    ndarray of shape (n_samples, n_variables)
 ///
 #[pyfunction]
+#[pyo3(signature = (xspecs, n_samples, seed=None))]
 pub(crate) fn lhs(
     py: Python,
     xspecs: PyObject,

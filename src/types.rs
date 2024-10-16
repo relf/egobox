@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
-#[pyclass(rename_all = "UPPERCASE")]
-#[derive(Clone)]
+#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Recombination {
     /// prediction is taken from the expert with highest responsability
     /// resulting in a model with discontinuities
@@ -48,16 +48,16 @@ impl CorrelationSpec {
     pub(crate) const MATERN52: u8 = egobox_moe::CorrelationSpec::MATERN52.bits();
 }
 
-#[pyclass(rename_all = "UPPERCASE")]
-#[derive(Debug, Clone, Copy)]
+#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum InfillStrategy {
     Ei = 1,
     Wb2 = 2,
     Wb2s = 3,
 }
 
-#[pyclass(rename_all = "UPPERCASE")]
-#[derive(Debug, Clone, Copy)]
+#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ParInfillStrategy {
     Kb = 1,
     Kblb = 2,
@@ -65,8 +65,8 @@ pub(crate) enum ParInfillStrategy {
     Clmin = 4,
 }
 
-#[pyclass(rename_all = "UPPERCASE")]
-#[derive(Debug, Clone, Copy)]
+#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum InfillOptimizer {
     Cobyla = 1,
     Slsqp = 2,
@@ -93,8 +93,8 @@ impl ExpectedOptimum {
     }
 }
 
-#[pyclass(rename_all = "UPPERCASE")]
-#[derive(Clone, Copy, Debug)]
+#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum XType {
     Float = 1,
     Int = 2,
@@ -126,8 +126,8 @@ impl XSpec {
     }
 }
 
-#[pyclass(rename_all = "UPPERCASE")]
-#[derive(Debug, Clone, Copy)]
+#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum SparseMethod {
     Fitc = 1,
     Vfe = 2,
