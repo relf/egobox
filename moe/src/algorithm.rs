@@ -483,13 +483,15 @@ impl GpSurrogate for GpMixture {
     }
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
-    fn save(&self, path: &str) -> Result<()> {
+    fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
         let mut file = fs::File::create(path).unwrap();
-        let bytes = match serde_json::to_string(self) {
-            Ok(b) => b,
-            Err(err) => return Err(MoeError::SaveError(err)),
+
+        let bytes = match format {
+            GpFileFormat::Json => serde_json::to_vec(self).map_err(MoeError::SaveJsonError)?,
+            GpFileFormat::Binary => bincode::serialize(self).map_err(MoeError::SaveBinaryError)?,
         };
-        file.write_all(bytes.as_bytes())?;
+        file.write_all(&bytes)?;
+
         Ok(())
     }
 }
@@ -878,9 +880,12 @@ impl GpMixture {
 
     #[cfg(feature = "persistent")]
     /// Load Moe from given json file.
-    pub fn load(path: &str) -> Result<Box<GpMixture>> {
-        let data = fs::read_to_string(path)?;
-        let moe: GpMixture = serde_json::from_str(&data).unwrap();
+    pub fn load(path: &str, format: GpFileFormat) -> Result<Box<GpMixture>> {
+        let data = fs::read(path)?;
+        let moe = match format {
+            GpFileFormat::Json => serde_json::from_slice(&data).unwrap(),
+            GpFileFormat::Binary => bincode::deserialize(&data).unwrap(),
+        };
         Ok(Box::new(moe))
     }
 }
@@ -1150,8 +1155,8 @@ mod tests {
         let xtest = array![[0.6]];
         let y_expected = moe.predict(&xtest).unwrap();
         let filename = format!("{test_dir}/saved_moe.json");
-        moe.save(&filename).expect("MoE saving");
-        let new_moe = GpMixture::load(&filename).expect("MoE loading");
+        moe.save(&filename, GpFileFormat::Json).expect("MoE saving");
+        let new_moe = GpMixture::load(&filename, GpFileFormat::Json).expect("MoE loading");
         assert_abs_diff_eq!(y_expected, new_moe.predict(&xtest).unwrap(), epsilon = 1e-6);
     }
 
@@ -1357,6 +1362,10 @@ mod tests {
                 .kpls_dim(Some(3))
                 .fit(&Dataset::new(xt, yt))
                 .expect("GP fit error");
+
+            // To see file size : 100D => json ~ 1.2Mo, bin ~ 0.6Mo
+            // gp.save("griewank.json", GpFileFormat::Json).unwrap();
+            // gp.save("griewank.bin", GpFileFormat::Binary).unwrap();
 
             let rng = Xoshiro256Plus::seed_from_u64(0);
             let xtest = Lhs::new(&xlimits).with_rng(rng).sample(100);

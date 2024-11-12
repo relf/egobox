@@ -19,6 +19,7 @@
 
 # Project
 **/*.json
+**/.bin
 *.npy
 input.txt
 output.txt

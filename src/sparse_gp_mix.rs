@@ -9,6 +9,8 @@
 //!
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Sgp_Tutorial.ipynb) for usage.
 //!
+use std::path::Path;
+
 use crate::types::*;
 use egobox_moe::{
     Clustered, GpMixture, GpSurrogate, GpType, Inducings, MixtureGpSurrogate, ThetaTuning,
@@ -237,14 +239,22 @@ impl SparseGpx {
         self.0.to_string()
     }
 
-    /// Save Gaussian processes mixture in a json file.
+    /// Save Gaussian processes mixture in a file.
+    /// If the filename has .json JSON human readable format is used
+    /// otherwise an optimized binary format is used.
     ///
     /// Parameters
-    ///     filename (string)
-    ///         json file generated in the current directory
+    ///     filename with .json or .bin extension (string)
+    ///         file generated in the current directory
     ///
-    fn save(&self, filename: String) {
-        self.0.save(&filename).ok();
+    /// Returns True if save succeeds otherwise False
+    ///
+    fn save(&self, filename: String) -> bool {
+        let format = match Path::new(&filename).extension().unwrap().to_str().unwrap() {
+            "json" => egobox_moe::GpFileFormat::Json,
+            _ => egobox_moe::GpFileFormat::Binary,
+        };
+        self.0.save(&filename, format).is_ok()
     }
 
     /// Load Gaussian processes mixture from a json file.
@@ -255,7 +265,11 @@ impl SparseGpx {
     ///
     #[staticmethod]
     fn load(filename: String) -> SparseGpx {
-        SparseGpx(GpMixture::load(&filename).unwrap())
+        let format = match Path::new(&filename).extension().unwrap().to_str().unwrap() {
+            "json" => egobox_moe::GpFileFormat::Json,
+            _ => egobox_moe::GpFileFormat::Binary,
+        };
+        SparseGpx(GpMixture::load(&filename, format).unwrap())
     }
 
     /// Predict output values at nsamples points.

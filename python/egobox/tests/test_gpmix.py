@@ -55,26 +55,29 @@ class TestGpMix(unittest.TestCase):
 
     def test_gpx_save_load(self):
         filename = "gpdump.json"
-
+        filename_bin = "gpdump.bin"
         gpx = self.gpx
 
-        if os.path.exists(filename):
-            os.remove(filename)
-        gpx.save(filename)
-        gpx2 = egx.Gpx.load(filename)
-        os.remove(filename)
+        for file in [filename, filename_bin]:
+            if os.path.exists(file):
+                os.remove(file)
+            gpx.save(file)
 
-        # should interpolate
-        self.assertAlmostEqual(1.0, gpx2.predict(np.array([[1.0]])).item())
-        self.assertAlmostEqual(0.0, gpx2.predict_var(np.array([[1.0]])).item())
+            gpx2 = egx.Gpx.load(file)
 
-        # check a point not too far from a training point
-        self.assertAlmostEqual(
-            1.1163, gpx2.predict(np.array([[1.1]])).item(), delta=1e-3
-        )
-        self.assertAlmostEqual(
-            0.0, gpx2.predict_var(np.array([[1.1]])).item(), delta=1e-3
-        )
+            os.remove(file)
+
+            # should interpolate
+            self.assertAlmostEqual(1.0, gpx2.predict(np.array([[1.0]])).item())
+            self.assertAlmostEqual(0.0, gpx2.predict_var(np.array([[1.0]])).item())
+
+            # check a point not too far from a training point
+            self.assertAlmostEqual(
+                1.1163, gpx2.predict(np.array([[1.1]])).item(), delta=1e-3
+            )
+            self.assertAlmostEqual(
+                0.0, gpx2.predict_var(np.array([[1.1]])).item(), delta=1e-3
+            )
 
     def test_training_params(self):
         self.assertEqual(self.gpx.dims(), (1, 1))
