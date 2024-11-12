@@ -1363,8 +1363,9 @@ mod tests {
                 .fit(&Dataset::new(xt, yt))
                 .expect("GP fit error");
 
-            gp.save("griewank.json", GpFileFormat::Json).unwrap();
-            gp.save("griewank.bin", GpFileFormat::Binary).unwrap();
+            // To see file size : 100D => json ~ 1.2Mo, bin ~ 0.6Mo
+            // gp.save("griewank.json", GpFileFormat::Json).unwrap();
+            // gp.save("griewank.bin", GpFileFormat::Binary).unwrap();
 
             let rng = Xoshiro256Plus::seed_from_u64(0);
             let xtest = Lhs::new(&xlimits).with_rng(rng).sample(100);
