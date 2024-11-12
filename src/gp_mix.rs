@@ -251,7 +251,7 @@ impl Gpx {
     fn save(&self, filename: String) -> bool {
         let extension = Path::new(&filename).extension().unwrap().to_str().unwrap();
         match extension {
-            ".json" => self
+            "json" => self
                 .0
                 .save(&filename, egobox_moe::GpFileFormat::Json)
                 .is_ok(),

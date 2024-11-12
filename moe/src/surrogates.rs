@@ -161,12 +161,12 @@ macro_rules! declare_surrogate {
                 fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
                     let bytes = match format {
-                        GpFileFormat::Json => serde_json::to_string(self)
+                        GpFileFormat::Json => serde_json::to_string(self as &dyn GpSurrogate)
                             .map_err(MoeError::SaveJsonError)?
                             .as_bytes()
                             .to_vec(),
                         GpFileFormat::Binary => {
-                            bincode::serialize(self).map_err(MoeError::SaveBinaryError)?
+                            bincode::serialize(self as &dyn GpSurrogate).map_err(MoeError::SaveBinaryError)?
                         }
                     };
                     file.write_all(&bytes)?;
@@ -321,12 +321,12 @@ macro_rules! declare_sgp_surrogate {
                 fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
                     let bytes = match format {
-                        GpFileFormat::Json => serde_json::to_string(self)
+                        GpFileFormat::Json => serde_json::to_string(self as &dyn SgpSurrogate)
                             .map_err(MoeError::SaveJsonError)?
                             .as_bytes()
                             .to_vec(),
                         GpFileFormat::Binary => {
-                            bincode::serialize(self).map_err(MoeError::SaveBinaryError)?
+                            bincode::serialize(self as &dyn SgpSurrogate).map_err(MoeError::SaveBinaryError)?
                         }
                     };
                     file.write_all(&bytes)?;
