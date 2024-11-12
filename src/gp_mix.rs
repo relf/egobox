@@ -249,17 +249,11 @@ impl Gpx {
     /// Returns True if save succeeds otherwise False
     ///
     fn save(&self, filename: String) -> bool {
-        let extension = Path::new(&filename).extension().unwrap().to_str().unwrap();
-        match extension {
-            "json" => self
-                .0
-                .save(&filename, egobox_moe::GpFileFormat::Json)
-                .is_ok(),
-            _ => self
-                .0
-                .save(&filename, egobox_moe::GpFileFormat::Binary)
-                .is_ok(),
-        }
+        let format = match Path::new(&filename).extension().unwrap().to_str().unwrap() {
+            "json" => egobox_moe::GpFileFormat::Json,
+            _ => egobox_moe::GpFileFormat::Binary,
+        };
+        self.0.save(&filename, format).is_ok()
     }
 
     /// Load Gaussian processes mixture from file.
@@ -270,7 +264,11 @@ impl Gpx {
     ///
     #[staticmethod]
     fn load(filename: String) -> Gpx {
-        Gpx(GpMixture::load(&filename).unwrap())
+        let format = match Path::new(&filename).extension().unwrap().to_str().unwrap() {
+            "json" => egobox_moe::GpFileFormat::Json,
+            _ => egobox_moe::GpFileFormat::Binary,
+        };
+        Gpx(GpMixture::load(&filename, format).unwrap())
     }
 
     /// Predict output values at nsamples points.

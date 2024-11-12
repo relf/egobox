@@ -586,10 +586,7 @@ impl GpSurrogate for MixintGpMixture {
 
         let mut file = fs::File::create(path).unwrap();
         let bytes = match format {
-            GpFileFormat::Json => serde_json::to_string(self)
-                .map_err(MoeError::SaveJsonError)?
-                .as_bytes()
-                .to_vec(),
+            GpFileFormat::Json => serde_json::to_vec(self).map_err(MoeError::SaveJsonError)?,
             GpFileFormat::Binary => bincode::serialize(self).map_err(MoeError::SaveBinaryError)?,
         };
         file.write_all(&bytes)?;

@@ -161,10 +161,8 @@ macro_rules! declare_surrogate {
                 fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
                     let bytes = match format {
-                        GpFileFormat::Json => serde_json::to_string(self as &dyn GpSurrogate)
-                            .map_err(MoeError::SaveJsonError)?
-                            .as_bytes()
-                            .to_vec(),
+                        GpFileFormat::Json => serde_json::to_vec(self as &dyn GpSurrogate)
+                            .map_err(MoeError::SaveJsonError)?,
                         GpFileFormat::Binary => {
                             bincode::serialize(self as &dyn GpSurrogate).map_err(MoeError::SaveBinaryError)?
                         }
@@ -321,10 +319,8 @@ macro_rules! declare_sgp_surrogate {
                 fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
                     let bytes = match format {
-                        GpFileFormat::Json => serde_json::to_string(self as &dyn SgpSurrogate)
-                            .map_err(MoeError::SaveJsonError)?
-                            .as_bytes()
-                            .to_vec(),
+                        GpFileFormat::Json => serde_json::to_vec(self as &dyn SgpSurrogate)
+                            .map_err(MoeError::SaveJsonError)?,
                         GpFileFormat::Binary => {
                             bincode::serialize(self as &dyn SgpSurrogate).map_err(MoeError::SaveBinaryError)?
                         }
@@ -394,10 +390,17 @@ declare_sgp_surrogate!(Matern52);
 
 #[cfg(feature = "persistent")]
 /// Load GP surrogate from given json file.
-pub fn load(path: &str) -> Result<Box<dyn GpSurrogate>> {
-    let data = fs::read_to_string(path)?;
-    let gp: Box<dyn GpSurrogate> = serde_json::from_str(&data).unwrap();
-    Ok(gp)
+pub fn load(path: &str, format: GpFileFormat) -> Result<Box<dyn GpSurrogate>> {
+    let data = fs::read(path)?;
+    match format {
+        GpFileFormat::Json => {
+            serde_json::from_slice::<Box<dyn GpSurrogate>>(&data).map_err(|err| {
+                MoeError::LoadError(format!("Error while loading from {path}: ({err})"))
+            })
+        }
+        GpFileFormat::Binary => bincode::deserialize(&data)
+            .map_err(|err| MoeError::LoadError(format!("Error while loading from {path} ({err})"))),
+    }
 }
 
 #[doc(hidden)]
@@ -462,7 +465,7 @@ mod tests {
             .expect("GP fit error");
         gp.save("target/tests/save_gp.json", GpFileFormat::Json)
             .expect("GP not saved");
-        let gp = load("target/tests/save_gp.json").expect("GP not loaded");
+        let gp = load("target/tests/save_gp.json", GpFileFormat::Json).expect("GP not loaded");
         let xv = Lhs::new(&xlimits).sample(20);
         let yv = xsinx(&xv);
         let ytest = gp.predict(&xv.view()).unwrap();
@@ -472,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_load_fail() {
-        let gp = load("notfound.json");
+        let gp = load("notfound.json", GpFileFormat::Json);
         assert!(gp.is_err());
     }
 }
