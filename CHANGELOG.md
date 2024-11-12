@@ -1,5 +1,11 @@
 # Changes
 
+## Version 0.24.0 - 12/11/2024
+
+* `moe`: Save/Load surrogates in binary format by @relf in <https://github.com/relf/egobox/pull/213>
+* Fix badge link by @relf in <https://github.com/relf/egobox/pull/201>
+* Upgrade to PyO3 0.22 by @relf in <https://github.com/relf/egobox/pull/203>
+
 ## Version 0.23.0 - 01/10/2024
 
 * Add EGObox logo by @relf in <https://github.com/relf/egobox/pull/193>
