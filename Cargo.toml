@@ -38,7 +38,7 @@ egobox-ego = { version = "0.24.0", path = "./ego", features = ["persistent"] }
 
 linfa = { version = "0.7", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx"] }
+ndarray = { version = "0.16", features = ["rayon", "approx"] }
 ndarray-rand = "0.14"
 anyhow = "1"
 rayon = "1"

@@ -88,6 +88,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "approx"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "arc-swap"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -542,7 +551,7 @@ name = "egobox"
 version = "0.24.0"
 dependencies = [
  "anyhow",
- "approx",
+ "approx 0.4.0",
  "argmin_testfunctions",
  "criterion",
  "ctrlc",
@@ -555,7 +564,7 @@ dependencies = [
  "libm",
  "linfa",
  "log",
- "ndarray",
+ "ndarray 0.16.1",
  "ndarray-rand",
  "numpy",
  "pyo3",
@@ -570,10 +579,10 @@ dependencies = [
 name = "egobox-doe"
 version = "0.24.0"
 dependencies = [
- "approx",
+ "approx 0.4.0",
  "criterion",
  "linfa",
- "ndarray",
+ "ndarray 0.16.1",
  "ndarray-rand",
  "ndarray-stats",
  "num-traits",
@@ -587,7 +596,7 @@ name = "egobox-ego"
 version = "0.24.0"
 dependencies = [
  "anyhow",
- "approx",
+ "approx 0.4.0",
  "argmin",
  "argmin_testfunctions",
  "bincode",
@@ -605,7 +614,7 @@ dependencies = [
  "linfa-linalg",
  "linfa-pls",
  "log",
- "ndarray",
+ "ndarray 0.16.1",
  "ndarray-linalg",
  "ndarray-npy",
  "ndarray-rand",
@@ -627,7 +636,7 @@ dependencies = [
 name = "egobox-gp"
 version = "0.24.0"
 dependencies = [
- "approx",
+ "approx 0.4.0",
  "argmin_testfunctions",
  "cobyla",
  "criterion",
@@ -637,7 +646,7 @@ dependencies = [
  "linfa-linalg",
  "linfa-pls",
  "log",
- "ndarray",
+ "ndarray 0.16.1",
  "ndarray-linalg",
  "ndarray-npy",
  "ndarray-rand",
@@ -658,7 +667,7 @@ dependencies = [
 name = "egobox-moe"
 version = "0.24.0"
 dependencies = [
- "approx",
+ "approx 0.4.0",
  "argmin_testfunctions",
  "bincode",
  "bitflags",
@@ -672,7 +681,7 @@ dependencies = [
  "linfa-linalg",
  "linfa-pls",
  "log",
- "ndarray",
+ "ndarray 0.16.1",
  "ndarray-csv",
  "ndarray-linalg",
  "ndarray-npy",
@@ -732,7 +741,7 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e29b3f2b07b398985f495a66466e0a1fd105e022c25e1fd7042b60402cba765a"
 dependencies = [
- "ndarray",
+ "ndarray 0.15.6",
 ]
 
 [[package]]
@@ -1024,8 +1033,8 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1cab423110bc374e4cfa915da88952e2c6a4a5a6300ac0a0e68022bff2ace0b3"
 dependencies = [
- "approx",
- "ndarray",
+ "approx 0.4.0",
+ "ndarray 0.15.6",
  "ndarray-linalg",
  "num-traits",
  "rand",
@@ -1043,7 +1052,7 @@ dependencies = [
  "linfa",
  "linfa-linalg",
  "linfa-nn",
- "ndarray",
+ "ndarray 0.15.6",
  "ndarray-rand",
  "ndarray-stats",
  "noisy_float",
@@ -1060,7 +1069,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e7562b41c8876d3367897067013bb2884cc78e6893f092ecd26b305176ac82"
 dependencies = [
- "ndarray",
+ "ndarray 0.15.6",
  "num-traits",
  "thiserror",
 ]
@@ -1073,7 +1082,7 @@ checksum = "c1945b1a1435e885b4743dad94f9676c0bf65d6cce102e96c753f93b4cfe68d0"
 dependencies = [
  "kdtree",
  "linfa",
- "ndarray",
+ "ndarray 0.15.6",
  "ndarray-stats",
  "noisy_float",
  "num-traits",
@@ -1090,7 +1099,7 @@ checksum = "4bd9bc190667ad5c4b6a529e3fec5b47979dcd9a58f935a5c3d47ad099deb3b0"
 dependencies = [
  "linfa",
  "linfa-linalg",
- "ndarray",
+ "ndarray 0.15.6",
  "ndarray-linalg",
  "ndarray-rand",
  "ndarray-stats",
@@ -1155,7 +1164,7 @@ version = "0.15.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adb12d4e967ec485a5f71c6311fe28158e9d6f4bc4a447b474184d0f91a8fa32"
 dependencies = [
- "approx",
+ "approx 0.4.0",
  "cblas-sys",
  "libc",
  "matrixmultiply",
@@ -1168,6 +1177,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ndarray"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
+dependencies = [
+ "approx 0.5.1",
+ "cblas-sys",
+ "libc",
+ "matrixmultiply",
+ "num-complex",
+ "num-integer",
+ "num-traits",
+ "portable-atomic",
+ "portable-atomic-util",
+ "rawpointer",
+ "rayon",
+]
+
+[[package]]
 name = "ndarray-csv"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1175,7 +1203,7 @@ checksum = "2956dbaf15d46593bfddfdb88901cb35299f3a58390c7328ac4f58932800b8f8"
 dependencies = [
  "csv",
  "either",
- "ndarray",
+ "ndarray 0.15.6",
  "serde",
 ]
 
@@ -1187,7 +1215,7 @@ checksum = "8f87ff36428f228c6056204d0f5cb8c5165f0db0a065429faace3edbc2718f1f"
 dependencies = [
  "cauchy",
  "lax",
- "ndarray",
+ "ndarray 0.15.6",
  "num-complex",
  "num-traits",
  "rand",
@@ -1201,7 +1229,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f85776816e34becd8bd9540818d7dc77bf28307f3b3dcc51cc82403c6931680c"
 dependencies = [
  "byteorder",
- "ndarray",
+ "ndarray 0.15.6",
  "num-complex",
  "num-traits",
  "py_literal",
@@ -1214,7 +1242,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65608f937acc725f5b164dcf40f4f0bc5d67dc268ab8a649d3002606718c4588"
 dependencies = [
- "ndarray",
+ "ndarray 0.15.6",
  "rand",
  "rand_distr",
 ]
@@ -1227,7 +1255,7 @@ checksum = "af5a8477ac96877b5bd1fd67e0c28736c12943aba24eda92b127e036b0c8f400"
 dependencies = [
  "indexmap",
  "itertools",
- "ndarray",
+ "ndarray 0.15.6",
  "noisy_float",
  "num-integer",
  "num-traits",
@@ -1241,7 +1269,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "668b3abeae3e0637740340e0e32a9bf9308380e146ea6797950f9ff16e88d88a"
 dependencies = [
  "lazy_static",
- "ndarray",
+ "ndarray 0.15.6",
  "num-traits",
  "regex",
 ]
@@ -1365,7 +1393,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edb929bc0da91a4d85ed6c0a84deaa53d411abfb387fc271124f91bf6b89f14e"
 dependencies = [
  "libc",
- "ndarray",
+ "ndarray 0.16.1",
  "num-complex",
  "num-integer",
  "num-traits",
@@ -1510,6 +1538,15 @@ name = "portable-atomic"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc9c68a3f6da06753e9335d63e27f6b9754dd1920d941135b7ea8224f141adb2"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90a7d5beecc52a491b54d6dd05c7a45ba1801666a5baad9fdbfc6fef8d2d206c"
+dependencies = [
+ "portable-atomic",
+]
 
 [[package]]
 name = "powerfmt"
@@ -1954,7 +1991,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "704ef26d974e8a452313ed629828cd9d4e4fa34667ca1ad9d6b1fffa43c6e166"
 dependencies = [
- "ndarray",
+ "ndarray 0.16.1",
  "num-complex",
  "num-traits",
  "smallvec",
