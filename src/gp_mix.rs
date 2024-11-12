@@ -9,6 +9,8 @@
 //!
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
 //!
+use std::path::Path;
+
 use crate::types::*;
 use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{Clustered, MixtureGpSurrogate, ThetaTuning};
@@ -236,17 +238,31 @@ impl Gpx {
         self.0.to_string()
     }
 
-    /// Save Gaussian processes mixture in a json file.
+    /// Save Gaussian processes mixture in a file.
+    /// If the filename has .json JSON human readable format is used
+    /// otherwise an optimized binary format is used.
     ///
     /// Parameters
-    ///     filename (string)
-    ///         json file generated in the current directory
+    ///     filename with .json or .bin extension (string)
+    ///         file generated in the current directory
     ///
-    fn save(&self, filename: String) {
-        self.0.save(&filename).ok();
+    /// Returns True if save succeeds otherwise False
+    ///
+    fn save(&self, filename: String) -> bool {
+        let extension = Path::new(&filename).extension().unwrap().to_str().unwrap();
+        match extension {
+            ".json" => self
+                .0
+                .save(&filename, egobox_moe::GpFileFormat::Json)
+                .is_ok(),
+            _ => self
+                .0
+                .save(&filename, egobox_moe::GpFileFormat::Binary)
+                .is_ok(),
+        }
     }
 
-    /// Load Gaussian processes mixture from a json file.
+    /// Load Gaussian processes mixture from file.
     ///
     /// Parameters
     ///     filename (string)

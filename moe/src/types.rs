@@ -125,3 +125,13 @@ impl Clustering {
 pub trait MixtureGpSurrogate: Clustered + GpSurrogate + GpSurrogateExt {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>>;
 }
+
+#[derive(Default, Debug)]
+/// An enumeration of Gpx available file format
+pub enum GpFileFormat {
+    /// Human readable format
+    #[default]
+    Json,
+    /// Binary format
+    Binary,
+}

@@ -62,7 +62,7 @@ class TestGpMix(unittest.TestCase):
             os.remove(filename)
         gpx.save(filename)
         gpx2 = egx.Gpx.load(filename)
-        os.remove(filename)
+        # os.remove(filename)
 
         # should interpolate
         self.assertAlmostEqual(1.0, gpx2.predict(np.array([[1.0]])).item())

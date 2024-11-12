@@ -483,13 +483,18 @@ impl GpSurrogate for GpMixture {
     }
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
-    fn save(&self, path: &str) -> Result<()> {
+    fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
         let mut file = fs::File::create(path).unwrap();
-        let bytes = match serde_json::to_string(self) {
-            Ok(b) => b,
-            Err(err) => return Err(MoeError::SaveError(err)),
+
+        let bytes = match format {
+            GpFileFormat::Json => serde_json::to_string(self)
+                .map_err(MoeError::SaveJsonError)?
+                .as_bytes()
+                .to_vec(),
+            GpFileFormat::Binary => bincode::serialize(self).map_err(MoeError::SaveBinaryError)?,
         };
-        file.write_all(bytes.as_bytes())?;
+        file.write_all(&bytes)?;
+
         Ok(())
     }
 }
@@ -1150,7 +1155,7 @@ mod tests {
         let xtest = array![[0.6]];
         let y_expected = moe.predict(&xtest).unwrap();
         let filename = format!("{test_dir}/saved_moe.json");
-        moe.save(&filename).expect("MoE saving");
+        moe.save(&filename, GpFileFormat::Json).expect("MoE saving");
         let new_moe = GpMixture::load(&filename).expect("MoE loading");
         assert_abs_diff_eq!(y_expected, new_moe.predict(&xtest).unwrap(), epsilon = 1e-6);
     }

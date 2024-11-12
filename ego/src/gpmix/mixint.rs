@@ -9,8 +9,8 @@ use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
 use egobox_gp::metrics::CrossValScore;
 use egobox_gp::ThetaTuning;
 use egobox_moe::{
-    Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
-    GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, RegressionSpec,
+    Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpFileFormat, GpMixture,
+    GpMixtureParams, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -581,13 +581,18 @@ impl GpSurrogate for MixintGpMixture {
 
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
-    fn save(&self, path: &str) -> egobox_moe::Result<()> {
+    fn save(&self, path: &str, format: GpFileFormat) -> egobox_moe::Result<()> {
+        use egobox_moe::GpFileFormat;
+
         let mut file = fs::File::create(path).unwrap();
-        let bytes = match serde_json::to_string(self) {
-            Ok(b) => b,
-            Err(err) => return Err(MoeError::SaveError(err)),
+        let bytes = match format {
+            GpFileFormat::Json => serde_json::to_string(self)
+                .map_err(MoeError::SaveJsonError)?
+                .as_bytes()
+                .to_vec(),
+            GpFileFormat::Binary => bincode::serialize(self).map_err(MoeError::SaveBinaryError)?,
         };
-        file.write_all(bytes.as_bytes())?;
+        file.write_all(&bytes)?;
         Ok(())
     }
 }

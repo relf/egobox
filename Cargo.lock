@@ -660,6 +660,7 @@ version = "0.23.0"
 dependencies = [
  "approx",
  "argmin_testfunctions",
+ "bincode",
  "bitflags",
  "criterion",
  "csv",

@@ -18,7 +18,7 @@ categories = ["algorithms", "mathematics", "science"]
 [features]
 default = []
 
-persistent = ["serializable", "serde_json"]
+persistent = ["serializable", "serde_json", "bincode"]
 serializable = [
     "serde",
     "typetag",
@@ -51,6 +51,8 @@ thiserror = "1"
 
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
+bincode = { version = "1.3.3", optional = true }
+
 typetag = { version = "0.2", optional = true }
 
 [dev-dependencies]

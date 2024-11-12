@@ -1,4 +1,5 @@
 use crate::errors::Result;
+use crate::types::GpFileFormat;
 use egobox_gp::{
     correlation_models::*, mean_models::*, GaussianProcess, GpParams, SgpParams,
     SparseGaussianProcess, SparseMethod, ThetaTuning,
@@ -54,7 +55,7 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Save model in given file.
     #[cfg(feature = "persistent")]
-    fn save(&self, path: &str) -> Result<()>;
+    fn save(&self, path: &str, format: GpFileFormat) -> Result<()>;
 }
 
 /// A trait for a GP surrogate with derivatives predictions and sampling
@@ -157,13 +158,19 @@ macro_rules! declare_surrogate {
                 }
 
                 #[cfg(feature = "persistent")]
-                fn save(&self, path: &str) -> Result<()> {
+                fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
-                    let bytes = match serde_json::to_string(self as &dyn GpSurrogate) {
-                        Ok(b) => b,
-                        Err(err) => return Err(MoeError::SaveError(err))
+                    let bytes = match format {
+                        GpFileFormat::Json => serde_json::to_string(self)
+                            .map_err(MoeError::SaveJsonError)?
+                            .as_bytes()
+                            .to_vec(),
+                        GpFileFormat::Binary => {
+                            bincode::serialize(self).map_err(MoeError::SaveBinaryError)?
+                        }
                     };
-                    file.write_all(bytes.as_bytes())?;
+                    file.write_all(&bytes)?;
+
                     Ok(())
                 }
 
@@ -311,13 +318,18 @@ macro_rules! declare_sgp_surrogate {
                 }
 
                 #[cfg(feature = "persistent")]
-                fn save(&self, path: &str) -> Result<()> {
+                fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
                     let mut file = fs::File::create(path).unwrap();
-                    let bytes = match serde_json::to_string(self as &dyn SgpSurrogate) {
-                        Ok(b) => b,
-                        Err(err) => return Err(MoeError::SaveError(err))
+                    let bytes = match format {
+                        GpFileFormat::Json => serde_json::to_string(self)
+                            .map_err(MoeError::SaveJsonError)?
+                            .as_bytes()
+                            .to_vec(),
+                        GpFileFormat::Binary => {
+                            bincode::serialize(self).map_err(MoeError::SaveBinaryError)?
+                        }
                     };
-                    file.write_all(bytes.as_bytes())?;
+                    file.write_all(&bytes)?;
                     Ok(())
                 }
             }
@@ -448,7 +460,8 @@ mod tests {
         let gp = make_surrogate_params!(Constant, SquaredExponential)
             .train(&xt.view(), &yt.view())
             .expect("GP fit error");
-        gp.save("target/tests/save_gp.json").expect("GP not saved");
+        gp.save("target/tests/save_gp.json", GpFileFormat::Json)
+            .expect("GP not saved");
         let gp = load("target/tests/save_gp.json").expect("GP not loaded");
         let xv = Lhs::new(&xlimits).sample(20);
         let yv = xsinx(&xv);
