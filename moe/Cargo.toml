@@ -1,6 +1,6 @@
 [package]
 name = "egobox-moe"
-version = "0.23.0"
+version = "0.24.0"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 edition = "2021"
 description = "A library for mixture of expert gaussian processes"
@@ -29,8 +29,8 @@ serializable = [
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.23.0", path = "../doe" }
-egobox-gp = { version = "0.23.0", path = "../gp" }
+egobox-doe = { version = "0.24.0", path = "../doe" }
+egobox-gp = { version = "0.24.0", path = "../gp" }
 
 linfa = { version = "0.7", default-features = false }
 linfa-clustering = { version = "0.7", default-features = false }
