@@ -13,7 +13,7 @@ categories = ["algorithms", "mathematics", "science"]
 
 default = []
 
-serializable = ["serde", "typetag", "linfa/serde"]
+serializable = ["serde", "typetag", "linfa/serde", "rand_xoshiro/serde1"]
 persistent = ["serializable", "serde_json"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
