@@ -119,6 +119,14 @@ class TestGpMix(unittest.TestCase):
             error = np.linalg.norm(y_pred - y_test) / np.linalg.norm(y_test)
             print("   RMS error: " + str(error))
 
+    def test_multi_outputs_exception(self):
+        self.xt = np.array([[0.0, 1.0, 2.0, 3.0, 4.0]]).T
+        self.yt = np.array(
+            [[0.0, 10.0], [1.0, -3.0], [1.5, 1.5], [0.9, 1.0], [1.0, 0.0]]
+        )
+        with self.assertRaises(BaseException):
+            egx.Gpx.builder().fit(self.xt, self.yt)
+
 
 if __name__ == "__main__":
     unittest.main()

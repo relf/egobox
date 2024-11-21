@@ -418,6 +418,12 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
     ) -> Result<Self::Object> {
         let x = dataset.records();
         let y = dataset.targets();
+        if y.ncols() > 1 {
+            panic!(
+                "Multiple outputs not handled, a one-dimensional column vector \
+            as training output data is expected"
+            );
+        }
         if let Some(d) = self.kpls_dim() {
             if *d > x.ncols() {
                 return Err(GpError::InvalidValueError(format!(
@@ -838,7 +844,7 @@ mod tests {
     use super::*;
 
     use approx::assert_abs_diff_eq;
-    use ndarray::Array;
+    use ndarray::{concatenate, Array};
     // use ndarray_npy::{read_npy, write_npy};
     use ndarray_npy::write_npy;
     use ndarray_rand::rand::SeedableRng;
@@ -1020,5 +1026,22 @@ mod tests {
         let sgp_vars = sgp.predict_var(&xplot).unwrap();
 
         save_data(&xt, &yt, &z, &xplot, &sgp_vals, &sgp_vars);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_multiple_outputs() {
+        let mut rng = Xoshiro256Plus::seed_from_u64(42);
+        // Generate training data
+        let nt = 200;
+        // Variance of the gaussian noise on our training data
+        let eta2: f64 = 0.01;
+        let (xt, yt) = make_test_data(nt, eta2, &mut rng);
+        let yt = concatenate(Axis(1), &[yt.view(), yt.view()]).unwrap();
+        let n_inducings = 30;
+
+        let _sgp = SparseKriging::params(Inducings::Randomized(n_inducings))
+            .fit(&Dataset::new(xt.clone(), yt.clone()))
+            .expect("GP fitted");
     }
 }
