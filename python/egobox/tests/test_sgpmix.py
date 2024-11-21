@@ -60,6 +60,25 @@ class TestSgp(unittest.TestCase):
         print(elapsed)
         print(sgp)
 
+    def test_sgp_multi_outputs_exception(self):
+        # random generator for reproducibility
+        rng = np.random.RandomState(0)
+
+        # Generate training data
+        nt = 200
+        # Variance of the gaussian noise on our trainingg data
+        eta2 = [0.01]
+        gaussian_noise = rng.normal(loc=0.0, scale=np.sqrt(eta2), size=(nt, 1))
+        xt = 2 * rng.rand(nt, 1) - 1
+        yt = f_obj(xt) + gaussian_noise
+        yt = np.hstack((yt, yt))
+
+        # Pick inducing points randomly in training data
+        n_inducing = 30
+
+        with self.assertRaises(BaseException):
+            egx.SparseGpMix(nz=n_inducing, seed=0).fit(xt, yt)
+
 
 if __name__ == "__main__":
     unittest.main()

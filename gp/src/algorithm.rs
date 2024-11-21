@@ -734,6 +734,12 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
     ) -> Result<Self::Object> {
         let x = dataset.records();
         let y = dataset.targets();
+        if y.ncols() > 1 {
+            panic!(
+                "Multiple outputs not handled, a one-dimensional column vector \
+            as training output data is expected"
+            );
+        }
         if let Some(d) = self.kpls_dim() {
             if *d > x.ncols() {
                 return Err(GpError::InvalidValueError(format!(
@@ -1558,6 +1564,19 @@ mod tests {
             .fit(&Dataset::new(xt, yt))
             .expect("GP fit error");
         assert_abs_diff_eq!(*gp.theta().to_vec(), expected);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_multiple_outputs() {
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![[0.0, 10.0], [1.0, -3.], [1.5, 1.5], [0.9, 1.0], [1.0, 0.0]];
+        let _gp = Kriging::params()
+            .fit(&Dataset::new(xt.clone(), yt.clone()))
+            .expect("GP fit error");
+        // println!("theta = {}", gp.theta());
+        // let xtest = array![[0.1]];
+        // println!("pred({}) = {}", &xtest, gp.predict(&xtest).unwrap());
     }
 
     fn x2sinx(x: &Array2<f64>) -> Array2<f64> {
