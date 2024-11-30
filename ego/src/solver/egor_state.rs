@@ -462,7 +462,7 @@ where
     /// # use argmin::core::{State, ArgminFloat};
     ///
     /// # let mut state: EgorState<f64> = EgorState::new();
-
+    ///
     /// # assert!(state.best_param.is_none());
     /// # state.best_param = Some(array![1.0, 2.0]);
     /// # assert_eq!(state.best_param.as_ref().unwrap()[0].to_ne_bytes(), 1.0f64.to_ne_bytes());

@@ -383,8 +383,8 @@ where
     F: Float,
     Corr: CorrelationModel<F>;
 
-impl<'a, F, D, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
-    for SparseGpVariancePredictor<'a, F, Corr>
+impl<F, D, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
+    for SparseGpVariancePredictor<'_, F, Corr>
 where
     F: Float,
     D: Data<Elem = F>,

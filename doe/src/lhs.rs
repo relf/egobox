@@ -168,7 +168,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
             let p_accpt = n_acpt / (inner_loop as f64); // probability of acceptance
             let p_imp = n_imp / (inner_loop as f64); // probability of improvement
 
-            if phip_best - phip < tol {
+            if phip - phip_best > tol {
                 if p_accpt >= 0.1 && p_imp < p_accpt {
                     t *= F::cast(0.8)
                 } else if p_accpt >= 0.1 && (p_imp - p_accpt).abs() < f64::EPSILON {

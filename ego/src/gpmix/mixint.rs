@@ -661,8 +661,8 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Mix
 }
 
 struct MoeVariancePredictor<'a>(&'a GpMixture);
-impl<'a, D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
-    for MoeVariancePredictor<'a>
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
+    for MoeVariancePredictor<'_>
 {
     fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
         assert_eq!(
