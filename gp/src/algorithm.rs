@@ -698,8 +698,8 @@ where
     Mean: RegressionModel<F>,
     Corr: CorrelationModel<F>;
 
-impl<'a, F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
-    for GpVariancePredictor<'a, F, Mean, Corr>
+impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
+    for GpVariancePredictor<'_, F, Mean, Corr>
 where
     F: Float,
     D: Data<Elem = F>,
