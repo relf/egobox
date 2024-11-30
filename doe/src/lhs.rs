@@ -175,12 +175,10 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
                 } else {
                     t /= F::cast(0.8)
                 }
+            } else if p_accpt <= 0.1 {
+                t /= F::cast(0.7)
             } else {
-                if p_accpt <= 0.1 {
-                    t /= F::cast(0.7)
-                } else {
-                    t *= F::cast(0.9)
-                }
+                t *= F::cast(0.9)
             }
         }
         lhs_best
