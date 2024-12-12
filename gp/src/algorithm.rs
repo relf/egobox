@@ -1574,9 +1574,6 @@ mod tests {
         let _gp = Kriging::params()
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fit error");
-        // println!("theta = {}", gp.theta());
-        // let xtest = array![[0.1]];
-        // println!("pred({}) = {}", &xtest, gp.predict(&xtest).unwrap());
     }
 
     fn x2sinx(x: &Array2<f64>) -> Array2<f64> {
