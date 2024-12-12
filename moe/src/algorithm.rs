@@ -346,7 +346,7 @@ impl GpMixtureValidParams<f64> {
             let errors = scale_factors.map(move |&factor| {
                 let gmx2 = gmx.clone();
                 let gmx2 = gmx2.heaviside_factor(factor);
-                let pred = predict_smooth(experts, &gmx2, xtest).unwrap();
+                let pred = predict_smooth(experts, &gmx2, xtest, ytest.ncols()).unwrap();
                 pred.sub(ytest).mapv(|x| x * x).sum().sqrt() / xtest.mapv(|x| x * x).sum().sqrt()
             });
 
@@ -387,22 +387,17 @@ fn predict_smooth(
     experts: &[Box<dyn FullGpSurrogate>],
     gmx: &GaussianMixture<f64>,
     points: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ny: usize,
 ) -> Result<Array2<f64>> {
     let probas = gmx.predict_probas(points);
-    let mut preds = Array1::<f64>::zeros(points.nrows());
-
-    Zip::from(&mut preds)
-        .and(points.rows())
-        .and(probas.rows())
-        .for_each(|y, x, p| {
-            let x = x.insert_axis(Axis(0));
-            let preds: Array1<f64> = experts
-                .iter()
-                .map(|gp| gp.predict(&x).unwrap()[[0, 0]])
-                .collect();
-            *y = (preds * p).sum();
-        });
-    Ok(preds.insert_axis(Axis(1)))
+    let preds: Array2<f64> = experts
+        .iter()
+        .enumerate()
+        .map(|(i, gp)| {
+            gp.predict(&points.view()).unwrap() * probas.column(i).to_owned().insert_axis(Axis(1))
+        })
+        .fold(Array2::zeros((points.nrows(), ny)), |acc, pred| acc + pred);
+    Ok(preds)
 }
 
 /// Mixture of gaussian process experts
@@ -597,7 +592,7 @@ impl GpMixture {
     /// or another (ie responsabilities).     
     /// The smooth recombination of each cluster expert responsabilty is used to get the result.
     pub fn predict_smooth(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
-        predict_smooth(&self.experts, &self.gmx, x)
+        predict_smooth(&self.experts, &self.gmx, x, self.output_dim())
     }
 
     /// Predict variances at a set of points `x` specified as (n, nx) matrix.
@@ -609,21 +604,19 @@ impl GpMixture {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         let probas = self.gmx.predict_probas(x);
-        let mut preds = Array1::<f64>::zeros(x.nrows());
-
-        Zip::from(&mut preds)
-            .and(x.rows())
-            .and(probas.rows())
-            .for_each(|y, x, p| {
-                let x = x.insert_axis(Axis(0));
-                let preds: Array1<f64> = self
-                    .experts
-                    .iter()
-                    .map(|gp| gp.predict_var(&x).unwrap()[[0, 0]])
-                    .collect();
-                *y = (preds * p * p).sum();
-            });
-        Ok(preds.insert_axis(Axis(1)))
+        let preds: Array2<f64> = self
+            .experts
+            .iter()
+            .enumerate()
+            .map(|(i, gp)| {
+                let p = probas.column(i).to_owned().insert_axis(Axis(1));
+                gp.predict_var(&x.view()).unwrap() * &p * &p
+            })
+            .fold(
+                Array2::zeros((x.nrows(), self.output_dim())),
+                |acc, pred| acc + pred,
+            );
+        Ok(preds)
     }
 
     /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.
@@ -731,7 +724,7 @@ impl GpMixture {
     pub fn predict_hard(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(x);
         trace!("Clustering {:?}", clustering);
-        let mut preds = Array2::zeros((x.nrows(), 1));
+        let mut preds = Array2::zeros((x.nrows(), self.output_dim()));
         Zip::from(preds.rows_mut())
             .and(x.rows())
             .and(&clustering)
@@ -756,7 +749,7 @@ impl GpMixture {
     ) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(x);
         trace!("Clustering {:?}", clustering);
-        let mut variances = Array2::zeros((x.nrows(), 1));
+        let mut variances = Array2::zeros((x.nrows(), self.output_dim()));
         Zip::from(variances.rows_mut())
             .and(x.rows())
             .and(&clustering)

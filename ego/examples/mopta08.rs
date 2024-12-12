@@ -191,9 +191,10 @@ fn mopta(x: &ArrayView2<f64>, indices: Option<&[usize]>) -> Array2<f64> {
         path_exe.push(r"ego/examples");
         path_exe.push(mopta_exe);
 
-        Command::new(path_exe)
+        let _ = Command::new(path_exe)
             .spawn()
-            .expect("ls command failed to start");
+            .expect("ls command failed to start")
+            .wait();
 
         std::thread::sleep(std::time::Duration::from_secs(1));
         let y_i = get_output().unwrap();
