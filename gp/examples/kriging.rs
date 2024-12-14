@@ -1,9 +1,9 @@
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
 use linfa::prelude::*;
-use ndarray::{arr2, concatenate, Array, Array2, Axis};
+use ndarray::{arr2, concatenate, Array, Array1, Array2, Axis};
 
-fn xsinx(x: &Array2<f64>) -> Array2<f64> {
-    (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
+fn xsinx(x: &Array2<f64>) -> Array1<f64> {
+    ((x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())).remove_axis(Axis(1))
 }
 
 fn main() {
@@ -29,5 +29,8 @@ fn main() {
         .map(|v| v.sqrt());
 
     println!("Compute prediction errors (x, err(x))");
-    println!("{}", concatenate![Axis(1), xtest, (ypred - ytest), ysigma]);
+    println!(
+        "{}",
+        concatenate![Axis(1), xtest, (ypred - ytest).insert_axis(Axis(1)), ysigma]
+    );
 }

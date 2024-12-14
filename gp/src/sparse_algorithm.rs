@@ -7,7 +7,7 @@ use finitediff::FiniteDiff;
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
-use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip};
+use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_einsum_beta::*;
 use ndarray_rand::rand::seq::SliceRandom;
 use ndarray_rand::rand::SeedableRng;
@@ -163,7 +163,7 @@ pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
     /// Data used for prediction
     w_data: WoodburyData<F>,
     /// Training data (input, output)
-    pub(crate) training_data: (Array2<F>, Array2<F>),
+    pub(crate) training_data: (Array2<F>, Array1<F>),
     /// Parameters used to fit this model
     pub(crate) params: SgpValidParams<F, Corr>,
 }
@@ -233,9 +233,9 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
 
     /// Predict output values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n scalar output values as (n, 1) column vector.
-    pub fn predict(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
+    pub fn predict(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array1<F>> {
         let kx = self.compute_k(x, &self.inducings, &self.w_star, &self.theta, self.sigma2);
-        let mu = kx.dot(&self.w_data.vec);
+        let mu = kx.dot(&self.w_data.vec).remove_axis(Axis(1));
         Ok(mu)
     }
 
@@ -291,14 +291,14 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
 
     /// Retrieve input and output dimensions
     pub fn dims(&self) -> (usize, usize) {
-        (self.training_data.0.ncols(), self.training_data.1.ncols())
+        (self.training_data.0.ncols(), self.training_data.1.len())
     }
 
     pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.training_data.0.ncols()));
         let f = |x: &Array1<f64>| -> f64 {
             let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
-            let v = self.predict(&x).unwrap()[[0, 0]];
+            let v = self.predict(&x).unwrap()[0];
             unsafe { *(&v as *const F as *const f64) }
         };
         Zip::from(drv.rows_mut())
@@ -348,22 +348,22 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         n_traj: usize,
         method: GpSamplingMethod,
     ) -> Array2<F> {
-        let mean = self.predict(x).unwrap();
+        let mean = self.predict(x).unwrap().insert_axis(Axis(1));
         let cov = self.compute_k(x, x, &self.w_star, &self.theta, self.sigma2);
         sample(x, mean, cov, n_traj, method)
     }
 }
 
-impl<F, D, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>> for SparseGaussianProcess<F, Corr>
+impl<F, D, Corr> PredictInplace<ArrayBase<D, Ix2>, Array1<F>> for SparseGaussianProcess<F, Corr>
 where
     F: Float,
     D: Data<Elem = F>,
     Corr: CorrelationModel<F>,
 {
-    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<F>) {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array1<F>) {
         assert_eq!(
             x.nrows(),
-            y.nrows(),
+            y.len(),
             "The number of data points must match the number of output targets."
         );
 
@@ -371,8 +371,8 @@ where
         *y = values;
     }
 
-    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.dims().1))
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<F> {
+        Array1::zeros((x.nrows(),))
     }
 }
 
@@ -407,23 +407,18 @@ where
 }
 
 impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
-    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for SgpValidParams<F, Corr>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix1>, GpError> for SgpValidParams<F, Corr>
 {
     type Object = SparseGaussianProcess<F, Corr>;
 
     /// Fit GP parameters using maximum likelihood
     fn fit(
         &self,
-        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
+        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix1>>,
     ) -> Result<Self::Object> {
         let x = dataset.records();
-        let y = dataset.targets();
-        if y.ncols() > 1 {
-            panic!(
-                "Multiple outputs not handled, a one-dimensional column vector \
-            as training output data is expected"
-            );
-        }
+        let y = dataset.targets().to_owned().insert_axis(Axis(1));
+
         if let Some(d) = self.kpls_dim() {
             if *d > x.ncols() {
                 return Err(GpError::InvalidValueError(format!(
@@ -440,7 +435,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
 
         let mut w_star = Array2::eye(x.ncols());
         if let Some(n_components) = self.kpls_dim() {
-            let ds = Dataset::new(x.to_owned(), y.to_owned());
+            let ds = Dataset::new(xtrain.to_owned(), ytrain.to_owned());
             w_star = PlsRegression::params(*n_components).fit(&ds).map_or_else(
                 |e| match e {
                     linfa_pls::PlsError::PowerMethodConstantResidualError() => {
@@ -634,7 +629,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             w_data,
             w_star,
             inducings: z.clone(),
-            training_data: (xtrain.to_owned(), ytrain.to_owned()),
+            training_data: (xtrain.to_owned(), ytrain.remove_axis(Axis(1))),
             params: self.clone(),
         })
     }
@@ -862,12 +857,12 @@ mod tests {
         nt: usize,
         eta2: f64,
         rng: &mut Xoshiro256Plus,
-    ) -> (Array2<f64>, Array2<f64>) {
+    ) -> (Array2<f64>, Array1<f64>) {
         let normal = Normal::new(0., eta2.sqrt()).unwrap();
         let gaussian_noise = Array::<f64, _>::random_using((nt, 1), normal, rng);
         let xt = 2. * Array::<f64, _>::random_using((nt, 1), Uniform::new(0., 1.), rng) - 1.;
         let yt = f_obj(&xt) + gaussian_noise;
-        (xt, yt)
+        (xt, yt.remove_axis(Axis(1)))
     }
 
     fn save_data(
@@ -928,7 +923,7 @@ mod tests {
         println!("noise variance={:?}", sgp.noise_variance());
         // assert_abs_diff_eq!(eta2, sgp.noise_variance());
 
-        let sgp_vals = sgp.predict(&xplot).unwrap();
+        let sgp_vals = sgp.predict(&xplot).unwrap().insert_axis(Axis(1));
         let yplot = f_obj(&xplot);
         let errvals = (yplot - &sgp_vals).mapv(|v| v.abs());
         assert_abs_diff_eq!(errvals, Array2::zeros((xplot.nrows(), 1)), epsilon = 0.5);
@@ -936,7 +931,14 @@ mod tests {
         let errvars = (&sgp_vars - Array2::from_elem((xplot.nrows(), 1), 0.01)).mapv(|v| v.abs());
         assert_abs_diff_eq!(errvars, Array2::zeros((xplot.nrows(), 1)), epsilon = 0.2);
 
-        save_data(&xt, &yt, sgp.inducings(), &xplot, &sgp_vals, &sgp_vars);
+        save_data(
+            &xt,
+            &yt.insert_axis(Axis(1)),
+            sgp.inducings(),
+            &xplot,
+            &sgp_vals,
+            &sgp_vars,
+        );
     }
 
     #[test]
@@ -974,10 +976,17 @@ mod tests {
         println!("noise variance={:?}", sgp.noise_variance());
         assert_abs_diff_eq!(eta2, sgp.noise_variance());
 
-        let sgp_vals = sgp.predict(&xplot).unwrap();
+        let sgp_vals = sgp.predict(&xplot).unwrap().insert_axis(Axis(1));
         let sgp_vars = sgp.predict_var(&xplot).unwrap();
 
-        save_data(&xt, &yt, sgp.inducings(), &xplot, &sgp_vals, &sgp_vars);
+        save_data(
+            &xt,
+            &yt.insert_axis(Axis(1)),
+            sgp.inducings(),
+            &xplot,
+            &sgp_vals,
+            &sgp_vars,
+        );
     }
 
     #[test]
@@ -1022,10 +1031,17 @@ mod tests {
         assert_abs_diff_eq!(eta2, sgp.noise_variance(), epsilon = 0.015);
         assert_abs_diff_eq!(&z, sgp.inducings(), epsilon = 0.0015);
 
-        let sgp_vals = sgp.predict(&xplot).unwrap();
+        let sgp_vals = sgp.predict(&xplot).unwrap().insert_axis(Axis(1));
         let sgp_vars = sgp.predict_var(&xplot).unwrap();
 
-        save_data(&xt, &yt, &z, &xplot, &sgp_vals, &sgp_vars);
+        save_data(
+            &xt,
+            &yt.insert_axis(Axis(1)),
+            &z,
+            &xplot,
+            &sgp_vals,
+            &sgp_vars,
+        );
     }
 
     #[test]

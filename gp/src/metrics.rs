@@ -3,7 +3,7 @@ use linfa::{
     traits::{Fit, Predict, PredictInplace},
     Float, ParamGuard,
 };
-use ndarray::{Array2, ArrayBase, Ix2, OwnedRepr};
+use ndarray::{Array1, Array2, ArrayBase, Ix2, OwnedRepr};
 
 use crate::{
     correlation_models, mean_models, GaussianProcess, GpError, GpParams, SgpParams,
@@ -15,10 +15,10 @@ pub trait CrossValScore<F, ER, P, O>
 where
     F: Float,
     ER: std::error::Error + From<linfa::error::Error>,
-    P: Fit<Array2<F>, Array2<F>, ER, Object = O> + ParamGuard,
-    O: PredictInplace<ArrayBase<OwnedRepr<F>, Ix2>, Array2<F>>,
+    P: Fit<Array2<F>, Array1<F>, ER, Object = O> + ParamGuard,
+    O: PredictInplace<ArrayBase<OwnedRepr<F>, Ix2>, Array1<F>>,
 {
-    fn training_data(&self) -> &(Array2<F>, Array2<F>);
+    fn training_data(&self) -> &(Array2<F>, Array1<F>);
 
     fn params(&self) -> P;
 
@@ -51,7 +51,7 @@ where
     Mean: mean_models::RegressionModel<F>,
     Corr: correlation_models::CorrelationModel<F>,
 {
-    fn training_data(&self) -> &(Array2<F>, Array2<F>) {
+    fn training_data(&self) -> &(Array2<F>, Array1<F>) {
         &self.training_data
     }
 
@@ -65,7 +65,7 @@ where
     F: Float,
     Corr: correlation_models::CorrelationModel<F>,
 {
-    fn training_data(&self) -> &(Array2<F>, Array2<F>) {
+    fn training_data(&self) -> &(Array2<F>, Array1<F>) {
         &self.training_data
     }
 
@@ -80,22 +80,22 @@ mod test {
     use crate::{Inducings, SparseKriging};
     use approx::assert_abs_diff_eq;
     use egobox_doe::{Lhs, SamplingMethod};
-    use ndarray::{array, Array, Array1, Data, Ix2, Zip};
+    use ndarray::{array, Array, Array1, Axis, Data, Ix2, Zip};
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::{Normal, Uniform};
     use ndarray_rand::RandomExt;
     use rand_xoshiro::Xoshiro256Plus;
 
-    fn griewank(x: &Array2<f64>) -> Array2<f64> {
+    fn griewank(x: &Array2<f64>) -> Array1<f64> {
         let dim = x.ncols();
         let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
-        let mut y = Array2::zeros((x.nrows(), 1));
-        Zip::from(y.rows_mut()).and(x.rows()).for_each(|mut y, x| {
+        let mut y = Array1::zeros((x.nrows(),));
+        Zip::from(&mut y).and(x.rows()).for_each(|y, x| {
             let s = x.mapv(|v| v * v).sum() / 4000.;
             let p = (x.to_owned() / &d)
                 .mapv(|v| v.cos())
                 .fold(1., |acc, x| acc * x);
-            y[0] = s - p + 1.;
+            *y = s - p + 1.;
         });
         y
     }
@@ -142,11 +142,11 @@ mod test {
         nt: usize,
         eta2: f64,
         rng: &mut Xoshiro256Plus,
-    ) -> (Array2<f64>, Array2<f64>) {
+    ) -> (Array2<f64>, Array1<f64>) {
         let normal = Normal::new(0., eta2.sqrt()).unwrap();
         let gaussian_noise = Array::<f64, _>::random_using((nt, 1), normal, rng);
         let xt = 2. * Array::<f64, _>::random_using((nt, 1), Uniform::new(0., 1.), rng) - 1.;
-        let yt = f_obj(&xt) + gaussian_noise;
+        let yt = (f_obj(&xt) + gaussian_noise).remove_axis(Axis(1));
         (xt, yt)
     }
 

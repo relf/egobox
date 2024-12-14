@@ -40,11 +40,10 @@ fn criterion_gp(c: &mut Criterion) {
         let yt = match read_npy(&yfilename) {
             Ok(yt) => yt,
             Err(_) => {
-                let mut yv: Array1<f64> = Array1::zeros(xt.nrows());
-                Zip::from(&mut yv).and(xt.rows()).par_for_each(|y, x| {
+                let mut yt: Array1<f64> = Array1::zeros(xt.nrows());
+                Zip::from(&mut yt).and(xt.rows()).par_for_each(|y, x| {
                     *y = griewank(&x.to_owned());
                 });
-                let yt = yv.into_shape((xt.nrows(), 1)).unwrap();
                 write_npy(&yfilename, &yt).expect("cannot save yt");
                 yt
             }
