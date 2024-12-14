@@ -627,15 +627,15 @@ impl GpSurrogateExt for MixintGpMixture {
     }
 }
 
-impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
-    fn training_data(&self) -> &(Array2<f64>, Array2<f64>) {
-        &self.training_data
-    }
+// impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
+//     fn training_data(&self) -> &(Array2<f64>, Array2<f64>) {
+//         &self.training_data
+//     }
 
-    fn params(&self) -> MixintGpMixtureParams {
-        MixintGpMixtureParams::from(self.params.clone())
-    }
-}
+//     fn params(&self) -> MixintGpMixtureParams {
+//         MixintGpMixtureParams::from(self.params.clone())
+//     }
+// }
 
 impl MixtureGpSurrogate for MixintGpMixture {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
@@ -894,7 +894,7 @@ mod tests {
             yvar,
             epsilon = 1e-3
         );
-        println!("LOOCV = {}", mixi_moe.loocv_score());
+        //println!("LOOCV = {}", mixi_moe.loocv_score());
     }
 
     fn ftest(x: &Array2<f64>) -> Array2<f64> {

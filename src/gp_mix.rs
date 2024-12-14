@@ -17,7 +17,7 @@ use egobox_moe::{Clustered, MixtureGpSurrogate, ThetaTuning};
 #[allow(unused_imports)] // Avoid linting problem
 use egobox_moe::{GpMixture, GpSurrogate, GpSurrogateExt};
 use linfa::{traits::Fit, Dataset};
-use ndarray::{Array1, Array2, Zip};
+use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
@@ -130,7 +130,10 @@ impl GpMix {
     ///     the fitted Gaussian process mixture  
     ///
     fn fit(&mut self, py: Python, xt: PyReadonlyArray2<f64>, yt: PyReadonlyArray2<f64>) -> Gpx {
-        let dataset = Dataset::new(xt.as_array().to_owned(), yt.as_array().to_owned());
+        let dataset = Dataset::new(
+            xt.as_array().to_owned(),
+            yt.as_array().to_owned().remove_axis(Axis(1)),
+        );
 
         let recomb = match self.recombination {
             Recombination::Hard => egobox_moe::Recombination::Hard,
@@ -385,16 +388,16 @@ impl Gpx {
     /// Returns
     ///     the couple (ndarray[nt, nx], ndarray[nt, ny])
     ///
-    fn training_data<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> (Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>) {
-        let (xdata, ydata) = self.0.training_data();
-        (
-            xdata.to_owned().into_pyarray_bound(py),
-            ydata.to_owned().into_pyarray_bound(py),
-        )
-    }
+    // fn training_data<'py>(
+    //     &self,
+    //     py: Python<'py>,
+    // ) -> (Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>) {
+    //     let (xdata, ydata) = self.0.training_data();
+    //     (
+    //         xdata.to_owned().into_pyarray_bound(py),
+    //         ydata.to_owned().into_pyarray_bound(py),
+    //     )
+    // }
 
     /// Get optimized thetas hyperparameters (ie once GP experts are fitted)
     ///

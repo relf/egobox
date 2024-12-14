@@ -113,7 +113,7 @@ mod tests {
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Hard)
-            .fit(&Dataset::new(xt, yt))
+            .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
             .expect("GP fitting");
         let bgp = Box::new(gp) as Box<dyn MixtureGpSurrogate>;
 

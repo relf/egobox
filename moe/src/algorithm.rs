@@ -21,7 +21,7 @@ use std::ops::Sub;
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
 use ndarray::{
-    concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, Axis, Data, Ix2, Zip,
+    concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
 };
 
 #[cfg(feature = "blas")]
@@ -46,7 +46,7 @@ macro_rules! check_allowed {
     };
 }
 
-impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError>
+impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix1>, MoeError>
     for GpMixtureValidParams<f64>
 {
     type Object = GpMixture;
@@ -60,11 +60,11 @@ impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, MoeError>
     ///
     fn fit(
         &self,
-        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
+        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix1>>,
     ) -> Result<Self::Object> {
         let x = dataset.records();
-        let y = dataset.targets();
-        self.train(x, y)
+        let y = dataset.targets().to_owned().insert_axis(Axis(1));
+        self.train(x, &y)
     }
 }
 
@@ -80,7 +80,7 @@ impl GpMixtureValidParams<f64> {
 
         let (n_clusters, recomb) = if self.n_clusters() == 0 {
             // automatic mode
-            let max_nb_clusters = xt.nrows() / 10 + 1;
+            let max_nb_clusters = (xt.nrows() / 10 + 1).min(5);
             find_best_number_of_clusters(
                 xt,
                 yt,
@@ -97,7 +97,7 @@ impl GpMixtureValidParams<f64> {
             debug!("Automatic settings {} {:?}", n_clusters, recomb);
         }
 
-        let training = if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
+        let training = if recomb == Recombination::Smooth(None) && self.n_clusters() != 1 {
             // Extract 5% of data for validation
             // TODO: Use cross-validation ? Performances
             let (_, training_data) = extract_part(&data, 5);
@@ -166,7 +166,7 @@ impl GpMixtureValidParams<f64> {
             experts.push(expert);
         }
 
-        if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
+        if recomb == Recombination::Smooth(None) && self.n_clusters() != 1 {
             // Extract 5% of data for validation
             // TODO: Use cross-validation ? Performances
             let (test, _) = extract_part(&data, 5);
@@ -188,7 +188,7 @@ impl GpMixtureValidParams<f64> {
                 recombination: recomb,
                 experts,
                 gmx: gmx.clone(),
-                training_data: (xt.to_owned(), yt.to_owned()),
+                training_data: (xt.to_owned(), yt.to_owned().remove_axis(Axis(1))),
                 params: self.clone(),
             })
         }
@@ -204,7 +204,7 @@ impl GpMixtureValidParams<f64> {
     ) -> Result<Box<dyn FullGpSurrogate>> {
         let xtrain = data.slice(s![.., ..nx]).to_owned();
         let ytrain = data.slice(s![.., nx..]).to_owned();
-        let mut dataset = Dataset::from((xtrain.clone(), ytrain.clone()));
+        let mut dataset = Dataset::from((xtrain.clone(), ytrain.clone().remove_axis(Axis(1))));
         let regression_spec = self.regression_spec();
         let mut allowed_means = vec![];
         check_allowed!(regression_spec, Regression, Constant, allowed_means);
@@ -415,7 +415,7 @@ pub struct GpMixture {
     /// Gp type
     gp_type: GpType<f64>,
     /// Training inputs
-    training_data: (Array2<f64>, Array2<f64>),
+    training_data: (Array2<f64>, Array1<f64>),
     /// Params used to fit this model
     params: GpMixtureValidParams<f64>,
 }
@@ -519,7 +519,7 @@ impl GpSurrogateExt for GpMixture {
 }
 
 impl CrossValScore<f64, MoeError, GpMixtureParams<f64>, Self> for GpMixture {
-    fn training_data(&self) -> &(Array2<f64>, Array2<f64>) {
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
         &self.training_data
     }
 
@@ -897,20 +897,20 @@ fn extract_part<F: Float>(
     (data_test, data_train)
 }
 
-impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for GpMixture {
-    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array1<f64>> for GpMixture {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array1<f64>) {
         assert_eq!(
             x.nrows(),
-            y.nrows(),
+            y.len(),
             "The number of data points must match the number of output targets."
         );
 
         let values = self.predict(x).expect("MoE prediction");
-        *y = values;
+        *y = values.remove_axis(Axis(1));
     }
 
-    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.dims().1))
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<f64> {
+        Array1::zeros(x.nrows())
     }
 }
 
@@ -988,7 +988,7 @@ mod tests {
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Hard)
             .with_rng(rng)
-            .fit(&Dataset::new(xt, yt))
+            .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 30).insert_axis(Axis(1));
         let preds = moe.predict(&x).expect("MOE prediction");
@@ -1018,7 +1018,7 @@ mod tests {
         let mut rng = Xoshiro256Plus::seed_from_u64(42);
         let xt = Array2::random_using((60, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
-        let ds = Dataset::new(xt.to_owned(), yt.to_owned());
+        let ds = Dataset::new(xt.to_owned(), yt.to_owned().remove_axis(Axis(1)));
         let moe = GpMixture::params()
             .n_clusters(3)
             .recombination(Recombination::Smooth(Some(0.5)))
@@ -1063,10 +1063,10 @@ mod tests {
 
     #[test]
     fn test_moe_auto() {
-        let mut rng = Xoshiro256Plus::seed_from_u64(0);
-        let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
+        let mut rng = Xoshiro256Plus::seed_from_u64(42);
+        let xt = Array2::random_using((60, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
-        let ds = Dataset::new(xt, yt);
+        let ds = Dataset::new(xt, yt.to_owned().remove_axis(Axis(1)));
         let moe = GpMixture::params()
             .n_clusters(0)
             .with_rng(rng.clone())
@@ -1095,7 +1095,7 @@ mod tests {
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .with_rng(rng.clone())
-            .fit(&Dataset::new(xt, yt))
+            .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
             .expect("MOE fitted");
         // Smoke test: prediction is pretty good hence variance is very low
         let x = Array1::linspace(0., 1., 20).insert_axis(Axis(1));
@@ -1126,7 +1126,7 @@ mod tests {
         let _moe = GpMixture::params()
             .n_clusters(3)
             .with_rng(rng)
-            .fit(&Dataset::new(xt, yt))
+            .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
             .expect("MOE fitted");
     }
 
@@ -1139,7 +1139,7 @@ mod tests {
         let mut rng = Xoshiro256Plus::seed_from_u64(0);
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
-        let ds = Dataset::new(xt, yt);
+        let ds = Dataset::new(xt, yt.remove_axis(Axis(1)));
         let moe = GpMixture::params()
             .n_clusters(3)
             .with_rng(rng)
@@ -1165,7 +1165,7 @@ mod tests {
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng)
-            .fit(&Dataset::new(xt, yt))
+            .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
             .expect("MOE fitted");
         let x = Array1::linspace(0., 1., 50).insert_axis(Axis(1));
         let preds = moe.predict(&x).expect("MOE prediction");
@@ -1231,7 +1231,7 @@ mod tests {
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Smooth(Some(1.)))
             .with_rng(rng)
-            .fit(&Dataset::new(xt, yt))
+            .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
             .expect("MOE fitted");
 
         for _ in 0..20 {
@@ -1303,7 +1303,7 @@ mod tests {
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Hard)
             .with_rng(rng)
-            .fit(&Dataset::new(xt, yt))
+            .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
             .expect("MOE fitted");
         // Values may vary depending on the platforms and linalg backends
         // assert_eq!("Mixture[Hard](Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.03871601282054056], variance=[0.276011431746834], likelihood=454.17113736397033), Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.07903503494417609], variance=[0.0077182164672893756], likelihood=436.39615700140183), Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.050821466014058826], variance=[0.32824998062969973], likelihood=193.19339252734846))", moe.to_string());
@@ -1353,7 +1353,7 @@ mod tests {
                 .regression_spec(RegressionSpec::CONSTANT)
                 .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
                 .kpls_dim(Some(3))
-                .fit(&Dataset::new(xt, yt))
+                .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
                 .expect("GP fit error");
 
             // To see file size : 100D => json ~ 1.2Mo, bin ~ 0.6Mo

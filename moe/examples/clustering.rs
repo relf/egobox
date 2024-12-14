@@ -21,7 +21,7 @@ fn f3parts(x: &Array2<f64>) -> Array2<f64> {
 fn main() -> Result<(), Box<dyn Error>> {
     let xtrain = Lhs::new(&arr2(&[[0., 1.]])).sample(50);
     let ytrain = f3parts(&xtrain);
-    let ds = Dataset::new(xtrain, ytrain);
+    let ds = Dataset::new(xtrain, ytrain.remove_axis(Axis(1)));
     let moe1 = GpMixture::params().fit(&ds)?;
     let moe3 = GpMixture::params()
         .n_clusters(3)

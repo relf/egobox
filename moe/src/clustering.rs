@@ -7,7 +7,7 @@ use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
 use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
-use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_rand::rand::Rng;
 use std::ops::Sub;
 
@@ -70,7 +70,8 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     } else {
         max_nb_clusters
     };
-    let dataset: DatasetView<f64, f64> = DatasetView::new(x.view(), y.view());
+    let dataset: DatasetView<f64, f64, Ix1> =
+        DatasetView::new(x.view(), y.view().remove_axis(Axis(1)));
 
     // Stock
     let mut mean_err_h: Vec<f64> = Vec::new();
@@ -129,9 +130,14 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                         .gmm(gmm.clone())
                         .fit(&train)
                     {
-                        let xytrain =
-                            concatenate(Axis(1), &[train.records().view(), train.targets.view()])
-                                .unwrap();
+                        let xytrain = concatenate(
+                            Axis(1),
+                            &[
+                                train.records().view(),
+                                train.targets.view().insert_axis(Axis(1)),
+                            ],
+                        )
+                        .unwrap();
                         let data_clustering = gmm.predict(&xytrain);
                         let clusters = sort_by_cluster(n_clusters, &xytrain, &data_clustering);
                         for cluster in clusters.iter().take(i + 1) {
@@ -141,6 +147,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                         let actual = valid.targets();
                         let mixture = mixture.set_recombination(Recombination::Hard);
                         let h_error = if let Ok(pred) = mixture.predict(valid.records()) {
+                            let pred = pred.remove_axis(Axis(1));
                             if pred.iter().any(|v| f64::is_infinite(*v)) {
                                 1.0 // max bad value
                             } else if pred.iter().any(|v| f64::is_nan(*v)) {
@@ -159,8 +166,11 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                             1.0
                         };
                         h_errors.push(h_error);
-                        let mixture = mixture.set_recombination(Recombination::Smooth(None));
+
+                        // Try only default soft(1.0), not soft(None) which can take too much time
+                        let mixture = mixture.set_recombination(Recombination::Smooth(Some(1.)));
                         let s_error = if let Ok(pred) = mixture.predict(valid.records()) {
+                            let pred = pred.remove_axis(Axis(1));
                             if pred.iter().any(|v| f64::is_infinite(*v)) {
                                 1.0 // max bad value
                             } else if pred.iter().any(|v| f64::is_nan(*v)) {
@@ -196,10 +206,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
         if ok && !s_errors.is_empty() && !h_errors.is_empty() {
             nb_clusters_ok.push(i);
         } else {
-            // Assume that if it fails for n clusters it will fail for m > n clusters
-            // early exit
             debug!("Prediction with {} clusters fails", n_clusters);
-            break;
         }
 
         // Stock median errors
@@ -398,7 +405,7 @@ mod tests {
             .n_clusters(nb_clusters)
             .recombination(recombination)
             .with_rng(rng)
-            .fit(&Dataset::new(xtrain, ytrain))
+            .fit(&Dataset::new(xtrain, ytrain.remove_axis(Axis(1))))
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict(&obs).unwrap();
@@ -433,7 +440,7 @@ mod tests {
             .recombination(recomb)
             .regression_spec(RegressionSpec::LINEAR)
             .correlation_spec(CorrelationSpec::ALL)
-            .fit(&Dataset::new(xtrain, ytrain))
+            .fit(&Dataset::new(xtrain, ytrain.remove_axis(Axis(1))))
             .unwrap();
         let ypreds = moe.predict(&xvalid).expect("moe not fitted");
         debug!("{:?}", concatenate![Axis(1), ypreds, yvalid]);

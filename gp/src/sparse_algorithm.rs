@@ -71,7 +71,7 @@ impl<F: Float> Clone for WoodburyData<F> {
 /// # Example
 ///
 /// ```
-/// use ndarray::{Array, Array2, Axis};
+/// use ndarray::{Array, Array1, Array2, Axis};
 /// use ndarray_rand::rand;
 /// use ndarray_rand::rand::SeedableRng;
 /// use ndarray_rand::RandomExt;
@@ -83,8 +83,8 @@ impl<F: Float> Clone for WoodburyData<F> {
 /// const PI: f64 = std::f64::consts::PI;
 ///
 /// // Let us define a hidden target function for our sparse GP example
-/// fn f_obj(x: &Array2<f64>) -> Array2<f64> {
-///   x.mapv(|v| (3. * PI * v).sin() + 0.3 * (9. * PI * v).cos() + 0.5 * (7. * PI * v).sin())
+/// fn f_obj(x: &Array1<f64>) -> Array1<f64> {
+///     x.mapv(|v| (3. * PI * v).sin() + 0.3 * (9. * PI * v).cos() + 0.5 * (7. * PI * v).sin())
 /// }
 ///
 /// // Then we can define a utility function to generate some noisy data
@@ -92,13 +92,13 @@ impl<F: Float> Clone for WoodburyData<F> {
 /// fn make_test_data(
 ///     nt: usize,
 ///     eta2: f64,
-/// ) -> (Array2<f64>, Array2<f64>) {
+/// ) -> (Array2<f64>, Array1<f64>) {
 ///     let normal = Normal::new(0., eta2.sqrt()).unwrap();
 ///     let mut rng = rand::thread_rng();
-///     let gaussian_noise = Array::<f64, _>::random_using((nt, 1), normal, &mut rng);
-///     let xt = 2. * Array::<f64, _>::random_using((nt, 1), Uniform::new(0., 1.), &mut rng) - 1.;
+///     let gaussian_noise = Array::<f64, _>::random_using((nt, ), normal, &mut rng);
+///     let xt = 2. * Array::<f64, _>::random_using((nt, ), Uniform::new(0., 1.), &mut rng) - 1.;
 ///     let yt = f_obj(&xt) + gaussian_noise;
-///     (xt, yt)
+///     (xt.insert_axis(Axis(1)), yt)
 /// }
 ///
 /// // Generate training data

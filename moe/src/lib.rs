@@ -48,8 +48,8 @@
 //! use linfa::{traits::Fit, ParamGuard, Dataset};
 //!
 //! // One-dimensional test function with 3 modes
-//! fn f3modes(x: &Array2<f64>) -> Array2<f64> {
-//!     let mut y = Array2::zeros(x.dim());
+//! fn f3modes(x: &Array1<f64>) -> Array1<f64> {
+//!     let mut y = Array1::zeros(x.len());
 //!     Zip::from(&mut y).and(x).for_each(|yi, &xi| {
 //!         if xi < 0.4 {
 //!             *yi = xi * xi;
@@ -64,9 +64,9 @@
 //!
 //! // Training data
 //! let mut rng = Xoshiro256Plus::from_entropy();
-//! let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
+//! let xt = Array1::random_using((50, ), Uniform::new(0., 1.), &mut rng);
 //! let yt = f3modes(&xt);
-//! let ds = Dataset::new(xt, yt);
+//! let ds = Dataset::new(xt.insert_axis(Axis(1)), yt);
 //!
 //! // Predictions
 //! let observations = Array1::linspace(0., 1., 100).insert_axis(Axis(1));

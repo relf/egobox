@@ -5,7 +5,7 @@ use egobox_gp::{
     SparseGaussianProcess, SparseMethod, ThetaTuning,
 };
 use linfa::prelude::{Dataset, Fit};
-use ndarray::{Array1, Array2, ArrayView2};
+use ndarray::{Array1, Array2, ArrayView2, Axis};
 use paste::paste;
 
 #[cfg(feature = "serializable")]
@@ -133,7 +133,7 @@ macro_rules! declare_surrogate {
                     y: &ArrayView2<f64>,
                 ) -> Result<Box<dyn FullGpSurrogate>> {
                     Ok(Box::new([<Gp $regr $corr Surrogate>](
-                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,
+                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned().remove_axis(Axis(1))))?,
                     )))
                 }
             }
@@ -151,7 +151,7 @@ macro_rules! declare_surrogate {
                     self.0.dims()
                 }
                 fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict(x)?)
+                    Ok(self.0.predict(x)?.insert_axis(Axis(1)))
                 }
                 fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_var(x)?)
@@ -281,7 +281,7 @@ macro_rules! declare_sgp_surrogate {
                     y: &ArrayView2<f64>,
                 ) -> Result<Box<dyn FullGpSurrogate>> {
                     Ok(Box::new([<Sgp $corr Surrogate>](
-                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,
+                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned().remove_axis(Axis(1))))?,
                     )))
                 }
             }
@@ -309,7 +309,7 @@ macro_rules! declare_sgp_surrogate {
                     self.0.dims()
                 }
                 fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
-                    Ok(self.0.predict(x)?)
+                    Ok(self.0.predict(x)?.insert_axis(Axis(1)))
                 }
                 fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_var(x)?)

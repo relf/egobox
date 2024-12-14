@@ -16,7 +16,7 @@ use egobox_moe::{
     Clustered, GpMixture, GpSurrogate, GpType, Inducings, MixtureGpSurrogate, ThetaTuning,
 };
 use linfa::{traits::Fit, Dataset};
-use ndarray::{Array1, Array2, Zip};
+use ndarray::{Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
@@ -124,7 +124,10 @@ impl SparseGpMix {
         xt: PyReadonlyArray2<f64>,
         yt: PyReadonlyArray2<f64>,
     ) -> SparseGpx {
-        let dataset = Dataset::new(xt.as_array().to_owned(), yt.as_array().to_owned());
+        let dataset = Dataset::new(
+            xt.as_array().to_owned(),
+            yt.as_array().to_owned().remove_axis(Axis(1)),
+        );
 
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)
