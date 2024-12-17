@@ -14,7 +14,7 @@ use egobox_moe::{
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
-use ndarray::{s, Array, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
+use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
@@ -559,7 +559,7 @@ impl GpSurrogate for MixintGpMixture {
         self.moe.dims()
     }
 
-    fn predict(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+    fn predict(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array1<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -643,11 +643,11 @@ impl MixtureGpSurrogate for MixintGpMixture {
     }
 }
 
-impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for MixintGpMixture {
-    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array1<f64>> for MixintGpMixture {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array1<f64>) {
         assert_eq!(
             x.nrows(),
-            y.nrows(),
+            y.len(),
             "The number of data points must match the number of output targets."
         );
 
@@ -655,8 +655,8 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>> for Mix
         *y = values;
     }
 
-    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.moe.dims().1))
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<f64> {
+        Array1::zeros((x.nrows(),))
     }
 }
 
@@ -884,7 +884,7 @@ mod tests {
             .expect("Predict var fail");
         println!("{ytest:?}");
         assert_abs_diff_eq!(
-            array![[0.], [0.7872696212255119], [1.5], [0.9], [1.]],
+            array![0., 0.7872696212255119, 1.5, 0.9, 1.],
             ytest,
             epsilon = 1e-3
         );
@@ -897,10 +897,10 @@ mod tests {
         //println!("LOOCV = {}", mixi_moe.loocv_score());
     }
 
-    fn ftest(x: &Array2<f64>) -> Array2<f64> {
-        let mut y = (x.column(0).to_owned() * x.column(0)).insert_axis(Axis(1));
-        y = &y + (x.column(1).to_owned() * x.column(1)).insert_axis(Axis(1));
-        y = &y * (x.column(2).insert_axis(Axis(1)).mapv(|v| v + 1.));
+    fn ftest(x: &Array2<f64>) -> Array1<f64> {
+        let mut y = x.column(0).to_owned() * x.column(0);
+        y = &y + (x.column(1).to_owned() * x.column(1));
+        y = &y * (x.column(2).mapv(|v| v + 1.));
         y
     }
 
@@ -913,7 +913,7 @@ mod tests {
 
         let n = mixi.get_unfolded_dim() * 10;
         let xt = mixi_lhs.sample(n);
-        let yt = ftest(&xt);
+        let yt = ftest(&xt).insert_axis(Axis(1));
 
         let surrogate_builder =
             MoeBuilder::new().correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);

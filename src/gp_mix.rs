@@ -283,7 +283,7 @@ impl Gpx {
     /// Returns
     ///     the output values at nsamples x points (array[nsamples, 1])
     ///
-    fn predict<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> Bound<'py, PyArray2<f64>> {
+    fn predict<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> Bound<'py, PyArray1<f64>> {
         self.0
             .predict(&x.as_array())
             .unwrap()

@@ -239,7 +239,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     /// Predict output values at n given `x` points of nx components specified as a (n, nx) matrix.
-    /// Returns n scalar output values as (n, 1) column vector.
+    /// Returns n scalar output values as a vector (n,).
     pub fn predict(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array1<F>> {
         let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
         // Compute the mean term at x

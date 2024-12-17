@@ -595,7 +595,7 @@ where
                                 .unwrap()
                                 .view(),
                         )
-                        .unwrap()[[0, 0]]
+                        .unwrap()[0]
                         / scale_cstr
                 };
                 #[cfg(feature = "nlopt")]
@@ -684,7 +684,7 @@ where
             Ok(res)
         } else {
             let x = &xk.view().insert_axis(Axis(0));
-            let pred = obj_model.predict(x)?[[0, 0]];
+            let pred = obj_model.predict(x)?[0];
             let var = obj_model.predict_var(x)?[[0, 0]];
             let conf = match self.config.q_ei {
                 QEiStrategy::KrigingBeliever => 0.,
@@ -694,7 +694,7 @@ where
             };
             res.push(pred + conf * f64::sqrt(var));
             for cstr_model in cstr_models {
-                res.push(cstr_model.predict(x)?[[0, 0]]);
+                res.push(cstr_model.predict(x)?[0]);
             }
             Ok(res)
         }

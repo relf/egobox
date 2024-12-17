@@ -28,7 +28,7 @@ impl InfillCriterion for ExpectedImprovement {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                let pred = p[[0, 0]];
+                let pred = p[0];
                 let sigma = s[[0, 0]].sqrt();
                 let args0 = (fmin - pred) / sigma;
                 let args1 = (fmin - pred) * norm_cdf(args0);
@@ -58,7 +58,7 @@ impl InfillCriterion for ExpectedImprovement {
                 if sigma.abs() < 1e-12 {
                     Array1::zeros(pt.len())
                 } else {
-                    let pred = p[[0, 0]];
+                    let pred = p[0];
                     let diff_y = fmin - pred;
                     let arg = (fmin - pred) / sigma;
                     let y_prime = obj_model.predict_gradients(&pt).unwrap();

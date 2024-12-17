@@ -147,7 +147,6 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                         let actual = valid.targets();
                         let mixture = mixture.set_recombination(Recombination::Hard);
                         let h_error = if let Ok(pred) = mixture.predict(valid.records()) {
-                            let pred = pred.remove_axis(Axis(1));
                             if pred.iter().any(|v| f64::is_infinite(*v)) {
                                 1.0 // max bad value
                             } else if pred.iter().any(|v| f64::is_nan(*v)) {
@@ -170,7 +169,6 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                         // Try only default soft(1.0), not soft(None) which can take too much time
                         let mixture = mixture.set_recombination(Recombination::Smooth(Some(1.)));
                         let s_error = if let Ok(pred) = mixture.predict(valid.records()) {
-                            let pred = pred.remove_axis(Axis(1));
                             if pred.iter().any(|v| f64::is_infinite(*v)) {
                                 1.0 // max bad value
                             } else if pred.iter().any(|v| f64::is_nan(*v)) {
@@ -364,8 +362,8 @@ mod tests {
     use ndarray_rand::rand::SeedableRng;
     use rand_xoshiro::Xoshiro256Plus;
 
-    fn l1norm(x: &Array2<f64>) -> Array2<f64> {
-        x.map_axis(Axis(1), |x| x.norm_l1()).insert_axis(Axis(1))
+    fn l1norm(x: &Array2<f64>) -> Array1<f64> {
+        x.map_axis(Axis(1), |x| x.norm_l1())
     }
 
     fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
@@ -425,7 +423,7 @@ mod tests {
         let rng = Xoshiro256Plus::seed_from_u64(42);
         let (n_clusters, recomb) = find_best_number_of_clusters(
             &xtrain,
-            &ytrain,
+            &ytrain.to_owned().insert_axis(Axis(1)),
             4,
             None,
             RegressionSpec::LINEAR,
@@ -440,7 +438,7 @@ mod tests {
             .recombination(recomb)
             .regression_spec(RegressionSpec::LINEAR)
             .correlation_spec(CorrelationSpec::ALL)
-            .fit(&Dataset::new(xtrain, ytrain.remove_axis(Axis(1))))
+            .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();
         let ypreds = moe.predict(&xvalid).expect("moe not fitted");
         debug!("{:?}", concatenate![Axis(1), ypreds, yvalid]);

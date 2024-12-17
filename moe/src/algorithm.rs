@@ -80,7 +80,7 @@ impl GpMixtureValidParams<f64> {
 
         let (n_clusters, recomb) = if self.n_clusters() == 0 {
             // automatic mode
-            let max_nb_clusters = (xt.nrows() / 10 + 1).min(5);
+            let max_nb_clusters = xt.nrows() / 10 + 1;
             find_best_number_of_clusters(
                 xt,
                 yt,
@@ -171,7 +171,7 @@ impl GpMixtureValidParams<f64> {
             // TODO: Use cross-validation ? Performances
             let (test, _) = extract_part(&data, 5);
             let xtest = test.slice(s![.., ..nx]).to_owned();
-            let ytest = test.slice(s![.., nx..]).to_owned();
+            let ytest = test.slice(s![.., nx..]).to_owned().remove_axis(Axis(1));
             let factor = self.optimize_heaviside_factor(&experts, gmx, &xtest, &ytest);
             info!("Retrain mixture with optimized heaviside factor={}", factor);
 
@@ -337,7 +337,7 @@ impl GpMixtureValidParams<f64> {
         experts: &[Box<dyn FullGpSurrogate>],
         gmx: &GaussianMixture<f64>,
         xtest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        ytest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        ytest: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     ) -> f64 {
         if self.recombination() == Recombination::Hard || self.n_clusters() == 1 {
             1.
@@ -346,7 +346,7 @@ impl GpMixtureValidParams<f64> {
             let errors = scale_factors.map(move |&factor| {
                 let gmx2 = gmx.clone();
                 let gmx2 = gmx2.heaviside_factor(factor);
-                let pred = predict_smooth(experts, &gmx2, xtest, ytest.ncols()).unwrap();
+                let pred = predict_smooth(experts, &gmx2, xtest).unwrap();
                 pred.sub(ytest).mapv(|x| x * x).sum().sqrt() / xtest.mapv(|x| x * x).sum().sqrt()
             });
 
@@ -387,16 +387,13 @@ fn predict_smooth(
     experts: &[Box<dyn FullGpSurrogate>],
     gmx: &GaussianMixture<f64>,
     points: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ny: usize,
-) -> Result<Array2<f64>> {
+) -> Result<Array1<f64>> {
     let probas = gmx.predict_probas(points);
-    let preds: Array2<f64> = experts
+    let preds: Array1<f64> = experts
         .iter()
         .enumerate()
-        .map(|(i, gp)| {
-            gp.predict(&points.view()).unwrap() * probas.column(i).to_owned().insert_axis(Axis(1))
-        })
-        .fold(Array2::zeros((points.nrows(), ny)), |acc, pred| acc + pred);
+        .map(|(i, gp)| gp.predict(&points.view()).unwrap() * probas.column(i))
+        .fold(Array1::zeros((points.nrows(),)), |acc, pred| acc + pred);
     Ok(preds)
 }
 
@@ -463,7 +460,7 @@ impl GpSurrogate for GpMixture {
         self.experts[0].dims()
     }
 
-    fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_hard(x),
             Recombination::Smooth(_) => self.predict_smooth(x),
@@ -556,12 +553,6 @@ impl GpMixture {
         &self.gmx
     }
 
-    /// Retrieve output dimension
-    pub fn output_dim(&self) -> usize {
-        let (_, res) = self.experts[0].dims();
-        res
-    }
-
     /// Sets recombination mode
     pub fn set_recombination(mut self, recombination: Recombination<f64>) -> Self {
         self.recombination = match recombination {
@@ -591,8 +582,8 @@ impl GpMixture {
     /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
     /// or another (ie responsabilities).     
     /// The smooth recombination of each cluster expert responsabilty is used to get the result.
-    pub fn predict_smooth(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
-        predict_smooth(&self.experts, &self.gmx, x, self.output_dim())
+    pub fn predict_smooth(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array1<f64>> {
+        predict_smooth(&self.experts, &self.gmx, x)
     }
 
     /// Predict variances at a set of points `x` specified as (n, nx) matrix.
@@ -612,10 +603,7 @@ impl GpMixture {
                 let p = probas.column(i).to_owned().insert_axis(Axis(1));
                 gp.predict_var(&x.view()).unwrap() * &p * &p
             })
-            .fold(
-                Array2::zeros((x.nrows(), self.output_dim())),
-                |acc, pred| acc + pred,
-            );
+            .fold(Array2::zeros((x.nrows(), 1)), |acc, pred| acc + pred);
         Ok(preds)
     }
 
@@ -640,7 +628,7 @@ impl GpMixture {
                 let preds: Array1<f64> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict(&x).unwrap()[[0, 0]])
+                    .map(|gp| gp.predict(&x).unwrap()[0])
                     .collect();
                 let drvs: Vec<Array1<f64>> = self
                     .experts
@@ -721,21 +709,14 @@ impl GpMixture {
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// Then the expert of the cluster is used to predict the output value.
     /// Returns the ouputs as a (n, 1) column vector
-    pub fn predict_hard(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
+    pub fn predict_hard(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array1<f64>> {
         let clustering = self.gmx.predict(x);
         trace!("Clustering {:?}", clustering);
-        let mut preds = Array2::zeros((x.nrows(), self.output_dim()));
-        Zip::from(preds.rows_mut())
+        let mut preds = Array1::zeros((x.nrows(),));
+        Zip::from(&mut preds)
             .and(x.rows())
             .and(&clustering)
-            .for_each(|mut y, x, &c| {
-                y.assign(
-                    &self.experts[c]
-                        .predict(&x.insert_axis(Axis(0)))
-                        .unwrap()
-                        .row(0),
-                );
-            });
+            .for_each(|y, x, &c| *y = self.experts[c].predict(&x.insert_axis(Axis(0))).unwrap()[0]);
         Ok(preds)
     }
 
@@ -749,7 +730,7 @@ impl GpMixture {
     ) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(x);
         trace!("Clustering {:?}", clustering);
-        let mut variances = Array2::zeros((x.nrows(), self.output_dim()));
+        let mut variances = Array2::zeros((x.nrows(), 1));
         Zip::from(variances.rows_mut())
             .and(x.rows())
             .and(&clustering)
@@ -819,7 +800,7 @@ impl GpMixture {
         self.experts[ith].sample(&x.view(), n_traj)
     }
 
-    pub fn predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
+    pub fn predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array1<f64>> {
         <GpMixture as GpSurrogate>::predict(self, &x.view())
     }
 
@@ -906,7 +887,7 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array1<f64>> for GpM
         );
 
         let values = self.predict(x).expect("MoE prediction");
-        *y = values.remove_axis(Axis(1));
+        *y = values;
     }
 
     fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<f64> {
@@ -1001,12 +982,12 @@ mod tests {
         write_npy(format!("{test_dir}/dpreds_hard.npy"), &dpreds).expect("dpreds saved");
         assert_abs_diff_eq!(
             0.39 * 0.39,
-            moe.predict(&array![[0.39]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.39]]).unwrap()[0],
             epsilon = 1e-4
         );
         assert_abs_diff_eq!(
             f64::sin(10. * 0.82),
-            moe.predict(&array![[0.82]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.82]]).unwrap()[0],
             epsilon = 1e-4
         );
         println!("LOOCV = {}", moe.loocv_score());
@@ -1036,7 +1017,7 @@ mod tests {
         println!("Smooth moe {moe}");
         assert_abs_diff_eq!(
             0.2623, // test we are not good as the true value = 0.37*0.37 = 0.1369
-            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.37]]).unwrap()[0],
             epsilon = 1e-3
         );
 
@@ -1056,7 +1037,7 @@ mod tests {
         write_npy(format!("{test_dir}/preds_smooth2.npy"), &preds).expect("preds saved");
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
-            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.37]]).unwrap()[0],
             epsilon = 1e-3
         );
     }
@@ -1079,7 +1060,7 @@ mod tests {
         );
         assert_abs_diff_eq!(
             0.37 * 0.37, // true value of the function
-            moe.predict(&array![[0.37]]).unwrap()[[0, 0]],
+            moe.predict(&array![[0.37]]).unwrap()[0],
             epsilon = 1e-3
         );
     }
@@ -1186,7 +1167,7 @@ mod tests {
 
             let x = array![[x1], [x1 + h], [x1 - h]];
             let preds = moe.predict(&x).unwrap();
-            let fdiff = (preds[[1, 0]] - preds[[2, 0]]) / (2. * h);
+            let fdiff = (preds[1] - preds[2]) / (2. * h);
 
             let drv = moe.predict_gradients(&xtest).unwrap();
             let df = df_test_1d(&xtest);
@@ -1253,8 +1234,8 @@ mod tests {
             let y_pred = moe.predict(&x).unwrap();
             let y_deriv = moe.predict_gradients(&x).unwrap();
 
-            let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
-            let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+            let diff_g = (y_pred[1] - y_pred[2]) / (2. * e);
+            let diff_d = (y_pred[3] - y_pred[4]) / (2. * e);
 
             assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
             assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
@@ -1310,16 +1291,16 @@ mod tests {
         println!("Display moe: {}", moe);
     }
 
-    fn griewank(x: &Array2<f64>) -> Array2<f64> {
+    fn griewank(x: &Array2<f64>) -> Array1<f64> {
         let dim = x.ncols();
         let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
-        let mut y = Array2::zeros((x.nrows(), 1));
-        Zip::from(y.rows_mut()).and(x.rows()).for_each(|mut y, x| {
+        let mut y = Array1::zeros((x.nrows(),));
+        Zip::from(&mut y).and(x.rows()).for_each(|y, x| {
             let s = x.mapv(|v| v * v).sum() / 4000.;
             let p = (x.to_owned() / &d)
                 .mapv(|v| v.cos())
                 .fold(1., |acc, x| acc * x);
-            y[0] = s - p + 1.;
+            *y = s - p + 1.;
         });
         y
     }
@@ -1353,7 +1334,7 @@ mod tests {
                 .regression_spec(RegressionSpec::CONSTANT)
                 .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
                 .kpls_dim(Some(3))
-                .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
+                .fit(&Dataset::new(xt, yt))
                 .expect("GP fit error");
 
             // To see file size : 100D => json ~ 1.2Mo, bin ~ 0.6Mo
