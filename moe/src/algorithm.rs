@@ -101,8 +101,8 @@ impl GpMixtureValidParams<f64> {
             debug!("Automatic settings {} {:?}", n_clusters, recomb);
         }
 
-        let training = if recomb == Recombination::Smooth(None) && self.n_clusters() != 1 {
-            // Extract 5% of data for validation
+        let training = if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
+            // Extract 5% of data for validation to find best heaviside factor
             // TODO: Use cross-validation ? Performances
             let (_, training_data) = extract_part(&data, 5);
             training_data
@@ -174,8 +174,8 @@ impl GpMixtureValidParams<f64> {
             experts.push(expert);
         }
 
-        if recomb == Recombination::Smooth(None) && self.n_clusters() != 1 {
-            // Extract 5% of data for validation
+        if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
+            // Extract 5% of data for validation to find best heaviside factor
             // TODO: Use cross-validation ? Performances
             let (test, _) = extract_part(&data, 5);
             let xtest = test.slice(s![.., ..nx]).to_owned();
@@ -291,6 +291,7 @@ impl GpMixtureValidParams<f64> {
                 if nc > 0 && self.theta_tunings().len() == 1 {
                     expert_params.theta_tuning(self.theta_tunings()[0].clone());
                 } else {
+                    debug!("Training with theta_tuning = {:?}.", self.theta_tunings());
                     expert_params.theta_tuning(self.theta_tunings()[nc].clone());
                 }
                 debug!("Train best expert...");

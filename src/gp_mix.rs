@@ -161,7 +161,6 @@ impl GpMix {
                 }
             },
         };
-
         let dataset = Dataset::new(xt, yt);
 
         let recomb = match self.recombination {
@@ -187,7 +186,11 @@ impl GpMix {
                 bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
             }
         }
-        let theta_tunings = vec![theta_tuning; self.n_clusters];
+        let theta_tunings = if self.n_clusters > 0 {
+            vec![theta_tuning; self.n_clusters]
+        } else {
+            vec![theta_tuning; 1] // used as default theta tuning for all experts
+        };
 
         if let Err(ctrlc::Error::MultipleHandlers) = ctrlc::set_handler(|| std::process::exit(2)) {
             // ignore multiple handlers error
