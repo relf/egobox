@@ -16,7 +16,8 @@ use egobox_moe::{
     Clustered, GpMixture, GpSurrogate, GpType, Inducings, MixtureGpSurrogate, ThetaTuning,
 };
 use linfa::{traits::Fit, Dataset};
-use ndarray::{Array1, Array2, Axis, Zip};
+use log::error;
+use ndarray::{Array1, Array2, Axis, Ix1, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
@@ -124,10 +125,38 @@ impl SparseGpMix {
         xt: PyReadonlyArray2<f64>,
         yt: PyReadonlyArray2<f64>,
     ) -> SparseGpx {
-        let dataset = Dataset::new(
-            xt.as_array().to_owned(),
-            yt.as_array().to_owned().remove_axis(Axis(1)),
-        );
+        let xt = xt.as_array();
+        let xt = match xt.to_owned().into_dimensionality::<Ix2>() {
+            Ok(xt) => xt,
+            Err(_) => match xt.into_dimensionality::<Ix1>() {
+                Ok(xt) => xt.insert_axis(Axis(1)).to_owned(),
+                _ => {
+                    error!("Training input has to be an [nsamples, nx] array");
+                    panic!("Bad training input data");
+                }
+            },
+        };
+
+        let yt = yt.as_array();
+        let yt = match yt.to_owned().into_dimensionality::<Ix1>() {
+            Ok(yt) => yt,
+            Err(_) => match yt.into_dimensionality::<Ix2>() {
+                Ok(yt) => {
+                    if yt.dim().1 == 1 {
+                        yt.to_owned().remove_axis(Axis(1))
+                    } else {
+                        error!("Training output has to be one dimensional");
+                        panic!("Bad training output data");
+                    }
+                }
+                Err(_) => {
+                    error!("Training output has to be one dimensional");
+                    panic!("Bad training output data");
+                }
+            },
+        };
+
+        let dataset = Dataset::new(xt, yt);
 
         let rng = if let Some(seed) = self.seed {
             Xoshiro256Plus::seed_from_u64(seed)

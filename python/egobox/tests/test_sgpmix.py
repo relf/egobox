@@ -16,68 +16,53 @@ def f_obj(x):
 
 
 class TestSgp(unittest.TestCase):
-    def test_sgp(self):
+    def setUp(self):
         # random generator for reproducibility
-        rng = np.random.RandomState(0)
+        self.rng = np.random.RandomState(0)
 
         # Generate training data
-        nt = 200
+        self.nt = 200
         # Variance of the gaussian noise on our trainingg data
         eta2 = [0.01]
-        gaussian_noise = rng.normal(loc=0.0, scale=np.sqrt(eta2), size=(nt, 1))
-        xt = 2 * rng.rand(nt, 1) - 1
-        yt = f_obj(xt) + gaussian_noise
+        gaussian_noise = self.rng.normal(
+            loc=0.0, scale=np.sqrt(eta2), size=(self.nt, 1)
+        )
+        self.xt = 2 * self.rng.rand(self.nt, 1) - 1
+        self.yt = f_obj(self.xt) + gaussian_noise
 
         # Pick inducing points randomly in training data
-        n_inducing = 30
-        random_idx = rng.permutation(nt)[:n_inducing]
-        Z = xt[random_idx].copy()
+        self.n_inducing = 30
+
+    def test_sgp(self):
+        random_idx = self.rng.permutation(self.nt)[: self.n_inducing]
+        Z = self.xt[random_idx].copy()
 
         start = time.time()
-        sgp = egx.SparseGpMix(z=Z).fit(xt, yt)
+        sgp = egx.SparseGpMix(z=Z).fit(self.xt, self.yt)
         elapsed = time.time() - start
         print(elapsed)
         sgp.save("sgp.json")
 
     def test_sgp_random(self):
-        # random generator for reproducibility
-        rng = np.random.RandomState(0)
-
-        # Generate training data
-        nt = 200
-        # Variance of the gaussian noise on our trainingg data
-        eta2 = [0.01]
-        gaussian_noise = rng.normal(loc=0.0, scale=np.sqrt(eta2), size=(nt, 1))
-        xt = 2 * rng.rand(nt, 1) - 1
-        yt = f_obj(xt) + gaussian_noise
-
-        # Pick inducing points randomly in training data
-        n_inducing = 30
-
         start = time.time()
-        sgp = egx.SparseGpMix(nz=n_inducing, seed=0).fit(xt, yt)
+        sgp = egx.SparseGpMix(nz=self.n_inducing, seed=0).fit(self.xt, self.yt)
         elapsed = time.time() - start
         print(elapsed)
         print(sgp)
 
     def test_sgp_multi_outputs_exception(self):
-        # random generator for reproducibility
-        rng = np.random.RandomState(0)
-
-        # Generate training data
-        nt = 200
-        # Variance of the gaussian noise on our trainingg data
-        eta2 = [0.01]
-        gaussian_noise = rng.normal(loc=0.0, scale=np.sqrt(eta2), size=(nt, 1))
-        xt = 2 * rng.rand(nt, 1) - 1
-        yt = f_obj(xt) + gaussian_noise
-        yt = np.hstack((yt, yt))
-
-        # Pick inducing points randomly in training data
-        n_inducing = 30
+        yt = np.hstack((self.yt, self.yt))
 
         with self.assertRaises(BaseException):
-            egx.SparseGpMix(nz=n_inducing, seed=0).fit(xt, yt)
+            egx.SparseGpx.builder(nz=self.n_inducing, seed=0).fit(self.xt, yt)
+
+    def test_1d_training_data(self):
+        self.xt1 = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+        self.yt1 = np.array([0.0, 1.0, 1.5, 0.9, 1.0])
+
+        self.sgpx = egx.SparseGpx.builder(nz=self.n_inducing, seed=0).fit(
+            self.xt, self.yt
+        )
 
 
 if __name__ == "__main__":
