@@ -156,7 +156,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned> EgorSolver<SB> {
                                 .unwrap()
                                 .view(),
                         )
-                        .unwrap()[[0, 0]]
+                        .unwrap()[0]
                         / scale_cstr
                 };
                 #[cfg(feature = "nlopt")]

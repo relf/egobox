@@ -116,11 +116,11 @@ impl<F: Float> Clone for GpInnerParams<F> {
 /// ```no_run
 /// use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess};
 /// use linfa::prelude::*;
-/// use ndarray::{arr2, concatenate, Array, Array2, Axis};
+/// use ndarray::{arr2, concatenate, Array, Array1, Array2, Axis};
 ///
 /// // one-dimensional test function to approximate
-/// fn xsinx(x: &Array2<f64>) -> Array2<f64> {
-///     (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
+/// fn xsinx(x: &Array2<f64>) -> Array1<f64> {
+///     ((x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())).remove_axis(Axis(1))
 /// }
 ///
 /// // training data
@@ -177,7 +177,7 @@ pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: Correlation
     /// Training outputs
     yt_norm: NormalizedData<F>,
     /// Training dataset (input, output)
-    pub(crate) training_data: (Array2<F>, Array2<F>),
+    pub(crate) training_data: (Array2<F>, Array1<F>),
     /// Parameters used to fit this model
     pub(crate) params: GpValidParams<F, Mean, Corr>,
 }
@@ -239,8 +239,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     /// Predict output values at n given `x` points of nx components specified as a (n, nx) matrix.
-    /// Returns n scalar output values as (n, 1) column vector.
-    pub fn predict(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
+    /// Returns n scalar output values as a vector (n,).
+    pub fn predict(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array1<F>> {
         let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
         // Compute the mean term at x
         let f = self.params.mean.value(&xnorm);
@@ -249,7 +249,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         // Scaled predictor
         let y_ = &f.dot(&self.inner_params.beta) + &corr.dot(&self.inner_params.gamma);
         // Predictor
-        Ok(&y_ * &self.yt_norm.std + &self.yt_norm.mean)
+        Ok((&y_ * &self.yt_norm.std + &self.yt_norm.mean).remove_axis(Axis(1)))
     }
 
     /// Predict variance values at n given `x` points of nx components specified as a (n, nx) matrix.
@@ -364,7 +364,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     ) -> Array2<F> {
         let mean = self.predict(x).unwrap();
         let cov = self._compute_covariance(x);
-        sample(x, mean, cov, n_traj, method)
+        sample(x, mean.insert_axis(Axis(1)), cov, n_traj, method)
     }
 
     /// Retrieve optimized hyperparameters theta
@@ -666,7 +666,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 }
 
-impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
+impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array1<F>>
     for GaussianProcess<F, Mean, Corr>
 where
     F: Float,
@@ -674,10 +674,10 @@ where
     Mean: RegressionModel<F>,
     Corr: CorrelationModel<F>,
 {
-    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<F>) {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array1<F>) {
         assert_eq!(
             x.nrows(),
-            y.nrows(),
+            y.len(),
             "The number of data points must match the number of output targets."
         );
 
@@ -685,8 +685,8 @@ where
         *y = values;
     }
 
-    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.dims().1))
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<F> {
+        Array1::zeros((x.nrows(),))
     }
 }
 
@@ -723,23 +723,18 @@ where
 }
 
 impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem = F>>
-    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, GpError> for GpValidParams<F, Mean, Corr>
+    Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix1>, GpError> for GpValidParams<F, Mean, Corr>
 {
     type Object = GaussianProcess<F, Mean, Corr>;
 
     /// Fit GP parameters using maximum likelihood
     fn fit(
         &self,
-        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
+        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix1>>,
     ) -> Result<Self::Object> {
         let x = dataset.records();
-        let y = dataset.targets();
-        if y.ncols() > 1 {
-            panic!(
-                "Multiple outputs not handled, a one-dimensional column vector \
-            as training output data is expected"
-            );
-        }
+        let y = dataset.targets().to_owned().insert_axis(Axis(1));
+
         if let Some(d) = self.kpls_dim() {
             if *d > x.ncols() {
                 return Err(GpError::InvalidValueError(format!(
@@ -752,7 +747,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         }
 
         let xtrain = NormalizedData::new(x);
-        let ytrain = NormalizedData::new(y);
+        let ytrain = NormalizedData::new(&y);
 
         let mut w_star = Array2::eye(x.ncols());
         if let Some(n_components) = self.kpls_dim() {
@@ -871,7 +866,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             w_star,
             xt_norm: xtrain,
             yt_norm: ytrain,
-            training_data: (x.to_owned(), y.to_owned()),
+            training_data: (x.to_owned(), y.to_owned().remove_axis(Axis(1))),
             params: self.clone(),
         })
     }
@@ -1100,7 +1095,7 @@ mod tests {
     use linfa::prelude::Predict;
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::Norm;
-    use ndarray::{arr2, array, Array, Zip};
+    use ndarray::{arr1, arr2, array, Array, Zip};
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
     use ndarray_npy::write_npy;
@@ -1119,7 +1114,7 @@ mod tests {
         let rng = Xoshiro256Plus::seed_from_u64(42);
         let nt = 5;
         let xt = Lhs::new(&xlimits).with_rng(rng).sample(nt);
-        let yt = Array::from_vec(vec![3.1; nt]).insert_axis(Axis(1));
+        let yt = Array::from_vec(vec![3.1; nt]);
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
@@ -1131,7 +1126,7 @@ mod tests {
         let rng = Xoshiro256Plus::seed_from_u64(43);
         let xtest = Lhs::new(&xlimits).with_rng(rng).sample(nt);
         let ytest = gp.predict(&xtest).expect("prediction error");
-        assert_abs_diff_eq!(Array::from_elem((nt, 1), 3.1), ytest, epsilon = 1e-6);
+        assert_abs_diff_eq!(Array::from_elem((nt,), 3.1), ytest, epsilon = 1e-6);
     }
 
     macro_rules! test_gp {
@@ -1142,7 +1137,7 @@ mod tests {
                 fn [<test_gp_ $regr:snake _ $corr:snake >]() {
                     let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
                     let xplot = Array::linspace(0., 4., 100).insert_axis(Axis(1));
-                    let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+                    let yt = array![0.0, 1.0, 1.5, 0.9, 1.0];
                     let gp = GaussianProcess::<f64, [<$regr Mean>], [<$corr Corr>] >::params(
                         [<$regr Mean>]::default(),
                         [<$corr Corr>]::default(),
@@ -1153,7 +1148,7 @@ mod tests {
                     let yvals = gp
                         .predict(&arr2(&[[1.0], [3.5]]))
                         .expect("prediction error");
-                    let expected_y = arr2(&[[1.0], [0.9]]);
+                    let expected_y = arr1(&[1.0, 0.9]);
                     assert_abs_diff_eq!(expected_y, yvals, epsilon = 0.5);
 
                     let gpr_vals = gp.predict(&xplot).unwrap();
@@ -1200,16 +1195,16 @@ mod tests {
     test_gp!(Quadratic, Matern32);
     test_gp!(Quadratic, Matern52);
 
-    fn griewank(x: &Array2<f64>) -> Array2<f64> {
+    fn griewank(x: &Array2<f64>) -> Array1<f64> {
         let dim = x.ncols();
         let d = Array1::linspace(1., dim as f64, dim).mapv(|v| v.sqrt());
-        let mut y = Array2::zeros((x.nrows(), 1));
-        Zip::from(y.rows_mut()).and(x.rows()).for_each(|mut y, x| {
+        let mut y = Array1::zeros((x.nrows(),));
+        Zip::from(&mut y).and(x.rows()).for_each(|y, x| {
             let s = x.mapv(|v| v * v).sum() / 4000.;
             let p = (x.to_owned() / &d)
                 .mapv(|v| v.cos())
                 .fold(1., |acc, x| acc * x);
-            y[0] = s - p + 1.;
+            *y = s - p + 1.;
         });
         y
     }
@@ -1217,11 +1212,7 @@ mod tests {
     #[test]
     fn test_griewank() {
         let x = array![[1., 1., 1., 1., 1.], [2., 2., 2., 2., 2.]];
-        assert_abs_diff_eq!(
-            array![[0.72890641], [1.01387135]],
-            griewank(&x),
-            epsilon = 1e-8
-        );
+        assert_abs_diff_eq!(array![0.72890641, 1.01387135], griewank(&x), epsilon = 1e-8);
     }
 
     #[test]
@@ -1273,10 +1264,8 @@ mod tests {
         });
     }
 
-    fn tensor_product_exp(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        x.mapv(|v| v.exp())
-            .map_axis(Axis(1), |row| row.product())
-            .insert_axis(Axis(1))
+    fn tensor_product_exp(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array1<f64> {
+        x.mapv(|v| v.exp()).map_axis(Axis(1), |row| row.product())
     }
 
     #[test]
@@ -1305,13 +1294,11 @@ mod tests {
         assert_abs_diff_eq!(err, 0., epsilon = 2e-2);
     }
 
-    fn rosenb(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array2<f64> {
-        let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
-        Zip::from(y.rows_mut())
-            .and(x.rows())
-            .par_for_each(|mut yi, xi| {
-                yi.assign(&array![rosenbrock(&xi.to_vec())]);
-            });
+    fn rosenb(x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Array1<f64> {
+        let mut y: Array1<f64> = Array1::zeros((x.nrows(),));
+        Zip::from(&mut y).and(x.rows()).par_for_each(|yi, xi| {
+            *yi = rosenbrock(&xi.to_vec());
+        });
         y
     }
 
@@ -1345,20 +1332,16 @@ mod tests {
         assert_abs_diff_eq!(var, Array2::zeros((nt, 1)), epsilon = 2e-1);
     }
 
-    fn sphere(x: &Array2<f64>) -> Array2<f64> {
-        let s = (x * x).sum_axis(Axis(1));
-        s.insert_axis(Axis(1))
+    fn sphere(x: &Array2<f64>) -> Array1<f64> {
+        (x * x).sum_axis(Axis(1))
     }
 
     fn dsphere(x: &Array2<f64>) -> Array2<f64> {
         x.mapv(|v| 2. * v)
     }
 
-    fn norm1(x: &Array2<f64>) -> Array2<f64> {
-        x.mapv(|v| v.abs())
-            .sum_axis(Axis(1))
-            .insert_axis(Axis(1))
-            .to_owned()
+    fn norm1(x: &Array2<f64>) -> Array1<f64> {
+        x.mapv(|v| v.abs()).sum_axis(Axis(1)).to_owned()
     }
 
     fn dnorm1(x: &Array2<f64>) -> Array2<f64> {
@@ -1407,8 +1390,8 @@ mod tests {
                     println!("true deriv at [{},{}] = {}", xa, xb, true_deriv);
                     println!("jacob = at [{},{}] = {}", xa, xb, gp.predict_jacobian(&array![xa, xb]));
 
-                    let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
-                    let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+                    let diff_g = (y_pred[1] - y_pred[2]) / (2. * e);
+                    let diff_d = (y_pred[3] - y_pred[4]) / (2. * e);
 
                     // test only if fdiff is not largely wrong
                     if (diff_g-true_deriv[[0, 0]]).abs() < 10. {
@@ -1551,7 +1534,7 @@ mod tests {
     #[test]
     fn test_fixed_theta() {
         let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
-        let yt = array![[0.0], [1.0], [1.5], [0.9], [1.0]];
+        let yt = array![0.0, 1.0, 1.5, 0.9, 1.0];
         let gp = Kriging::params()
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fit error");
@@ -1566,18 +1549,8 @@ mod tests {
         assert_abs_diff_eq!(*gp.theta().to_vec(), expected);
     }
 
-    #[test]
-    #[should_panic]
-    fn test_multiple_outputs() {
-        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
-        let yt = array![[0.0, 10.0], [1.0, -3.], [1.5, 1.5], [0.9, 1.0], [1.0, 0.0]];
-        let _gp = Kriging::params()
-            .fit(&Dataset::new(xt.clone(), yt.clone()))
-            .expect("GP fit error");
-    }
-
-    fn x2sinx(x: &Array2<f64>) -> Array2<f64> {
-        (x * x) * (x).mapv(|v| v.sin())
+    fn x2sinx(x: &Array2<f64>) -> Array1<f64> {
+        ((x * x) * (x).mapv(|v| v.sin())).remove_axis(Axis(1))
     }
 
     #[test]
@@ -1661,18 +1634,18 @@ mod tests {
             [-1.875, -0.625]
         ];
         let yt = array![
-            [2.43286801],
-            [13.10840811],
-            [5.32908578],
-            [17.81862219],
-            [74.08849877],
-            [39.68137781],
-            [14.96009727],
-            [63.17475741],
-            [61.26331775],
-            [-7.46009727],
-            [44.39159189],
-            [2.17091422],
+            2.43286801,
+            13.10840811,
+            5.32908578,
+            17.81862219,
+            74.08849877,
+            39.68137781,
+            14.96009727,
+            63.17475741,
+            61.26331775,
+            -7.46009727,
+            44.39159189,
+            2.17091422,
         ];
 
         let gp = GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(

@@ -5,7 +5,7 @@ use egobox_gp::{
     SparseGaussianProcess, SparseMethod, ThetaTuning,
 };
 use linfa::prelude::{Dataset, Fit};
-use ndarray::{Array1, Array2, ArrayView2};
+use ndarray::{Array1, Array2, ArrayView2, Axis};
 use paste::paste;
 
 #[cfg(feature = "serializable")]
@@ -46,11 +46,11 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     fn dims(&self) -> (usize, usize);
     /// Predict output values at n points given as (n, xdim) matrix.
     #[deprecated(since = "0.17.0", note = "renamed predict")]
-    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_values(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
         self.predict(x)
     }
-    /// Predict output values at n points given as (n, xdim) matrix.
-    fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    /// Predict output values at n points given as a vector (n,)..
+    fn predict(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
     fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
     /// Save model in given file.
@@ -133,7 +133,7 @@ macro_rules! declare_surrogate {
                     y: &ArrayView2<f64>,
                 ) -> Result<Box<dyn FullGpSurrogate>> {
                     Ok(Box::new([<Gp $regr $corr Surrogate>](
-                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,
+                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned().remove_axis(Axis(1))))?,
                     )))
                 }
             }
@@ -150,7 +150,7 @@ macro_rules! declare_surrogate {
                 fn dims(&self) -> (usize, usize) {
                     self.0.dims()
                 }
-                fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                fn predict(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
                     Ok(self.0.predict(x)?)
                 }
                 fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
@@ -281,7 +281,7 @@ macro_rules! declare_sgp_surrogate {
                     y: &ArrayView2<f64>,
                 ) -> Result<Box<dyn FullGpSurrogate>> {
                     Ok(Box::new([<Sgp $corr Surrogate>](
-                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned()))?,
+                        self.0.clone().fit(&Dataset::new(x.to_owned(), y.to_owned().remove_axis(Axis(1))))?,
                     )))
                 }
             }
@@ -308,7 +308,7 @@ macro_rules! declare_sgp_surrogate {
                 fn dims(&self) -> (usize, usize) {
                     self.0.dims()
                 }
-                fn predict(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                fn predict(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
                     Ok(self.0.predict(x)?)
                 }
                 fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
@@ -451,8 +451,8 @@ mod tests {
     use ndarray_linalg::Norm;
     use ndarray_stats::DeviationExt;
 
-    fn xsinx(x: &Array2<f64>) -> Array2<f64> {
-        (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
+    fn xsinx(x: &Array2<f64>) -> Array1<f64> {
+        ((x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())).remove_axis(Axis(1))
     }
 
     #[test]
@@ -461,7 +461,7 @@ mod tests {
         let xt = Lhs::new(&xlimits).sample(10);
         let yt = xsinx(&xt);
         let gp = make_surrogate_params!(Constant, SquaredExponential)
-            .train(&xt.view(), &yt.view())
+            .train(&xt.view(), &yt.insert_axis(Axis(1)).view())
             .expect("GP fit error");
         gp.save("target/tests/save_gp.json", GpFileFormat::Json)
             .expect("GP not saved");

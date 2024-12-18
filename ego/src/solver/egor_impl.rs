@@ -97,7 +97,7 @@ where
         &self,
         model_name: &str,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         make_clustering: bool,
         optimize_theta: bool,
         clustering: Option<&Clustering>,
@@ -114,7 +114,7 @@ where
         {
             info!("{} Clustering and training...", model_name);
             let model = builder
-                .train(&xt.view(), &yt.view())
+                .train(xt.view(), yt.view())
                 .expect("GP training failure");
             info!(
                 "... {} trained ({} / {})",
@@ -155,7 +155,7 @@ where
             builder.set_theta_tunings(&theta_tunings);
 
             let model = builder
-                .train_on_clusters(&xt.view(), &yt.view(), clustering)
+                .train_on_clusters(xt.view(), yt.view(), clustering)
                 .expect("GP training failure");
             model
         }
@@ -204,13 +204,7 @@ where
                 self.make_clustered_surrogate(
                     &name,
                     &state.data.as_ref().unwrap().0,
-                    &state
-                        .data
-                        .as_ref()
-                        .unwrap()
-                        .1
-                        .slice(s![.., k..k + 1])
-                        .to_owned(),
+                    &state.data.as_ref().unwrap().1.slice(s![.., k]).to_owned(),
                     false,
                     true,
                     state.clusterings.as_ref().unwrap()[k].as_ref(),
@@ -412,7 +406,7 @@ where
                     self.make_clustered_surrogate(
                         &name,
                         &xt,
-                        &yt.slice(s![.., k..k + 1]).to_owned(),
+                        &yt.slice(s![.., k]).to_owned(),
                         make_clustering,
                         optimize_theta,
                         clusterings[k].as_ref(),
@@ -595,7 +589,7 @@ where
                                 .unwrap()
                                 .view(),
                         )
-                        .unwrap()[[0, 0]]
+                        .unwrap()[0]
                         / scale_cstr
                 };
                 #[cfg(feature = "nlopt")]
@@ -684,7 +678,7 @@ where
             Ok(res)
         } else {
             let x = &xk.view().insert_axis(Axis(0));
-            let pred = obj_model.predict(x)?[[0, 0]];
+            let pred = obj_model.predict(x)?[0];
             let var = obj_model.predict_var(x)?[[0, 0]];
             let conf = match self.config.q_ei {
                 QEiStrategy::KrigingBeliever => 0.,
@@ -694,7 +688,7 @@ where
             };
             res.push(pred + conf * f64::sqrt(var));
             for cstr_model in cstr_models {
-                res.push(cstr_model.predict(x)?[[0, 0]]);
+                res.push(cstr_model.predict(x)?[0]);
             }
             Ok(res)
         }

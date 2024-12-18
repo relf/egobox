@@ -25,8 +25,7 @@ class TestGpMix(unittest.TestCase):
         self.xt = np.array([[0.0, 1.0, 2.0, 3.0, 4.0]]).T
         self.yt = np.array([[0.0, 1.0, 1.5, 0.9, 1.0]]).T
 
-        gpmix = egx.GpMix()  # or egx.Gpx.builder()
-        self.gpx = gpmix.fit(self.xt, self.yt)
+        self.gpx = egx.Gpx.builder().fit(self.xt, self.yt)
 
     def test_gpx_kriging(self):
         gpx = self.gpx
@@ -83,7 +82,7 @@ class TestGpMix(unittest.TestCase):
         self.assertEqual(self.gpx.dims(), (1, 1))
         (xdata, ydata) = self.gpx.training_data()
         np.testing.assert_array_equal(xdata, self.xt)
-        np.testing.assert_array_equal(ydata, self.yt)
+        np.testing.assert_array_equal(np.atleast_2d(ydata).T, self.yt)
 
     def test_kpls_griewank(self):
         lb = -600
@@ -126,6 +125,12 @@ class TestGpMix(unittest.TestCase):
         )
         with self.assertRaises(BaseException):
             egx.Gpx.builder().fit(self.xt, self.yt)
+
+    def test_1d_training_data(self):
+        self.xt1 = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+        self.yt1 = np.array([0.0, 1.0, 1.5, 0.9, 1.0])
+
+        self.gpx = egx.Gpx.builder().fit(self.xt1, self.yt1)
 
 
 if __name__ == "__main__":

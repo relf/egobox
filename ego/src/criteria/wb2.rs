@@ -31,7 +31,7 @@ impl InfillCriterion for WB2Criterion {
         let scale = scale.unwrap_or(self.0.unwrap_or(1.0));
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         let ei = EI.value(x, obj_model, fmin, None);
-        scale * ei - obj_model.predict(&pt).unwrap()[[0, 0]]
+        scale * ei - obj_model.predict(&pt).unwrap()[0]
     }
 
     /// Computes derivatives of WB2S infill criterion wrt to x components at given `x` point
@@ -78,7 +78,7 @@ pub(crate) fn compute_wb2s_scale(
     let i_max = ei_x.argmax().unwrap();
     let pred_max = obj_model
         .predict(&x.row(i_max).insert_axis(Axis(0)))
-        .unwrap()[[0, 0]];
+        .unwrap()[0];
     let ei_max = ei_x[i_max];
     if ei_max.abs() > 100. * f64::EPSILON {
         ratio * pred_max / ei_max
@@ -113,7 +113,7 @@ mod tests {
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Hard)
-            .fit(&Dataset::new(xt, yt))
+            .fit(&Dataset::new(xt, yt.remove_axis(Axis(1))))
             .expect("GP fitting");
         let bgp = Box::new(gp) as Box<dyn MixtureGpSurrogate>;
 
@@ -153,12 +153,7 @@ mod tests {
         let fdiff2 = (bgp.predict(&xtest21.view()).unwrap()
             - bgp.predict(&xtest22.view()).unwrap())
             / (2. * h);
-        println!(
-            "gp fdiff({}) = [[{}, {}]]",
-            xtest,
-            fdiff1[[0, 0]],
-            fdiff2[[0, 0]]
-        );
+        println!("gp fdiff({}) = [[{}, {}]]", xtest, fdiff1[0], fdiff2[0]);
         println!(
             "GP predict derivatives({}) = {}",
             xtest,

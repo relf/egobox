@@ -2,11 +2,11 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::*;
-use ndarray::{array, Array2, Zip};
+use ndarray::{array, Array1, Array2, Axis, Zip};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
-fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
+fn function_test_1d(x: &Array2<f64>) -> Array1<f64> {
     let mut y = Array2::zeros(x.dim());
     Zip::from(&mut y).and(x).for_each(|yi, &xi| {
         if xi < 0.4 {
@@ -17,7 +17,7 @@ fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
             *yi = f64::sin(10. * xi);
         }
     });
-    y
+    y.remove_axis(Axis(1))
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
