@@ -129,15 +129,15 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
     /// Train the surrogate with given training dataset (x, y)
     fn train(
         &self,
-        xt: &ArrayView2<f64>,
-        yt: &ArrayView1<f64>,
+        xt: ArrayView2<f64>,
+        yt: ArrayView1<f64>,
     ) -> Result<Box<dyn MixtureGpSurrogate>>;
 
     /// Train the surrogate with given training dataset (x, y) and given clustering
     fn train_on_clusters(
         &self,
-        xt: &ArrayView2<f64>,
-        yt: &ArrayView1<f64>,
+        xt: ArrayView2<f64>,
+        yt: ArrayView1<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn MixtureGpSurrogate>>;
 }

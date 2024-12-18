@@ -460,20 +460,20 @@ impl SurrogateBuilder for MixintGpMixtureParams {
 
     fn train(
         &self,
-        xt: &ArrayView2<f64>,
-        yt: &ArrayView1<f64>,
+        xt: ArrayView2<f64>,
+        yt: ArrayView1<f64>,
     ) -> Result<Box<dyn MixtureGpSurrogate>> {
-        let mixmoe = self.check_ref()?._train(xt, yt)?;
+        let mixmoe = self.check_ref()?._train(&xt, &yt)?;
         Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn MixtureGpSurrogate>)
     }
 
     fn train_on_clusters(
         &self,
-        xt: &ArrayView2<f64>,
-        yt: &ArrayView1<f64>,
+        xt: ArrayView2<f64>,
+        yt: ArrayView1<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn MixtureGpSurrogate>> {
-        let mixmoe = self.check_ref()?._train_on_clusters(xt, yt, clustering)?;
+        let mixmoe = self.check_ref()?._train_on_clusters(&xt, &yt, clustering)?;
         Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn MixtureGpSurrogate>)
     }
 }

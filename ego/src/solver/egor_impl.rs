@@ -114,7 +114,7 @@ where
         {
             info!("{} Clustering and training...", model_name);
             let model = builder
-                .train(&xt.view(), &yt.view())
+                .train(xt.view(), yt.view())
                 .expect("GP training failure");
             info!(
                 "... {} trained ({} / {})",
@@ -155,7 +155,7 @@ where
             builder.set_theta_tunings(&theta_tunings);
 
             let model = builder
-                .train_on_clusters(&xt.view(), &yt.view(), clustering)
+                .train_on_clusters(xt.view(), yt.view(), clustering)
                 .expect("GP training failure");
             model
         }
