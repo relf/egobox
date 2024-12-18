@@ -232,7 +232,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
     }
 
     /// Predict output values at n given `x` points of nx components specified as a (n, nx) matrix.
-    /// Returns n scalar output values as (n, 1) column vector.
+    /// Returns n scalar output values as as a vector (n,).
     pub fn predict(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array1<F>> {
         let kx = self.compute_k(x, &self.inducings, &self.w_star, &self.theta, self.sigma2);
         let mu = kx.dot(&self.w_data.vec).remove_axis(Axis(1));

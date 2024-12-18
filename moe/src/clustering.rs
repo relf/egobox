@@ -58,7 +58,7 @@ pub(crate) fn sort_by_cluster<F: Float>(
 /// Find the best number of cluster thanks to cross validation
 pub fn find_best_number_of_clusters<R: Rng + Clone>(
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    y: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    y: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     max_nb_clusters: usize,
     kpls_dim: Option<usize>,
     regression_spec: RegressionSpec,
@@ -70,8 +70,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     } else {
         max_nb_clusters
     };
-    let dataset: DatasetView<f64, f64, Ix1> =
-        DatasetView::new(x.view(), y.view().remove_axis(Axis(1)));
+    let dataset: DatasetView<f64, f64, Ix1> = DatasetView::new(x.view(), y.view());
 
     // Stock
     let mut mean_err_h: Vec<f64> = Vec::new();
@@ -112,7 +111,13 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
         let n_clusters = i + 1;
 
         if ok {
-            let xydata = Dataset::from(concatenate(Axis(1), &[x.view(), y.view()]).unwrap());
+            let xydata = Dataset::from(
+                concatenate(
+                    Axis(1),
+                    &[x.view(), y.to_owned().insert_axis(Axis(1)).view()],
+                )
+                .unwrap(),
+            );
             let maybe_gmm = GaussianMixtureModel::params(n_clusters)
                 .n_runs(20)
                 .with_rng(rng.clone())
@@ -366,7 +371,7 @@ mod tests {
         x.map_axis(Axis(1), |x| x.norm_l1())
     }
 
-    fn function_test_1d(x: &Array2<f64>) -> Array2<f64> {
+    fn function_test_1d(x: &Array2<f64>) -> Array1<f64> {
         let mut y = Array2::zeros(x.dim());
         Zip::from(&mut y).and(x).for_each(|yi, &xi| {
             if xi < 0.4 {
@@ -377,7 +382,7 @@ mod tests {
                 *yi = f64::sin(10. * xi);
             }
         });
-        y
+        y.remove_axis(Axis(1))
     }
 
     #[test]
@@ -403,7 +408,7 @@ mod tests {
             .n_clusters(nb_clusters)
             .recombination(recombination)
             .with_rng(rng)
-            .fit(&Dataset::new(xtrain, ytrain.remove_axis(Axis(1))))
+            .fit(&Dataset::new(xtrain, ytrain))
             .unwrap();
         let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let preds = moe.predict(&obs).unwrap();
@@ -423,7 +428,7 @@ mod tests {
         let rng = Xoshiro256Plus::seed_from_u64(42);
         let (n_clusters, recomb) = find_best_number_of_clusters(
             &xtrain,
-            &ytrain.to_owned().insert_axis(Axis(1)),
+            &ytrain,
             4,
             None,
             RegressionSpec::LINEAR,

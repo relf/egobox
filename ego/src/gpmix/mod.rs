@@ -7,7 +7,7 @@ use egobox_gp::ThetaTuning;
 use egobox_moe::{
     Clustering, CorrelationSpec, GpMixtureParams, MixtureGpSurrogate, RegressionSpec,
 };
-use ndarray::ArrayView2;
+use ndarray::{ArrayView1, ArrayView2};
 
 use linfa::ParamGuard;
 
@@ -52,7 +52,7 @@ impl SurrogateBuilder for GpMixtureParams<f64> {
     fn train(
         &self,
         xt: &ArrayView2<f64>,
-        yt: &ArrayView2<f64>,
+        yt: &ArrayView1<f64>,
     ) -> Result<Box<dyn MixtureGpSurrogate>> {
         let checked = self.check_ref()?;
         let moe = checked.train(xt, yt)?;
@@ -62,7 +62,7 @@ impl SurrogateBuilder for GpMixtureParams<f64> {
     fn train_on_clusters(
         &self,
         xt: &ArrayView2<f64>,
-        yt: &ArrayView2<f64>,
+        yt: &ArrayView1<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn MixtureGpSurrogate>> {
         let checked = self.check_ref()?;

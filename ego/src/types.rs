@@ -3,7 +3,7 @@ use crate::{errors::Result, EgorState};
 use argmin::core::CostFunction;
 use egobox_moe::{Clustering, MixtureGpSurrogate, ThetaTuning};
 use linfa::Float;
-use ndarray::{Array1, Array2, ArrayView2};
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use serde::{Deserialize, Serialize};
 
 /// Optimization result
@@ -130,14 +130,14 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
     fn train(
         &self,
         xt: &ArrayView2<f64>,
-        yt: &ArrayView2<f64>,
+        yt: &ArrayView1<f64>,
     ) -> Result<Box<dyn MixtureGpSurrogate>>;
 
     /// Train the surrogate with given training dataset (x, y) and given clustering
     fn train_on_clusters(
         &self,
         xt: &ArrayView2<f64>,
-        yt: &ArrayView2<f64>,
+        yt: &ArrayView1<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn MixtureGpSurrogate>>;
 }

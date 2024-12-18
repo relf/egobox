@@ -14,7 +14,9 @@ use egobox_moe::{
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
-use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, DataMut, Ix2, Zip};
+use ndarray::{
+    s, Array, Array1, Array2, ArrayBase, ArrayView1, ArrayView2, Axis, Data, DataMut, Ix1, Ix2, Zip,
+};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
@@ -343,7 +345,7 @@ impl MixintGpMixtureValidParams {
     fn _train(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     ) -> Result<MixintGpMixture> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, &xt.view())
@@ -369,7 +371,7 @@ impl MixintGpMixtureValidParams {
     fn _train_on_clusters(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         clustering: &egobox_moe::Clustering,
     ) -> Result<MixintGpMixture> {
         let mut xcast = if self.work_in_folded_space {
@@ -459,7 +461,7 @@ impl SurrogateBuilder for MixintGpMixtureParams {
     fn train(
         &self,
         xt: &ArrayView2<f64>,
-        yt: &ArrayView2<f64>,
+        yt: &ArrayView1<f64>,
     ) -> Result<Box<dyn MixtureGpSurrogate>> {
         let mixmoe = self.check_ref()?._train(xt, yt)?;
         Ok(mixmoe).map(|mixmoe| Box::new(mixmoe) as Box<dyn MixtureGpSurrogate>)
@@ -468,7 +470,7 @@ impl SurrogateBuilder for MixintGpMixtureParams {
     fn train_on_clusters(
         &self,
         xt: &ArrayView2<f64>,
-        yt: &ArrayView2<f64>,
+        yt: &ArrayView1<f64>,
         clustering: &Clustering,
     ) -> Result<Box<dyn MixtureGpSurrogate>> {
         let mixmoe = self.check_ref()?._train_on_clusters(xt, yt, clustering)?;
@@ -476,14 +478,14 @@ impl SurrogateBuilder for MixintGpMixtureParams {
     }
 }
 
-impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>, EgoError>
+impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix1>, EgoError>
     for MixintGpMixtureValidParams
 {
     type Object = MixintGpMixture;
 
     fn fit(
         &self,
-        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix2>>,
+        dataset: &DatasetBase<ArrayBase<D, Ix2>, ArrayBase<D, Ix1>>,
     ) -> Result<Self::Object> {
         let x = dataset.records();
         let y = dataset.targets();
@@ -522,7 +524,7 @@ pub struct MixintGpMixture {
     /// i.e for "blue" in ["red", "green", "blue"] either \[2\] or [0, 0, 1]
     work_in_folded_space: bool,
     /// Training inputs
-    training_data: (Array2<f64>, Array2<f64>),
+    training_data: (Array2<f64>, Array1<f64>),
     /// Parameters used to trin this model
     params: MixintGpMixtureValidParams,
 }
@@ -627,15 +629,15 @@ impl GpSurrogateExt for MixintGpMixture {
     }
 }
 
-// impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
-//     fn training_data(&self) -> &(Array2<f64>, Array2<f64>) {
-//         &self.training_data
-//     }
+impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
+        &self.training_data
+    }
 
-//     fn params(&self) -> MixintGpMixtureParams {
-//         MixintGpMixtureParams::from(self.params.clone())
-//     }
-// }
+    fn params(&self) -> MixintGpMixtureParams {
+        MixintGpMixtureParams::from(self.params.clone())
+    }
+}
 
 impl MixtureGpSurrogate for MixintGpMixture {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
@@ -760,7 +762,7 @@ impl MixintContext {
     pub fn create_surrogate(
         &self,
         surrogate_builder: &MoeBuilder,
-        dataset: &DatasetBase<Array2<f64>, Array2<f64>>,
+        dataset: &DatasetBase<Array2<f64>, Array1<f64>>,
     ) -> Result<MixintGpMixture> {
         let mut params = MixintGpMixtureParams::new(&self.xtypes, surrogate_builder);
         let params = params.work_in_folded_space(self.work_in_folded_space);
@@ -870,7 +872,7 @@ mod tests {
 
         let surrogate_builder = MoeBuilder::new();
         let xt = array![[0.], [2.], [3.0], [4.]];
-        let yt = array![[0.], [1.5], [0.9], [1.]];
+        let yt = array![0., 1.5, 0.9, 1.];
         let ds = Dataset::new(xt, yt);
         let mixi_moe = mixi
             .create_surrogate(&surrogate_builder, &ds)
@@ -913,7 +915,7 @@ mod tests {
 
         let n = mixi.get_unfolded_dim() * 10;
         let xt = mixi_lhs.sample(n);
-        let yt = ftest(&xt).insert_axis(Axis(1));
+        let yt = ftest(&xt);
 
         let surrogate_builder =
             MoeBuilder::new().correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL);

@@ -97,7 +97,7 @@ where
         &self,
         model_name: &str,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        yt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        yt: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         make_clustering: bool,
         optimize_theta: bool,
         clustering: Option<&Clustering>,
@@ -204,13 +204,7 @@ where
                 self.make_clustered_surrogate(
                     &name,
                     &state.data.as_ref().unwrap().0,
-                    &state
-                        .data
-                        .as_ref()
-                        .unwrap()
-                        .1
-                        .slice(s![.., k..k + 1])
-                        .to_owned(),
+                    &state.data.as_ref().unwrap().1.slice(s![.., k]).to_owned(),
                     false,
                     true,
                     state.clusterings.as_ref().unwrap()[k].as_ref(),
@@ -412,7 +406,7 @@ where
                     self.make_clustered_surrogate(
                         &name,
                         &xt,
-                        &yt.slice(s![.., k..k + 1]).to_owned(),
+                        &yt.slice(s![.., k]).to_owned(),
                         make_clustering,
                         optimize_theta,
                         clusterings[k].as_ref(),
