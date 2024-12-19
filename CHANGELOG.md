@@ -1,5 +1,13 @@
 # Changes
 
+## Version 0.25.0 - 19/12/2024
+
+* `gp`: **Breaking change** - Change GP training Rust API to use one dimensional array by @relf in <https://github.com/relf/egobox/pull/222>
+* `doe`: Fix optimized LHS ESE algorithm  by @relf in <https://github.com/relf/egobox/pull/219>
+* `egobox::Gpx`: Exception raised if training output data is not one-dimensional by @relf in <https://github.com/relf/egobox/pull/218>
+* `moe`: Refactor `predict_smooth` by @relf in <https://github.com/relf/egobox/pull/221>
+* Update to numpy crate 0.22.1 to fix win32 compilation by @relf in <https://github.com/relf/egobox/pull/216>
+
 ## Version 0.24.0 - 12/11/2024
 
 * `moe`: Save/Load surrogates in binary format by @relf in <https://github.com/relf/egobox/pull/213>
