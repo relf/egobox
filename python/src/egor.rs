@@ -12,8 +12,7 @@
 
 use crate::types::*;
 use egobox_ego::find_best_result_index;
-use ndarray::{concatenate, Array1, Axis};
-use numpy::ndarray::{Array2, ArrayView2};
+use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
