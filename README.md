@@ -51,8 +51,8 @@ import numpy as np
 import egobox as egx
 
 # Training
-xtrain = np.array([[0.0, 1.0, 2.0, 3.0, 4.0]]).T
-ytrain = np.array([[0.0, 1.0, 1.5, 0.9, 1.0]]).T
+xtrain = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+ytrain = np.array([0.0, 1.0, 1.5, 0.9, 1.0])
 gpx = egx.Gpx.builder().fit(xtrain, ytrain)
 
 # Prediction
@@ -79,10 +79,10 @@ Depending on the sub-packages you want to use, you have to add following declara
 
 ```text
 [dependencies]
-egobox-doe = { version = "0.24" }
-egobox-gp  = { version = "0.24" }
-egobox-moe = { version = "0.24" }
-egobox-ego = { version = "0.24" }
+egobox-doe = { version = "0.25" }
+egobox-gp  = { version = "0.25" }
+egobox-moe = { version = "0.25" }
+egobox-ego = { version = "0.25" }
 ```
 
 ### Features
@@ -146,7 +146,7 @@ Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you coul
 
 ```text
 [dependencies]
-egobox-gp = { version = "0.24", features = ["blas", "linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.25", features = ["blas", "linfa/intel-mkl-static"] }
 ```
 
 or you could run the `gp` example as follows:

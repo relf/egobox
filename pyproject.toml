@@ -24,13 +24,13 @@ python-source = "python"
 
 [tool.poetry]
 name = "egobox"
-version = "0.24.0"
+version = "0.25.0"
 description = "Python binding for egobox EGO optimizer written in Rust"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 packages = [{ include = "egobox", from = "python" }]
 
 [tool.poetry.dependencies]
-numpy = ">=1.18, <2"
+numpy = ">=1.18"
 python = ">=3.9"
 
 [tool.poetry.dev-dependencies]
