@@ -29,7 +29,7 @@ ndarray-linalg = { version = "0.15", optional = true }
 ndarray-stats = "0.5"
 ndarray_einsum_beta = "0.7"
 ndarray-rand = "0.14"
-ndarray-npy = "0.8"
+ndarray-npy = "0.9"
 nlopt = { version = "0.7.0", optional = true }
 cobyla = { version = "0.6" }
 rand_xoshiro = "0.6"
