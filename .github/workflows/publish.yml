@@ -19,8 +19,26 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Publish crates
+      - name: Publish egobox-doe
         uses: katyo/publish-crates@v2
+        path: ./doe
         with:
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+      - name: Publish egobox-gp
+        uses: katyo/publish-crates@v2
+        path: ./gp
+        with:
+          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  
+      - name: Publish egobox-moe
+        uses: katyo/publish-crates@v2
+        path: ./moe
+        with:
+          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        
+      - name: Publish egobox-ego
+        uses: katyo/publish-crates@v2
+        path: ./ego
+        with:
+          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
