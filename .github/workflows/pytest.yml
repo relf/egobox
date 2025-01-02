@@ -23,23 +23,34 @@ jobs:
           - ubuntu-latest
           - windows-latest
           - macos-latest
+    env:
+      UV_CACHE_DIR: /tmp/.uv-cache
+      RUST_BACKTRACE: 1
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Set up uv
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'macos-latest' }}
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          default: true
+      - name: Set up uv
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: irm https://astral.sh/uv/install.ps1 | iex
+        shell: powershell
 
-      - name: Log active toolchain
-        run: rustup show
+      - name: Cache folder for uv
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.uv-cache
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+            uv-${{ runner.os }}
+
+      - name: Install the project
+        working-directory: python
+        run: uv sync --all-extras --dev --python ${{ matrix.python-version }}
 
       - name: Build the Python binding
         working-directory: python
@@ -50,8 +61,8 @@ jobs:
       - name: Run linter and formatter
         working-directory: python
         run: |
-            uv run ruff check
-            uv run ruff format --check
+          uv run ruff check
+          uv run ruff format --check
 
       - name: Test Python
         working-directory: python
@@ -59,5 +70,3 @@ jobs:
           uv run pytest
         shell: bash
 
-    env:
-      RUST_BACKTRACE: 1
