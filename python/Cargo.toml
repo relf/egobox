@@ -1,0 +1,49 @@
+[package]
+name = "egobox"
+authors.workspace = true
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+homepage.workspace = true
+description = "A python binding for egobox crates"
+repository = "https://github.com/relf/egobox/python"
+
+[lib]
+name = "egobox"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+
+nlopt = ["egobox-ego/nlopt", "egobox-gp/nlopt"]
+serializable-gp = ["egobox-gp/serializable"]
+persistent-moe = ["egobox-moe/persistent"]
+blas = ["ndarray/blas", "egobox-gp/blas", "egobox-moe/blas", "egobox-ego/blas"]
+
+[dependencies]
+egobox-doe = { version = "0.25.0", path = "../crates/doe" }
+egobox-gp = { version = "0.25.0", path = "../crates/gp" }
+egobox-moe = { version = "0.25.0", path = "../crates/moe", features = [
+  "persistent",
+] }
+egobox-ego = { version = "0.25.0", path = "../crates/ego", features = [
+  "persistent",
+] }
+
+pyo3 = { version = "0.22", features = ["extension-module"] }
+pyo3-log = "0.11"
+numpy = "0.22.1"
+
+linfa.workspace = true
+ndarray.workspace = true
+ndarray-rand.workspace = true
+
+rand_xoshiro.workspace = true
+env_logger.workspace = true
+log.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+ctrlc.workspace = true
+
+argmin_testfunctions.workspace = true

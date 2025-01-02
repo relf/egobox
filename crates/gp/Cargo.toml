@@ -1,11 +1,12 @@
 [package]
 name = "egobox-gp"
-version = "0.25.0"
-authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
-edition = "2021"
+authors.workspace = true
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+homepage.workspace = true
 description = "A library for gaussian process modeling"
-license = "Apache-2.0"
-repository = "https://github.com/relf/egobox"
+repository = "https://github.com/relf/egobox/crates/gp"
 keywords = ["machine-learning", "gaussian-process", "kriging", "surrogate"]
 categories = ["algorithms", "mathematics", "science"]
 
@@ -20,36 +21,40 @@ blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 [dependencies]
 egobox-doe = { version = "0.25.0", path = "../doe" }
 
-linfa = { version = "0.7", default-features = false }
+linfa.workspace = true
 linfa-pls = { version = "0.7", default-features = false }
 linfa-linalg = { version = "0.1", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx"] }
+ndarray.workspace = true
+ndarray-stats.workspace = true
+ndarray-rand.workspace = true
+
+num-traits.workspace = true
+
+rand_xoshiro.workspace = true
+thiserror.workspace = true
+log.workspace = true
+rayon.workspace = true
+
 ndarray-linalg = { version = "0.15", optional = true }
-ndarray-stats = "0.5"
 ndarray_einsum_beta = "0.7"
-ndarray-rand = "0.14"
-ndarray-npy = "0.8"
+
+ndarray-npy.workspace = true
 nlopt = { version = "0.7.0", optional = true }
 cobyla = { version = "0.6" }
-rand_xoshiro = "0.6"
 paste = "1.0"
-num-traits = "0.2"
-thiserror = "1"
-log = "0.4"
-rayon = "1"
 
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 typetag = { version = "0.2", optional = true }
 
-finitediff = { version = "0.1", features = ["ndarray"] }
+finitediff.workspace = true
 
 [dev-dependencies]
-criterion = "0.5"
-serde_json = "1"
-approx = "0.4"
-argmin_testfunctions = "0.2"
+criterion.workspace = true
+serde_json.workspace = true
+approx.workspace = true
+argmin_testfunctions.workspace = true
 
 [[bench]]
 name = "gp"

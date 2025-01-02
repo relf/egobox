@@ -23,35 +23,52 @@ jobs:
           - ubuntu-latest
           - windows-latest
           - macos-latest
+    env:
+      UV_CACHE_DIR: /tmp/.uv-cache
+      RUST_BACKTRACE: 1
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Set up uv
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: irm https://astral.sh/uv/install.ps1 | iex
+        shell: powershell
+
+      - name: Cache folder for uv
+        uses: actions/cache@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          path: /tmp/.uv-cache
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+            uv-${{ runner.os }}
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Install the project
+        working-directory: python
+        run: uv sync --all-extras --dev --python ${{ matrix.python-version }}
+
+      - name: Build the wrapper
+        uses: PyO3/maturin-action@v1
         with:
-          toolchain: stable
-          default: true
+          working-directory: python
+          command: develop
+          args: --release
+          sccache: 'true'
 
-      - name: Log active toolchain
-        run: rustup show
-
-      - name: Install test dependencies
+      - name: Run linter and formatter
+        working-directory: python
         run: |
-          python -m pip install --upgrade pip
-          pip install maturin numpy pytest poetry
+          uv run ruff check
+          uv run ruff format --check
 
       - name: Test Python
+        working-directory: python
         run: |
-            poetry install
-            poetry run maturin develop --release
-            poetry run pytest
+          uv run pytest
         shell: bash
 
-    env:
-      RUST_BACKTRACE: 1

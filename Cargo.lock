@@ -541,18 +541,13 @@ checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
 name = "egobox"
 version = "0.25.0"
 dependencies = [
- "anyhow",
- "approx",
  "argmin_testfunctions",
- "criterion",
  "ctrlc",
  "egobox-doe",
  "egobox-ego",
  "egobox-gp",
  "egobox-moe",
  "env_logger",
- "finitediff",
- "libm",
  "linfa",
  "log",
  "ndarray",
@@ -561,7 +556,6 @@ dependencies = [
  "pyo3",
  "pyo3-log",
  "rand_xoshiro",
- "rayon",
  "serde",
  "serde_json",
 ]
@@ -679,7 +673,6 @@ dependencies = [
  "ndarray-rand",
  "ndarray-stats",
  "paste",
- "rand_isaac",
  "rand_xoshiro",
  "serde",
  "serde_json",
@@ -1669,15 +1662,6 @@ checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
 dependencies = [
  "num-traits",
  "rand",
-]
-
-[[package]]
-name = "rand_isaac"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fac4373cd91b4f55722c553fb0f286edbb81ef3ff6eec7b99d1898a4110a0b28"
-dependencies = [
- "rand_core",
 ]
 
 [[package]]

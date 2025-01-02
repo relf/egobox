@@ -1,0 +1,6 @@
+
+# C extensions
+*.so
+
+# Pyenv
+.python-version

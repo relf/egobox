@@ -1,0 +1,44 @@
+[package]
+name = "egobox-doe"
+authors.workspace = true
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+homepage.workspace = true
+description = "A library for design of experiments"
+repository = "https://github.com/relf/egobox/crates/doe"
+keywords = [
+    "machine-learning",
+    "design",
+    "experiments",
+    "lhs",
+    "full-factorial",
+]
+readme = "README.md"
+
+[features]
+default = []
+
+serializable = ["serde", "rand_xoshiro/serde1"]
+
+[dependencies]
+linfa.workspace = true
+ndarray.workspace = true
+ndarray-rand.workspace = true
+ndarray-stats.workspace = true
+num-traits.workspace = true
+rand_xoshiro.workspace = true
+serde = { version = "1", optional = true }
+
+[dev-dependencies]
+criterion.workspace = true
+serde_json.workspace = true
+approx.workspace = true
+
+[[bench]]
+name = "lhs"
+harness = false
+
+[[bench]]
+name = "lhs_classics"
+harness = false
