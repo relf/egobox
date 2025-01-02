@@ -9,6 +9,7 @@ logging.basicConfig(level=logging.INFO)
 xspecs_g24 = egx.to_specs([[0.0, 3.0], [0.0, 4.0]])
 n_cstr_g24 = 2
 
+
 # Objective
 def G24(point):
     """
