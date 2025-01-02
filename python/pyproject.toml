@@ -18,10 +18,11 @@ dynamic = ["version"]
 
 [build-system]
 build-backend = "maturin"
-requires = ["maturin>=1.0,<2.0", "poetry_core>=1.0.0"]
+requires = ["maturin>=1.0, <2.0"]
 
 [tool.maturin]
 python-source = "./"
+features = ["pyo3/extension-module"]
 # Optional usage of BLAS backend 
 # cargo-extra-args = "--features linfa/intel-mkl-static"
 
