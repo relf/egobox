@@ -52,11 +52,13 @@ jobs:
         working-directory: python
         run: uv sync --all-extras --dev --python ${{ matrix.python-version }}
 
-      - name: Build the Python binding
-        working-directory: python
-        run: |
-          uv run maturin develop --release
-        shell: bash
+      - name: Build the wrapper
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          command: develop
+          args: --release
+          sccache: 'true'
 
       - name: Run linter and formatter
         working-directory: python
