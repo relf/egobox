@@ -39,27 +39,25 @@ source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "numpy", version = "2.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "pre-commit" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "pip" },
+    { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "numpy" },
-    { name = "pre-commit", specifier = ">=4.0.1" },
-]
+requires-dist = [{ name = "numpy" }]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pip" },
+    { name = "pre-commit", specifier = ">=4.0.1" },
     { name = "pytest", specifier = ">=8.0.2" },
-    { name = "ruff", specifier = ">=0.3.0" },
+    { name = "ruff", specifier = ">=0.8.0" },
 ]
 
 [[package]]
