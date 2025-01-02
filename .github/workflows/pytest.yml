@@ -41,15 +41,22 @@ jobs:
       - name: Log active toolchain
         run: rustup show
 
-      - name: Install test dependencies
+      - name: Build the Python binding
+        working-directory: python
         run: |
-          python -m pip install --upgrade pip
-          pip install uv
+          uv run maturin develop --release
+        shell: bash
+
+      - name: Run linter and formatter
+        working-directory: python
+        run: |
+            uv run ruff check
+            uv run ruff format --check
 
       - name: Test Python
+        working-directory: python
         run: |
-            uv run maturin develop --release
-            uv run pytest
+          uv run pytest
         shell: bash
 
     env:
