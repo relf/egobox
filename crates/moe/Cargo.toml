@@ -1,11 +1,12 @@
 [package]
 name = "egobox-moe"
-version = "0.25.0"
-authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
-edition = "2021"
+authors.workspace = true
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+homepage.workspace = true
 description = "A library for mixture of expert gaussian processes"
-license = "Apache-2.0"
-repository = "https://github.com/relf/egobox"
+repository = "https://github.com/relf/egobox/crates/moe"
 keywords = [
     "machine-learning",
     "mixture",
@@ -32,22 +33,22 @@ blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 egobox-doe = { version = "0.25.0", path = "../doe" }
 egobox-gp = { version = "0.25.0", path = "../gp" }
 
-linfa = { version = "0.7", default-features = false }
+linfa.workspace = true
 linfa-clustering = { version = "0.7", default-features = false }
 linfa-pls = { version = "0.7", default-features = false }
 linfa-linalg = { version = "0.1", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx"] }
+ndarray.workspace = true
 ndarray-linalg = { version = "0.15", optional = true }
-ndarray-stats = "0.5"
-ndarray-rand = "0.14"
-ndarray-npy = "0.8"
-rand_xoshiro = "0.6"
+ndarray-stats.workspace = true
+ndarray-rand.workspace = true
+ndarray-npy.workspace = true
+rand_xoshiro.workspace = true
 paste = "1.0"
 bitflags = { version = "2.4.1", features = ["serde"] }
-log = "0.4"
-env_logger = "0.11.3"
-thiserror = "1"
+log.workspace = true
+env_logger.workspace = true
+thiserror.workspace = true
 
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
@@ -56,13 +57,12 @@ bincode = { version = "1.3.3", optional = true }
 typetag = { version = "0.2", optional = true }
 
 [dev-dependencies]
-criterion = "0.5"
-approx = "0.4"
-ndarray-npy = "0.8"
+criterion.workspace = true
+approx.workspace = true
+ndarray-npy.workspace = true
 ndarray-csv = "0.5"
 csv = "1.1"
-argmin_testfunctions = "0.2"
-rand_isaac = "0.3"
+argmin_testfunctions.workspace = true
 
 [[bench]]
 name = "bench_find_nb_clusters"
