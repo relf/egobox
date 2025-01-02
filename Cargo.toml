@@ -31,10 +31,14 @@ persistent-moe = ["egobox-moe/persistent"]
 blas = ["ndarray/blas", "egobox-gp/blas", "egobox-moe/blas", "egobox-ego/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.25.0", path = "./doe" }
-egobox-gp = { version = "0.25.0", path = "./gp" }
-egobox-moe = { version = "0.25.0", path = "./moe", features = ["persistent"] }
-egobox-ego = { version = "0.25.0", path = "./ego", features = ["persistent"] }
+egobox-doe = { version = "0.25.0", path = "./crates/doe" }
+egobox-gp = { version = "0.25.0", path = "./crates/gp" }
+egobox-moe = { version = "0.25.0", path = "./crates/moe", features = [
+  "persistent",
+] }
+egobox-ego = { version = "0.25.0", path = "./crates/ego", features = [
+  "persistent",
+] }
 
 linfa = { version = "0.7", default-features = false }
 
@@ -64,4 +68,4 @@ approx = "0.4"
 argmin_testfunctions = "0.2"
 
 [workspace]
-members = ["doe", "gp", "moe", "ego"]
+members = ["./crates/*"]
