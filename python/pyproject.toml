@@ -12,26 +12,19 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: Unix",
 ]
+dynamic = ["version"]
 
 [build-system]
 build-backend = "maturin"
 requires = ["maturin>=1.0,<2.0", "poetry_core>=1.0.0"]
 
 [tool.maturin]
-python-source = "python"
+python-source = "./"
 # Optional usage of BLAS backend 
 # cargo-extra-args = "--features linfa/intel-mkl-static"
 
-[tool.poetry]
-name = "egobox"
-version = "0.25.0"
-description = "Python binding for egobox EGO optimizer written in Rust"
-authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
-packages = [{ include = "egobox", from = "python" }]
+[tool.uv]
+dev-dependencies = ["pip", "pytest>=8.0.2", "ruff>=0.3.0"]
 
-[tool.poetry.dependencies]
-numpy = ">=1.18"
-python = ">=3.9"
-
-[tool.poetry.dev-dependencies]
-pytest = ">=6"
+[tool.uv.workspace]
+members = ["egobox"]
