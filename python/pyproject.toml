@@ -12,6 +12,8 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: Unix",
 ]
+requires-python = ">=3.9"
+dependencies = ["numpy"]
 dynamic = ["version"]
 
 [build-system]
@@ -25,6 +27,3 @@ python-source = "./"
 
 [tool.uv]
 dev-dependencies = ["pip", "pytest>=8.0.2", "ruff>=0.3.0"]
-
-[tool.uv.workspace]
-members = ["egobox"]
