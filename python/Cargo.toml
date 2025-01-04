@@ -7,6 +7,7 @@ edition.workspace = true
 homepage.workspace = true
 description = "A python binding for egobox crates"
 repository = "https://github.com/relf/egobox/python"
+readme = "README.md"
 
 [lib]
 name = "egobox"
