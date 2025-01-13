@@ -188,7 +188,7 @@ fn mopta(x: &ArrayView2<f64>, indices: Option<&[usize]>) -> Array2<f64> {
         } else {
             "mopta08_elf64.bin"
         };
-        path_exe.push(r"ego/examples");
+        path_exe.push(r"crates/ego/examples");
         path_exe.push(mopta_exe);
 
         let _ = Command::new(path_exe)
@@ -270,7 +270,6 @@ fn main() -> anyhow::Result<()> {
                 .n_clusters(1)
                 .n_start(50)
                 .n_doe(n_doe)
-                .n_optmod(3)
                 .max_iters(max_iters)
                 .regression_spec(RegressionSpec::CONSTANT)
                 .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
