@@ -76,6 +76,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all --release --features persistent-moe,nlopt # ,blas,linfa/intel-mkl-static   # disabled till linfa 0.8 
+          args: --all --release --features persistent-moe,nlopt,blas,linfa/intel-mkl-static
 
 
