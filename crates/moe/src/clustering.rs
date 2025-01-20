@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::parameters::GpMixtureParams;
 use crate::types::*;
-use log::{debug, info};
+use log::debug; // , info};
 
 use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
@@ -9,7 +9,7 @@ use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_rand::rand::Rng;
-use std::ops::Sub;
+// use std::ops::Sub;
 
 fn mean(list: &[f64]) -> f64 {
     let sum: f64 = Iterator::sum(list.iter());
@@ -93,7 +93,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 
     let use_median = true;
 
-    info!(
+    debug!(
         "Find best nb of clusters (max={}, dataset size={}x{})",
         max_nb_clusters - 1,
         x.nrows(),
@@ -102,15 +102,20 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 
     // Find error for each cluster
     while i < max_nb_clusters && !stop {
-        debug!("Try {} cluster(s)", i + 1);
+        debug!("###############################Try {} cluster(s)", i + 1);
 
         let mut h_errors: Vec<f64> = Vec::new();
         let mut s_errors: Vec<f64> = Vec::new();
         let mut ok = true; // Say if this number of cluster is possible
 
         let n_clusters = i + 1;
-
+        // let test_dir = "target/tests";
         if ok {
+            // let xy = concatenate(
+            //     Axis(1),
+            //     &[x.view(), y.to_owned().insert_axis(Axis(1)).view()],
+            // )
+            // .unwrap();
             let xydata = Dataset::from(
                 concatenate(
                     Axis(1),
@@ -126,7 +131,15 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 
             if let Some(gmm) = maybe_gmm {
                 // Cross Validation
+                // let data_clustering = gmm.predict(&xy);
+                // ndarray_npy::write_npy(
+                //     format!("{test_dir}/clustering_{}.npy", i + 1),
+                //     &data_clustering.mapv(|v| v as f64),
+                // )
+                // .expect("clustering saved");
+
                 for (train, valid) in dataset.fold(5).into_iter() {
+                    debug!("X: {}", Array1::from_iter(valid.records().iter().cloned()));
                     if let Ok(mixture) = GpMixtureParams::default()
                         .n_clusters(n_clusters)
                         .regression_spec(regression_spec)
@@ -158,12 +171,16 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                                 ok = false; // something wrong => early exit
                                 1.0
                             } else {
-                                let denom = actual.mapv(|x| x * x).sum().sqrt();
-                                if denom > 100. * f64::EPSILON {
-                                    pred.sub(actual).mapv(|x| x * x).sum().sqrt() / denom
-                                } else {
-                                    pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                                }
+                                let denom = actual.mapv(|x| x.abs()).sum();
+                                // if denom > 100. * f64::EPSILON {
+                                //     (pred - actual).mapv(|x| x * x).sum().sqrt() / denom
+                                // } else {
+                                //     (pred - actual).mapv(|x| x * x).sum().sqrt()
+                                // }
+                                debug!("Diff: {}", &pred.to_owned() - actual);
+                                let err = (pred - actual).mapv(|x| x.abs()).sum() / denom;
+                                debug!("Err = {}", err);
+                                err
                             }
                         } else {
                             ok = false;
@@ -180,12 +197,13 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                                 ok = false; // something wrong => early exit
                                 1.0
                             } else {
-                                let denom = actual.mapv(|x| x * x).sum().sqrt();
-                                if denom > 100. * f64::EPSILON {
-                                    pred.sub(actual).mapv(|x| x * x).sum().sqrt() / denom
-                                } else {
-                                    pred.sub(actual).mapv(|x| x * x).sum().sqrt()
-                                }
+                                // let denom = actual.mapv(|x| x * x).sum().sqrt();
+                                // if denom > 100. * f64::EPSILON {
+                                //     (pred - actual).mapv(|x| x * x).sum().sqrt() / denom
+                                // } else {
+                                //     (pred - actual).mapv(|x| x * x).sum().sqrt()
+                                // }
+                                (pred - actual).mapv(|x| x.abs()).sum()
                             }
                         } else {
                             ok = false;
@@ -211,6 +229,9 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
         } else {
             debug!("Prediction with {} clusters fails", n_clusters);
         }
+
+        debug!("hard errors : {:?}", h_errors);
+        debug!("soft errors : {:?}", s_errors);
 
         // Stock median errors
         median_err_s.push(median(&s_errors));
@@ -272,7 +293,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     if nb_clusters_ok.is_empty() {
         // Selection fails even with one cluster
         // possibly because some predicitions give inf or nan values
-        info!("Selection of best number of clusters fails. Default to 1 cluster with Smooth(None) recombination");
+        debug!("Selection of best number of clusters fails. Default to 1 cluster with Smooth(None) recombination");
         return (1, Recombination::Smooth(None));
     }
 
@@ -363,7 +384,7 @@ mod tests {
     use ndarray::{array, Array1, Array2, Axis, Zip};
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
-    use ndarray_npy::write_npy;
+    //use ndarray_npy::write_npy;
     use ndarray_rand::rand::SeedableRng;
     use rand_xoshiro::Xoshiro256Plus;
 
@@ -387,37 +408,45 @@ mod tests {
 
     #[test]
     fn test_find_best_cluster_nb_1d() {
+        // let env = env_logger::Env::new().filter_or("EGOBOX_LOG", "info");
+        // let mut builder = env_logger::Builder::from_env(env);
+        // let builder = builder.target(env_logger::Target::Stdout);
+        // builder.try_init().ok();
+
+        //let test_dir = "target/tests";
         let rng = Xoshiro256Plus::seed_from_u64(42);
-        let doe = Lhs::new(&array![[0., 1.]]).with_rng(rng);
-        //write_npy("doe.npy", &doe);
+        let doe = Lhs::new(&array![[0., 1.]]).with_rng(rng.clone());
         let xtrain = doe.sample(50);
-        //write_npy("xtrain.npy", &xtrain);
+        // write_npy(format!("{test_dir}/xtrain.npy"), &xtrain).expect("xt save");
         let ytrain = function_test_1d(&xtrain);
-        //write_npy("ytrain.npy", &ytrain);
-        let rng = Xoshiro256Plus::seed_from_u64(42);
-        let (nb_clusters, recombination) = find_best_number_of_clusters(
+        // write_npy(format!("{test_dir}/ytrain.npy"), &ytrain).expect("yt save");
+        let (nb_clusters, _recombination) = find_best_number_of_clusters(
             &xtrain,
             &ytrain,
-            5,
+            3,
             None,
             RegressionSpec::ALL,
             CorrelationSpec::ALL,
             rng.clone(),
         );
-        let moe = GpMixture::params()
-            .n_clusters(nb_clusters)
-            .recombination(recombination)
-            .with_rng(rng)
-            .fit(&Dataset::new(xtrain, ytrain))
-            .unwrap();
-        let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
-        let preds = moe.predict(&obs).unwrap();
-
-        let test_dir = "target/tests";
-        std::fs::create_dir_all(test_dir).ok();
-        write_npy(format!("{test_dir}/best_obs.npy"), &obs).expect("obs save");
-        write_npy(format!("{test_dir}/best_preds.npy"), &preds).expect("preds save");
         assert_eq!(3, nb_clusters);
+
+        println!("Optimal number of clusters = {nb_clusters}");
+
+        // for i in 1..=3 {
+        //     let moe = GpMixture::params()
+        //         .n_clusters(i)
+        //         .recombination(recombination)
+        //         .with_rng(rng.clone())
+        //         .fit(&Dataset::new(xtrain.clone(), ytrain.clone()))
+        //         .unwrap();
+        //     let obs = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
+        //     let preds = moe.predict(&obs).unwrap();
+
+        //     std::fs::create_dir_all(test_dir).ok();
+        //     write_npy(format!("{test_dir}/best_obs.npy"), &obs).expect("obs save");
+        //     write_npy(format!("{test_dir}/best_preds_{i}.npy"), &preds).expect("preds save");
+        // }
     }
 
     #[test]
