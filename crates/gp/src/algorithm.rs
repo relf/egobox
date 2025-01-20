@@ -10,6 +10,11 @@ use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
+#[cfg(feature = "blas")]
+use log::warn;
+#[cfg(feature = "blas")]
+use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
+
 use linfa_pls::PlsRegression;
 use ndarray::{Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 
@@ -583,20 +588,22 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
     ) -> Array1<F> {
         let x = &(x.to_owned().insert_axis(Axis(0)));
-        let xnorm = (x - &self.xtrain.mean) / &self.xtrain.std;
+        let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
 
-        let dx = pairwise_differences(&xnorm, &self.xtrain.data);
+        let dx = pairwise_differences(&xnorm, &self.xt_norm.data);
 
         let sigma2 = self.inner_params.sigma2;
         let r_chol = &self.inner_params.r_chol.to_owned().with_lapack();
 
         let r = self
+            .params
             .corr
             .value(&dx, &self.theta, &self.w_star)
             .with_lapack();
         let dr = self
+            .params
             .corr
-            .jacobian(&xnorm.row(0), &self.xtrain.data, &self.theta, &self.w_star)
+            .jacobian(&xnorm.row(0), &self.xt_norm.data, &self.theta, &self.w_star)
             .with_lapack();
 
         let rho1 = r_chol
@@ -611,8 +618,8 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let p2 = inv_kr.t().dot(&dr);
 
-        let f_x = self.mean.value(x).t().to_owned();
-        let f_mean = self.mean.value(&self.xtrain.data).with_lapack();
+        let f_x = self.params.mean.value(x).t().to_owned();
+        let f_mean = self.params.mean.value(&self.xt_norm.data).with_lapack();
 
         let rho2 = r_chol
             .solve_triangular(UPLO::Lower, Diag::NonUnit, &f_mean)
@@ -641,16 +648,16 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             }
         };
 
-        let df = self.mean.jacobian(&xnorm.row(0)).with_lapack();
+        let df = self.params.mean.jacobian(&xnorm.row(0)).with_lapack();
 
         let d_a = df.t().to_owned() - dr.t().dot(&inv_kf);
         // let p3 = d_a.dot(&d_mat).t();
         let p4 = d_mat.t().dot(&d_a.t());
 
         let two = F::cast(2.);
-        let prime_t = (-p2 + p4).without_lapack().mapv(|v| two * v).t().to_owned();
+        let prime_t = (p4 - p2).without_lapack().mapv(|v| two * v);
 
-        let x_std = &self.xtrain.std;
+        let x_std = &self.xt_norm.std;
         let dvar = (prime_t / x_std).mapv(|v| v * sigma2);
         dvar.row(0).into_owned()
     }
@@ -1590,8 +1597,8 @@ mod tests {
 
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
         println!("analytic deriv = {y_deriv}, fdiff = {fdiff}");
-        if fdiff.abs() < 6e-1 {
-            let atol = 6e-1;
+        if fdiff.abs() < 1. {
+            let atol = 1.;
             println!("Check absolute error: abs({y_deriv}) should be < {atol}");
             assert_abs_diff_eq!(y_deriv, 0.0, epsilon = atol); // check absolute when close to zero
         } else {

@@ -36,7 +36,7 @@ thiserror.workspace = true
 log.workspace = true
 rayon.workspace = true
 
-ndarray-linalg = { version = "0.15", optional = true }
+ndarray-linalg = { version = "0.16", optional = true }
 ndarray_einsum_beta = "0.7"
 
 ndarray-npy.workspace = true

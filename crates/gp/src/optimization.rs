@@ -3,11 +3,7 @@ use ndarray::{arr1, s};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
 
-#[cfg(feature = "blas")]
-use log::warn;
 use ndarray::{Array, Array1, Array2, Zip};
-#[cfg(feature = "blas")]
-use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 
 use linfa::prelude::Float;
 
