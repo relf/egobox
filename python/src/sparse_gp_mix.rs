@@ -21,6 +21,7 @@ use ndarray::{Array1, Array2, Axis, Ix1, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use rand_xoshiro::Xoshiro256Plus;
 
 /// Sparse Gaussian processes mixture builder
@@ -58,6 +59,7 @@ use rand_xoshiro::Xoshiro256Plus;
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///         
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct SparseGpMix {
     pub correlation_spec: CorrelationSpec,
@@ -71,6 +73,7 @@ pub(crate) struct SparseGpMix {
     pub seed: Option<u64>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl SparseGpMix {
     #[new]
@@ -216,9 +219,11 @@ impl SparseGpMix {
 }
 
 /// A trained Gaussian processes mixture
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct SparseGpx(Box<GpMixture>);
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl SparseGpx {
     /// Get Gaussian processes mixture builder aka `GpSparse`
