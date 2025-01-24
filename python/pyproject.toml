@@ -28,3 +28,6 @@ features = ["pyo3/extension-module"]
 
 [tool.uv]
 dev-dependencies = ["pip", "pytest>=8.0.2", "ruff>=0.8.0", "pre-commit>=4.0.1"]
+
+[tool.ruff]
+extend-exclude = ["egobox/egobox.pyi"]
