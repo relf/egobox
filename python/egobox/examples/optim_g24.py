@@ -50,22 +50,15 @@ def g24(point):
     return np.array([G24(p), G24_c1(p), G24_c2(p)]).T
 
 
+# Configure the optimizer. See help(egor) for options
 egor = egx.Egor(
-    g24,
     xspecs_g24,
     n_doe=10,
     n_cstr=n_cstr_g24,
-    cstr_tol=1e-3,
+    cstr_tol=[1e-3] * n_cstr_g24,
     infill_strategy=egx.InfillStrategy.WB2,
-    # expected=egx.ExpectedOptimum(val=-5.50, tol=1e-2),
-    # outdir="./out",
-    # hot_start=True
-)  # see help(egor) for options
+    target=-5.50,  # known reference objective value
+)
 
-# Restrict regression and correlation models used
-# egor = egx.Egor(g24, xlimits_g24, n_cstr=n_cstr_g24, n_doe=10,
-#                      regr_spec=egx.RegressionSpec.LINEAR,
-#                      corr_spec=egx.CorrelationSpec.MATERN32 | egx.CorrelationSpec.MATERN52)
-
-res = egor.minimize(max_iters=30)
+res = egor.minimize(g24, max_iters=30)
 print(f"Optimization f={res.y_opt} at {res.x_opt}")
