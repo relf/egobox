@@ -21,7 +21,8 @@ build-backend = "maturin"
 requires = ["maturin>=1.0, <2.0"]
 
 [tool.maturin]
-python-source = "./"
+python-source = "egobox"
+module-name = "egobox"
 features = ["pyo3/extension-module"]
 # Optional usage of BLAS backend 
 # cargo-extra-args = "--features linfa/intel-mkl-static"

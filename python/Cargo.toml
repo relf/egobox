@@ -11,7 +11,7 @@ readme = "README.md"
 
 [lib]
 name = "egobox"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
@@ -48,3 +48,8 @@ serde_json.workspace = true
 ctrlc.workspace = true
 
 argmin_testfunctions.workspace = true
+pyo3-stub-gen = { path = "../../pyo3-stub-gen/pyo3-stub-gen", features = ["numpy"] }
+
+[[bin]]
+name = "stub_gen"
+doc = false
