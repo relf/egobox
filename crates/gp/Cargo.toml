@@ -19,7 +19,7 @@ persistent = ["serializable", "serde_json"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
 
 [dependencies]
-egobox-doe = { version = "0.25.1", path = "../doe" }
+egobox-doe = { version = "0.25.2", path = "../doe" }
 
 linfa.workspace = true
 linfa-pls = { version = "0.7", default-features = false }
