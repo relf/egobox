@@ -131,7 +131,8 @@ impl<SB: SurrogateBuilder + DeserializeOwned> EgorService<SB> {
     ) -> Array2<f64> {
         let xtypes = &self.solver.config.xtypes;
         let x_data = to_continuous_space(xtypes, x_data);
-        let x = self.solver.suggest(&x_data, y_data);
+        // TODO: cstr_funcs not managed
+        let x = self.solver.suggest(&x_data, y_data, &[]);
         to_discrete_space(xtypes, &x).to_owned()
     }
 }

@@ -160,7 +160,7 @@ pub fn to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> 
 
 impl<O, SB> Solver<O, EgorState<f64>> for EgorSolver<SB>
 where
-    O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>,
+    O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints,
     SB: SurrogateBuilder + DeserializeOwned,
 {
     const NAME: &'static str = "Egor";
@@ -264,6 +264,7 @@ where
             state.get_max_iters()
         );
         let now = Instant::now();
+
         let res = if self.config.trego.activated {
             self.trego_iteration(fobj, state)?
         } else {
@@ -307,7 +308,9 @@ where
     SB: SurrogateBuilder + DeserializeOwned,
 {
     /// Iteration of EGO algorithm
-    fn ego_iteration<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+    fn ego_iteration<
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints,
+    >(
         &mut self,
         fobj: &mut Problem<O>,
         state: EgorState<f64>,
@@ -325,7 +328,9 @@ where
     }
 
     /// Itertaion of TREGO algorithm
-    fn trego_iteration<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+    fn trego_iteration<
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints,
+    >(
         &mut self,
         fobj: &mut Problem<O>,
         state: EgorState<f64>,

@@ -129,6 +129,7 @@ pub const HISTORY_FILE: &str = "egor_history.npy";
 ///
 pub struct EgorBuilder<O: GroupFunc> {
     fobj: O,
+    fcstrs: Vec<BaseFn>,
     config: EgorConfig,
 }
 
@@ -141,12 +142,18 @@ impl<O: GroupFunc> EgorBuilder<O> {
     pub fn optimize(fobj: O) -> Self {
         EgorBuilder {
             fobj,
+            fcstrs: vec![],
             config: EgorConfig::default(),
         }
     }
 
     pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
         self.config = init(self.config);
+        self
+    }
+
+    pub fn subject_to(mut self, fcstrs: Vec<BaseFn>) -> Self {
+        self.fcstrs = fcstrs;
         self
     }
 
@@ -168,7 +175,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
             ..self.config.clone()
         };
         Egor {
-            fobj: ObjFunc::new(self.fobj),
+            fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
             solver: EgorSolver::new(config, rng),
         }
     }
@@ -187,7 +194,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
             ..self.config.clone()
         };
         Egor {
-            fobj: ObjFunc::new(self.fobj),
+            fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
             solver: EgorSolver::new(config, rng),
         }
     }

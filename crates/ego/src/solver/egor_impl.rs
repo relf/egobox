@@ -52,6 +52,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned> EgorSolver<SB> {
         &self,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+        _cstr_funcs: &[&(dyn ObjFn<InfillObjData<f64>> + Sync)],
     ) -> Array2<f64> {
         let rng = self.rng.clone();
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
@@ -74,6 +75,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned> EgorSolver<SB> {
             &sampling,
             None,
             find_best_result_index(y_data, &cstr_tol),
+            &[],
         );
         x_dat
     }
@@ -219,7 +221,9 @@ where
     /// * Find next promising location(s) of optimum
     /// * Update state: Evaluate true function, update doe and optimum
     #[allow(clippy::type_complexity)]
-    pub fn ego_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+    pub fn ego_step<
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints,
+    >(
         &mut self,
         fobj: &mut Problem<O>,
         state: EgorState<f64>,
@@ -260,6 +264,8 @@ where
                 None
             };
 
+            let problem = fobj.take_problem().unwrap();
+            let fcstrs = problem.fn_constraints();
             let (x_dat, y_dat, infill_value, infill_data) = self.next_points(
                 init,
                 state.get_iter(),
@@ -272,7 +278,9 @@ where
                 &sampling,
                 lhs_optim_seed,
                 state.best_index.unwrap(),
+                fcstrs,
             );
+            fobj.problem = Some(problem);
 
             debug!("Try adding {}", x_dat);
             let added_indices = update_data(&mut x_data, &mut y_data, &x_dat, &y_dat);
@@ -376,6 +384,7 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
         best_index: usize,
+        cstr_funcs: &[BaseFn],
     ) -> (Array2<f64>, Array2<f64>, f64, InfillObjData<f64>) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
@@ -446,6 +455,7 @@ where
                 cstr_tol,
                 lhs_optim,
                 &infill_data,
+                cstr_funcs,
             ) {
                 Ok((infill_obj, xk)) => {
                     match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
@@ -520,6 +530,8 @@ where
     /// The optimized value of the criterion is returned together with the
     /// optimum location
     /// Returns (infill_obj, x_opt)
+    #[allow(clippy::too_many_arguments)]
+    //#[allow(clippy::type_complexity)]
     fn find_best_point(
         &self,
         sampling: &Lhs<f64, Xoshiro256Plus>,
@@ -528,6 +540,7 @@ where
         cstr_tol: &Array1<f64>,
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
+        cstr_funcs: &[BaseFn],
     ) -> Result<(f64, Array1<f64>)> {
         let fmin = infill_data.fmin;
 
@@ -602,7 +615,12 @@ where
                 }
             })
             .collect();
-        let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
+        let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
+        cstr_refs.extend(
+            cstr_funcs
+                .iter()
+                .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync)),
+        );
         info!("Optimize infill criterion...");
         while !success && n_optim <= n_max_optim {
             let x_start = sampling.sample(self.config.n_start);

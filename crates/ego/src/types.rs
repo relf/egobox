@@ -63,16 +63,29 @@ pub enum QEiStrategy {
 pub trait GroupFunc: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
+pub trait DomainConstraints {
+    fn fn_constraints(&self) -> &[BaseFn];
+}
+
 /// As structure to handle the objective and constraints functions for implementing
 /// `argmin::CostFunction` to be used with argmin framework.
 #[derive(Clone)]
 pub struct ObjFunc<O: GroupFunc> {
     fobj: O,
+    fcstrs: Vec<BaseFn>,
 }
 
 impl<O: GroupFunc> ObjFunc<O> {
     pub fn new(fobj: O) -> Self {
-        ObjFunc { fobj }
+        ObjFunc {
+            fobj,
+            fcstrs: vec![],
+        }
+    }
+
+    pub fn subject_to(mut self, fcstrs: Vec<BaseFn>) -> Self {
+        self.fcstrs = fcstrs;
+        self
     }
 }
 
@@ -84,8 +97,14 @@ impl<O: GroupFunc> CostFunction for ObjFunc<O> {
 
     /// Apply the cost function to a parameter `p`
     fn cost(&self, p: &Self::Param) -> std::result::Result<Self::Output, argmin::core::Error> {
-        // Evaluate 2D Rosenbrock function
+        // Evaluate objective function
         Ok((self.fobj)(&p.view()))
+    }
+}
+
+impl<O: GroupFunc> DomainConstraints for ObjFunc<O> {
+    fn fn_constraints(&self) -> &[BaseFn] {
+        &self.fcstrs
     }
 }
 
@@ -142,8 +161,12 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
     ) -> Result<Box<dyn MixtureGpSurrogate>>;
 }
 
+// A trait for functions used by internal optimizers
 pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
+
+// A function type for domain constraints which will be used by the internal optimizer
+pub type BaseFn = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
 
 /// Data used by internal infill criteria optimization
 #[derive(Clone, Debug, Serialize, Deserialize)]
