@@ -397,6 +397,30 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_xsinx_with_domain_constraint() {
+        let initial_doe = array![[0.], [7.], [25.]];
+        let res = EgorBuilder::optimize(xsinx)
+            .subject_to(vec![|x, g, _u| {
+                if let Some(g) = g {
+                    g[0] = 1.
+                }
+                x[0] - 17.0
+            }])
+            .configure(|cfg| {
+                cfg.infill_strategy(InfillStrategy::EI)
+                    .max_iters(30)
+                    .doe(&initial_doe)
+                    .target(-15.1)
+            })
+            .min_within(&array![[0.0, 25.0]])
+            .run()
+            .expect("Egor should minimize xsinx");
+        let expected = array![17.0];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
+    }
+
+    #[test]
+    #[serial]
     fn test_xsinx_trego_wb2_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {

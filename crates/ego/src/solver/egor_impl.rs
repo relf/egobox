@@ -439,8 +439,14 @@ where
             debug!("... surrogates trained");
 
             let fmin = y_data[[best_index, 0]];
-            let (scale_infill_obj, scale_cstr, scale_wb2) =
+            let (scale_infill_obj, scale_cstr_models, scale_wb2) =
                 self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, fmin);
+            let mut scale_cstr = Array1::ones(scale_cstr_models.len() + cstr_funcs.len());
+            if !cstr_funcs.is_empty() {
+                scale_cstr
+                    .slice_mut(s![..scale_cstr_models.len()])
+                    .assign(&scale_cstr_models);
+            }
             infill_data = InfillObjData {
                 fmin,
                 scale_infill_obj,
