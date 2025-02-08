@@ -384,7 +384,7 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
         best_index: usize,
-        cstr_funcs: &[BaseFn],
+        cstr_funcs: &[CstrFn],
     ) -> (Array2<f64>, Array2<f64>, f64, InfillObjData<f64>) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
@@ -546,7 +546,7 @@ where
         cstr_tol: &Array1<f64>,
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
-        cstr_funcs: &[BaseFn],
+        cstr_funcs: &[CstrFn],
     ) -> Result<(f64, Array1<f64>)> {
         let fmin = infill_data.fmin;
 

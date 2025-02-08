@@ -64,7 +64,7 @@ pub trait GroupFunc: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
 pub trait DomainConstraints {
-    fn fn_constraints(&self) -> &[BaseFn];
+    fn fn_constraints(&self) -> &[CstrFn];
 }
 
 /// As structure to handle the objective and constraints functions for implementing
@@ -72,7 +72,7 @@ pub trait DomainConstraints {
 #[derive(Clone)]
 pub struct ObjFunc<O: GroupFunc> {
     fobj: O,
-    fcstrs: Vec<BaseFn>,
+    fcstrs: Vec<CstrFn>,
 }
 
 impl<O: GroupFunc> ObjFunc<O> {
@@ -83,7 +83,7 @@ impl<O: GroupFunc> ObjFunc<O> {
         }
     }
 
-    pub fn subject_to(mut self, fcstrs: Vec<BaseFn>) -> Self {
+    pub fn subject_to(mut self, fcstrs: Vec<CstrFn>) -> Self {
         self.fcstrs = fcstrs;
         self
     }
@@ -103,7 +103,7 @@ impl<O: GroupFunc> CostFunction for ObjFunc<O> {
 }
 
 impl<O: GroupFunc> DomainConstraints for ObjFunc<O> {
-    fn fn_constraints(&self) -> &[BaseFn] {
+    fn fn_constraints(&self) -> &[CstrFn] {
         &self.fcstrs
     }
 }
@@ -166,7 +166,7 @@ pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 
 // A function type for domain constraints which will be used by the internal optimizer
-pub type BaseFn = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
+pub type CstrFn = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
 
 /// Data used by internal infill criteria optimization
 #[derive(Clone, Debug, Serialize, Deserialize)]

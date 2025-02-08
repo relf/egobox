@@ -129,7 +129,7 @@ pub const HISTORY_FILE: &str = "egor_history.npy";
 ///
 pub struct EgorBuilder<O: GroupFunc> {
     fobj: O,
-    fcstrs: Vec<BaseFn>,
+    fcstrs: Vec<CstrFn>,
     config: EgorConfig,
 }
 
@@ -152,7 +152,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
         self
     }
 
-    pub fn subject_to(mut self, fcstrs: Vec<BaseFn>) -> Self {
+    pub fn subject_to(mut self, fcstrs: Vec<CstrFn>) -> Self {
         self.fcstrs = fcstrs;
         self
     }
