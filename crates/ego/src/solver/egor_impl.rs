@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::utils::{compute_cstr_scales, find_best_result_index_from, update_data};
@@ -24,7 +26,7 @@ use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 
-impl<SB: SurrogateBuilder + DeserializeOwned> EgorSolver<SB> {
+impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     /// Constructor of the optimization of the function `f` with specified random generator
     /// to get reproducibility.
     ///
@@ -41,6 +43,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned> EgorSolver<SB> {
             xlimits: as_continuous_limits(&xtypes),
             surrogate_builder: SB::new_with_xtypes(&xtypes),
             rng,
+            phantom: PhantomData,
         }
     }
 
@@ -75,15 +78,16 @@ impl<SB: SurrogateBuilder + DeserializeOwned> EgorSolver<SB> {
             &sampling,
             None,
             find_best_result_index(y_data, &cstr_tol),
-            &[],
+            &Vec::<Cstr>::new(),
         );
         x_dat
     }
 }
 
-impl<SB> EgorSolver<SB>
+impl<SB, C> EgorSolver<SB, C>
 where
     SB: SurrogateBuilder + DeserializeOwned,
+    C: CstrFn,
 {
     pub fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
         self.config.n_clusters == 0 && (added != 0 && added % 10 == 0 && added - prev_added > 0)
@@ -222,7 +226,7 @@ where
     /// * Update state: Evaluate true function, update doe and optimum
     #[allow(clippy::type_complexity)]
     pub fn ego_step<
-        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints,
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
     >(
         &mut self,
         fobj: &mut Problem<O>,
@@ -384,7 +388,7 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         lhs_optim: Option<u64>,
         best_index: usize,
-        cstr_funcs: &[CstrFn],
+        cstr_funcs: &[impl CstrFn],
     ) -> (Array2<f64>, Array2<f64>, f64, InfillObjData<f64>) {
         debug!("Make surrogate with {}", x_data);
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
@@ -546,7 +550,7 @@ where
         cstr_tol: &Array1<f64>,
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
-        cstr_funcs: &[CstrFn],
+        cstr_funcs: &[impl CstrFn],
     ) -> Result<(f64, Array1<f64>)> {
         let fmin = infill_data.fmin;
 

@@ -1,6 +1,7 @@
 use crate::optimizers::*;
 use crate::utils::find_best_result_index_from;
 use crate::utils::update_data;
+use crate::CstrFn;
 use crate::EgorSolver;
 use crate::EgorState;
 use crate::InfillObjData;
@@ -23,7 +24,7 @@ use ndarray::{s, Array, Array1, Array2, ArrayView1, Axis};
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 
-impl<SB: SurrogateBuilder + DeserializeOwned> EgorSolver<SB> {
+impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     /// Local step where infill criterion is optimized within trust region
     pub fn trego_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &mut self,

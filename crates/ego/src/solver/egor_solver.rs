@@ -121,6 +121,7 @@ use argmin::core::{
 
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::marker::PhantomData;
 use std::time::Instant;
 
 /// Numpy filename for initial DOE dump
@@ -135,7 +136,7 @@ pub const DEFAULT_CSTR_TOL: f64 = 1e-6;
 /// Therefore this structure can be used with `argmin::core::Executor` and benefit
 /// from observers and checkpointing features.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct EgorSolver<SB: SurrogateBuilder> {
+pub struct EgorSolver<SB: SurrogateBuilder, C: CstrFn> {
     pub(crate) config: EgorConfig,
     /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
     /// Note: used for continuous variables handling, the optimizer base.
@@ -147,6 +148,8 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// A random generator used to get reproductible results.
     /// For instance: Xoshiro256Plus::from_u64_seed(42) for reproducibility
     pub(crate) rng: Xoshiro256Plus,
+
+    pub phantom: PhantomData<C>,
 }
 
 /// Build `xtypes` from simple float bounds of `x` input components when x belongs to R^n.
@@ -158,9 +161,10 @@ pub fn to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> 
     xtypes
 }
 
-impl<O, SB> Solver<O, EgorState<f64>> for EgorSolver<SB>
+impl<O, SB, C> Solver<O, EgorState<f64>> for EgorSolver<SB, C>
 where
-    O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints,
+    O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
+    C: CstrFn,
     SB: SurrogateBuilder + DeserializeOwned,
 {
     const NAME: &'static str = "Egor";
@@ -303,13 +307,13 @@ where
     }
 }
 
-impl<SB> EgorSolver<SB>
+impl<SB, C: CstrFn> EgorSolver<SB, C>
 where
     SB: SurrogateBuilder + DeserializeOwned,
 {
     /// Iteration of EGO algorithm
     fn ego_iteration<
-        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints,
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
     >(
         &mut self,
         fobj: &mut Problem<O>,
@@ -327,9 +331,9 @@ where
         }
     }
 
-    /// Itertaion of TREGO algorithm
+    /// Itertation of TREGO algorithm
     fn trego_iteration<
-        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints,
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
     >(
         &mut self,
         fobj: &mut Problem<O>,

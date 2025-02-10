@@ -63,19 +63,19 @@ pub enum QEiStrategy {
 pub trait GroupFunc: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
-pub trait DomainConstraints {
-    fn fn_constraints(&self) -> &[CstrFn];
+pub trait DomainConstraints<C: CstrFn> {
+    fn fn_constraints(&self) -> &[impl CstrFn];
 }
 
 /// As structure to handle the objective and constraints functions for implementing
 /// `argmin::CostFunction` to be used with argmin framework.
 #[derive(Clone)]
-pub struct ObjFunc<O: GroupFunc> {
+pub struct ObjFunc<O: GroupFunc, C: CstrFn> {
     fobj: O,
-    fcstrs: Vec<CstrFn>,
+    fcstrs: Vec<C>,
 }
 
-impl<O: GroupFunc> ObjFunc<O> {
+impl<O: GroupFunc, C: CstrFn> ObjFunc<O, C> {
     pub fn new(fobj: O) -> Self {
         ObjFunc {
             fobj,
@@ -83,13 +83,13 @@ impl<O: GroupFunc> ObjFunc<O> {
         }
     }
 
-    pub fn subject_to(mut self, fcstrs: Vec<CstrFn>) -> Self {
+    pub fn subject_to(mut self, fcstrs: Vec<C>) -> Self {
         self.fcstrs = fcstrs;
         self
     }
 }
 
-impl<O: GroupFunc> CostFunction for ObjFunc<O> {
+impl<O: GroupFunc, C: CstrFn> CostFunction for ObjFunc<O, C> {
     /// Type of the parameter vector
     type Param = Array2<f64>;
     /// Type of the return value computed by the cost function
@@ -102,8 +102,8 @@ impl<O: GroupFunc> CostFunction for ObjFunc<O> {
     }
 }
 
-impl<O: GroupFunc> DomainConstraints for ObjFunc<O> {
-    fn fn_constraints(&self) -> &[CstrFn] {
+impl<O: GroupFunc, C: CstrFn> DomainConstraints<C> for ObjFunc<O, C> {
+    fn fn_constraints(&self) -> &[impl CstrFn] {
         &self.fcstrs
     }
 }
@@ -162,11 +162,21 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
 }
 
 // A trait for functions used by internal optimizers
-pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
-impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
+pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {
+    //type Cstr;
+}
+impl<T, U> ObjFn<U> for T
+where
+    T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64,
+{
+    //type Cstr = Cstr;
+}
+
+pub trait CstrFn: Clone + ObjFn<InfillObjData<f64>> + Sync {}
+impl<T> CstrFn for T where T: Clone + ObjFn<InfillObjData<f64>> + Sync {}
 
 // A function type for domain constraints which will be used by the internal optimizer
-pub type CstrFn = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
+pub type Cstr = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
 
 /// Data used by internal infill criteria optimization
 #[derive(Clone, Debug, Serialize, Deserialize)]
