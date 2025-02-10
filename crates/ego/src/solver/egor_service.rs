@@ -53,19 +53,19 @@ use serde::de::DeserializeOwned;
 /// EGO optimizer service builder allowing to use Egor optimizer
 /// as a service.
 ///
-pub struct EgorServiceBuilder<C: CstrFn = Cstr> {
+pub struct EgorServiceFactory<C: CstrFn = Cstr> {
     config: EgorConfig,
     phantom: PhantomData<C>,
 }
 
-impl<C: CstrFn> EgorServiceBuilder<C> {
+impl<C: CstrFn> EgorServiceFactory<C> {
     /// Function to be minimized domain should be basically R^nx -> R^ny
     /// where nx is the dimension of input x and ny the output dimension
     /// equal to 1 (obj) + n (cstrs).
     /// But function has to be able to evaluate several points in one go
     /// hence take an (p, nx) matrix and return an (p, ny) matrix
     pub fn optimize() -> Self {
-        EgorServiceBuilder {
+        EgorServiceFactory {
             config: EgorConfig::default(),
             phantom: PhantomData,
         }
@@ -145,7 +145,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorServiceApi<SB, C> {
 }
 
 /// Egor Service
-pub type EgorService = EgorServiceBuilder;
+pub type EgorServiceBuilder = EgorServiceFactory<Cstr>;
 
 #[cfg(test)]
 mod tests {
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_xsinx_egor_builder() {
-        let ego = EgorService::optimize()
+        let ego = EgorServiceBuilder::optimize()
             .configure(|conf| {
                 conf.regression_spec(RegressionSpec::ALL)
                     .correlation_spec(CorrelationSpec::ALL)

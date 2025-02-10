@@ -1,4 +1,4 @@
-use egobox_ego::{Cstr, EgorBuilder};
+use egobox_ego::EgorBuilder;
 use ndarray::{array, Array2, ArrayView2, Zip};
 
 /// Rosenbrock test function: min f(x)=0 at x=(1, 1)
@@ -14,7 +14,7 @@ fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
 
 fn main() {
     let xlimits = array![[-2., 2.], [-2., 2.]];
-    let res = EgorBuilder::<_, Cstr>::optimize(rosenbrock)
+    let res = EgorBuilder::optimize(rosenbrock)
         .configure(|config| config.max_iters(100).target(1e-2))
         .min_within(&xlimits)
         .run()

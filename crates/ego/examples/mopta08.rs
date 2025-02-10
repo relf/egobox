@@ -1,5 +1,5 @@
 use clap::Parser;
-use egobox_ego::{Cstr, EgorBuilder, GroupFunc, InfillOptimizer};
+use egobox_ego::{EgorBuilder, GroupFunc, InfillOptimizer};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
 use std::fs::{remove_file, File};
@@ -262,7 +262,7 @@ fn main() -> anyhow::Result<()> {
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
 
-    let res = EgorBuilder::<_, Cstr>::optimize(mopta_func(dim))
+    let res = EgorBuilder::optimize(mopta_func(dim))
         .configure(|config| {
             config
                 .n_cstr(N_CSTR)

@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use egobox_ego::{Cstr, EgorBuilder, InfillStrategy};
+use egobox_ego::{EgorBuilder, InfillStrategy};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{array, Array2, ArrayView2, Zip};
 
@@ -18,7 +18,7 @@ fn criterion_ego(c: &mut Criterion) {
     group.bench_function("ego ackley", |b| {
         b.iter(|| {
             black_box(
-                EgorBuilder::<_, Cstr>::optimize(ackley)
+                EgorBuilder::optimize(ackley)
                     .configure(|config| {
                         config
                             .regression_spec(RegressionSpec::CONSTANT)

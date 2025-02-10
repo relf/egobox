@@ -205,14 +205,14 @@ class TestOptimizer(unittest.TestCase):
         if grad:
             return np.one(1.0)
         else:
-            return x - 17.0
+            return (x - 18.0).item()
 
     def test_egor_with_fcstrs(self):
         fcstrs = [TestOptimizer.cstrs_xsinx]
-        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), seed=42)
-        res = egor.minimize(xsinx, fcstrs=fcstrs, max_iters=20)
+        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), n_doe=3, seed=42)
+        res = egor.minimize(xsinx, fcstrs=fcstrs, max_iters=10)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
-        self.assertAlmostEqual(17, res.x_opt[0], delta=1e-3)
+        self.assertAlmostEqual(18, res.x_opt[0], delta=1e-3)
 
 
 if __name__ == "__main__":

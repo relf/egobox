@@ -1,4 +1,4 @@
-use egobox_ego::{Cstr, EgorBuilder, InfillStrategy};
+use egobox_ego::{EgorBuilder, InfillStrategy};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{array, Array2, ArrayView2, Zip};
 
@@ -13,7 +13,7 @@ fn ackley(x: &ArrayView2<f64>) -> Array2<f64> {
 
 fn main() {
     let xlimits = array![[-32.768, 32.768], [-32.768, 32.768], [-32.768, 32.768]];
-    let res = EgorBuilder::<_, Cstr>::optimize(ackley)
+    let res = EgorBuilder::optimize(ackley)
         .configure(|config| {
             config
                 .regression_spec(RegressionSpec::CONSTANT)

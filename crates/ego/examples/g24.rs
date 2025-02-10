@@ -1,5 +1,5 @@
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_ego::{Cstr, EgorServiceBuilder};
+use egobox_ego::{Cstr, EgorServiceFactory};
 use ndarray::{array, concatenate, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Zip};
 
 // Objective
@@ -33,7 +33,7 @@ fn main() {
     let mut doe = Lhs::new(&xlimits).sample(3);
 
     // We use Egor optimizer as a service
-    let egor = EgorServiceBuilder::<Cstr>::optimize()
+    let egor = EgorServiceFactory::<Cstr>::optimize()
         .configure(|config| config.n_cstr(2).seed(42))
         .min_within(&xlimits);
 

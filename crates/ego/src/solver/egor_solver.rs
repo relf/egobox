@@ -136,7 +136,7 @@ pub const DEFAULT_CSTR_TOL: f64 = 1e-6;
 /// Therefore this structure can be used with `argmin::core::Executor` and benefit
 /// from observers and checkpointing features.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct EgorSolver<SB: SurrogateBuilder, C: CstrFn> {
+pub struct EgorSolver<SB: SurrogateBuilder, C: CstrFn = Cstr> {
     pub(crate) config: EgorConfig,
     /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
     /// Note: used for continuous variables handling, the optimizer base.

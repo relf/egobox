@@ -29,7 +29,7 @@
 //! }
 //!
 //! let xlimits = array![[-2., 2.], [-2., 2.]];
-//! let res = EgorBuilder::<_, Cstr>::optimize(rosenb).configure(|config|
+//! let res = EgorBuilder::optimize(rosenb).configure(|config|
 //!         config
 //!             .infill_strategy(InfillStrategy::EI)
 //!             .n_doe(10)
@@ -85,7 +85,7 @@
 //!
 //! let xlimits = array![[0., 3.], [0., 4.]];
 //! let doe = Lhs::new(&xlimits).sample(10);
-//! let res = EgorBuilder::<_, Cstr>::optimize(f_g24).configure(|config|
+//! let res = EgorBuilder::optimize(f_g24).configure(|config|
 //!             config
 //!                 .n_cstr(2)
 //!                 .infill_strategy(InfillStrategy::EI)
@@ -127,20 +127,20 @@ pub const HISTORY_FILE: &str = "egor_history.npy";
 /// EGO optimizer builder allowing to specify function to be minimized
 /// subject to constraints intended to be negative.
 ///
-pub struct EgorBuilder<O: GroupFunc, C: CstrFn = Cstr> {
+pub struct EgorFactory<O: GroupFunc, C: CstrFn = Cstr> {
     fobj: O,
     fcstrs: Vec<C>,
     config: EgorConfig,
 }
 
-impl<O: GroupFunc, C: CstrFn> EgorBuilder<O, C> {
+impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
     /// Function to be minimized domain should be basically R^nx -> R^ny
     /// where nx is the dimension of input x and ny the output dimension
     /// equal to 1 (obj) + n (cstrs).
     /// But function has to be able to evaluate several points in one go
     /// hence take an (p, nx) matrix and return an (p, ny) matrix
     pub fn optimize(fobj: O) -> Self {
-        EgorBuilder {
+        EgorFactory {
             fobj,
             fcstrs: vec![],
             config: EgorConfig::default(),
@@ -203,7 +203,11 @@ impl<O: GroupFunc, C: CstrFn> EgorBuilder<O, C> {
 /// Egor optimizer structure used to parameterize the underlying `argmin::Solver`
 /// and trigger the optimization using `argmin::Executor`.
 #[derive(Clone)]
-pub struct Egor<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> {
+pub struct Egor<
+    O: GroupFunc,
+    C: CstrFn = Cstr,
+    SB: SurrogateBuilder + DeserializeOwned = GpMixtureParams<f64>,
+> {
     fobj: ObjFunc<O, C>,
     solver: EgorSolver<SB, C>,
 }
@@ -345,7 +349,7 @@ impl Observe<EgorState<f64>> for OptimizationObserver {
     }
 }
 
-type EgorFactory<O> = EgorBuilder<O, Cstr>;
+pub type EgorBuilder<O> = EgorFactory<O, Cstr>;
 
 #[cfg(test)]
 mod tests {
@@ -378,7 +382,7 @@ mod tests {
         let outfile = format!("{outdir}/{DOE_INITIAL_FILE}");
         let _ = std::fs::remove_file(&outfile);
         let initial_doe = array![[0.], [7.], [25.]];
-        let res = EgorFactory::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .configure(|cfg| {
                 cfg.infill_strategy(InfillStrategy::EI)
                     .regression_spec(RegressionSpec::QUADRATIC)
@@ -401,7 +405,7 @@ mod tests {
     #[serial]
     fn test_xsinx_with_domain_constraint() {
         let initial_doe = array![[0.], [7.], [25.]];
-        let res = EgorBuilder::<_, Cstr>::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .subject_to(vec![|x: &[f64], g: Option<&mut [f64]>, _u| {
                 if let Some(g) = g {
                     g[0] = 1.
@@ -424,7 +428,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_trego_wb2_egor_builder() {
-        let res = EgorBuilder::<_, Cstr>::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
                     .max_iters(20)
@@ -443,7 +447,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_optmod_egor() {
-        let res = EgorBuilder::<_, Cstr>::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .configure(|config| config.max_iters(20).n_optmod(3))
             .min_within(&array![[0.0, 25.0]])
             .run()
@@ -457,7 +461,7 @@ mod tests {
     fn test_xsinx_hot_start_egor() {
         let _ = std::fs::remove_file(".checkpoints/egor.arg");
         let n_iter = 1;
-        let res = EgorBuilder::<_, Cstr>::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
                     .max_iters(n_iter)
@@ -471,7 +475,7 @@ mod tests {
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
 
         // without hostart we reach the same point
-        let res = EgorBuilder::<_, Cstr>::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
                     .max_iters(n_iter)
@@ -486,7 +490,7 @@ mod tests {
 
         // with hot start we continue
         let ext_iters = 3;
-        let res = EgorBuilder::<_, Cstr>::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
                     .seed(42)
@@ -504,7 +508,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_auto_clustering_egor_builder() {
-        let res = EgorBuilder::<_, Cstr>::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .configure(|config| config.n_clusters(0).max_iters(20))
             .min_within(&array![[0.0, 25.0]])
             .run()
@@ -521,7 +525,7 @@ mod tests {
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
         let xlimits = array![[0.0, 25.0]];
         let doe = array![[0.], [7.], [23.]];
-        let _ = EgorBuilder::<_, Cstr>::optimize(xsinx)
+        let _ = EgorBuilder::optimize(xsinx)
             .configure(|config| config.max_iters(2).doe(&doe).outdir(outdir).seed(42))
             .min_within(&xlimits)
             .run()
@@ -531,7 +535,7 @@ mod tests {
         assert!(filepath.exists());
         let doe: Array2<f64> = read_npy(&filepath).expect("file read");
 
-        let res = EgorBuilder::<_, Cstr>::optimize(xsinx)
+        let res = EgorBuilder::optimize(xsinx)
             .configure(|config| config.max_iters(3).outdir(outdir).warm_start(true).seed(42))
             .min_within(&xlimits)
             .run()
@@ -561,7 +565,7 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
-        let res = EgorBuilder::<_, Cstr>::optimize(rosenb)
+        let res = EgorBuilder::optimize(rosenb)
             .configure(|config| {
                 config
                     .doe(&doe)
@@ -592,7 +596,7 @@ mod tests {
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
         let max_iters = 20;
-        let res = EgorBuilder::<_, Cstr>::optimize(rosenb)
+        let res = EgorBuilder::optimize(rosenb)
             .configure(|config| {
                 config
                     .doe(&init_doe)
@@ -649,7 +653,7 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(3);
-        let res = EgorBuilder::<_, Cstr>::optimize(f_g24)
+        let res = EgorBuilder::optimize(f_g24)
             .configure(|config| {
                 config
                     .n_cstr(2)
@@ -673,7 +677,7 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
-        let res = EgorBuilder::<_, Cstr>::optimize(f_g24)
+        let res = EgorBuilder::optimize(f_g24)
             .configure(|config| {
                 config
                     .regression_spec(RegressionSpec::ALL)
@@ -712,7 +716,7 @@ mod tests {
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![XType::Int(0, 25)];
 
-        let res = EgorBuilder::<_, Cstr>::optimize(mixsinx)
+        let res = EgorBuilder::optimize(mixsinx)
             .configure(|config| {
                 config
                     .doe(&doe)
@@ -734,7 +738,7 @@ mod tests {
         let doe = array![[0.], [7.], [25.]];
         let xtypes = vec![XType::Int(0, 25)];
 
-        let res = EgorBuilder::<_, Cstr>::optimize(mixsinx)
+        let res = EgorBuilder::optimize(mixsinx)
             .configure(|config| {
                 config
                     .doe(&doe)
@@ -755,7 +759,7 @@ mod tests {
         let max_iters = 20;
         let xtypes = vec![XType::Int(0, 25)];
 
-        let res = EgorBuilder::<_, Cstr>::optimize(mixsinx)
+        let res = EgorBuilder::optimize(mixsinx)
             .configure(|config| {
                 config
                     .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
@@ -806,7 +810,7 @@ mod tests {
             XType::Ord(vec![0., 2., 3.]),
         ];
 
-        let res = EgorBuilder::<_, Cstr>::optimize(mixobj)
+        let res = EgorBuilder::optimize(mixobj)
             .configure(|config| {
                 config
                     .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
@@ -842,7 +846,7 @@ mod tests {
         ];
         let xlimits = as_continuous_limits::<f64>(&xtypes);
 
-        EgorBuilder::<_, Cstr>::optimize(mixobj)
+        EgorBuilder::optimize(mixobj)
             .configure(|config| config.outdir(outdir).max_iters(1).seed(42))
             .min_within_mixint_space(&xtypes)
             .run()
@@ -854,7 +858,7 @@ mod tests {
 
         // Check that with no iteration, obj function is never called
         // as the DOE does not need to be evaluated!
-        EgorBuilder::<_, Cstr>::optimize(|_x| panic!("Should not call objective function!"))
+        EgorBuilder::optimize(|_x| panic!("Should not call objective function!"))
             .configure(|config| config.outdir(outdir).warm_start(true).max_iters(0).seed(42))
             .min_within_mixint_space(&xtypes)
             .run()
