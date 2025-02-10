@@ -147,11 +147,15 @@ impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
         }
     }
 
+    /// Set configuration of the optimizer
     pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
         self.config = init(self.config);
         self
     }
 
+    /// This function allows to define complex constraints on inputs using functions [CstrFn] trait.
+    /// Bounds constraints are better specified using `min_within()` or `min_within_mixint_space()`
+    /// arguments.
     pub fn subject_to(mut self, fcstrs: Vec<C>) -> Self {
         self.fcstrs = fcstrs;
         self

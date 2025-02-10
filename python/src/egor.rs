@@ -267,7 +267,14 @@ impl Egor {
     ///
     /// # Parameters
     ///     max_iters:
-    ///         the iteration budget, number of fun calls is n_doe + q_points * max_iters.
+    ///         the iteration budget, number of fun calls is `n_doe + q_points * max_iters`.
+    ///
+    ///     fcstrs:
+    ///         list of constraints functions defined as g(x, return_grad): (ndarray[nx], bool) -> float or ndarray[nx,]
+    ///         If the given `return_grad` boolean is `False` the function has to return the constraint float value
+    ///         to be made negative by the optimizer (which drives the input array `x`).
+    ///         Otherwise the function has to return the gradient (ndarray[nx,]) of the constraint funtion
+    ///         wrt the `nx` components of `x`.
     ///
     /// # Returns
     ///     optimization result

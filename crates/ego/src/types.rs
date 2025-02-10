@@ -161,24 +161,28 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
     ) -> Result<Box<dyn MixtureGpSurrogate>>;
 }
 
-// A trait for functions used by internal optimizers
-pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {
-    //type Cstr;
-}
-impl<T, U> ObjFn<U> for T
-where
-    T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64,
-{
-    //type Cstr = Cstr;
-}
+/// A trait for functions used by internal optimizers
+/// Functions are expected to be defined as `g(x, g, u)` where
+/// * `x` is the input information,
+/// * `g` an optional gradient information to be updated if present
+/// * `u` information provided by the user
+pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
+impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 
+/// A function trait for domain constraints used by the internal optimizer
+/// It is a specialized version of [`ObjFn`] with [`InfillObjData`] as user information
 pub trait CstrFn: Clone + ObjFn<InfillObjData<f64>> + Sync {}
 impl<T> CstrFn for T where T: Clone + ObjFn<InfillObjData<f64>> + Sync {}
 
-// A function type for domain constraints which will be used by the internal optimizer
+/// A function type for domain constraints which will be used by the internal optimizer
+/// which is the default value for [`EgorBuilder`] generic `C` parameter.
 pub type Cstr = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
 
 /// Data used by internal infill criteria optimization
+/// Internally this type is used to carry the information required to
+/// compute the various infill criteria implemented by [`Egor`].
+///
+/// See [`crate::criteria`]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InfillObjData<F: Float> {
     pub fmin: F,

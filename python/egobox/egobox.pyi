@@ -123,13 +123,20 @@ class Egor:
             Random generator seed to allow computation reproducibility.
     """
     def __new__(cls,xspecs,n_cstr = ...,cstr_tol = ...,n_start = ...,n_doe = ...,doe = ...,regr_spec = ...,corr_spec = ...,infill_strategy = ...,q_points = ...,par_infill_strategy = ...,infill_optimizer = ...,kpls_dim = ...,trego = ...,n_clusters = ...,n_optmod = ...,target = ...,outdir = ...,warm_start = ...,hot_start = ...,seed = ...): ...
-    def minimize(self, fun,max_iters = ...) -> OptimResult:
+    def minimize(self, fun,max_iters = ..., fcstrs = ...) -> OptimResult:
         r"""
         This function finds the minimum of a given function `fun`
         
         # Parameters
             max_iters:
                 the iteration budget, number of fun calls is n_doe + q_points * max_iters.
+
+            fcstrs: 
+                list of constraints functions defined as g(x, return_grad): (ndarray[nx], bool) -> float or ndarray[nx,]
+                If the given `return_grad` boolean is `False` the function has to return the constraint float value
+                to be made negative by the optimizer (which drives the input array `x`).
+                Otherwise the function has to return the gradient (ndarray[nx,]) of the constraint funtion
+                wrt the `nx` components of `x`.
         
         # Returns
             optimization result
