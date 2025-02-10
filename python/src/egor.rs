@@ -11,7 +11,7 @@
 //!
 
 use crate::types::*;
-use egobox_ego::find_best_result_index;
+use egobox_ego::{find_best_result_index, InfillObjData};
 use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
@@ -274,8 +274,14 @@ impl Egor {
     ///         x_opt (array[1, nx]): x value where fun is at its minimum subject to constraints
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
-    #[pyo3(signature = (fun, max_iters = 20))]
-    fn minimize(&self, py: Python, fun: PyObject, max_iters: usize) -> PyResult<OptimResult> {
+    #[pyo3(signature = (fun, fcstrs=vec![], max_iters = 20))]
+    fn minimize(
+        &self,
+        py: Python,
+        fun: PyObject,
+        fcstrs: Vec<PyObject>,
+        max_iters: usize,
+    ) -> PyResult<OptimResult> {
         let obj = |x: &ArrayView2<f64>| -> Array2<f64> {
             Python::with_gil(|py| {
                 let args = (x.to_owned().into_pyarray_bound(py),);
@@ -284,9 +290,31 @@ impl Egor {
                 pyarray.to_owned_array()
             })
         };
+
+        let fcstrs = fcstrs
+            .iter()
+            .map(|cstr| {
+                let cstr = |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| -> f64 {
+                    Python::with_gil(|py| {
+                        if let Some(g) = g {
+                            let args = (Array1::from(x.to_vec()).into_pyarray_bound(py), true);
+                            let grad = cstr.bind(py).call1(args).unwrap();
+                            let grad = grad.downcast_into::<PyArray1<f64>>().unwrap().readonly();
+                            g.copy_from_slice(grad.as_slice().unwrap())
+                        }
+                        let args = (Array1::from(x.to_vec()).into_pyarray_bound(py), false);
+                        let res = cstr.bind(py).call1(args).unwrap().extract().unwrap();
+                        res
+                    })
+                };
+                cstr
+            })
+            .collect::<Vec<_>>();
+
         let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
 
         let mixintegor = egobox_ego::EgorBuilder::optimize(obj)
+            .subject_to(fcstrs)
             .configure(|config| self.apply_config(config, Some(max_iters), self.doe.as_ref()))
             .min_within_mixint_space(&xtypes);
 
@@ -331,7 +359,7 @@ impl Egor {
         let doe = concatenate(Axis(1), &[x_doe.view(), y_doe.view()]).unwrap();
         let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
 
-        let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
+        let mixintegor = egobox_ego::EgorService::optimize()
             .configure(|config| self.apply_config(config, Some(1), Some(&doe)))
             .min_within_mixint_space(&xtypes);
 

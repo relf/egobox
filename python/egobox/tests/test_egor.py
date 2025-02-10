@@ -125,7 +125,7 @@ class TestOptimizer(unittest.TestCase):
         start = time.process_time()
         res = egor.minimize(g24, max_iters=max_iters)
         end = time.process_time()
-        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
+        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end - start}s")
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(2.3295, res.x_opt[0], delta=1e-2)
         self.assertAlmostEqual(3.1785, res.x_opt[1], delta=1e-2)
@@ -146,7 +146,7 @@ class TestOptimizer(unittest.TestCase):
         res = egor.minimize(g24, max_iters=30)
         end = time.process_time()
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=5e-1)
-        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
+        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end - start}s")
 
     def test_g24_trego(self):
         n_doe = 5
@@ -163,7 +163,7 @@ class TestOptimizer(unittest.TestCase):
         start = time.process_time()
         res = egor.minimize(g24, max_iters=max_iters)
         end = time.process_time()
-        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
+        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end - start}s")
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(2.3295, res.x_opt[0], delta=1e-2)
         self.assertAlmostEqual(3.1785, res.x_opt[1], delta=1e-2)
@@ -177,7 +177,7 @@ class TestOptimizer(unittest.TestCase):
         start = time.process_time()
         res = egor.minimize(six_humps, max_iters=45)
         end = time.process_time()
-        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end-start}s")
+        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end - start}s")
         # 2 global optimum value =-1.0316 located at (0.089842, -0.712656) and  (-0.089842, 0.712656)
         self.assertAlmostEqual(-1.0316, res.y_opt[0], delta=2e-1)
 
@@ -197,6 +197,22 @@ class TestOptimizer(unittest.TestCase):
         res = egor.get_result(x_doe, y_doe)
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
+
+    # Constraint function which prevent from reaching the
+    # the unconstrained minimum located in x=18.9
+    @staticmethod
+    def cstrs_xsinx(x, grad=False):
+        if grad:
+            return np.one(1.0)
+        else:
+            return x - 17.0
+
+    def test_egor_with_fcstrs(self):
+        fcstrs = [TestOptimizer.cstrs_xsinx]
+        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), seed=42)
+        res = egor.minimize(xsinx, fcstrs=fcstrs, max_iters=20)
+        print(f"Optimization f={res.y_opt} at {res.x_opt}")
+        self.assertAlmostEqual(17, res.x_opt[0], delta=1e-3)
 
 
 if __name__ == "__main__":
