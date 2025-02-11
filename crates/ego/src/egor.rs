@@ -250,7 +250,7 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
         };
 
         info!("{}", result);
-        let (x_data, y_data) = result.state().clone().take_data().unwrap();
+        let (x_data, y_data, _c_data) = result.state().clone().take_data().unwrap();
 
         let res = if !self.solver.config.discrete() {
             info!("Data: \n{}", concatenate![Axis(1), x_data, y_data]);

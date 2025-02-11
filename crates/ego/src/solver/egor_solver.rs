@@ -233,8 +233,10 @@ where
         let theta_inits = vec![None; self.config.n_cstr + 1];
         let no_point_added_retries = MAX_POINT_ADDITION_RETRY;
 
+        let c_data = self.eval_fcstrs(problem, &x_data);
+
         let mut initial_state = state
-            .data((x_data, y_data.clone()))
+            .data((x_data, y_data.clone(), c_data))
             .clusterings(clusterings)
             .theta_inits(theta_inits)
             .sampling(sampling);
@@ -274,7 +276,7 @@ where
         } else {
             self.ego_iteration(fobj, state)?
         };
-        let (x_data, y_data) = res.0.data.clone().unwrap();
+        let (x_data, y_data, _c_data) = res.0.data.clone().unwrap();
 
         if self.config.outdir.is_some() {
             let doe = concatenate![Axis(1), x_data, y_data];
@@ -340,7 +342,7 @@ where
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
         let rho = |sigma| sigma * sigma;
-        let (_, y_data) = state.data.as_ref().unwrap(); // initialized in init
+        let (_, y_data, _) = state.data.as_ref().unwrap(); // initialized in init
         let best = state.best_index.unwrap(); // initialized in init
         let prev_best = state.prev_best_index.unwrap(); // initialized in init
 

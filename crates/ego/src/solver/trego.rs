@@ -2,6 +2,7 @@ use crate::optimizers::*;
 use crate::utils::find_best_result_index_from;
 use crate::utils::update_data;
 use crate::CstrFn;
+use crate::DomainConstraints;
 use crate::EgorSolver;
 use crate::EgorState;
 use crate::InfillObjData;
@@ -26,15 +27,17 @@ use serde::de::DeserializeOwned;
 
 impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     /// Local step where infill criterion is optimized within trust region
-    pub fn trego_step<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+    pub fn trego_step<
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
+    >(
         &mut self,
-        fobj: &mut Problem<O>,
+        problem: &mut Problem<O>,
         state: EgorState<f64>,
         models: Vec<Box<dyn MixtureGpSurrogate>>,
         infill_data: &InfillObjData<f64>,
     ) -> EgorState<f64> {
         let mut new_state = state.clone();
-        let (mut x_data, mut y_data) = new_state.take_data().expect("DOE data");
+        let (mut x_data, mut y_data, mut c_data) = new_state.take_data().expect("DOE data");
 
         let best_index = new_state.best_index.unwrap();
         let y_old = y_data[[best_index, 0]];
@@ -66,15 +69,24 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             x_data.row(new_state.best_index.unwrap()),
             x_data.row(best_index)
         );
-        let y_new = self.eval_obj(fobj, &x_new);
+        let y_new = self.eval_obj(problem, &x_new);
         debug!(
             "y_old-y_new={}, rho={}",
             y_old - y_new[[0, 0]],
             rho(new_state.sigma)
         );
 
+        let c_new = self.eval_fcstrs(problem, &x_new);
+
         // Update DOE and best point
-        let added = update_data(&mut x_data, &mut y_data, &x_new, &y_new);
+        let added = update_data(
+            &mut x_data,
+            &mut y_data,
+            &mut c_data,
+            &x_new,
+            &y_new,
+            &c_new,
+        );
         new_state.prev_added = new_state.added;
         new_state.added += added.len();
         info!(
@@ -89,7 +101,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             &y_data,
             &new_state.cstr_tol,
         );
-        new_state = new_state.data((x_data, y_data));
+        new_state = new_state.data((x_data, y_data, c_data));
         new_state.prev_best_index = new_state.best_index;
         new_state.best_index = Some(new_best_index);
         new_state
