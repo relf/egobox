@@ -626,11 +626,30 @@ where
             })
             .collect();
         let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
-        cstr_refs.extend(
-            cstr_funcs
-                .iter()
-                .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync)),
-        );
+        let cstr_funcs = cstr_funcs
+            .iter()
+            .map(|cstr| {
+                |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
+                    let x = if self.config.discrete() {
+                        let xary = Array2::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
+                        // We have to cast x to folded space as EgorSolver
+                        // works internally in the continuous space while
+                        // the constraint function expects discrete variable in folded space
+                        to_discrete_space(&self.config.xtypes, &xary)
+                            .row(0)
+                            .into_owned();
+                        &xary.into_iter().collect::<Vec<_>>()
+                    } else {
+                        x
+                    };
+                    cstr(x, gradient, params)
+                }
+            })
+            .collect::<Vec<_>>();
+        let cstr_funcs = cstr_funcs
+            .iter()
+            .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync));
+        cstr_refs.extend(cstr_funcs);
         info!("Optimize infill criterion...");
         while !success && n_optim <= n_max_optim {
             let x_start = sampling.sample(self.config.n_start);
