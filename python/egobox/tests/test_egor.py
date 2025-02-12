@@ -15,6 +15,14 @@ def xsinx(x: np.ndarray) -> np.ndarray:
     return y
 
 
+# grad information is used when using SLSQP as infill optimizer
+def cstr_xsinx(x, grad=False):
+    if grad:
+        return np.one(1.0)
+    else:
+        return (x - 18.0).item()
+
+
 def G24(point):
     """
     Function G24
@@ -24,7 +32,7 @@ def G24(point):
     return -p[:, 0] - p[:, 1]
 
 
-# Constraints < 0
+# Constraints < 0 to be metamodelized
 def G24_c1(point):
     p = np.atleast_2d(point)
     return (
@@ -34,6 +42,13 @@ def G24_c1(point):
         + p[:, 1]
         - 2.0
     )
+
+
+# Used as fonction constraint
+def g24_c1(x, grad=False):
+    if grad:
+        raise NotImplementedError("g24_c1: constraint gradient not available")
+    return G24_c1(x).item()
 
 
 def G24_c2(point):
@@ -46,6 +61,13 @@ def G24_c2(point):
         + p[:, 1]
         - 36.0
     )
+
+
+# Used as fonction constraint
+def g24_c2(x, grad=False):
+    if grad:
+        raise NotImplementedError("g24_c1: constraint gradient not available")
+    return G24_c2(x).item()
 
 
 # Grouped evaluation
@@ -200,19 +222,33 @@ class TestOptimizer(unittest.TestCase):
 
     # Constraint function which prevent from reaching the
     # the unconstrained minimum located in x=18.9
-    @staticmethod
-    def cstrs_xsinx(x, grad=False):
-        if grad:
-            return np.one(1.0)
-        else:
-            return (x - 18.0).item()
-
     def test_egor_with_fcstrs(self):
-        fcstrs = [TestOptimizer.cstrs_xsinx]
-        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), n_doe=3, seed=42)
-        res = egor.minimize(xsinx, fcstrs=fcstrs, max_iters=10)
+        fcstrs = [cstr_xsinx]
+        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), n_doe=5, seed=42)
+        res = egor.minimize(xsinx, max_iters=10, fcstrs=fcstrs)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(18, res.x_opt[0], delta=1e-3)
+
+    def test_g24_with_fcstrs(self):
+        n_doe = 5
+        max_iters = 20
+        n_cstr = 2
+        egor = egx.Egor(
+            egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
+            seed=42,
+            n_optmod=2,
+            n_doe=n_doe,
+        )
+        start = time.process_time()
+        fcstrs = [g24_c1, g24_c2]
+        res = egor.minimize(g24, max_iters=max_iters, fcstrs=fcstrs)
+        end = time.process_time()
+        print(f"Optimization f={res.y_opt} at {res.x_opt} in {end - start}s")
+        self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=1e-2)
+        self.assertAlmostEqual(2.3295, res.x_opt[0], delta=1e-2)
+        self.assertAlmostEqual(3.1785, res.x_opt[1], delta=1e-2)
+        self.assertEqual((n_doe + max_iters, 2), res.x_doe.shape)
+        self.assertEqual((n_doe + max_iters, 1 + n_cstr), res.y_doe.shape)
 
 
 if __name__ == "__main__":
