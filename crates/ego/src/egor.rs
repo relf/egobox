@@ -250,10 +250,10 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
         };
 
         info!("{}", result);
-        let (x_data, y_data, _c_data) = result.state().clone().take_data().unwrap();
+        let (x_data, y_data, c_data) = result.state().clone().take_data().unwrap();
 
         let res = if !self.solver.config.discrete() {
-            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data]);
+            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data, c_data]);
             OptimResult {
                 x_opt: result.state.get_best_param().unwrap().to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
@@ -361,7 +361,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
-    use ndarray::{array, s, Array2, ArrayView2, Ix1, Zip};
+    use ndarray::{array, s, Array1, Array2, ArrayView2, Ix1, Zip};
 
     use ndarray_npy::read_npy;
 
@@ -650,8 +650,42 @@ mod tests {
         y
     }
 
+    fn f_g24_bare(x: &ArrayView2<f64>) -> Array2<f64> {
+        let mut y = Array2::zeros((x.nrows(), 1));
+        Zip::from(y.rows_mut())
+            .and(x.rows())
+            .for_each(|mut yi, xi| {
+                yi.assign(&array![g24(&xi)]);
+            });
+        y
+    }
+
     #[test]
     #[serial]
+    fn test_egor_g24_basic_egor_builder_cobyla() {
+        let xlimits = array![[0., 3.], [0., 4.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .sample(3);
+        let res = EgorBuilder::optimize(f_g24)
+            .configure(|config| {
+                config
+                    .n_cstr(2)
+                    .doe(&doe)
+                    .max_iters(20)
+                    .infill_optimizer(InfillOptimizer::Cobyla)
+                    .cstr_tol(array![2e-3, 1e-3])
+                    .seed(42)
+            })
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure");
+        println!("G24 optim result = {res:?}");
+        let expected = array![2.3295, 3.1785];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 3e-2);
+    }
+
+    #[test]
     fn test_egor_g24_basic_egor_builder() {
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
@@ -662,7 +696,7 @@ mod tests {
                 config
                     .n_cstr(2)
                     .doe(&doe)
-                    .max_iters(50)
+                    .max_iters(20)
                     .cstr_tol(array![2e-6, 1e-6])
                     .seed(42)
             })
@@ -672,6 +706,42 @@ mod tests {
         println!("G24 optim result = {res:?}");
         let expected = array![2.3295, 3.1785];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 3e-2);
+    }
+
+    #[test]
+    #[serial]
+    fn test_egor_g24_with_domain_constraints() {
+        let xlimits = array![[0., 3.], [0., 4.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .sample(3);
+        let c1 = |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| {
+            if g.is_some() {
+                panic!("c1: gradient not implemented") // ie panic with InfillOptimizer::Slsqp
+            }
+            g24_c1(&Array1::from_vec(x.to_vec()))
+        };
+        let c2 = |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| {
+            if g.is_some() {
+                panic!("c2:  gradient not implemented")
+            }
+            g24_c2(&Array1::from_vec(x.to_vec()))
+        };
+        let res = EgorBuilder::optimize(f_g24_bare)
+            .subject_to(vec![c1, c2])
+            .configure(|config| {
+                config
+                    .doe(&doe)
+                    .max_iters(50)
+                    .infill_optimizer(InfillOptimizer::Cobyla)
+                    .seed(42)
+            })
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure");
+        println!("G24 optim result = {res:?}");
+        let expected = array![2.3295, 3.1785];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
 
     #[test]

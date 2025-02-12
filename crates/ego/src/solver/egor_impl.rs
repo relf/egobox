@@ -521,11 +521,9 @@ where
                 Ok((infill_obj, xk)) => {
                     match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
                         Ok(yk) => {
-                            y_dat = concatenate![
-                                Axis(0),
-                                y_dat,
-                                Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap()
-                            ];
+                            let yk =
+                                Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap();
+                            y_dat = concatenate![Axis(0), y_dat, yk];
 
                             let ck = cstr_funcs
                                 .iter()
@@ -896,11 +894,11 @@ where
                             to_discrete_space(&self.config.xtypes, &xary)
                                 .row(0)
                                 .into_owned();
-                            &xary.into_iter().collect::<Vec<_>>()
+                            xary.into_iter().collect::<Vec<_>>()
                         } else {
-                            xi.as_slice().unwrap()
+                            xi.to_vec()
                         };
-                        cstr(xuser, None, &mut unused)
+                        cstr(&xuser, None, &mut unused)
                     })
                     .collect::<Array1<_>>();
                 r.assign(cstr_vals)
