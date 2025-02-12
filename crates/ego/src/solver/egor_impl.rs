@@ -83,7 +83,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             &cstr_tol,
             &sampling,
             None,
-            find_best_result_index(y_data, &cstr_tol),
+            find_best_result_index(y_data, &c_data, &cstr_tol),
             &fcstrs,
         );
         x_dat
@@ -375,6 +375,7 @@ where
             state.best_index.unwrap(),
             y_data.nrows() - add_count as usize,
             &y_data,
+            &c_data,
             &new_state.cstr_tol,
         );
         new_state.prev_best_index = state.best_index;

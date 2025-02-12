@@ -1,4 +1,4 @@
-use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_stats::QuantileExt;
 
 use crate::utils::sort_axis::*;
@@ -46,16 +46,22 @@ pub fn find_best_result_index_from<F: Float>(
     current_index: usize, /* current best index */
     offset_index: usize,
     ydata: &ArrayBase<impl Data<Elem = F>, Ix2>, /* the whole data so far */
+    cdata: &ArrayBase<impl Data<Elem = F>, Ix2>, /* the whole function cstrs data so far */
     cstr_tol: &Array1<F>,
 ) -> usize {
-    let new_ydata = ydata.slice(s![offset_index.., ..]);
+    // let new_ydata = ydata.slice(s![offset_index.., ..]);
+
+    let alldata = concatenate![Axis(1), ydata.to_owned(), cdata.to_owned()];
+    let alltols = concatenate![Axis(0), cstr_tol.to_owned(), Array1::zeros(cdata.ncols())];
+
+    let new_ydata = alldata.slice(s![offset_index.., ..]);
 
     let best = ydata.row(current_index);
     let min = new_ydata
         .outer_iter()
         .enumerate()
         .fold((usize::MAX, best), |a, b| {
-            std::cmp::min_by(a, b, |(i, u), (j, v)| cstr_min((*i, u), (*j, v), cstr_tol))
+            std::cmp::min_by(a, b, |(i, u), (j, v)| cstr_min((*i, u), (*j, v), &alltols))
         });
     match min {
         (usize::MAX, _) => current_index,
@@ -63,22 +69,31 @@ pub fn find_best_result_index_from<F: Float>(
     }
 }
 
-/// Find best (eg minimal) cost value (y_data\[0\]) with valid constraints (y_data\[1..\] < cstr_tol).
-/// y_data containing ns samples [objective, cstr_1, ... cstr_nc] is given as a matrix (ns, nc + 1)  
+/// Find best (eg minimal) cost value (y_data\[0\]) with valid constraints, meaning
+/// * y_data\[1..\] < cstr_tol
+/// * c_data[..] < 0
+///
+/// y_data containing ns samples [objective, cstr_1, ... cstr_nc] is given as a matrix (ns, nc + 1)
+/// c_data containing [fcstr_1, ... fcstr1_nfc] where fcstr_i is the value of function constraints at x_i
 pub fn find_best_result_index<F: Float>(
     y_data: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    c_data: &ArrayBase<impl Data<Elem = F>, Ix2>,
     cstr_tol: &Array1<F>,
 ) -> usize {
-    if y_data.ncols() > 1 {
+    if y_data.ncols() > 1 || c_data.ncols() > 0 {
+        // Merge metamodelised constraints and function constraints
+        let alldata = concatenate![Axis(1), y_data.to_owned(), c_data.to_owned()];
+        let alltols = concatenate![Axis(0), cstr_tol.to_owned(), Array1::zeros(c_data.ncols())];
+
         // Compute sum of violated constraints
-        let cstrs = y_data.slice(s![.., 1..]);
+        let cstrs = &alldata.slice(s![.., 1..]);
         let mut c_obj = Array2::zeros((y_data.nrows(), 2));
 
         Zip::from(c_obj.rows_mut())
             .and(cstrs.rows())
-            .and(y_data.slice(s![.., 0]))
+            .and(alldata.slice(s![.., 0]))
             .for_each(|mut c_obj_row, c_row, obj| {
-                let c_sum = zip(c_row, cstr_tol)
+                let c_sum = zip(c_row, &alltols)
                     .filter(|(c, ctol)| *c > ctol)
                     .fold(F::zero(), |acc, (c, ctol)| acc + (*c - *ctol).abs());
                 c_obj_row.assign(&array![c_sum, *obj]);
@@ -106,13 +121,13 @@ pub fn find_best_result_index<F: Float>(
             let mut index = 0;
 
             // sort regardoing minimal objective
-            let perm = y_data.sort_axis_by(Axis(0), |i, j| y_data[[i, 0]] < y_data[[j, 0]]);
-            let y_sort = y_data.to_owned().permute_axis(Axis(0), &perm);
+            let perm = alldata.sort_axis_by(Axis(0), |i, j| alldata[[i, 0]] < alldata[[j, 0]]);
+            let y_sort = alldata.to_owned().permute_axis(Axis(0), &perm);
 
             // Take the first one which do not violate constraints
             for (i, row) in y_sort.axis_iter(Axis(0)).enumerate() {
                 let success =
-                    zip(row.slice(s![1..]), cstr_tol).fold(true, |acc, (c, tol)| acc && c < tol);
+                    zip(row.slice(s![1..]), &alltols).fold(true, |acc, (c, tol)| acc && c < tol);
 
                 if success {
                     index = i;
@@ -170,28 +185,29 @@ mod tests {
     fn test_find_best_obj() {
         // respect constraint (0, 1, 2) and minimize obj (1)
         let ydata = array![[1.0, -0.15], [-1.0, -0.01], [2.0, -0.2], [-3.0, 2.0]];
+        let cdata = array![[], [], [], []];
         let cstr_tol = Array1::from_elem(4, 0.1);
-        assert_abs_diff_eq!(1, find_best_result_index(&ydata, &cstr_tol));
+        assert_abs_diff_eq!(1, find_best_result_index(&ydata, &cdata, &cstr_tol));
 
         // respect constraint (0, 1, 2) and minimize obj (2)
         let ydata = array![[1.0, -0.15], [-1.0, -0.01], [-2.0, -0.2], [-3.0, 2.0]];
         let cstr_tol = Array1::from_elem(4, 0.1);
-        assert_abs_diff_eq!(2, find_best_result_index(&ydata, &cstr_tol));
+        assert_abs_diff_eq!(2, find_best_result_index(&ydata, &cdata, &cstr_tol));
 
         // all out of tolerance => minimize constraint overshoot sum (0)
         let ydata = array![[1.0, 0.15], [-1.0, 0.3], [2.0, 0.2], [-3.0, 2.0]];
         let cstr_tol = Array1::from_elem(4, 0.1);
-        assert_abs_diff_eq!(0, find_best_result_index(&ydata, &cstr_tol));
+        assert_abs_diff_eq!(0, find_best_result_index(&ydata, &cdata, &cstr_tol));
 
         // all in tolerance => min obj
         let ydata = array![[1.0, 0.15], [-1.0, 0.3], [2.0, 0.2], [-3.0, 2.0]];
         let cstr_tol = Array1::from_elem(4, 3.0);
-        assert_abs_diff_eq!(3, find_best_result_index(&ydata, &cstr_tol));
+        assert_abs_diff_eq!(3, find_best_result_index(&ydata, &cdata, &cstr_tol));
 
         // unconstrained => min obj
         let ydata = array![[1.0], [-1.0], [2.0], [-3.0]];
         let cstr_tol = Array1::from_elem(4, 0.1);
-        assert_abs_diff_eq!(3, find_best_result_index(&ydata, &cstr_tol));
+        assert_abs_diff_eq!(3, find_best_result_index(&ydata, &cdata, &cstr_tol));
     }
 
     #[test]
@@ -216,11 +232,12 @@ mod tests {
             [-5.50801509642, 1.951629235996e-7, 2.48275059533e-6],
             [-5.50801399313, -6.707576982734e-8, 1.03991762046e-6]
         ];
+        let c_data = Array2::zeros((y_data.nrows(), 0));
         let cstr_tol = Array1::from_vec(vec![1e-6; 2]); // this is the default
-        let index = find_best_result_index(&y_data, &cstr_tol);
+        let index = find_best_result_index(&y_data, &c_data, &cstr_tol);
         assert_eq!(11, index);
         let cstr_tol = Array1::from_vec(vec![2e-6; 2]);
-        let index = find_best_result_index(&y_data, &cstr_tol);
+        let index = find_best_result_index(&y_data, &c_data, &cstr_tol);
         assert_eq!(17, index);
     }
 
@@ -246,11 +263,12 @@ mod tests {
             [-5.50801509642, 1.951629235996e-7, 2.48275059533e-6],
             [-5.50801399313, -6.707576982734e-8, 1.03991762046e-6]
         ];
+        let c_data = Array2::zeros((y_data.nrows(), 0));
         let cstr_tol = Array1::from_vec(vec![2e-6; 2]);
-        let index = find_best_result_index_from(11, 12, &y_data, &cstr_tol);
+        let index = find_best_result_index_from(11, 12, &y_data, &c_data, &cstr_tol);
         assert_eq!(17, index);
         let cstr_tol = Array1::from_vec(vec![2e-6; 2]);
-        let index = find_best_result_index(&y_data, &cstr_tol);
+        let index = find_best_result_index(&y_data, &c_data, &cstr_tol);
         assert_eq!(17, index);
     }
 }

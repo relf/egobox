@@ -99,6 +99,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             best_index,
             y_data.nrows() - 1,
             &y_data,
+            &c_data,
             &new_state.cstr_tol,
         );
         new_state = new_state.data((x_data, y_data, c_data));

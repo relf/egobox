@@ -236,7 +236,7 @@ where
         let c_data = self.eval_fcstrs(problem, &x_data);
 
         let mut initial_state = state
-            .data((x_data, y_data.clone(), c_data))
+            .data((x_data, y_data.clone(), c_data.clone()))
             .clusterings(clusterings)
             .theta_inits(theta_inits)
             .sampling(sampling);
@@ -251,7 +251,7 @@ where
             .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
         initial_state.target_cost = self.config.target;
 
-        let best_index = find_best_result_index(&y_data, &initial_state.cstr_tol);
+        let best_index = find_best_result_index(&y_data, &c_data, &initial_state.cstr_tol);
         initial_state.best_index = Some(best_index);
         initial_state.prev_best_index = Some(best_index);
         initial_state.last_best_iter = 0;

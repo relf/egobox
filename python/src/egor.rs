@@ -376,6 +376,7 @@ impl Egor {
 
     /// This function gives the best evaluation index given the outputs
     /// of the function (objective wrt constraints) under minimization.
+    /// Caveat: This function does not take into account function constraints values
     ///
     /// # Parameters
     ///     y_doe (array[ns, 1 + n_cstr]): ns values of objective and constraints
@@ -386,11 +387,14 @@ impl Egor {
     #[pyo3(signature = (y_doe))]
     fn get_result_index(&self, y_doe: PyReadonlyArray2<f64>) -> usize {
         let y_doe = y_doe.as_array();
-        find_best_result_index(&y_doe, &self.cstr_tol())
+        // TODO: Make c_doe an optional argument ?
+        let c_doe = Array2::zeros((y_doe.ncols(), 0));
+        find_best_result_index(&y_doe, &c_doe, &self.cstr_tol())
     }
 
     /// This function gives the best result given inputs and outputs
     /// of the function (objective wrt constraints) under minimization.
+    /// Caveat: This function does not take into account function constraints values
     ///
     /// # Parameters
     ///     x_doe (array[ns, nx]): ns samples where function has been evaluated
@@ -410,7 +414,9 @@ impl Egor {
     ) -> OptimResult {
         let x_doe = x_doe.as_array();
         let y_doe = y_doe.as_array();
-        let idx = find_best_result_index(&y_doe, &self.cstr_tol());
+        // TODO: Make c_doe an optional argument ?
+        let c_doe = Array2::zeros((y_doe.ncols(), 0));
+        let idx = find_best_result_index(&y_doe, &c_doe, &self.cstr_tol());
         let x_opt = x_doe.row(idx).to_pyarray_bound(py).into();
         let y_opt = y_doe.row(idx).to_pyarray_bound(py).into();
         let x_doe = x_doe.to_pyarray_bound(py).into();
