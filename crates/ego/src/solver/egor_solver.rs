@@ -130,7 +130,7 @@ pub const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 pub const DOE_FILE: &str = "egor_doe.npy";
 
 /// Default tolerance value for constraints to be satisfied (ie cstr < tol)
-pub const DEFAULT_CSTR_TOL: f64 = 1e-6;
+pub const DEFAULT_CSTR_TOL: f64 = 1e-4;
 
 /// Implementation of `argmin::core::Solver` for Egor optimizer.
 /// Therefore this structure can be used with `argmin::core::Executor` and benefit
