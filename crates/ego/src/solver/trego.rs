@@ -76,7 +76,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             rho(new_state.sigma)
         );
 
-        let c_new = self.eval_fcstrs(problem, &x_new);
+        let c_new = self.eval_problem_fcstrs(problem, &x_new);
 
         // Update DOE and best point
         let added = update_data(

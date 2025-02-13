@@ -174,8 +174,11 @@ where
     }
 
     /// Refresh infill data used to optimize infill criterion
-    pub fn refresh_infill_data(
+    pub fn refresh_infill_data<
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
+    >(
         &self,
+        problem: &mut Problem<O>,
         state: &EgorState<f64>,
         models: &[Box<dyn egobox_moe::MixtureGpSurrogate>],
     ) -> InfillObjData<f64> {
@@ -185,8 +188,12 @@ where
 
         let fmin = y_data[[state.best_index.unwrap(), 0]];
 
-        let (scale_infill_obj, scale_cstr, scale_wb2) =
-            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, fmin);
+        let pb = problem.take_problem().unwrap();
+        let fcstrs = pb.fn_constraints();
+        let (scale_infill_obj, scale_cstr, _scale_fcstr, scale_wb2) =
+            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, fcstrs, fmin);
+        problem.problem = Some(pb);
+
         InfillObjData {
             fmin,
             scale_infill_obj,
@@ -466,28 +473,27 @@ where
             debug!("... surrogates trained");
 
             let fmin = y_data[[best_index, 0]];
-            let (scale_infill_obj, scale_cstr_models, scale_wb2) =
-                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, fmin);
-            let mut scale_cstr = Array1::ones(scale_cstr_models.len() + cstr_funcs.len());
-            if !cstr_funcs.is_empty() {
-                scale_cstr
-                    .slice_mut(s![..scale_cstr_models.len()])
-                    .assign(&scale_cstr_models);
-            }
+            let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) =
+                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, cstr_funcs, fmin);
+
+            let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
+
             infill_data = InfillObjData {
                 fmin,
                 scale_infill_obj,
-                scale_cstr: Some(scale_cstr.to_owned()),
+                scale_cstr: Some(all_scale_cstr.to_owned()),
                 scale_wb2,
             };
 
             let cstr_funcs = cstr_funcs
                 .iter()
-                .map(|cstr| {
-                    |x: &[f64],
-                     gradient: Option<&mut [f64]>,
-                     params: &mut InfillObjData<f64>|
-                     -> f64 {
+                .enumerate()
+                .map(|(i, cstr)| {
+                    let scale_fc = scale_fcstr[i];
+                    move |x: &[f64],
+                          gradient: Option<&mut [f64]>,
+                          params: &mut InfillObjData<f64>|
+                          -> f64 {
                         let x = if self.config.discrete() {
                             let xary = Array2::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
                             // We have to cast x to folded space as EgorSolver
@@ -500,7 +506,7 @@ where
                         } else {
                             x
                         };
-                        cstr(x, gradient, params)
+                        cstr(x, gradient, params) / scale_fc
                     }
                 })
                 .collect::<Vec<_>>();
@@ -563,8 +569,9 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        fcstrs: &[impl CstrFn],
         fmin: f64,
-    ) -> (f64, Array1<f64>, f64) {
+    ) -> (f64, Array1<f64>, Array1<f64>, f64) {
         let npts = (100 * self.xlimits.nrows()).min(1000);
         debug!("Use {npts} points to evaluate scalings");
         let scaling_points = sampling.sample(npts);
@@ -591,10 +598,17 @@ where
             Array1::zeros((0,))
         } else {
             let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
-            info!("Constraints scalings is updated to {}", scale_cstr);
+            info!("Constraints scaling is updated to {}", scale_cstr);
             scale_cstr
         };
-        (scale_infill_obj, scale_cstr, scale_ic)
+
+        let fcstr_values = self.eval_fcstrs(fcstrs, &scaling_points).map(|v| v.abs());
+        let mut scale_fcstr = Array1::zeros(fcstr_values.ncols());
+        Zip::from(&mut scale_fcstr)
+            .and(fcstr_values.columns())
+            .for_each(|sc, vals| *sc = *vals.max().unwrap());
+
+        (scale_infill_obj, scale_cstr, scale_fcstr, scale_ic)
     }
 
     /// Find best x promising points by optimizing the chosen infill criterion
@@ -647,7 +661,6 @@ where
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
             .map(|i| {
-                let index = i;
                 let cstr = move |x: &[f64],
                                  gradient: Option<&mut [f64]>,
                                  params: &mut InfillObjData<f64>|
@@ -666,8 +679,8 @@ where
                             .to_vec();
                         grad[..].copy_from_slice(&grd);
                     }
-                    let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[index];
-                    cstr_models[index]
+                    let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
+                    cstr_models[i]
                         .predict(
                             &Array::from_shape_vec((1, x.len()), x.to_vec())
                                 .unwrap()
@@ -686,6 +699,8 @@ where
                 }
             })
             .collect();
+
+        // We merge metamodelized constraints and function constraints
         let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
         cstr_refs.extend(cstr_funcs);
 
@@ -869,14 +884,11 @@ where
             .expect("Objective evaluation")
     }
 
-    pub fn eval_fcstrs<O: DomainConstraints<C>>(
+    pub fn eval_fcstrs(
         &self,
-        pb: &mut Problem<O>,
-        x: &Array2<f64>,
+        fcstrs: &[impl CstrFn],
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        let problem = pb.take_problem().unwrap();
-        let fcstrs = problem.fn_constraints();
-
         let mut unused = InfillObjData::default();
 
         let mut res = Array2::zeros((x.nrows(), fcstrs.len()));
@@ -903,6 +915,20 @@ where
                     .collect::<Array1<_>>();
                 r.assign(cstr_vals)
             });
+
+        res
+    }
+
+    pub fn eval_problem_fcstrs<O: DomainConstraints<C>>(
+        &self,
+        pb: &mut Problem<O>,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Array2<f64> {
+        let problem = pb.take_problem().unwrap();
+        let fcstrs = problem.fn_constraints();
+
+        let res = self.eval_fcstrs(fcstrs, x);
+
         pb.problem = Some(problem);
         res
     }

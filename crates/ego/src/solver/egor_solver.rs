@@ -233,7 +233,7 @@ where
         let theta_inits = vec![None; self.config.n_cstr + 1];
         let no_point_added_retries = MAX_POINT_ADDITION_RETRY;
 
-        let c_data = self.eval_fcstrs(problem, &x_data);
+        let c_data = self.eval_problem_fcstrs(problem, &x_data);
 
         let mut initial_state = state
             .data((x_data, y_data.clone(), c_data.clone()))
@@ -338,7 +338,7 @@ where
         O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
     >(
         &mut self,
-        fobj: &mut Problem<O>,
+        problem: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
         let rho = |sigma| sigma * sigma;
@@ -395,15 +395,15 @@ where
         if is_global_phase {
             // Global step
             info!(">>> TREGO global step (aka EGO)");
-            let mut res = self.ego_iteration(fobj, new_state)?;
+            let mut res = self.ego_iteration(problem, new_state)?;
             res.0.prev_step_ego = true;
             Ok(res)
         } else {
             info!(">>> TREGO local step");
             // Local step
             let models = self.refresh_surrogates(&new_state);
-            let infill_data = self.refresh_infill_data(&new_state, &models);
-            let mut new_state = self.trego_step(fobj, new_state, models, &infill_data);
+            let infill_data = self.refresh_infill_data(problem, &new_state, &models);
+            let mut new_state = self.trego_step(problem, new_state, models, &infill_data);
             new_state.prev_step_ego = false;
             Ok((new_state, None))
         }

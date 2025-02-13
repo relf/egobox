@@ -411,7 +411,6 @@ where
         if let Some((x_data, y_data, c_data)) = self.data.as_ref() {
             let best_index = self
                 .best_index
-                // TODO: use cdata in find_best_result_index
                 .unwrap_or_else(|| find_best_result_index(y_data, c_data, &self.cstr_tol));
 
             let param = x_data.row(best_index).to_owned();
