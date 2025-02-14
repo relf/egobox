@@ -21,13 +21,16 @@ class Egor:
                an k the number of constraints (n_cstr)
                hence ny = 1 (obj) + k (cstrs)
             cstr functions are expected be negative (<=0) at the optimum.
-    
+            This constraints will be approximated using surrogates, so
+            if constraints are cheap to evaluate better to pass them through run(fcstrs=[...])
+   
         n_cstr (int):
-            the number of constraint functions.
-    
-        cstr_tol (list(n_cstr,)):
-            List of tolerances for constraints to be satisfied (cstr < tol), list size should be equal to n_cstr.
-            None by default means zero tolerances.
+            the number of constraints which will be approximated by surrogates (see `fun` argument)
+   
+        cstr_tol (list(n_cstr + n_fcstr,)):
+            List of tolerances for constraints to be satisfied (cstr < tol),
+            list size should be equal to n_cstr + n_fctrs where n_cstr is the `n_cstr` argument
+            and `n_fcstr` the number of constraints passed as functions.
     
         xspecs (list(XSpec)) where XSpec(xtype=FLOAT|INT|ORD|ENUM, xlimits=[<f(xtype)>] or tags=[strings]):
             Specifications of the nx components of the input x (eg. len(xspecs) == nx)
