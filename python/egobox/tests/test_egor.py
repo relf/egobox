@@ -239,7 +239,6 @@ class TestOptimizer(unittest.TestCase):
     def test_g24_with_fcstrs(self):
         n_doe = 5
         max_iters = 20
-        n_cstr = 2
         egor = egx.Egor(
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             seed=42,
