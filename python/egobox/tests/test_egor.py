@@ -78,6 +78,13 @@ def g24(point):
     return res
 
 
+def g24_bare(point):
+    p = np.atleast_2d(point)
+    res = np.array([G24(p)]).T
+    print(f"y={res}")
+    return res
+
+
 def six_humps(x):
     """
     Function Six-Hump Camel Back
@@ -225,7 +232,7 @@ class TestOptimizer(unittest.TestCase):
     def test_egor_with_fcstrs(self):
         fcstrs = [cstr_xsinx]
         egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), n_doe=5, seed=42)
-        res = egor.minimize(xsinx, max_iters=10, fcstrs=fcstrs)
+        res = egor.minimize(xsinx, max_iters=20, fcstrs=fcstrs)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(18, res.x_opt[0], delta=1e-3)
 
@@ -241,14 +248,14 @@ class TestOptimizer(unittest.TestCase):
         )
         start = time.process_time()
         fcstrs = [g24_c1, g24_c2]
-        res = egor.minimize(g24, max_iters=max_iters, fcstrs=fcstrs)
+        res = egor.minimize(g24_bare, max_iters=max_iters, fcstrs=fcstrs)
         end = time.process_time()
         print(f"Optimization f={res.y_opt} at {res.x_opt} in {end - start}s")
         self.assertAlmostEqual(-5.5080, res.y_opt[0], delta=1e-2)
         self.assertAlmostEqual(2.3295, res.x_opt[0], delta=1e-2)
         self.assertAlmostEqual(3.1785, res.x_opt[1], delta=1e-2)
         self.assertEqual((n_doe + max_iters, 2), res.x_doe.shape)
-        self.assertEqual((n_doe + max_iters, 1 + n_cstr), res.y_doe.shape)
+        self.assertEqual((n_doe + max_iters, 1), res.y_doe.shape)
 
 
 if __name__ == "__main__":

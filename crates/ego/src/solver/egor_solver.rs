@@ -244,11 +244,10 @@ where
         initial_state.max_iters = self.config.max_iters as u64;
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
-        initial_state.cstr_tol = self
-            .config
-            .cstr_tol
-            .clone()
-            .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
+        initial_state.cstr_tol = self.config.cstr_tol.clone().unwrap_or(Array1::from_elem(
+            self.config.n_cstr + c_data.ncols(),
+            DEFAULT_CSTR_TOL,
+        ));
         initial_state.target_cost = self.config.target;
 
         let best_index = find_best_result_index(&y_data, &c_data, &initial_state.cstr_tol);

@@ -598,16 +598,27 @@ where
             Array1::zeros((0,))
         } else {
             let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
-            info!("Constraints scaling is updated to {}", scale_cstr);
+            info!(
+                "Surrogated constraints scaling is updated to {}",
+                scale_cstr
+            );
             scale_cstr
         };
 
-        let fcstr_values = self.eval_fcstrs(fcstrs, &scaling_points).map(|v| v.abs());
-        let mut scale_fcstr = Array1::zeros(fcstr_values.ncols());
-        Zip::from(&mut scale_fcstr)
-            .and(fcstr_values.columns())
-            .for_each(|sc, vals| *sc = *vals.max().unwrap());
-
+        let scale_fcstr = if fcstrs.is_empty() {
+            Array1::zeros((0,))
+        } else {
+            let fcstr_values = self.eval_fcstrs(fcstrs, &scaling_points).map(|v| v.abs());
+            let mut scale_fcstr = Array1::zeros(fcstr_values.ncols());
+            Zip::from(&mut scale_fcstr)
+                .and(fcstr_values.columns())
+                .for_each(|sc, vals| *sc = *vals.max().unwrap());
+            info!(
+                "Fonctional constraints scaling is updated to {}",
+                scale_fcstr
+            );
+            scale_fcstr
+        };
         (scale_infill_obj, scale_cstr, scale_fcstr, scale_ic)
     }
 

@@ -298,6 +298,7 @@ impl Egor {
             })
         };
 
+        let n_fcstr = fcstrs.len();
         let fcstrs = fcstrs
             .iter()
             .map(|cstr| {
@@ -322,7 +323,9 @@ impl Egor {
 
         let mixintegor = egobox_ego::EgorFactory::optimize(obj)
             .subject_to(fcstrs)
-            .configure(|config| self.apply_config(config, Some(max_iters), self.doe.as_ref()))
+            .configure(|config| {
+                self.apply_config(config, Some(max_iters), n_fcstr, self.doe.as_ref())
+            })
             .min_within_mixint_space(&xtypes);
 
         let res = py.allow_threads(|| {
@@ -367,7 +370,7 @@ impl Egor {
         let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
 
         let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
-            .configure(|config| self.apply_config(config, Some(1), Some(&doe)))
+            .configure(|config| self.apply_config(config, Some(1), 0, Some(&doe)))
             .min_within_mixint_space(&xtypes);
 
         let x_suggested = py.allow_threads(|| mixintegor.suggest(&x_doe, &y_doe));
@@ -388,8 +391,9 @@ impl Egor {
     fn get_result_index(&self, y_doe: PyReadonlyArray2<f64>) -> usize {
         let y_doe = y_doe.as_array();
         // TODO: Make c_doe an optional argument ?
-        let c_doe = Array2::zeros((y_doe.ncols(), 0));
-        find_best_result_index(&y_doe, &c_doe, &self.cstr_tol())
+        let n_fcstrs = 0;
+        let c_doe = Array2::zeros((y_doe.ncols(), n_fcstrs));
+        find_best_result_index(&y_doe, &c_doe, &self.cstr_tol(n_fcstrs))
     }
 
     /// This function gives the best result given inputs and outputs
@@ -415,8 +419,9 @@ impl Egor {
         let x_doe = x_doe.as_array();
         let y_doe = y_doe.as_array();
         // TODO: Make c_doe an optional argument ?
-        let c_doe = Array2::zeros((y_doe.ncols(), 0));
-        let idx = find_best_result_index(&y_doe, &c_doe, &self.cstr_tol());
+        let n_fcstrs = 0;
+        let c_doe = Array2::zeros((y_doe.ncols(), n_fcstrs));
+        let idx = find_best_result_index(&y_doe, &c_doe, &self.cstr_tol(n_fcstrs));
         let x_opt = x_doe.row(idx).to_pyarray_bound(py).into();
         let y_opt = y_doe.row(idx).to_pyarray_bound(py).into();
         let x_doe = x_doe.to_pyarray_bound(py).into();
@@ -481,8 +486,11 @@ impl Egor {
         xtypes
     }
 
-    fn cstr_tol(&self) -> Array1<f64> {
-        let cstr_tol = self.cstr_tol.clone().unwrap_or(vec![0.0; self.n_cstr]);
+    fn cstr_tol(&self, n_fcstr: usize) -> Array1<f64> {
+        let cstr_tol = self
+            .cstr_tol
+            .clone()
+            .unwrap_or(vec![egobox_ego::DEFAULT_CSTR_TOL; self.n_cstr + n_fcstr]);
         Array1::from_vec(cstr_tol)
     }
 
@@ -490,12 +498,14 @@ impl Egor {
         &self,
         config: egobox_ego::EgorConfig,
         max_iters: Option<usize>,
+        n_fcstr: usize,
         doe: Option<&Array2<f64>>,
     ) -> egobox_ego::EgorConfig {
         let infill_strategy = self.infill_strategy();
         let qei_strategy = self.qei_strategy();
         let infill_optimizer = self.infill_optimizer();
-        let cstr_tol = self.cstr_tol();
+
+        let cstr_tol = self.cstr_tol(n_fcstr);
 
         let mut config = config
             .n_cstr(self.n_cstr)

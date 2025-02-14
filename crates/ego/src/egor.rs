@@ -263,7 +263,7 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
             }
         } else {
             let x_data = to_discrete_space(&xtypes, &x_data.view());
-            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data]);
+            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data, c_data]);
 
             let x_opt = result
                 .state
@@ -408,7 +408,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_with_domain_constraint() {
-        let initial_doe = array![[0.], [7.], [25.]];
+        let initial_doe = array![[0.], [7.], [10.]];
         let res = EgorBuilder::optimize(xsinx)
             .subject_to(vec![|x: &[f64], g: Option<&mut [f64]>, _u| {
                 if let Some(g) = g {
@@ -418,9 +418,9 @@ mod tests {
             }])
             .configure(|cfg| {
                 cfg.infill_strategy(InfillStrategy::EI)
-                    .max_iters(30)
+                    .infill_optimizer(InfillOptimizer::Cobyla)
+                    .max_iters(100)
                     .doe(&initial_doe)
-                    .target(-15.1)
             })
             .min_within(&array![[0.0, 25.0]])
             .run()
