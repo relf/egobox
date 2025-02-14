@@ -121,6 +121,7 @@ use argmin::core::{
 
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::marker::PhantomData;
 use std::time::Instant;
 
 /// Numpy filename for initial DOE dump
@@ -129,13 +130,13 @@ pub const DOE_INITIAL_FILE: &str = "egor_initial_doe.npy";
 pub const DOE_FILE: &str = "egor_doe.npy";
 
 /// Default tolerance value for constraints to be satisfied (ie cstr < tol)
-pub const DEFAULT_CSTR_TOL: f64 = 1e-6;
+pub const DEFAULT_CSTR_TOL: f64 = 1e-4;
 
 /// Implementation of `argmin::core::Solver` for Egor optimizer.
 /// Therefore this structure can be used with `argmin::core::Executor` and benefit
 /// from observers and checkpointing features.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct EgorSolver<SB: SurrogateBuilder> {
+pub struct EgorSolver<SB: SurrogateBuilder, C: CstrFn = Cstr> {
     pub(crate) config: EgorConfig,
     /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
     /// Note: used for continuous variables handling, the optimizer base.
@@ -147,6 +148,8 @@ pub struct EgorSolver<SB: SurrogateBuilder> {
     /// A random generator used to get reproductible results.
     /// For instance: Xoshiro256Plus::from_u64_seed(42) for reproducibility
     pub(crate) rng: Xoshiro256Plus,
+
+    pub phantom: PhantomData<C>,
 }
 
 /// Build `xtypes` from simple float bounds of `x` input components when x belongs to R^n.
@@ -158,9 +161,10 @@ pub fn to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> 
     xtypes
 }
 
-impl<O, SB> Solver<O, EgorState<f64>> for EgorSolver<SB>
+impl<O, SB, C> Solver<O, EgorState<f64>> for EgorSolver<SB, C>
 where
-    O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>,
+    O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
+    C: CstrFn,
     SB: SurrogateBuilder + DeserializeOwned,
 {
     const NAME: &'static str = "Egor";
@@ -229,8 +233,10 @@ where
         let theta_inits = vec![None; self.config.n_cstr + 1];
         let no_point_added_retries = MAX_POINT_ADDITION_RETRY;
 
+        let c_data = self.eval_problem_fcstrs(problem, &x_data);
+
         let mut initial_state = state
-            .data((x_data, y_data.clone()))
+            .data((x_data, y_data.clone(), c_data.clone()))
             .clusterings(clusterings)
             .theta_inits(theta_inits)
             .sampling(sampling);
@@ -238,14 +244,13 @@ where
         initial_state.max_iters = self.config.max_iters as u64;
         initial_state.added = doe.nrows();
         initial_state.no_point_added_retries = no_point_added_retries;
-        initial_state.cstr_tol = self
-            .config
-            .cstr_tol
-            .clone()
-            .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
+        initial_state.cstr_tol = self.config.cstr_tol.clone().unwrap_or(Array1::from_elem(
+            self.config.n_cstr + c_data.ncols(),
+            DEFAULT_CSTR_TOL,
+        ));
         initial_state.target_cost = self.config.target;
 
-        let best_index = find_best_result_index(&y_data, &initial_state.cstr_tol);
+        let best_index = find_best_result_index(&y_data, &c_data, &initial_state.cstr_tol);
         initial_state.best_index = Some(best_index);
         initial_state.prev_best_index = Some(best_index);
         initial_state.last_best_iter = 0;
@@ -264,12 +269,13 @@ where
             state.get_max_iters()
         );
         let now = Instant::now();
+
         let res = if self.config.trego.activated {
             self.trego_iteration(fobj, state)?
         } else {
             self.ego_iteration(fobj, state)?
         };
-        let (x_data, y_data) = res.0.data.clone().unwrap();
+        let (x_data, y_data, _c_data) = res.0.data.clone().unwrap();
 
         if self.config.outdir.is_some() {
             let doe = concatenate![Axis(1), x_data, y_data];
@@ -302,12 +308,14 @@ where
     }
 }
 
-impl<SB> EgorSolver<SB>
+impl<SB, C: CstrFn> EgorSolver<SB, C>
 where
     SB: SurrogateBuilder + DeserializeOwned,
 {
     /// Iteration of EGO algorithm
-    fn ego_iteration<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+    fn ego_iteration<
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
+    >(
         &mut self,
         fobj: &mut Problem<O>,
         state: EgorState<f64>,
@@ -324,14 +332,16 @@ where
         }
     }
 
-    /// Itertaion of TREGO algorithm
-    fn trego_iteration<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
+    /// Itertation of TREGO algorithm
+    fn trego_iteration<
+        O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
+    >(
         &mut self,
-        fobj: &mut Problem<O>,
+        problem: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
         let rho = |sigma| sigma * sigma;
-        let (_, y_data) = state.data.as_ref().unwrap(); // initialized in init
+        let (_, y_data, _) = state.data.as_ref().unwrap(); // initialized in init
         let best = state.best_index.unwrap(); // initialized in init
         let prev_best = state.prev_best_index.unwrap(); // initialized in init
 
@@ -384,15 +394,15 @@ where
         if is_global_phase {
             // Global step
             info!(">>> TREGO global step (aka EGO)");
-            let mut res = self.ego_iteration(fobj, new_state)?;
+            let mut res = self.ego_iteration(problem, new_state)?;
             res.0.prev_step_ego = true;
             Ok(res)
         } else {
             info!(">>> TREGO local step");
             // Local step
             let models = self.refresh_surrogates(&new_state);
-            let infill_data = self.refresh_infill_data(&new_state, &models);
-            let mut new_state = self.trego_step(fobj, new_state, models, &infill_data);
+            let infill_data = self.refresh_infill_data(problem, &new_state, &models);
+            let mut new_state = self.trego_step(problem, new_state, models, &infill_data);
             new_state.prev_step_ego = false;
             Ok((new_state, None))
         }

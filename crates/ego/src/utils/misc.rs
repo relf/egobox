@@ -53,23 +53,29 @@ pub fn is_update_ok(
     true
 }
 
-/// Append `x_new` (resp. `y_new`) to `x_data` (resp. y_data) if `x_new` not too close to `x_data` points
+/// Append `x_new` (resp. `y_new`, `c_new`) to `x_data` (resp. y_data, resp. c_data)
+/// if `x_new` not too close to `x_data` points
 /// Returns the index of appended points in `x_new`
 pub fn update_data(
     x_data: &mut Array2<f64>,
     y_data: &mut Array2<f64>,
+    c_data: &mut Array2<f64>,
     x_new: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     y_new: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    c_new: &ArrayBase<impl Data<Elem = f64>, Ix2>,
 ) -> Vec<usize> {
     let mut appended = vec![];
     Zip::indexed(x_new.rows())
         .and(y_new.rows())
-        .for_each(|idx, x, y| {
+        .and(c_new.rows())
+        .for_each(|idx, x, y, c| {
             let xdat = x.insert_axis(Axis(0));
             let ydat = y.insert_axis(Axis(0));
+            let cdat = c.insert_axis(Axis(0));
             if is_update_ok(x_data, &x) {
                 *x_data = concatenate![Axis(0), x_data.view(), xdat];
                 *y_data = concatenate![Axis(0), y_data.view(), ydat];
+                *c_data = concatenate![Axis(0), c_data.view(), cdat];
                 appended.push(idx);
             }
         });
@@ -98,16 +104,20 @@ mod tests {
     fn test_update_data() {
         let mut xdata = array![[0., 1.], [2., 3.]];
         let mut ydata = array![[3.], [4.]];
+        let mut cdata = array![[5.], [6.]];
         assert_eq!(
             update_data(
                 &mut xdata,
                 &mut ydata,
+                &mut cdata,
                 &array![[3., 4.], [1e-7, 1.]],
                 &array![[6.], [7.]],
+                &array![[8.], [9.]],
             ),
             &[0]
         );
         assert_eq!(&array![[0., 1.], [2., 3.], [3., 4.]], xdata);
         assert_eq!(&array![[3.], [4.], [6.]], ydata);
+        assert_eq!(&array![[5.], [6.], [8.]], cdata);
     }
 }

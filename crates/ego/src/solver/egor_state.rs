@@ -76,8 +76,8 @@ pub struct EgorState<F: Float> {
     /// ThetaTunings controlled by n_optmod configuration triggering
     /// GP surrogate models hyperparameters optimization or reusing previous ones
     pub theta_inits: Option<Vec<Option<Array2<F>>>>,
-    /// Historic data (params, objective and constraints)
-    pub data: Option<(Array2<F>, Array2<F>)>,
+    /// Historic data (params, objective and constraints values, function constraints)
+    pub data: Option<(Array2<F>, Array2<F>, Array2<F>)>,
     /// Previous index of best result in data
     pub prev_best_index: Option<usize>,
     /// index of best result in data
@@ -216,15 +216,17 @@ where
 
     /// Set the current data points as training points for the surrogate models
     /// These points are gradually selected by the EGO algorithm regarding an infill criterion.
-    /// Data is expressed as a couple (xdata, ydata) where xdata is a (p, nx matrix)
-    /// and ydata is a (p, 1 + nb of cstr) matrix and ydata_i = fcost(xdata_i) for i in [1, p].  
-    pub fn data(mut self, data: (Array2<F>, Array2<F>)) -> Self {
+    /// Data is expressed as a triple (xdata, ydata, cdata) where :
+    /// * xdata is a (p, nx matrix),
+    /// * ydata is a (p, 1 + nb of cstr) matrix and ydata_i = fcost(xdata_i) for i in [1, p],  
+    /// * cdata is a (p, nb of fcstr) matrix and cdata_i = fcstr_j(xdata_i) for i in [1, p], j in [1, nb of fcstr]
+    pub fn data(mut self, data: (Array2<F>, Array2<F>, Array2<F>)) -> Self {
         self.data = Some(data);
         self
     }
 
     /// Moves the current data out and replaces it internally with `None`.
-    pub fn take_data(&mut self) -> Option<(Array2<F>, Array2<F>)> {
+    pub fn take_data(&mut self) -> Option<(Array2<F>, Array2<F>, Array2<F>)> {
         self.data.take()
     }
 
@@ -390,7 +392,7 @@ where
     /// let mut state: EgorState<f64> = EgorState::new();
     ///
     /// // Simulating a new, better parameter vector
-    /// let mut state = state.data((array![[1.0f64], [2.0f64], [3.0]], array![[10.0], [5.0], [0.5]]));
+    /// let mut state = state.data((array![[1.0f64], [2.0f64], [3.0]], array![[10.0], [5.0], [0.5]], array![[], [], []]));
     /// state.iter = 2;
     /// state.prev_best_index = Some(0);
     /// state.best_index = Some(2);
@@ -406,10 +408,10 @@ where
     /// assert!(state.is_best());
     /// ```
     fn update(&mut self) {
-        if let Some((x_data, y_data)) = self.data.as_ref() {
+        if let Some((x_data, y_data, c_data)) = self.data.as_ref() {
             let best_index = self
                 .best_index
-                .unwrap_or_else(|| find_best_result_index(y_data, &self.cstr_tol));
+                .unwrap_or_else(|| find_best_result_index(y_data, c_data, &self.cstr_tol));
 
             let param = x_data.row(best_index).to_owned();
             std::mem::swap(&mut self.prev_best_param, &mut self.best_param);

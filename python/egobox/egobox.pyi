@@ -21,13 +21,16 @@ class Egor:
                an k the number of constraints (n_cstr)
                hence ny = 1 (obj) + k (cstrs)
             cstr functions are expected be negative (<=0) at the optimum.
-    
+            This constraints will be approximated using surrogates, so
+            if constraints are cheap to evaluate better to pass them through run(fcstrs=[...])
+   
         n_cstr (int):
-            the number of constraint functions.
-    
-        cstr_tol (list(n_cstr,)):
-            List of tolerances for constraints to be satisfied (cstr < tol), list size should be equal to n_cstr.
-            None by default means zero tolerances.
+            the number of constraints which will be approximated by surrogates (see `fun` argument)
+   
+        cstr_tol (list(n_cstr + n_fcstr,)):
+            List of tolerances for constraints to be satisfied (cstr < tol),
+            list size should be equal to n_cstr + n_fctrs where n_cstr is the `n_cstr` argument
+            and `n_fcstr` the number of constraints passed as functions.
     
         xspecs (list(XSpec)) where XSpec(xtype=FLOAT|INT|ORD|ENUM, xlimits=[<f(xtype)>] or tags=[strings]):
             Specifications of the nx components of the input x (eg. len(xspecs) == nx)
@@ -123,13 +126,20 @@ class Egor:
             Random generator seed to allow computation reproducibility.
     """
     def __new__(cls,xspecs,n_cstr = ...,cstr_tol = ...,n_start = ...,n_doe = ...,doe = ...,regr_spec = ...,corr_spec = ...,infill_strategy = ...,q_points = ...,par_infill_strategy = ...,infill_optimizer = ...,kpls_dim = ...,trego = ...,n_clusters = ...,n_optmod = ...,target = ...,outdir = ...,warm_start = ...,hot_start = ...,seed = ...): ...
-    def minimize(self, fun,max_iters = ...) -> OptimResult:
+    def minimize(self, fun,max_iters = ..., fcstrs = ...) -> OptimResult:
         r"""
         This function finds the minimum of a given function `fun`
         
         # Parameters
             max_iters:
                 the iteration budget, number of fun calls is n_doe + q_points * max_iters.
+
+            fcstrs: 
+                list of constraints functions defined as g(x, return_grad): (ndarray[nx], bool) -> float or ndarray[nx,]
+                If the given `return_grad` boolean is `False` the function has to return the constraint float value
+                to be made negative by the optimizer (which drives the input array `x`).
+                Otherwise the function has to return the gradient (ndarray[nx,]) of the constraint funtion
+                wrt the `nx` components of `x`.
         
         # Returns
             optimization result

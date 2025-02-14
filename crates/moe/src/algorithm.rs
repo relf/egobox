@@ -103,7 +103,7 @@ impl GpMixtureValidParams<f64> {
 
         let training = if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
             // Extract 5% of data for validation to find best heaviside factor
-            // TODO: Use cross-validation ? Performances
+            // TODO: Better use cross-validation... but performances impact?
             let (_, training_data) = extract_part(&data, 5);
             training_data
         } else {
@@ -176,7 +176,7 @@ impl GpMixtureValidParams<f64> {
 
         if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
             // Extract 5% of data for validation to find best heaviside factor
-            // TODO: Use cross-validation ? Performances
+            // TODO: Better use cross-validation... but performances impact?
             let (test, _) = extract_part(&data, 5);
             let xtest = test.slice(s![.., ..nx]).to_owned();
             let ytest = test.slice(s![.., nx..]).to_owned().remove_axis(Axis(1));

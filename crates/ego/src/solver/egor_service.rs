@@ -39,6 +39,8 @@
 //! println!("Rosenbrock min result = {:?}", doe);
 //! ```
 //!
+use std::marker::PhantomData;
+
 use crate::gpmix::mixint::*;
 use crate::{to_xtypes, types::*, EgorConfig, EgorSolver};
 
@@ -51,19 +53,21 @@ use serde::de::DeserializeOwned;
 /// EGO optimizer service builder allowing to use Egor optimizer
 /// as a service.
 ///
-pub struct EgorServiceBuilder {
+pub struct EgorServiceFactory<C: CstrFn = Cstr> {
     config: EgorConfig,
+    phantom: PhantomData<C>,
 }
 
-impl EgorServiceBuilder {
+impl<C: CstrFn> EgorServiceFactory<C> {
     /// Function to be minimized domain should be basically R^nx -> R^ny
     /// where nx is the dimension of input x and ny the output dimension
     /// equal to 1 (obj) + n (cstrs).
     /// But function has to be able to evaluate several points in one go
     /// hence take an (p, nx) matrix and return an (p, ny) matrix
     pub fn optimize() -> Self {
-        EgorServiceBuilder {
+        EgorServiceFactory {
             config: EgorConfig::default(),
+            phantom: PhantomData,
         }
     }
 
@@ -79,7 +83,7 @@ impl EgorServiceBuilder {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> EgorService<GpMixtureParams<f64>> {
+    ) -> EgorServiceApi<GpMixtureParams<f64>, C> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
@@ -89,7 +93,7 @@ impl EgorServiceBuilder {
             xtypes: to_xtypes(xlimits),
             ..self.config.clone()
         };
-        EgorService {
+        EgorServiceApi {
             solver: EgorSolver::new(config, rng),
         }
     }
@@ -97,7 +101,10 @@ impl EgorServiceBuilder {
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
-    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> EgorService<MixintGpMixtureParams> {
+    pub fn min_within_mixint_space(
+        self,
+        xtypes: &[XType],
+    ) -> EgorServiceApi<MixintGpMixtureParams, C> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
@@ -107,19 +114,19 @@ impl EgorServiceBuilder {
             xtypes: xtypes.to_vec(),
             ..self.config.clone()
         };
-        EgorService {
+        EgorServiceApi {
             solver: EgorSolver::new(config, rng),
         }
     }
 }
 
-/// Egor optimizer service.
+/// Egor optimizer service API.
 #[derive(Clone)]
-pub struct EgorService<SB: SurrogateBuilder + DeserializeOwned> {
-    solver: EgorSolver<SB>,
+pub struct EgorServiceApi<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn = Cstr> {
+    solver: EgorSolver<SB, C>,
 }
 
-impl<SB: SurrogateBuilder + DeserializeOwned> EgorService<SB> {
+impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorServiceApi<SB, C> {
     /// Given an evaluated doe (x, y) data, return the next promising x point
     /// where optimum may be located with regard to the infill criterion.
     /// This function inverses the control of the optimization and can be used
@@ -135,6 +142,9 @@ impl<SB: SurrogateBuilder + DeserializeOwned> EgorService<SB> {
         to_discrete_space(xtypes, &x).to_owned()
     }
 }
+
+/// Egor Service
+pub type EgorServiceBuilder = EgorServiceFactory<Cstr>;
 
 #[cfg(test)]
 mod tests {

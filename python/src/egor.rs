@@ -11,7 +11,7 @@
 //!
 
 use crate::types::*;
-use egobox_ego::find_best_result_index;
+use egobox_ego::{find_best_result_index, InfillObjData};
 use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
@@ -48,13 +48,17 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///            an k the number of constraints (n_cstr)
 ///            hence ny = 1 (obj) + k (cstrs)
 ///         cstr functions are expected be negative (<=0) at the optimum.
+///         This constraints will be approximated using surrogates, so
+///         if constraints are cheap to evaluate better to pass them through run(fcstrs=[...])
 ///
 ///     n_cstr (int):
-///         the number of constraint functions.
+///         the number of constraints which will be approximated by surrogates (see `fun` argument)
 ///
-///     cstr_tol (list(n_cstr,)):
-///         List of tolerances for constraints to be satisfied (cstr < tol), list size should be equal to n_cstr.
-///         None by default means zero tolerances.
+///     cstr_tol (list(n_cstr + n_fcstr,)):
+///         List of tolerances for constraints to be satisfied (cstr < tol),
+///         list size should be equal to n_cstr + n_fctrs where n_cstr is the `n_cstr` argument
+///         and `n_fcstr` the number of constraints passed as functions.
+///         When None, tolerances default to DEFAULT_CSTR_TOL=1e-4.
 ///
 ///     xspecs (list(XSpec)) where XSpec(xtype=FLOAT|INT|ORD|ENUM, xlimits=[<f(xtype)>] or tags=[strings]):
 ///         Specifications of the nx components of the input x (eg. len(xspecs) == nx)
@@ -267,15 +271,28 @@ impl Egor {
     ///
     /// # Parameters
     ///     max_iters:
-    ///         the iteration budget, number of fun calls is n_doe + q_points * max_iters.
+    ///         the iteration budget, number of fun calls is `n_doe + q_points * max_iters`.
+    ///
+    ///     fcstrs:
+    ///         list of constraints functions defined as g(x, return_grad): (ndarray[nx], bool) -> float or ndarray[nx,]
+    ///         If the given `return_grad` boolean is `False` the function has to return the constraint float value
+    ///         to be made negative by the optimizer (which drives the input array `x`).
+    ///         Otherwise the function has to return the gradient (ndarray[nx,]) of the constraint function
+    ///         wrt the `nx` components of `x`.
     ///
     /// # Returns
     ///     optimization result
     ///         x_opt (array[1, nx]): x value where fun is at its minimum subject to constraints
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
-    #[pyo3(signature = (fun, max_iters = 20))]
-    fn minimize(&self, py: Python, fun: PyObject, max_iters: usize) -> PyResult<OptimResult> {
+    #[pyo3(signature = (fun, fcstrs=vec![], max_iters = 20))]
+    fn minimize(
+        &self,
+        py: Python,
+        fun: PyObject,
+        fcstrs: Vec<PyObject>,
+        max_iters: usize,
+    ) -> PyResult<OptimResult> {
         let obj = |x: &ArrayView2<f64>| -> Array2<f64> {
             Python::with_gil(|py| {
                 let args = (x.to_owned().into_pyarray_bound(py),);
@@ -284,10 +301,35 @@ impl Egor {
                 pyarray.to_owned_array()
             })
         };
+
+        let n_fcstr = fcstrs.len();
+        let fcstrs = fcstrs
+            .iter()
+            .map(|cstr| {
+                let cstr = |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| -> f64 {
+                    Python::with_gil(|py| {
+                        if let Some(g) = g {
+                            let args = (Array1::from(x.to_vec()).into_pyarray_bound(py), true);
+                            let grad = cstr.bind(py).call1(args).unwrap();
+                            let grad = grad.downcast_into::<PyArray1<f64>>().unwrap().readonly();
+                            g.copy_from_slice(grad.as_slice().unwrap())
+                        }
+                        let args = (Array1::from(x.to_vec()).into_pyarray_bound(py), false);
+                        let res = cstr.bind(py).call1(args).unwrap().extract().unwrap();
+                        res
+                    })
+                };
+                cstr
+            })
+            .collect::<Vec<_>>();
+
         let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
 
-        let mixintegor = egobox_ego::EgorBuilder::optimize(obj)
-            .configure(|config| self.apply_config(config, Some(max_iters), self.doe.as_ref()))
+        let mixintegor = egobox_ego::EgorFactory::optimize(obj)
+            .subject_to(fcstrs)
+            .configure(|config| {
+                self.apply_config(config, Some(max_iters), n_fcstr, self.doe.as_ref())
+            })
             .min_within_mixint_space(&xtypes);
 
         let res = py.allow_threads(|| {
@@ -332,7 +374,7 @@ impl Egor {
         let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
 
         let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
-            .configure(|config| self.apply_config(config, Some(1), Some(&doe)))
+            .configure(|config| self.apply_config(config, Some(1), 0, Some(&doe)))
             .min_within_mixint_space(&xtypes);
 
         let x_suggested = py.allow_threads(|| mixintegor.suggest(&x_doe, &y_doe));
@@ -341,6 +383,7 @@ impl Egor {
 
     /// This function gives the best evaluation index given the outputs
     /// of the function (objective wrt constraints) under minimization.
+    /// Caveat: This function does not take into account function constraints values
     ///
     /// # Parameters
     ///     y_doe (array[ns, 1 + n_cstr]): ns values of objective and constraints
@@ -351,11 +394,15 @@ impl Egor {
     #[pyo3(signature = (y_doe))]
     fn get_result_index(&self, y_doe: PyReadonlyArray2<f64>) -> usize {
         let y_doe = y_doe.as_array();
-        find_best_result_index(&y_doe, &self.cstr_tol())
+        // TODO: Make c_doe an optional argument ?
+        let n_fcstrs = 0;
+        let c_doe = Array2::zeros((y_doe.ncols(), n_fcstrs));
+        find_best_result_index(&y_doe, &c_doe, &self.cstr_tol(n_fcstrs))
     }
 
     /// This function gives the best result given inputs and outputs
     /// of the function (objective wrt constraints) under minimization.
+    /// Caveat: This function does not take into account function constraints values
     ///
     /// # Parameters
     ///     x_doe (array[ns, nx]): ns samples where function has been evaluated
@@ -375,7 +422,10 @@ impl Egor {
     ) -> OptimResult {
         let x_doe = x_doe.as_array();
         let y_doe = y_doe.as_array();
-        let idx = find_best_result_index(&y_doe, &self.cstr_tol());
+        // TODO: Make c_doe an optional argument ?
+        let n_fcstrs = 0;
+        let c_doe = Array2::zeros((y_doe.ncols(), n_fcstrs));
+        let idx = find_best_result_index(&y_doe, &c_doe, &self.cstr_tol(n_fcstrs));
         let x_opt = x_doe.row(idx).to_pyarray_bound(py).into();
         let y_opt = y_doe.row(idx).to_pyarray_bound(py).into();
         let x_doe = x_doe.to_pyarray_bound(py).into();
@@ -440,8 +490,11 @@ impl Egor {
         xtypes
     }
 
-    fn cstr_tol(&self) -> Array1<f64> {
-        let cstr_tol = self.cstr_tol.clone().unwrap_or(vec![0.0; self.n_cstr]);
+    fn cstr_tol(&self, n_fcstr: usize) -> Array1<f64> {
+        let cstr_tol = self
+            .cstr_tol
+            .clone()
+            .unwrap_or(vec![egobox_ego::DEFAULT_CSTR_TOL; self.n_cstr + n_fcstr]);
         Array1::from_vec(cstr_tol)
     }
 
@@ -449,12 +502,14 @@ impl Egor {
         &self,
         config: egobox_ego::EgorConfig,
         max_iters: Option<usize>,
+        n_fcstr: usize,
         doe: Option<&Array2<f64>>,
     ) -> egobox_ego::EgorConfig {
         let infill_strategy = self.infill_strategy();
         let qei_strategy = self.qei_strategy();
         let infill_optimizer = self.infill_optimizer();
-        let cstr_tol = self.cstr_tol();
+
+        let cstr_tol = self.cstr_tol(n_fcstr);
 
         let mut config = config
             .n_cstr(self.n_cstr)

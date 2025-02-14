@@ -63,20 +63,33 @@ pub enum QEiStrategy {
 pub trait GroupFunc: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
+pub trait DomainConstraints<C: CstrFn> {
+    fn fn_constraints(&self) -> &[impl CstrFn];
+}
+
 /// As structure to handle the objective and constraints functions for implementing
 /// `argmin::CostFunction` to be used with argmin framework.
 #[derive(Clone)]
-pub struct ObjFunc<O: GroupFunc> {
+pub struct ObjFunc<O: GroupFunc, C: CstrFn> {
     fobj: O,
+    fcstrs: Vec<C>,
 }
 
-impl<O: GroupFunc> ObjFunc<O> {
+impl<O: GroupFunc, C: CstrFn> ObjFunc<O, C> {
     pub fn new(fobj: O) -> Self {
-        ObjFunc { fobj }
+        ObjFunc {
+            fobj,
+            fcstrs: vec![],
+        }
+    }
+
+    pub fn subject_to(mut self, fcstrs: Vec<C>) -> Self {
+        self.fcstrs = fcstrs;
+        self
     }
 }
 
-impl<O: GroupFunc> CostFunction for ObjFunc<O> {
+impl<O: GroupFunc, C: CstrFn> CostFunction for ObjFunc<O, C> {
     /// Type of the parameter vector
     type Param = Array2<f64>;
     /// Type of the return value computed by the cost function
@@ -84,8 +97,14 @@ impl<O: GroupFunc> CostFunction for ObjFunc<O> {
 
     /// Apply the cost function to a parameter `p`
     fn cost(&self, p: &Self::Param) -> std::result::Result<Self::Output, argmin::core::Error> {
-        // Evaluate 2D Rosenbrock function
+        // Evaluate objective function
         Ok((self.fobj)(&p.view()))
+    }
+}
+
+impl<O: GroupFunc, C: CstrFn> DomainConstraints<C> for ObjFunc<O, C> {
+    fn fn_constraints(&self) -> &[impl CstrFn] {
+        &self.fcstrs
     }
 }
 
@@ -142,10 +161,33 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
     ) -> Result<Box<dyn MixtureGpSurrogate>>;
 }
 
+/// A trait for functions used by internal optimizers
+/// Functions are expected to be defined as `g(x, g, u)` where
+/// * `x` is the input information,
+/// * `g` an optional gradient information to be updated if present
+/// * `u` information provided by the user
+#[cfg(not(feature = "nlopt"))]
 pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
+#[cfg(feature = "nlopt")]
+use nlopt::ObjFn;
+
+#[cfg(not(feature = "nlopt"))]
 impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 
+/// A function trait for domain constraints used by the internal optimizer
+/// It is a specialized version of [`ObjFn`] with [`InfillObjData`] as user information
+pub trait CstrFn: Clone + ObjFn<InfillObjData<f64>> + Sync {}
+impl<T> CstrFn for T where T: Clone + ObjFn<InfillObjData<f64>> + Sync {}
+
+/// A function type for domain constraints which will be used by the internal optimizer
+/// which is the default value for [`EgorBuilder`] generic `C` parameter.
+pub type Cstr = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
+
 /// Data used by internal infill criteria optimization
+/// Internally this type is used to carry the information required to
+/// compute the various infill criteria implemented by [`Egor`].
+///
+/// See [`crate::criteria`]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InfillObjData<F: Float> {
     pub fmin: F,

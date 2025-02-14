@@ -1,4 +1,5 @@
 use crate::errors::Result;
+#[cfg(feature = "persistent")]
 use crate::types::GpFileFormat;
 use egobox_gp::{
     correlation_models::*, mean_models::*, GaussianProcess, GpParams, SgpParams,

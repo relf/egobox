@@ -127,26 +127,37 @@ pub const HISTORY_FILE: &str = "egor_history.npy";
 /// EGO optimizer builder allowing to specify function to be minimized
 /// subject to constraints intended to be negative.
 ///
-pub struct EgorBuilder<O: GroupFunc> {
+pub struct EgorFactory<O: GroupFunc, C: CstrFn = Cstr> {
     fobj: O,
+    fcstrs: Vec<C>,
     config: EgorConfig,
 }
 
-impl<O: GroupFunc> EgorBuilder<O> {
+impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
     /// Function to be minimized domain should be basically R^nx -> R^ny
     /// where nx is the dimension of input x and ny the output dimension
     /// equal to 1 (obj) + n (cstrs).
     /// But function has to be able to evaluate several points in one go
     /// hence take an (p, nx) matrix and return an (p, ny) matrix
     pub fn optimize(fobj: O) -> Self {
-        EgorBuilder {
+        EgorFactory {
             fobj,
+            fcstrs: vec![],
             config: EgorConfig::default(),
         }
     }
 
+    /// Set configuration of the optimizer
     pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
         self.config = init(self.config);
+        self
+    }
+
+    /// This function allows to define complex constraints on inputs using functions [CstrFn] trait.
+    /// Bounds constraints are better specified using `min_within()` or `min_within_mixint_space()`
+    /// arguments.
+    pub fn subject_to(mut self, fcstrs: Vec<C>) -> Self {
+        self.fcstrs = fcstrs;
         self
     }
 
@@ -157,7 +168,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Egor<O, GpMixtureParams<f64>> {
+    ) -> Egor<O, C, GpMixtureParams<f64>> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
@@ -168,7 +179,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
             ..self.config.clone()
         };
         Egor {
-            fobj: ObjFunc::new(self.fobj),
+            fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
             solver: EgorSolver::new(config, rng),
         }
     }
@@ -176,7 +187,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
-    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, MixintGpMixtureParams> {
+    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, C, MixintGpMixtureParams> {
         let rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
@@ -187,7 +198,7 @@ impl<O: GroupFunc> EgorBuilder<O> {
             ..self.config.clone()
         };
         Egor {
-            fobj: ObjFunc::new(self.fobj),
+            fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
             solver: EgorSolver::new(config, rng),
         }
     }
@@ -196,12 +207,16 @@ impl<O: GroupFunc> EgorBuilder<O> {
 /// Egor optimizer structure used to parameterize the underlying `argmin::Solver`
 /// and trigger the optimization using `argmin::Executor`.
 #[derive(Clone)]
-pub struct Egor<O: GroupFunc, SB: SurrogateBuilder + DeserializeOwned> {
-    fobj: ObjFunc<O>,
-    solver: EgorSolver<SB>,
+pub struct Egor<
+    O: GroupFunc,
+    C: CstrFn = Cstr,
+    SB: SurrogateBuilder + DeserializeOwned = GpMixtureParams<f64>,
+> {
+    fobj: ObjFunc<O, C>,
+    solver: EgorSolver<SB, C>,
 }
 
-impl<O: GroupFunc, SB: SurrogateBuilder + DeserializeOwned> Egor<O, SB> {
+impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C, SB> {
     /// Runs the (constrained) optimization of the objective function.
     pub fn run(&self) -> Result<OptimResult<f64>> {
         let xtypes = self.solver.config.xtypes.clone();
@@ -235,10 +250,10 @@ impl<O: GroupFunc, SB: SurrogateBuilder + DeserializeOwned> Egor<O, SB> {
         };
 
         info!("{}", result);
-        let (x_data, y_data) = result.state().clone().take_data().unwrap();
+        let (x_data, y_data, c_data) = result.state().clone().take_data().unwrap();
 
         let res = if !self.solver.config.discrete() {
-            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data]);
+            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data, c_data]);
             OptimResult {
                 x_opt: result.state.get_best_param().unwrap().to_owned(),
                 y_opt: result.state.get_full_best_cost().unwrap().to_owned(),
@@ -248,7 +263,7 @@ impl<O: GroupFunc, SB: SurrogateBuilder + DeserializeOwned> Egor<O, SB> {
             }
         } else {
             let x_data = to_discrete_space(&xtypes, &x_data.view());
-            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data]);
+            info!("Data: \n{}", concatenate![Axis(1), x_data, y_data, c_data]);
 
             let x_opt = result
                 .state
@@ -338,13 +353,15 @@ impl Observe<EgorState<f64>> for OptimizationObserver {
     }
 }
 
+pub type EgorBuilder<O> = EgorFactory<O, Cstr>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
-    use ndarray::{array, s, Array2, ArrayView2, Ix1, Zip};
+    use ndarray::{array, s, Array1, Array2, ArrayView2, Ix1, Zip};
 
     use ndarray_npy::read_npy;
 
@@ -386,6 +403,30 @@ mod tests {
         assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
         let saved_doe: Array2<f64> = read_npy(&outfile).unwrap();
         assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
+    }
+
+    #[test]
+    #[serial]
+    fn test_xsinx_with_domain_constraint() {
+        let initial_doe = array![[0.], [7.], [10.]];
+        let res = EgorBuilder::optimize(xsinx)
+            .subject_to(vec![|x: &[f64], g: Option<&mut [f64]>, _u| {
+                if let Some(g) = g {
+                    g[0] = 1.
+                }
+                x[0] - 17.0
+            }])
+            .configure(|cfg| {
+                cfg.infill_strategy(InfillStrategy::EI)
+                    .infill_optimizer(InfillOptimizer::Cobyla)
+                    .max_iters(100)
+                    .doe(&initial_doe)
+            })
+            .min_within(&array![[0.0, 25.0]])
+            .run()
+            .expect("Egor should minimize xsinx");
+        let expected = array![17.0];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
 
     #[test]
@@ -609,8 +650,42 @@ mod tests {
         y
     }
 
+    fn f_g24_bare(x: &ArrayView2<f64>) -> Array2<f64> {
+        let mut y = Array2::zeros((x.nrows(), 1));
+        Zip::from(y.rows_mut())
+            .and(x.rows())
+            .for_each(|mut yi, xi| {
+                yi.assign(&array![g24(&xi)]);
+            });
+        y
+    }
+
     #[test]
     #[serial]
+    fn test_egor_g24_basic_egor_builder_cobyla() {
+        let xlimits = array![[0., 3.], [0., 4.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .sample(3);
+        let res = EgorBuilder::optimize(f_g24)
+            .configure(|config| {
+                config
+                    .n_cstr(2)
+                    .doe(&doe)
+                    .max_iters(20)
+                    .infill_optimizer(InfillOptimizer::Cobyla)
+                    .cstr_tol(array![2e-3, 1e-3])
+                    .seed(42)
+            })
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure");
+        println!("G24 optim result = {res:?}");
+        let expected = array![2.3295, 3.1785];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 3e-2);
+    }
+
+    #[test]
     fn test_egor_g24_basic_egor_builder() {
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
@@ -621,7 +696,7 @@ mod tests {
                 config
                     .n_cstr(2)
                     .doe(&doe)
-                    .max_iters(50)
+                    .max_iters(20)
                     .cstr_tol(array![2e-6, 1e-6])
                     .seed(42)
             })
@@ -631,6 +706,42 @@ mod tests {
         println!("G24 optim result = {res:?}");
         let expected = array![2.3295, 3.1785];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 3e-2);
+    }
+
+    #[test]
+    #[serial]
+    fn test_egor_g24_with_domain_constraints() {
+        let xlimits = array![[0., 3.], [0., 4.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .sample(3);
+        let c1 = |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| {
+            if g.is_some() {
+                panic!("c1: gradient not implemented") // ie panic with InfillOptimizer::Slsqp
+            }
+            g24_c1(&Array1::from_vec(x.to_vec()))
+        };
+        let c2 = |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| {
+            if g.is_some() {
+                panic!("c2:  gradient not implemented")
+            }
+            g24_c2(&Array1::from_vec(x.to_vec()))
+        };
+        let res = EgorBuilder::optimize(f_g24_bare)
+            .subject_to(vec![c1, c2])
+            .configure(|config| {
+                config
+                    .doe(&doe)
+                    .max_iters(50)
+                    .infill_optimizer(InfillOptimizer::Cobyla)
+                    .seed(42)
+            })
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure");
+        println!("G24 optim result = {res:?}");
+        let expected = array![2.3295, 3.1785];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
     }
 
     #[test]
