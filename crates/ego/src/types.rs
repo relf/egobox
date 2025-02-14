@@ -166,7 +166,12 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
 /// * `x` is the input information,
 /// * `g` an optional gradient information to be updated if present
 /// * `u` information provided by the user
+#[cfg(not(feature = "nlopt"))]
 pub trait ObjFn<U>: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
+#[cfg(feature = "nlopt")]
+use nlopt::ObjFn;
+
+#[cfg(not(feature = "nlopt"))]
 impl<T, U> ObjFn<U> for T where T: Fn(&[f64], Option<&mut [f64]>, &mut U) -> f64 {}
 
 /// A function trait for domain constraints used by the internal optimizer

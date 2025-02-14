@@ -7,6 +7,11 @@ use crate::{find_best_result_index, optimizers::*, EgorConfig};
 use crate::{types::*, EgorState};
 use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
 
+#[cfg(not(feature = "nlopt"))]
+use crate::types::ObjFn;
+#[cfg(feature = "nlopt")]
+use nlopt::ObjFn;
+
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
 
