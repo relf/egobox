@@ -157,7 +157,7 @@ impl GpMixtureValidParams<f64> {
         let dataset_clustering = gmx.predict(xt);
         let clusters = sort_by_cluster(gmx.n_clusters(), &data, &dataset_clustering);
 
-        check_number_of_points(&clusters, xt.ncols())?;
+        check_number_of_points(&clusters, xt.ncols(), self.regression_spec())?;
 
         // Fit GPs on clustered data
         let mut experts = Vec::new();
@@ -372,9 +372,16 @@ impl GpMixtureValidParams<f64> {
 fn check_number_of_points<F>(
     clusters: &[ArrayBase<impl Data<Elem = F>, Ix2>],
     dim: usize,
+    regr: RegressionSpec,
 ) -> Result<()> {
     if clusters.len() > 1 {
-        let min_number_point = (dim + 1) * (dim + 2) / 2;
+        let min_number_point = if regr.contains(RegressionSpec::QUADRATIC) {
+            (dim + 1) * (dim + 2) / 2
+        } else if regr.contains(RegressionSpec::LINEAR) {
+            dim + 1
+        } else {
+            1
+        };
         for cluster in clusters {
             if cluster.len() < min_number_point {
                 return Err(MoeError::ClusteringError(format!(
