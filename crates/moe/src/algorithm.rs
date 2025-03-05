@@ -335,7 +335,7 @@ impl GpMixtureValidParams<f64> {
         if let Some(v) = best.1 {
             info!("Best expert {} accuracy={}", best.0, v);
         }
-        expert.map_err(MoeError::from)
+        expert
     }
 
     /// Take the best heaviside factor from 0.1 to 2.1 (step 0.1).

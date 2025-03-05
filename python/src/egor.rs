@@ -1,3 +1,4 @@
+#![allow(clippy::useless_conversion)]
 //! `egobox`, Rust toolbox for efficient global optimization
 //!
 //! Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions,
