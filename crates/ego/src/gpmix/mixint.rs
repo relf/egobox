@@ -10,7 +10,7 @@ use egobox_gp::metrics::CrossValScore;
 use egobox_gp::ThetaTuning;
 use egobox_moe::{
     Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
-    GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, RegressionSpec,
+    GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -358,8 +358,7 @@ impl MixintGpMixtureValidParams {
                 .surrogate_builder
                 .clone()
                 .check()?
-                .train(&xcast, &yt.to_owned())
-                .unwrap(),
+                .train(&xcast, &yt.to_owned())?,
             xtypes: self.xtypes.clone(),
             work_in_folded_space: self.work_in_folded_space,
             training_data: (xt.to_owned(), yt.to_owned()),
@@ -437,7 +436,7 @@ impl SurrogateBuilder for MixintGpMixtureParams {
     }
 
     /// Sets the number of clusters used by the mixture of surrogate experts.
-    fn set_n_clusters(&mut self, n_clusters: usize) {
+    fn set_n_clusters(&mut self, n_clusters: NbClusters) {
         self.0 = MixintGpMixtureValidParams {
             surrogate_builder: self.0.surrogate_builder.clone().n_clusters(n_clusters),
             xtypes: self.0.xtypes.clone(),

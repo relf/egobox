@@ -361,6 +361,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
+    use egobox_moe::NbClusters;
     use ndarray::{array, s, Array1, Array2, ArrayView2, Ix1, Zip};
 
     use ndarray_npy::read_npy;
@@ -513,7 +514,7 @@ mod tests {
     #[serial]
     fn test_xsinx_auto_clustering_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.n_clusters(0).max_iters(20))
+            .configure(|config| config.n_clusters(NbClusters::auto()).max_iters(20))
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor with auto clustering should minimize xsinx");

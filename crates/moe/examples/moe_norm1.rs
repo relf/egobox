@@ -1,6 +1,6 @@
 use csv::ReaderBuilder;
 use egobox_doe::{FullFactorial, SamplingMethod};
-use egobox_moe::GpMixture;
+use egobox_moe::{GpMixture, NbClusters};
 use linfa::{traits::Fit, Dataset};
 use ndarray::{arr2, s, Array2, Axis};
 use ndarray_csv::Array2Reader;
@@ -24,7 +24,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let xtrain = data_train.slice(s![.., ..2_usize]).to_owned();
     let ytrain = data_train.slice(s![.., 2_usize..]).to_owned();
     let ds = Dataset::new(xtrain, ytrain.remove_axis(Axis(1)));
-    let moe = GpMixture::params().n_clusters(4).fit(&ds)?;
+    let moe = GpMixture::params()
+        .n_clusters(NbClusters::fixed(4))
+        .fit(&ds)?;
 
     let xlimits = arr2(&[[-1., 1.], [-1., 1.]]);
     let xtest = FullFactorial::new(&xlimits).sample(100);

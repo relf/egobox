@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::parameters::GpMixtureParams;
-use crate::types::*;
+use crate::{types::*, NbClusters};
 use log::debug; // , info};
 
 use linfa::dataset::{Dataset, DatasetView};
@@ -66,7 +66,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     rng: R,
 ) -> (usize, Recombination<f64>) {
     let max_nb_clusters = if max_nb_clusters == 0 {
-        (x.len() / 10) + 1
+        (x.nrows() / 10) + 1
     } else {
         max_nb_clusters
     };
@@ -141,7 +141,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                 for (train, valid) in dataset.fold(5).into_iter() {
                     debug!("X: {}", Array1::from_iter(valid.records().iter().cloned()));
                     if let Ok(mixture) = GpMixtureParams::default()
-                        .n_clusters(n_clusters)
+                        .n_clusters(NbClusters::fixed(n_clusters))
                         .regression_spec(regression_spec)
                         .correlation_spec(correlation_spec)
                         .kpls_dim(kpls_dim)
@@ -468,7 +468,7 @@ mod tests {
         let xvalid = valid.sample(100);
         let yvalid = l1norm(&xvalid);
         let moe = GpMixture::params()
-            .n_clusters(n_clusters)
+            .n_clusters(NbClusters::fixed(n_clusters))
             .recombination(recomb)
             .regression_spec(RegressionSpec::LINEAR)
             .correlation_spec(CorrelationSpec::ALL)

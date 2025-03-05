@@ -5,7 +5,7 @@ pub mod spec;
 
 use egobox_gp::ThetaTuning;
 use egobox_moe::{
-    Clustering, CorrelationSpec, GpMixtureParams, MixtureGpSurrogate, RegressionSpec,
+    Clustering, CorrelationSpec, GpMixtureParams, MixtureGpSurrogate, NbClusters, RegressionSpec,
 };
 use ndarray::{ArrayView1, ArrayView2};
 
@@ -40,7 +40,7 @@ impl SurrogateBuilder for GpMixtureParams<f64> {
     }
 
     /// Sets the number of clusters used by the mixture of surrogate experts.
-    fn set_n_clusters(&mut self, n_clusters: usize) {
+    fn set_n_clusters(&mut self, n_clusters: NbClusters) {
         *self = self.clone().n_clusters(n_clusters);
     }
 

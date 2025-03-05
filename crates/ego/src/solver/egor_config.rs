@@ -2,6 +2,7 @@
 use crate::criteria::*;
 use crate::types::*;
 use crate::HotStartMode;
+use egobox_moe::NbClusters;
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::Array1;
 use ndarray::Array2;
@@ -72,9 +73,9 @@ pub struct EgorConfig {
     /// Optional dimension reduction (see [egobox_moe])
     pub(crate) kpls_dim: Option<usize>,
     /// Number of clusters used by mixture of experts (see [egobox_moe])
-    /// When set to 0 the clusters are computes automatically and refreshed
+    /// When set to Auto the clusters are computes automatically and refreshed
     /// every 10-points (tentative) additions
-    pub(crate) n_clusters: usize,
+    pub(crate) n_clusters: NbClusters,
     /// Specification of a target objective value which is used to stop the algorithm once reached
     pub(crate) target: f64,
     /// Directory to save intermediate results: inital doe + evalutions at each iteration
@@ -108,7 +109,7 @@ impl Default for EgorConfig {
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
-            n_clusters: 1,
+            n_clusters: NbClusters::default(),
             target: f64::NEG_INFINITY,
             outdir: None,
             warm_start: false,
@@ -239,9 +240,8 @@ impl EgorConfig {
 
     /// Sets the number of clusters used by the mixture of surrogate experts.
     ///
-    /// When set to Some(0), the number of clusters is determined automatically
-    /// When set None, default to 1
-    pub fn n_clusters(mut self, n_clusters: usize) -> Self {
+    /// When set to Auto, the number of clusters is determined automatically
+    pub fn n_clusters(mut self, n_clusters: NbClusters) -> Self {
         self.n_clusters = n_clusters;
         self
     }

@@ -19,6 +19,57 @@ use serde::{Deserialize, Serialize};
 
 pub use egobox_gp::{Inducings, SparseMethod, ThetaTuning};
 
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
+pub enum NbClusters {
+    /// Use a fixed number of clusters
+    Fixed { nb: usize },
+    /// Find best number of clusters automatically optionally limited to max
+    /// otherwize max is determined from number of samples
+    Auto { max: Option<usize> },
+}
+
+impl Default for NbClusters {
+    /// Default number of clusters is 1
+    fn default() -> Self {
+        Self::fixed(1)
+    }
+}
+
+impl NbClusters {
+    pub fn fixed(nb: usize) -> Self {
+        Self::Fixed { nb }
+    }
+    pub fn auto() -> Self {
+        Self::Auto { max: None }
+    }
+    pub fn automax(max: usize) -> Self {
+        Self::Auto { max: Some(max) }
+    }
+    pub fn is_fixed(&self) -> bool {
+        matches!(self, Self::Fixed { nb: _ })
+    }
+    pub fn is_auto(&self) -> bool {
+        matches!(self, Self::Auto { max: _ })
+    }
+    pub fn is_mono(&self) -> bool {
+        if let Self::Fixed { nb } = self {
+            if *nb == 1 {
+                return true;
+            }
+        }
+        false
+    }
+    pub fn is_multi(&self) -> bool {
+        if let Self::Fixed { nb } = self {
+            if *nb > 1 {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum GpType<F: Float> {
@@ -38,7 +89,8 @@ pub struct GpMixtureValidParams<F: Float> {
     /// Gp Type
     gp_type: GpType<F>,
     /// Number of clusters (i.e. number of experts)
-    n_clusters: usize,
+    /// If 0 the number of clusters is deterined automatically
+    n_clusters: NbClusters,
     /// [Recombination] mode
     recombination: Recombination<F>,
     /// Specification of GP regression models to be used
@@ -64,7 +116,7 @@ impl<F: Float> Default for GpMixtureValidParams<F> {
     fn default() -> GpMixtureValidParams<F> {
         GpMixtureValidParams {
             gp_type: GpType::FullGp,
-            n_clusters: 1,
+            n_clusters: NbClusters::default(),
             recombination: Recombination::Hard,
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
@@ -85,8 +137,8 @@ impl<F: Float> GpMixtureValidParams<F> {
     }
 
     /// The number of clusters, hence the number of experts of the mixture.
-    pub fn n_clusters(&self) -> usize {
-        self.n_clusters
+    pub fn n_clusters(&self) -> NbClusters {
+        self.n_clusters.clone()
     }
 
     /// The recombination mode
@@ -162,7 +214,7 @@ impl<F: Float> GpMixtureParams<F> {
     pub fn new_with_rng(gp_type: GpType<F>, rng: Xoshiro256Plus) -> GpMixtureParams<F> {
         Self(GpMixtureValidParams {
             gp_type,
-            n_clusters: 1,
+            n_clusters: NbClusters::default(),
             recombination: Recombination::Smooth(Some(F::one())),
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
@@ -182,7 +234,7 @@ impl<F: Float> GpMixtureParams<F> {
     }
 
     /// Sets the number of clusters
-    pub fn n_clusters(mut self, n_clusters: usize) -> Self {
+    pub fn n_clusters(mut self, n_clusters: NbClusters) -> Self {
         self.0.n_clusters = n_clusters;
         self
     }
@@ -264,10 +316,13 @@ impl<F: Float> ParamGuard for GpMixtureParams<F> {
                 ));
             }
         }
-        if self.0.n_clusters > 1 && self.0.theta_tunings.len() == 1 {
-        } else if self.0.n_clusters > 0 && self.0.n_clusters != self.0.theta_tunings.len() {
-            panic!("Number of clusters (={}) and theta init size (={}) not compatible, should be equal", 
-            self.0.n_clusters, self.0.theta_tunings.len());
+
+        if self.0.n_clusters.is_multi() && self.0.theta_tunings.len() == 1 {
+        } else if let NbClusters::Fixed { nb } = self.0.n_clusters {
+            if nb != self.0.theta_tunings.len() {
+                panic!("Number of clusters (={}) and theta init size (={}) not compatible, should be equal", 
+            nb, self.0.theta_tunings.len());
+            }
         }
         Ok(&self.0)
     }

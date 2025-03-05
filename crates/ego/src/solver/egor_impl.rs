@@ -101,7 +101,8 @@ where
     C: CstrFn,
 {
     pub fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
-        self.config.n_clusters == 0 && (added != 0 && added % 10 == 0 && added - prev_added > 0)
+        self.config.n_clusters.is_auto()
+            && (added != 0 && added % 10 == 0 && added - prev_added > 0)
     }
 
     /// Build surrogate given training data and surrogate builder
@@ -124,7 +125,7 @@ where
         builder.set_kpls_dim(self.config.kpls_dim);
         builder.set_regression_spec(self.config.regression_spec);
         builder.set_correlation_spec(self.config.correlation_spec);
-        builder.set_n_clusters(self.config.n_clusters);
+        builder.set_n_clusters(self.config.n_clusters.clone());
 
         if make_clustering
         /* init || recluster */

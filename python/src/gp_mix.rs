@@ -9,11 +9,11 @@
 //!
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Gpx_Tutorial.ipynb) for usage.
 //!
-use std::path::Path;
+use std::{cmp::Ordering, path::Path};
 
 use crate::types::*;
 use egobox_gp::metrics::CrossValScore;
-use egobox_moe::{Clustered, MixtureGpSurrogate, ThetaTuning};
+use egobox_moe::{Clustered, MixtureGpSurrogate, NbClusters, ThetaTuning};
 #[allow(unused_imports)] // Avoid linting problem
 use egobox_moe::{GpMixture, GpSurrogate, GpSurrogateExt};
 use linfa::{traits::Fit, Dataset};
@@ -26,11 +26,13 @@ use rand_xoshiro::Xoshiro256Plus;
 
 /// Gaussian processes mixture builder
 ///
-///     n_clusters (int >= 0)
-///         Number of clusters used by the mixture of surrogate experts.
+///     n_clusters (int)
+///         Number of clusters used by the mixture of surrogate experts (default is 1).
 ///         When set to 0, the number of cluster is determined automatically and refreshed every
 ///         10-points addition (should say 'tentative addition' because addition may fail for some points
-///         but failures are counted anyway).
+///         but it is counted anyway).
+///         When set to negative number -n, the number of clusters is determined automatically in [0, n]
+///         this is used to limit the number of trials hence the execution time.
 ///
 ///     regr_spec (RegressionSpec flags, an int in [1, 7]):
 ///         Specification of regression models used in mixture.
@@ -71,7 +73,7 @@ use rand_xoshiro::Xoshiro256Plus;
 ///         
 #[pyclass]
 pub(crate) struct GpMix {
-    pub n_clusters: usize,
+    pub n_clusters: NbClusters,
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub recombination: Recombination,
@@ -98,7 +100,7 @@ impl GpMix {
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
-        n_clusters: usize,
+        n_clusters: isize,
         regr_spec: u8,
         corr_spec: u8,
         recombination: Recombination,
@@ -108,6 +110,12 @@ impl GpMix {
         n_start: usize,
         seed: Option<u64>,
     ) -> Self {
+        let n_clusters = match n_clusters.cmp(&0) {
+            Ordering::Greater => NbClusters::fixed(n_clusters as usize),
+            Ordering::Equal => NbClusters::auto(),
+            Ordering::Less => NbClusters::automax(-n_clusters as usize),
+        };
+
         GpMix {
             n_clusters,
             regression_spec: RegressionSpec(regr_spec),
@@ -186,8 +194,8 @@ impl GpMix {
                 bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
             }
         }
-        let theta_tunings = if self.n_clusters > 0 {
-            vec![theta_tuning; self.n_clusters]
+        let theta_tunings = if let NbClusters::Fixed { nb } = self.n_clusters {
+            vec![theta_tuning; nb]
         } else {
             vec![theta_tuning; 1] // used as default theta tuning for all experts
         };
@@ -197,7 +205,7 @@ impl GpMix {
         };
         let moe = py.allow_threads(|| {
             GpMixture::params()
-                .n_clusters(self.n_clusters)
+                .n_clusters(self.n_clusters.clone())
                 .recombination(recomb)
                 .regression_spec(
                     egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
@@ -240,7 +248,7 @@ impl Gpx {
     ))]
     #[allow(clippy::too_many_arguments)]
     fn builder(
-        n_clusters: usize,
+        n_clusters: isize,
         regr_spec: u8,
         corr_spec: u8,
         recombination: Recombination,
