@@ -1,6 +1,6 @@
 use clap::Parser;
 use egobox_ego::{EgorBuilder, GroupFunc, InfillOptimizer};
-use egobox_moe::{CorrelationSpec, RegressionSpec};
+use egobox_moe::{CorrelationSpec, NbClusters, RegressionSpec};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
 use std::fs::{remove_file, File};
 use std::io::prelude::*;
@@ -267,7 +267,7 @@ fn main() -> anyhow::Result<()> {
             config
                 .n_cstr(N_CSTR)
                 .cstr_tol(cstr_tol.clone())
-                .n_clusters(1)
+                .n_clusters(NbClusters::fixed(1))
                 .n_start(50)
                 .n_doe(n_doe)
                 .max_iters(max_iters)

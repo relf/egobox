@@ -3,9 +3,9 @@ use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::parameters::{GpMixtureParams, GpMixtureValidParams};
-use crate::surrogates::*;
 use crate::types::*;
 use crate::{expertise_macros::*, GpType};
+use crate::{surrogates::*, NbClusters};
 
 use egobox_gp::metrics::CrossValScore;
 use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess, SparseGaussianProcess};
@@ -82,26 +82,27 @@ impl GpMixtureValidParams<f64> {
         )
         .unwrap();
 
-        let (n_clusters, recomb) = if self.n_clusters() == 0 {
-            // automatic mode
-            let max_nb_clusters = xt.nrows() / 10 + 1;
-            find_best_number_of_clusters(
-                xt,
-                yt,
-                max_nb_clusters,
-                self.kpls_dim(),
-                self.regression_spec(),
-                self.correlation_spec(),
-                self.rng(),
-            )
-        } else {
-            (self.n_clusters(), self.recombination())
+        let (n_clusters, recomb) = match self.n_clusters() {
+            NbClusters::Auto { max } => {
+                // automatic mode
+                let max_nb_clusters = max.unwrap_or(xt.nrows() / 10 + 1);
+                find_best_number_of_clusters(
+                    xt,
+                    yt,
+                    max_nb_clusters,
+                    self.kpls_dim(),
+                    self.regression_spec(),
+                    self.correlation_spec(),
+                    self.rng(),
+                )
+            }
+            NbClusters::Fixed { nb: nb_clusters } => (nb_clusters, self.recombination()),
         };
-        if self.n_clusters() == 0 {
+        if let NbClusters::Auto { max: _ } = self.n_clusters() {
             debug!("Automatic settings {} {:?}", n_clusters, recomb);
         }
 
-        let training = if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
+        let training = if recomb == Recombination::Smooth(None) && self.n_clusters().is_multi() {
             // Extract 5% of data for validation to find best heaviside factor
             // TODO: Better use cross-validation... but performances impact?
             let (_, training_data) = extract_part(&data, 5);
@@ -157,7 +158,7 @@ impl GpMixtureValidParams<f64> {
         let dataset_clustering = gmx.predict(xt);
         let clusters = sort_by_cluster(gmx.n_clusters(), &data, &dataset_clustering);
 
-        check_number_of_points(&clusters, xt.ncols())?;
+        check_number_of_points(&clusters, xt.ncols(), self.regression_spec())?;
 
         // Fit GPs on clustered data
         let mut experts = Vec::new();
@@ -174,7 +175,7 @@ impl GpMixtureValidParams<f64> {
             experts.push(expert);
         }
 
-        if recomb == Recombination::Smooth(None) && self.n_clusters() > 1 {
+        if recomb == Recombination::Smooth(None) && self.n_clusters().is_multi() {
             // Extract 5% of data for validation to find best heaviside factor
             // TODO: Better use cross-validation... but performances impact?
             let (test, _) = extract_part(&data, 5);
@@ -184,7 +185,7 @@ impl GpMixtureValidParams<f64> {
             info!("Retrain mixture with optimized heaviside factor={}", factor);
 
             let moe = GpMixtureParams::from(self.clone())
-                .n_clusters(gmx.n_clusters())
+                .n_clusters(NbClusters::fixed(gmx.n_clusters()))
                 .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
                 .train(xt, yt)?; // needs to train the gaussian mixture on all data (xt, yt) as it was
@@ -334,7 +335,7 @@ impl GpMixtureValidParams<f64> {
         if let Some(v) = best.1 {
             info!("Best expert {} accuracy={}", best.0, v);
         }
-        expert.map_err(MoeError::from)
+        expert
     }
 
     /// Take the best heaviside factor from 0.1 to 2.1 (step 0.1).
@@ -348,7 +349,7 @@ impl GpMixtureValidParams<f64> {
         xtest: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         ytest: &ArrayBase<impl Data<Elem = f64>, Ix1>,
     ) -> f64 {
-        if self.recombination() == Recombination::Hard || self.n_clusters() == 1 {
+        if self.recombination() == Recombination::Hard || self.n_clusters().is_mono() {
             1.
         } else {
             let scale_factors = Array1::linspace(0.1, 2.1, 20);
@@ -372,9 +373,16 @@ impl GpMixtureValidParams<f64> {
 fn check_number_of_points<F>(
     clusters: &[ArrayBase<impl Data<Elem = F>, Ix2>],
     dim: usize,
+    regr: RegressionSpec,
 ) -> Result<()> {
     if clusters.len() > 1 {
-        let min_number_point = (dim + 1) * (dim + 2) / 2;
+        let min_number_point = if regr.contains(RegressionSpec::QUADRATIC) {
+            (dim + 1) * (dim + 2) / 2
+        } else if regr.contains(RegressionSpec::LINEAR) {
+            dim + 1
+        } else {
+            1
+        };
         for cluster in clusters {
             if cluster.len() < min_number_point {
                 return Err(MoeError::ClusteringError(format!(
@@ -973,7 +981,7 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt.to_owned());
         let moe = GpMixture::params()
-            .n_clusters(3)
+            .n_clusters(NbClusters::fixed(3))
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Hard)
@@ -1010,7 +1018,7 @@ mod tests {
         let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt.to_owned(), yt.to_owned());
         let moe = GpMixture::params()
-            .n_clusters(3)
+            .n_clusters(NbClusters::fixed(3))
             .recombination(Recombination::Smooth(Some(0.5)))
             .with_rng(rng.clone())
             .fit(&ds)
@@ -1032,7 +1040,7 @@ mod tests {
 
         // Predict with smooth adjusted automatically which is better
         let moe = GpMixture::params()
-            .n_clusters(3)
+            .n_clusters(NbClusters::fixed(3))
             .recombination(Recombination::Smooth(None))
             .with_rng(rng.clone())
             .fit(&ds)
@@ -1058,7 +1066,7 @@ mod tests {
         let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt.to_owned());
         let moe = GpMixture::params()
-            .n_clusters(0)
+            .n_clusters(NbClusters::auto())
             .with_rng(rng.clone())
             .fit(&ds)
             .expect("MOE fitted");
@@ -1080,7 +1088,7 @@ mod tests {
         let xt = Array2::random_using((100, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let moe = GpMixture::params()
-            .n_clusters(3)
+            .n_clusters(NbClusters::fixed(3))
             .recombination(Recombination::Smooth(None))
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
@@ -1114,7 +1122,7 @@ mod tests {
         let xt = Array2::random_using((50, 1), Uniform::new(0., 1.), &mut rng);
         let yt = f_test_1d(&xt);
         let _moe = GpMixture::params()
-            .n_clusters(3)
+            .n_clusters(NbClusters::fixed(3))
             .with_rng(rng)
             .fit(&Dataset::new(xt, yt))
             .expect("MOE fitted");
@@ -1131,7 +1139,7 @@ mod tests {
         let yt = f_test_1d(&xt);
         let ds = Dataset::new(xt, yt);
         let moe = GpMixture::params()
-            .n_clusters(3)
+            .n_clusters(NbClusters::fixed(3))
             .with_rng(rng)
             .fit(&ds)
             .expect("MOE fitted");
@@ -1150,7 +1158,7 @@ mod tests {
         let yt = f_test_1d(&xt);
 
         let moe = GpMixture::params()
-            .n_clusters(3)
+            .n_clusters(NbClusters::fixed(3))
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Smooth(Some(0.5)))
@@ -1216,7 +1224,7 @@ mod tests {
         let yt = f(&xt);
 
         let moe = GpMixture::params()
-            .n_clusters(2)
+            .n_clusters(NbClusters::fixed(2))
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Smooth(Some(1.)))
@@ -1288,7 +1296,7 @@ mod tests {
         let yt = f_test_1d(&xt);
 
         let moe = GpMixture::params()
-            .n_clusters(3)
+            .n_clusters(NbClusters::fixed(3))
             .regression_spec(RegressionSpec::CONSTANT)
             .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
             .recombination(Recombination::Hard)
@@ -1339,7 +1347,7 @@ mod tests {
             write_npy(yfilename, &yt).expect("cannot save yt");
 
             let gp = GpMixture::params()
-                .n_clusters(1)
+                .n_clusters(NbClusters::default())
                 .regression_spec(RegressionSpec::CONSTANT)
                 .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
                 .kpls_dim(Some(3))

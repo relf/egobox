@@ -92,11 +92,13 @@ class Egor:
         trego (bool)
             When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
     
-        n_clusters (int >= 0)
-            Number of clusters used by the mixture of surrogate experts.
+        n_clusters (int)
+            Number of clusters used by the mixture of surrogate experts (default is 1).
             When set to 0, the number of cluster is determined automatically and refreshed every
             10-points addition (should say 'tentative addition' because addition may fail for some points
             but it is counted anyway).
+            When set to negative number -n, the number of clusters is determined automatically in [1, n]
+            this is used to limit the number of trials hence the execution time.
       
         n_optmod (int >= 1)
             Number of iterations between two surrogate models training (hypermarameters optimization)
@@ -439,11 +441,13 @@ class SparseGpMix:
     r"""
     Sparse Gaussian processes mixture builder
     
-        n_clusters (int >= 0)
-            Number of clusters used by the mixture of surrogate experts.
+        n_clusters (int)
+            Number of clusters used by the mixture of surrogate experts (default is 1).
             When set to 0, the number of cluster is determined automatically and refreshed every
             10-points addition (should say 'tentative addition' because addition may fail for some points
-            but failures are counted anyway).
+            but it is counted anyway).
+            When set to negative number -n, the number of clusters is determined automatically in [1, n]
+            this is used to limit the number of trials hence the execution time.
     
         corr_spec (CorrelationSpec flags, an int in [1, 15]):
             Specification of correlation models used in mixture.

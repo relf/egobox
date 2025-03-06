@@ -1,3 +1,4 @@
+#![allow(clippy::useless_conversion)]
 //! `egobox`, Rust toolbox for efficient global optimization
 //!
 //! Thanks to the [PyO3 project](https://pyo3.rs), which makes Rust well suited for building Python extensions,
@@ -10,8 +11,11 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Egor_Tutorial.ipynb) for usage.
 //!
 
+use std::cmp::Ordering;
+
 use crate::types::*;
 use egobox_ego::{find_best_result_index, InfillObjData};
+use egobox_moe::NbClusters;
 use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
@@ -120,11 +124,13 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///     trego (bool)
 ///         When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
 ///
-///     n_clusters (int >= 0)
-///         Number of clusters used by the mixture of surrogate experts.
+///     n_clusters (int)
+///         Number of clusters used by the mixture of surrogate experts (default is 1).
 ///         When set to 0, the number of cluster is determined automatically and refreshed every
 ///         10-points addition (should say 'tentative addition' because addition may fail for some points
 ///         but it is counted anyway).
+///         When set to negative number -n, the number of clusters is determined automatically in [1, n]
+///         this is used to limit the number of trials hence the execution time.
 ///   
 ///     n_optmod (int >= 1)
 ///         Number of iterations between two surrogate models training (hypermarameters optimization)
@@ -169,7 +175,7 @@ pub(crate) struct Egor {
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub trego: bool,
-    pub n_clusters: Option<usize>,
+    pub n_clusters: NbClusters,
     pub n_optmod: usize,
     pub target: f64,
     pub outdir: Option<String>,
@@ -233,7 +239,7 @@ impl Egor {
         infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
         trego: bool,
-        n_clusters: Option<usize>,
+        n_clusters: isize,
         n_optmod: usize,
         target: f64,
         outdir: Option<String>,
@@ -242,6 +248,13 @@ impl Egor {
         seed: Option<u64>,
     ) -> Self {
         let doe = doe.map(|x| x.to_owned_array());
+
+        let n_clusters = match n_clusters.cmp(&0) {
+            Ordering::Greater => NbClusters::fixed(n_clusters as usize),
+            Ordering::Equal => NbClusters::auto(),
+            Ordering::Less => NbClusters::automax(-n_clusters as usize),
+        };
+
         Egor {
             xspecs,
             n_cstr,
@@ -512,6 +525,7 @@ impl Egor {
         let cstr_tol = self.cstr_tol(n_fcstr);
 
         let mut config = config
+            .n_clusters(self.n_clusters.clone())
             .n_cstr(self.n_cstr)
             .max_iters(max_iters.unwrap_or(1))
             .n_start(self.n_start)
@@ -535,9 +549,6 @@ impl Egor {
         };
         if let Some(kpls_dim) = self.kpls_dim {
             config = config.kpls_dim(kpls_dim);
-        };
-        if let Some(n_clusters) = self.n_clusters {
-            config = config.n_clusters(n_clusters);
         };
         if let Some(outdir) = self.outdir.as_ref().cloned() {
             config = config.outdir(outdir);
