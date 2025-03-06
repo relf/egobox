@@ -129,7 +129,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         When set to 0, the number of cluster is determined automatically and refreshed every
 ///         10-points addition (should say 'tentative addition' because addition may fail for some points
 ///         but it is counted anyway).
-///         When set to negative number -n, the number of clusters is determined automatically in [0, n]
+///         When set to negative number -n, the number of clusters is determined automatically in [1, n]
 ///         this is used to limit the number of trials hence the execution time.
 ///   
 ///     n_optmod (int >= 1)
