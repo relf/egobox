@@ -24,6 +24,8 @@ use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 
+const CSTR_DOUBT: f64 = 3.;
+
 impl<SB, C> EgorSolver<SB, C>
 where
     SB: SurrogateBuilder + DeserializeOwned,
@@ -141,29 +143,9 @@ where
                                  gradient: Option<&mut [f64]>,
                                  params: &mut InfillObjData<f64>|
                       -> f64 {
-                    if let Some(grad) = gradient {
-                        let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
-                        let grd = cstr_models[i]
-                            .predict_gradients(
-                                &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                    .unwrap()
-                                    .view(),
-                            )
-                            .unwrap()
-                            .row(0)
-                            .mapv(|v| v / scale_cstr)
-                            .to_vec();
-                        grad[..].copy_from_slice(&grd);
-                    }
                     let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
-                    cstr_models[i]
-                        .predict(
-                            &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                .unwrap()
-                                .view(),
-                        )
-                        .unwrap()[0]
-                        / scale_cstr
+                    // Self::mean_cstr(&*cstr_models[i], x, gradient, scale_cstr)
+                    Self::upper_trust_bound_cstr(&*cstr_models[i], x, gradient, scale_cstr)
                 };
                 #[cfg(feature = "nlopt")]
                 {
@@ -234,6 +216,52 @@ where
             debug!("... infill criterion optimum found");
         }
         best_x.ok_or_else(|| EgoError::EgoError(String::from("Can not find best point")))
+    }
+
+    pub fn mean_cstr(
+        cstr_model: &dyn MixtureGpSurrogate,
+        x: &[f64],
+        gradient: Option<&mut [f64]>,
+        scale_cstr: f64,
+    ) -> f64 {
+        let x = Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
+        if let Some(grad) = gradient {
+            let grd = cstr_model
+                .predict_gradients(&x.view())
+                .unwrap()
+                .row(0)
+                .mapv(|v| v / scale_cstr)
+                .to_vec();
+            grad[..].copy_from_slice(&grd);
+        }
+        cstr_model.predict(&x.view()).unwrap()[0] / scale_cstr
+    }
+
+    pub fn upper_trust_bound_cstr(
+        cstr_model: &dyn MixtureGpSurrogate,
+        x: &[f64],
+        gradient: Option<&mut [f64]>,
+        scale_cstr: f64,
+    ) -> f64 {
+        let x = Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
+        let sigma = cstr_model.predict_var(&x.view()).unwrap()[[0, 0]].sqrt();
+        let cstr_val = cstr_model.predict(&x.view()).unwrap()[0];
+
+        if let Some(grad) = gradient {
+            let sigma_prime = if sigma < f64::EPSILON {
+                0.
+            } else {
+                cstr_model.predict_var_gradients(&x.view()).unwrap()[[0, 0]] / (2. * sigma)
+            };
+            let grd = cstr_model
+                .predict_gradients(&x.view())
+                .unwrap()
+                .row(0)
+                .mapv(|v| (v + CSTR_DOUBT * sigma_prime) / scale_cstr)
+                .to_vec();
+            grad[..].copy_from_slice(&grd);
+        }
+        (cstr_val + CSTR_DOUBT * sigma) / scale_cstr
     }
 
     /// Return the virtual points regarding the qei strategy
