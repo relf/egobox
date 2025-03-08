@@ -144,8 +144,11 @@ where
                                  params: &mut InfillObjData<f64>|
                       -> f64 {
                     let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
-                    // Self::mean_cstr(&*cstr_models[i], x, gradient, scale_cstr)
-                    Self::upper_trust_bound_cstr(&*cstr_models[i], x, gradient, scale_cstr)
+                    if self.config.cstr_strategy == ConstraintStrategy::MeanValue {
+                        Self::mean_cstr(&*cstr_models[i], x, gradient, scale_cstr)
+                    } else {
+                        Self::upper_trust_bound_cstr(&*cstr_models[i], x, gradient, scale_cstr)
+                    }
                 };
                 #[cfg(feature = "nlopt")]
                 {

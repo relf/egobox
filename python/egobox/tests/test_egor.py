@@ -150,6 +150,7 @@ class TestOptimizer(unittest.TestCase):
             seed=42,
             n_optmod=2,
             n_doe=n_doe,
+            cstr_strategy=egx.ConstraintStrategy.UTB,
         )
         start = time.process_time()
         res = egor.minimize(g24, max_iters=max_iters)

@@ -58,6 +58,13 @@ pub(crate) enum InfillStrategy {
 
 #[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum ConstraintStrategy {
+    Mv = 1,
+    Utb = 2,
+}
+
+#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ParInfillStrategy {
     Kb = 1,
     Kblb = 2,

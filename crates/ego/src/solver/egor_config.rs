@@ -10,7 +10,7 @@ use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 
 /// A structure to handle TREGO method parameterization
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct TregoConfig {
     pub(crate) activated: bool,
     pub(crate) n_local_steps: u64,
@@ -90,6 +90,8 @@ pub struct EgorConfig {
     pub(crate) seed: Option<u64>,
     /// Trego parameterization
     pub(crate) trego: TregoConfig,
+    /// Constraints criterion
+    pub(crate) cstr_strategy: ConstraintStrategy,
 }
 
 impl Default for EgorConfig {
@@ -117,6 +119,7 @@ impl Default for EgorConfig {
             xtypes: vec![],
             seed: None,
             trego: TregoConfig::default(),
+            cstr_strategy: ConstraintStrategy::MeanValue,
         }
     }
 }
@@ -291,6 +294,12 @@ impl EgorConfig {
     /// Activate TREGO method
     pub fn trego(mut self, activated: bool) -> Self {
         self.trego.activated = activated;
+        self
+    }
+
+    /// Sets the infill strategy
+    pub fn cstr_strategy(mut self, cstr_strategy: ConstraintStrategy) -> Self {
+        self.cstr_strategy = cstr_strategy;
         self
     }
 
