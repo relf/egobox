@@ -38,7 +38,7 @@ pub enum ConstraintStrategy {
     /// Use the mean value
     MeanValue,
     /// Use the upper bound (ie mean + 3*sigma)
-    UpperTrustedBound,
+    UpperTrustBound,
 }
 
 /// Optimizer used to optimize the infill criteria

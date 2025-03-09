@@ -472,7 +472,7 @@ impl Egor {
     fn cstr_strategy(&self) -> egobox_ego::ConstraintStrategy {
         match self.cstr_strategy {
             ConstraintStrategy::Mv => egobox_ego::ConstraintStrategy::MeanValue,
-            ConstraintStrategy::Utb => egobox_ego::ConstraintStrategy::UpperTrustedBound,
+            ConstraintStrategy::Utb => egobox_ego::ConstraintStrategy::UpperTrustBound,
         }
     }
 
