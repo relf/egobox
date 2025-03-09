@@ -32,6 +32,15 @@ pub enum InfillStrategy {
     WB2S,
 }
 
+/// Constraint criterion used to select next promising point
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConstraintStrategy {
+    /// Use the mean value
+    MeanValue,
+    /// Use the upper bound (ie mean + 3*sigma)
+    UpperTrustedBound,
+}
+
 /// Optimizer used to optimize the infill criteria
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InfillOptimizer {

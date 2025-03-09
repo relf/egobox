@@ -35,6 +35,7 @@ fn egobox(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RegressionSpec>()?;
     m.add_class::<CorrelationSpec>()?;
     m.add_class::<InfillStrategy>()?;
+    m.add_class::<ConstraintStrategy>()?;
     m.add_class::<ParInfillStrategy>()?;
     m.add_class::<InfillOptimizer>()?;
     m.add_class::<XType>()?;

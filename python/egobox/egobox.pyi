@@ -70,6 +70,10 @@ class Egor:
         infill_strategy (InfillStrategy enum)
             Infill criteria to decide best next promising point.
             Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S.
+
+        cstr_strategy (ConstraintStrategy enum)
+            Constraint management either use the mean value or upper bound
+            Can be either ConstraintStrategy.MV (default) or ConstraintStrategy.UTB.
     
         q_points (int > 0):
             Number of points to be evaluated to allow parallel evaluation of the function under optimization.
@@ -659,6 +663,10 @@ class InfillStrategy(Enum):
     Ei = auto()
     Wb2 = auto()
     Wb2s = auto()
+
+class ConstraintStrategy(Enum):
+    Mv = auto()
+    Utb = auto()
 
 class ParInfillStrategy(Enum):
     Kb = auto()

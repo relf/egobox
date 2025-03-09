@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
-use crate::utils::{compute_cstr_scales, find_best_result_index_from, update_data};
-use crate::{find_best_result_index, optimizers::*, EgorConfig};
+use crate::utils::{find_best_result_index_from, update_data};
+use crate::{find_best_result_index, EgorConfig};
 use crate::{types::*, EgorState};
 use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
 
@@ -15,18 +15,14 @@ use nlopt::ObjFn;
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
 
-use egobox_doe::{Lhs, LhsKind, SamplingMethod};
+use egobox_doe::{Lhs, LhsKind};
 use egobox_gp::ThetaTuning;
 use env_logger::{Builder, Env};
-use finitediff::FiniteDiff;
 
 use egobox_moe::{Clustering, MixtureGpSurrogate};
 use log::{debug, info, warn};
-use ndarray::{
-    concatenate, s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
-};
+use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 
-use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
@@ -76,7 +72,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         // TODO: c_data has to be passed as argument or better computed using fcstrs(x_data)
         let c_data = Array2::zeros((x_data.nrows(), 0));
 
-        let (x_dat, _, _, _, _) = self.next_points(
+        let (x_dat, _, _, _, _) = self.select_next_points(
             true,
             0,
             false, // done anyway
@@ -289,7 +285,7 @@ where
 
             let problem = fobj.take_problem().unwrap();
             let fcstrs = problem.fn_constraints();
-            let (x_dat, y_dat, c_dat, infill_value, infill_data) = self.next_points(
+            let (x_dat, y_dat, c_dat, infill_value, infill_data) = self.select_next_points(
                 init,
                 state.get_iter(),
                 recluster,
@@ -403,7 +399,7 @@ where
     /// infill criterion value is also returned
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::type_complexity)]
-    pub fn next_points(
+    pub fn select_next_points(
         &self,
         init: bool,
         iter: u64,
@@ -521,7 +517,7 @@ where
                 .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
                 .collect::<Vec<_>>();
 
-            match self.find_best_point(
+            match self.compute_best_points(
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,
@@ -531,7 +527,8 @@ where
                 &cstr_funcs,
             ) {
                 Ok((infill_obj, xk)) => {
-                    match self.get_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
+                    match self.compute_virtual_points(&xk, y_data, obj_model.as_ref(), cstr_models)
+                    {
                         Ok(yk) => {
                             let yk =
                                 Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap();
@@ -568,385 +565,5 @@ where
             }
         }
         (x_dat, y_dat, c_dat, infill_val, infill_data)
-    }
-
-    pub(crate) fn compute_scaling(
-        &self,
-        sampling: &Lhs<f64, Xoshiro256Plus>,
-        obj_model: &dyn MixtureGpSurrogate,
-        cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        fcstrs: &[impl CstrFn],
-        fmin: f64,
-    ) -> (f64, Array1<f64>, Array1<f64>, f64) {
-        let npts = (100 * self.xlimits.nrows()).min(1000);
-        debug!("Use {npts} points to evaluate scalings");
-        let scaling_points = sampling.sample(npts);
-
-        let scale_ic = if self.config.infill_criterion.name() == "WB2S" {
-            let scale_ic =
-                self.config
-                    .infill_criterion
-                    .scaling(&scaling_points.view(), obj_model, fmin);
-            info!("WB2S scaling factor = {}", scale_ic);
-            scale_ic
-        } else {
-            1.
-        };
-
-        let scale_infill_obj =
-            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, fmin, scale_ic);
-        info!(
-            "Infill criterion {} scaling is updated to {}",
-            self.config.infill_criterion.name(),
-            scale_infill_obj
-        );
-        let scale_cstr = if cstr_models.is_empty() {
-            Array1::zeros((0,))
-        } else {
-            let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
-            info!(
-                "Surrogated constraints scaling is updated to {}",
-                scale_cstr
-            );
-            scale_cstr
-        };
-
-        let scale_fcstr = if fcstrs.is_empty() {
-            Array1::zeros((0,))
-        } else {
-            let fcstr_values = self.eval_fcstrs(fcstrs, &scaling_points).map(|v| v.abs());
-            let mut scale_fcstr = Array1::zeros(fcstr_values.ncols());
-            Zip::from(&mut scale_fcstr)
-                .and(fcstr_values.columns())
-                .for_each(|sc, vals| *sc = *vals.max().unwrap());
-            info!(
-                "Fonctional constraints scaling is updated to {}",
-                scale_fcstr
-            );
-            scale_fcstr
-        };
-        (scale_infill_obj, scale_cstr, scale_fcstr, scale_ic)
-    }
-
-    /// Find best x promising points by optimizing the chosen infill criterion
-    /// The optimized value of the criterion is returned together with the
-    /// optimum location
-    /// Returns (infill_obj, x_opt)
-    #[allow(clippy::too_many_arguments)]
-    //#[allow(clippy::type_complexity)]
-    fn find_best_point(
-        &self,
-        sampling: &Lhs<f64, Xoshiro256Plus>,
-        obj_model: &dyn MixtureGpSurrogate,
-        cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        cstr_tol: &Array1<f64>,
-        lhs_optim_seed: Option<u64>,
-        infill_data: &InfillObjData<f64>,
-        cstr_funcs: &[&(dyn ObjFn<InfillObjData<f64>> + Sync)],
-    ) -> Result<(f64, Array1<f64>)> {
-        let fmin = infill_data.fmin;
-
-        let mut success = false;
-        let mut n_optim = 1;
-        let n_max_optim = 3;
-        let mut best_x = None;
-
-        let algorithm = match self.config.infill_optimizer {
-            InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
-            InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
-        };
-
-        let obj =
-            |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
-                // Defensive programming NlOpt::Cobyla may pass NaNs
-                if x.iter().any(|x| x.is_nan()) {
-                    return f64::INFINITY;
-                }
-                let InfillObjData {
-                    scale_infill_obj,
-                    scale_wb2,
-                    ..
-                } = params;
-                if let Some(grad) = gradient {
-                    let f = |x: &Vec<f64>| -> f64 {
-                        self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-                    };
-                    grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-                }
-                self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-            };
-
-        let cstrs: Vec<_> = (0..self.config.n_cstr)
-            .map(|i| {
-                let cstr = move |x: &[f64],
-                                 gradient: Option<&mut [f64]>,
-                                 params: &mut InfillObjData<f64>|
-                      -> f64 {
-                    if let Some(grad) = gradient {
-                        let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
-                        let grd = cstr_models[i]
-                            .predict_gradients(
-                                &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                    .unwrap()
-                                    .view(),
-                            )
-                            .unwrap()
-                            .row(0)
-                            .mapv(|v| v / scale_cstr)
-                            .to_vec();
-                        grad[..].copy_from_slice(&grd);
-                    }
-                    let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
-                    cstr_models[i]
-                        .predict(
-                            &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                .unwrap()
-                                .view(),
-                        )
-                        .unwrap()[0]
-                        / scale_cstr
-                };
-                #[cfg(feature = "nlopt")]
-                {
-                    Box::new(cstr) as Box<dyn nlopt::ObjFn<InfillObjData<f64>> + Sync>
-                }
-                #[cfg(not(feature = "nlopt"))]
-                {
-                    Box::new(cstr) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>
-                }
-            })
-            .collect();
-
-        // We merge metamodelized constraints and function constraints
-        let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
-        cstr_refs.extend(cstr_funcs);
-
-        info!("Optimize infill criterion...");
-        while !success && n_optim <= n_max_optim {
-            let x_start = sampling.sample(self.config.n_start);
-
-            if let Some(seed) = lhs_optim_seed {
-                let (y_opt, x_opt) =
-                    Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &self.xlimits)
-                        .cstr_tol(cstr_tol.to_owned())
-                        .seed(seed)
-                        .minimize();
-
-                info!("LHS optimization best_x {}", x_opt);
-                best_x = Some((y_opt, x_opt));
-                success = true;
-            } else {
-                let res = (0..self.config.n_start)
-                    .into_par_iter()
-                    .map(|i| {
-                        Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &self.xlimits)
-                            .xinit(&x_start.row(i))
-                            .max_eval(200)
-                            .ftol_rel(1e-4)
-                            .ftol_abs(1e-4)
-                            .minimize()
-                    })
-                    .reduce(
-                        || (f64::INFINITY, Array::ones((self.xlimits.nrows(),))),
-                        |a, b| if b.0 < a.0 { b } else { a },
-                    );
-
-                if res.0.is_nan() || res.0.is_infinite() {
-                    success = false;
-                } else {
-                    best_x = Some((res.0, Array::from(res.1.clone())));
-                    success = true;
-                }
-            }
-
-            if n_optim == n_max_optim && best_x.is_none() {
-                info!("All optimizations fail => Trigger LHS optimization");
-                let (y_opt, x_opt) =
-                    Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &self.xlimits)
-                        .minimize();
-
-                info!("LHS optimization best_x {}", x_opt);
-                best_x = Some((y_opt, x_opt));
-                success = true;
-            }
-            n_optim += 1;
-        }
-        if best_x.is_some() {
-            debug!("... infill criterion optimum found");
-        }
-        best_x.ok_or_else(|| EgoError::EgoError(String::from("Can not find best point")))
-    }
-
-    /// Return the virtual points regarding the qei strategy
-    /// The default is to return GP prediction
-    fn get_virtual_point(
-        &self,
-        xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-        y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-        obj_model: &dyn MixtureGpSurrogate,
-        cstr_models: &[Box<dyn MixtureGpSurrogate>],
-    ) -> Result<Vec<f64>> {
-        let mut res: Vec<f64> = Vec::with_capacity(3);
-        if self.config.q_ei == QEiStrategy::ConstantLiarMinimum {
-            let index_min = y_data.slice(s![.., 0_usize]).argmin().unwrap();
-            res.push(y_data[[index_min, 0]]);
-            for ic in 1..=self.config.n_cstr {
-                res.push(y_data[[index_min, ic]]);
-            }
-            Ok(res)
-        } else {
-            let x = &xk.view().insert_axis(Axis(0));
-            let pred = obj_model.predict(x)?[0];
-            let var = obj_model.predict_var(x)?[[0, 0]];
-            let conf = match self.config.q_ei {
-                QEiStrategy::KrigingBeliever => 0.,
-                QEiStrategy::KrigingBelieverLowerBound => -3.,
-                QEiStrategy::KrigingBelieverUpperBound => 3.,
-                _ => -1., // never used
-            };
-            res.push(pred + conf * f64::sqrt(var));
-            for cstr_model in cstr_models {
-                res.push(cstr_model.predict(x)?[0]);
-            }
-            Ok(res)
-        }
-    }
-
-    /// The infill criterion scaling is computed using x (n points of nx dim)
-    /// given the objective function surrogate
-    fn compute_infill_obj_scale(
-        &self,
-        x: &ArrayView2<f64>,
-        obj_model: &dyn MixtureGpSurrogate,
-        fmin: f64,
-        scale_ic: f64,
-    ) -> f64 {
-        let mut crit_vals = Array1::zeros(x.nrows());
-        let (mut nan_count, mut inf_count) = (0, 0);
-        Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
-            let val = self.eval_infill_obj(&x.to_vec(), obj_model, fmin, 1.0, scale_ic);
-            *c = if val.is_nan() {
-                nan_count += 1;
-                1.0
-            } else if val.is_infinite() {
-                inf_count += 1;
-                1.0
-            } else {
-                val.abs()
-            };
-        });
-        if inf_count > 0 || nan_count > 0 {
-            warn!(
-                "Criterion scale computation warning: ({nan_count} NaN + {inf_count} Inf) / {} points",
-                x.nrows()
-            );
-        }
-        let scale = *crit_vals.max().unwrap_or(&1.0);
-        if scale < 100.0 * f64::EPSILON {
-            1.0
-        } else {
-            scale
-        }
-    }
-
-    /// Compute infill criterion objective expected to be minimized
-    /// meaning infill criterion objective is negative infill criterion
-    /// the latter is expected to be maximized
-    pub(crate) fn eval_infill_obj(
-        &self,
-        x: &[f64],
-        obj_model: &dyn MixtureGpSurrogate,
-        fmin: f64,
-        scale: f64,
-        scale_ic: f64,
-    ) -> f64 {
-        let x_f = x.to_vec();
-        let obj = -(self
-            .config
-            .infill_criterion
-            .value(&x_f, obj_model, fmin, Some(scale_ic)));
-        obj / scale
-    }
-
-    pub fn eval_grad_infill_obj(
-        &self,
-        x: &[f64],
-        obj_model: &dyn MixtureGpSurrogate,
-        fmin: f64,
-        scale: f64,
-        scale_ic: f64,
-    ) -> Vec<f64> {
-        let x_f = x.to_vec();
-        let grad = -(self
-            .config
-            .infill_criterion
-            .grad(&x_f, obj_model, fmin, Some(scale_ic)));
-        (grad / scale).to_vec()
-    }
-
-    pub fn eval_obj<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
-        &self,
-        pb: &mut Problem<O>,
-        x: &Array2<f64>,
-    ) -> Array2<f64> {
-        let x = if self.config.discrete() {
-            // We have to cast x to folded space as EgorSolver
-            // works internally in the continuous space while
-            // the objective function expects discrete variable in folded space
-            to_discrete_space(&self.config.xtypes, x)
-        } else {
-            x.to_owned()
-        };
-        pb.problem("cost_count", |problem| problem.cost(&x))
-            .expect("Objective evaluation")
-    }
-
-    pub fn eval_fcstrs(
-        &self,
-        fcstrs: &[impl CstrFn],
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Array2<f64> {
-        let mut unused = InfillObjData::default();
-
-        let mut res = Array2::zeros((x.nrows(), fcstrs.len()));
-        Zip::from(res.rows_mut())
-            .and(x.rows())
-            .for_each(|mut r, xi| {
-                let cstr_vals = &fcstrs
-                    .iter()
-                    .map(|cstr| {
-                        let xuser = if self.config.discrete() {
-                            let xary = xi.to_owned().insert_axis(Axis(0));
-                            // We have to cast x to folded space as EgorSolver
-                            // works internally in the continuous space while
-                            // the constraint function expects discrete variable in folded space
-                            to_discrete_space(&self.config.xtypes, &xary)
-                                .row(0)
-                                .into_owned();
-                            xary.into_iter().collect::<Vec<_>>()
-                        } else {
-                            xi.to_vec()
-                        };
-                        cstr(&xuser, None, &mut unused)
-                    })
-                    .collect::<Array1<_>>();
-                r.assign(cstr_vals)
-            });
-
-        res
-    }
-
-    pub fn eval_problem_fcstrs<O: DomainConstraints<C>>(
-        &self,
-        pb: &mut Problem<O>,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Array2<f64> {
-        let problem = pb.take_problem().unwrap();
-        let fcstrs = problem.fn_constraints();
-
-        let res = self.eval_fcstrs(fcstrs, x);
-
-        pb.problem = Some(problem);
-        res
     }
 }

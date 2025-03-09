@@ -103,6 +103,10 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         Infill criteria to decide best next promising point.
 ///         Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S.
 ///
+///     cstr_strategy (ConstraintStrategy enum)
+///         Constraint management either use the mean value or upper bound
+///         Can be either ConstraintStrategy.MeanValue or ConstraintStrategy.UpperTrustedBound.
+///
 ///     q_points (int > 0):
 ///         Number of points to be evaluated to allow parallel evaluation of the function under optimization.
 ///
@@ -170,6 +174,7 @@ pub(crate) struct Egor {
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub infill_strategy: InfillStrategy,
+    pub cstr_strategy: ConstraintStrategy,
     pub q_points: usize,
     pub par_infill_strategy: ParInfillStrategy,
     pub infill_optimizer: InfillOptimizer,
@@ -209,6 +214,7 @@ impl Egor {
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         infill_strategy = InfillStrategy::Wb2,
+        cstr_strategy = ConstraintStrategy::Mv,
         q_points = 1,
         par_infill_strategy = ParInfillStrategy::Kb,
         infill_optimizer = InfillOptimizer::Cobyla,
@@ -234,6 +240,7 @@ impl Egor {
         regr_spec: u8,
         corr_spec: u8,
         infill_strategy: InfillStrategy,
+        cstr_strategy: ConstraintStrategy,
         q_points: usize,
         par_infill_strategy: ParInfillStrategy,
         infill_optimizer: InfillOptimizer,
@@ -265,6 +272,7 @@ impl Egor {
             regression_spec: RegressionSpec(regr_spec),
             correlation_spec: CorrelationSpec(corr_spec),
             infill_strategy,
+            cstr_strategy,
             q_points,
             par_infill_strategy,
             infill_optimizer,
@@ -461,6 +469,13 @@ impl Egor {
         }
     }
 
+    fn cstr_strategy(&self) -> egobox_ego::ConstraintStrategy {
+        match self.cstr_strategy {
+            ConstraintStrategy::Mv => egobox_ego::ConstraintStrategy::MeanValue,
+            ConstraintStrategy::Utb => egobox_ego::ConstraintStrategy::UpperTrustedBound,
+        }
+    }
+
     fn qei_strategy(&self) -> egobox_ego::QEiStrategy {
         match self.par_infill_strategy {
             ParInfillStrategy::Kb => egobox_ego::QEiStrategy::KrigingBeliever,
@@ -519,6 +534,7 @@ impl Egor {
         doe: Option<&Array2<f64>>,
     ) -> egobox_ego::EgorConfig {
         let infill_strategy = self.infill_strategy();
+        let cstr_strategy = self.cstr_strategy();
         let qei_strategy = self.qei_strategy();
         let infill_optimizer = self.infill_optimizer();
 
@@ -536,6 +552,7 @@ impl Egor {
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             )
             .infill_strategy(infill_strategy)
+            .cstr_strategy(cstr_strategy)
             .q_points(self.q_points)
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
