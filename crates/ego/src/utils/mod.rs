@@ -1,3 +1,4 @@
+mod cstr_pof;
 mod find_result;
 mod hot_start;
 mod misc;
