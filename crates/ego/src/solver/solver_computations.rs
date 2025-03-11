@@ -2,7 +2,7 @@ use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::to_discrete_space;
 use crate::optimizers::*;
 use crate::types::*;
-use crate::utils::compute_cstr_scales;
+use crate::utils::{compute_cstr_scales, pofs, pofs_grad};
 use crate::EgorSolver;
 
 #[cfg(not(feature = "nlopt"))]
@@ -13,7 +13,7 @@ use nlopt::ObjFn;
 use argmin::core::{CostFunction, Problem};
 
 use egobox_doe::{Lhs, SamplingMethod};
-use finitediff::FiniteDiff;
+// use finitediff::FiniteDiff;
 
 use egobox_moe::MixtureGpSurrogate;
 use log::{debug, info, warn};
@@ -100,7 +100,7 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        cstr_tol: &Array1<f64>,
+        cstr_tols: &Array1<f64>,
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
         cstr_funcs: &[&(dyn ObjFn<InfillObjData<f64>> + Sync)],
@@ -117,31 +117,42 @@ where
             InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
         };
 
-        let obj = |x: &[f64],
-                   gradient: Option<&mut [f64]>,
-                   params: &mut InfillObjData<f64>|
-         -> f64 {
-            // Defensive programming NlOpt::Cobyla may pass NaNs
-            if x.iter().any(|x| x.is_nan()) {
-                return f64::INFINITY;
-            }
-            let InfillObjData {
-                scale_infill_obj,
-                scale_wb2,
-                ..
-            } = params;
-            if let Some(grad) = gradient {
-                let f = |x: &Vec<f64>| -> f64 {
-                    self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-                };
-                grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+        let obj =
+            |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
+                // Defensive programming NlOpt::Cobyla may pass NaNs
+                if x.iter().any(|x| x.is_nan()) {
+                    return f64::INFINITY;
+                }
+                let InfillObjData {
+                    scale_infill_obj,
+                    scale_wb2,
+                    ..
+                } = params;
+                if let Some(grad) = gradient {
+                    // Use finite differences
+                    // let f = |x: &Vec<f64>| -> f64 {
+                    //     self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+                    // };
+                    // grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
 
-                let g_infill_obj =
-                    self.eval_grad_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2);
-                grad[..].copy_from_slice(&g_infill_obj);
-            }
-            self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-        };
+                    // let g_infill_obj =
+                    //     self.eval_grad_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2);
+
+                    let g_infill_obj = self.eval_grad_infill_obj_with_cstrs(
+                        x,
+                        obj_model,
+                        cstr_models,
+                        cstr_tols,
+                        fmin,
+                        *scale_infill_obj,
+                        *scale_wb2,
+                    );
+
+                    grad[..].copy_from_slice(&g_infill_obj);
+                }
+                self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+                    * pofs(x, cstr_models, &cstr_tols.to_vec())
+            };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
             .map(|i| {
@@ -178,7 +189,7 @@ where
             if let Some(seed) = lhs_optim_seed {
                 let (y_opt, x_opt) =
                     Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &self.xlimits)
-                        .cstr_tol(cstr_tol.to_owned())
+                        .cstr_tol(cstr_tols.to_owned())
                         .seed(seed)
                         .minimize();
 
@@ -378,6 +389,33 @@ where
             .infill_criterion
             .grad(&x_f, obj_model, fmin, Some(scale_ic)));
         (grad / scale).to_vec()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn eval_grad_infill_obj_with_cstrs(
+        &self,
+        x: &[f64],
+        obj_model: &dyn MixtureGpSurrogate,
+        cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        cstr_tols: &Array1<f64>,
+        fmin: f64,
+        scale: f64,
+        scale_ic: f64,
+    ) -> Vec<f64> {
+        if cstr_models.is_empty() {
+            self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic)
+        } else {
+            let infill = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
+            let pofs = pofs(x, cstr_models, &cstr_tols.to_vec());
+
+            let infill_grad =
+                Array1::from_vec(self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic))
+                    .mapv(|v| v * pofs);
+            let pofs_grad = pofs_grad(x, cstr_models, &cstr_tols.to_vec());
+
+            let cei_grad = infill_grad.mapv(|v| v * pofs) + pofs_grad.mapv(|v| v * infill);
+            cei_grad.to_vec()
+        }
     }
 
     pub fn eval_obj<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(

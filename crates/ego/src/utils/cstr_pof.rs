@@ -6,7 +6,7 @@ use ndarray::{Array1, ArrayView};
 
 /// Compute probability of feasibility using the given surrogate of
 /// a constraint function wrt the tolerance (ie cstr <= cstr_tol)
-pub fn pof(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> f64 {
+fn pof(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> f64 {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     if let Ok(p) = cstr_model.predict(&pt) {
         if let Ok(s) = cstr_model.predict_var(&pt) {
@@ -28,7 +28,7 @@ pub fn pof(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> f64
 
 /// Computes the derivative of the probability of feasibility of the given
 /// constraint surrogate model.
-pub fn pof_grad(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> Array1<f64> {
+fn pof_grad(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> Array1<f64> {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     if let Ok(p) = cstr_model.predict(&pt) {
         if let Ok(s) = cstr_model.predict_var(&pt) {
@@ -56,10 +56,14 @@ pub fn pof_grad(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -
 }
 
 pub fn pofs(x: &[f64], cstr_models: &[Box<dyn MixtureGpSurrogate>], cstr_tols: &[f64]) -> f64 {
-    zip(cstr_models, cstr_tols).fold(1., |acc, (cstr_model, cstr_tol)| {
-        let pof = pof(x, &**cstr_model, *cstr_tol);
-        acc * pof
-    })
+    if cstr_models.is_empty() {
+        1.
+    } else {
+        zip(cstr_models, cstr_tols).fold(1., |acc, (cstr_model, cstr_tol)| {
+            let pof = pof(x, &**cstr_model, *cstr_tol);
+            acc * pof
+        })
+    }
 }
 
 pub fn pofs_grad(
@@ -67,10 +71,24 @@ pub fn pofs_grad(
     cstr_models: &[Box<dyn MixtureGpSurrogate>],
     cstr_tols: &[f64],
 ) -> Array1<f64> {
-    zip(cstr_models, cstr_tols).fold(Array1::ones(x.len()), |acc, (cstr_model, cstr_tol)| {
-        let pof = pof_grad(x, &**cstr_model, *cstr_tol);
-        acc * pof
-    })
+    if cstr_models.is_empty() {
+        Array1::zeros(x.len())
+    } else {
+        zip(cstr_models, cstr_tols).enumerate().fold(
+            Array1::ones(x.len()),
+            |acc, (i, (cstr_model, cstr_tol))| {
+                let pof_grad_i = pof_grad(x, &**cstr_model, *cstr_tol);
+                let pof_others_product = cstr_models
+                    .iter()
+                    .enumerate()
+                    .filter(|(j, _)| *j != i)
+                    .fold(1., |acc_j, (_, cstr_model_j)| {
+                        acc_j * pof(x, &**cstr_model_j, *cstr_tol)
+                    });
+                acc * (pof_grad_i * pof_others_product)
+            },
+        )
+    }
 }
 
 #[cfg(test)]
