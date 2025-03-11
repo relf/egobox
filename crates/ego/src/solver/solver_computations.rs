@@ -117,25 +117,31 @@ where
             InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
         };
 
-        let obj =
-            |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
-                // Defensive programming NlOpt::Cobyla may pass NaNs
-                if x.iter().any(|x| x.is_nan()) {
-                    return f64::INFINITY;
-                }
-                let InfillObjData {
-                    scale_infill_obj,
-                    scale_wb2,
-                    ..
-                } = params;
-                if let Some(grad) = gradient {
-                    let f = |x: &Vec<f64>| -> f64 {
-                        self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-                    };
-                    grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-                }
-                self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-            };
+        let obj = |x: &[f64],
+                   gradient: Option<&mut [f64]>,
+                   params: &mut InfillObjData<f64>|
+         -> f64 {
+            // Defensive programming NlOpt::Cobyla may pass NaNs
+            if x.iter().any(|x| x.is_nan()) {
+                return f64::INFINITY;
+            }
+            let InfillObjData {
+                scale_infill_obj,
+                scale_wb2,
+                ..
+            } = params;
+            if let Some(grad) = gradient {
+                let f = |x: &Vec<f64>| -> f64 {
+                    self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+                };
+                grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+
+                let g_infill_obj =
+                    self.eval_grad_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2);
+                grad[..].copy_from_slice(&g_infill_obj);
+            }
+            self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+        };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
             .map(|i| {
