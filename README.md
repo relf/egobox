@@ -204,6 +204,19 @@ black-box functions. Journal of Global Optimization, 13(4), 455–492. <https://
 Diouane, Youssef, et al. "TREGO: a trust-region framework for efficient global optimization."
 Journal of Global Optimization 86.1 (2023): 1-23. <https://arxiv.org/pdf/2101.06808>
 
+Priem, Rémy, Nathalie Bartoli, and Youssef Diouane.
+On the use of upper trust bounds in constrained Bayesian optimization infill criteria.
+AIAA aviation 2019 forum. 2019. <https://hal.science/hal-02182492v1/file/Priem_24049.pdf>
+
+Sasena M., Papalambros P., Goovaerts P., 2002.
+Global optimization of problems with disconnected feasible regions via surrogate modeling.” AIAA Paper.
+
+Ginsbourger, D., Le Riche, R., & Carraro, L. (2010).
+Kriging is well-suited to parallelize optimization.
+ 
+E.C. Garrido-Merchan and D. Hernandez-Lobato. 
+Dealing with categorical and integer-valued variables in Bayesian Optimization with Gaussian processes.
+
 smtorg. (2018). Surrogate modeling toolbox. In GitHub repository. GitHub. <https://github.com/SMTOrg/smt>
 
 ## License

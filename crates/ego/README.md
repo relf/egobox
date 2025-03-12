@@ -16,7 +16,7 @@ It is a Rust port of EGO of the [SMT](https://smt.readthedocs.io) Python library
 
 * Mixture of gausian processes
 * Infill criteria: EI, WB2, WB2S
-* Basic handling of negative constraints
+* Handling of negative constraints: actual constraint functions or surrogates  
 * Mixed integer optimization available through continuous relaxation
 * Trust region EGO algorithm
 
