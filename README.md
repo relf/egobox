@@ -213,8 +213,8 @@ Global optimization of problems with disconnected feasible regions via surrogate
 
 Ginsbourger, D., Le Riche, R., & Carraro, L. (2010).
 Kriging is well-suited to parallelize optimization.
- 
-E.C. Garrido-Merchan and D. Hernandez-Lobato. 
+
+E.C. Garrido-Merchan and D. Hernandez-Lobato.
 Dealing with categorical and integer-valued variables in Bayesian Optimization with Gaussian processes.
 
 smtorg. (2018). Surrogate modeling toolbox. In GitHub repository. GitHub. <https://github.com/SMTOrg/smt>
