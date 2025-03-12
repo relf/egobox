@@ -43,18 +43,6 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 }
 
 /// Optimizer constructor
-///
-///    fun: array[n, nx]) -> array[n, ny]
-///         the function to be minimized
-///         fun(x) = [obj(x), cstr_1(x), ... cstr_k(x)] where
-///            obj is the objective function [n, nx] -> [n, 1]
-///            cstr_i is the ith constraint function [n, nx] -> [n, 1]
-///            an k the number of constraints (n_cstr)
-///            hence ny = 1 (obj) + k (cstrs)
-///         cstr functions are expected be negative (<=0) at the optimum.
-///         This constraints will be approximated using surrogates, so
-///         if constraints are cheap to evaluate better to pass them through run(fcstrs=[...])
-///
 ///     n_cstr (int):
 ///         the number of constraints which will be approximated by surrogates (see `fun` argument)
 ///
@@ -103,6 +91,10 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         Infill criteria to decide best next promising point.
 ///         Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S.
 ///
+///     cstr_infill (bool)
+///         Activate constrained infill criterion where the product of probability of feasibility of constraints
+///         used as a factor of the infill criterion specified via infill_strategy
+///         
 ///     cstr_strategy (ConstraintStrategy enum)
 ///         Constraint management either use the mean value or upper bound
 ///         Can be either ConstraintStrategy.MeanValue or ConstraintStrategy.UpperTrustedBound.
@@ -174,6 +166,7 @@ pub(crate) struct Egor {
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
     pub infill_strategy: InfillStrategy,
+    pub cstr_infill: bool,
     pub cstr_strategy: ConstraintStrategy,
     pub q_points: usize,
     pub par_infill_strategy: ParInfillStrategy,
@@ -214,6 +207,7 @@ impl Egor {
         regr_spec = RegressionSpec::CONSTANT,
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         infill_strategy = InfillStrategy::Wb2,
+        cstr_infill = false,
         cstr_strategy = ConstraintStrategy::Mv,
         q_points = 1,
         par_infill_strategy = ParInfillStrategy::Kb,
@@ -240,6 +234,7 @@ impl Egor {
         regr_spec: u8,
         corr_spec: u8,
         infill_strategy: InfillStrategy,
+        cstr_infill: bool,
         cstr_strategy: ConstraintStrategy,
         q_points: usize,
         par_infill_strategy: ParInfillStrategy,
@@ -272,6 +267,7 @@ impl Egor {
             regression_spec: RegressionSpec(regr_spec),
             correlation_spec: CorrelationSpec(corr_spec),
             infill_strategy,
+            cstr_infill,
             cstr_strategy,
             q_points,
             par_infill_strategy,
@@ -291,6 +287,18 @@ impl Egor {
     /// This function finds the minimum of a given function `fun`
     ///
     /// # Parameters
+    ///
+    ///     fun: array[n, nx]) -> array[n, ny]
+    ///         the function to be minimized
+    ///         fun(x) = [obj(x), cstr_1(x), ... cstr_k(x)] where
+    ///            obj is the objective function [n, nx] -> [n, 1]
+    ///            cstr_i is the ith constraint function [n, nx] -> [n, 1]
+    ///            an k the number of constraints (n_cstr)
+    ///            hence ny = 1 (obj) + k (cstrs)
+    ///         cstr functions are expected be negative (<=0) at the optimum.
+    ///         This constraints will be approximated using surrogates, so
+    ///         if constraints are cheap to evaluate better to pass them through run(fcstrs=[...])
+    ///
     ///     max_iters:
     ///         the iteration budget, number of fun calls is `n_doe + q_points * max_iters`.
     ///
@@ -552,6 +560,7 @@ impl Egor {
                 egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
             )
             .infill_strategy(infill_strategy)
+            .cstr_infill(self.cstr_infill)
             .cstr_strategy(cstr_strategy)
             .q_points(self.q_points)
             .qei_strategy(qei_strategy)

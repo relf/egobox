@@ -135,23 +135,27 @@ where
                     // };
                     // grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
 
-                    // let g_infill_obj =
-                    //     self.eval_grad_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2);
-
-                    let g_infill_obj = self.eval_grad_infill_obj_with_cstrs(
-                        x,
-                        obj_model,
-                        cstr_models,
-                        cstr_tols,
-                        fmin,
-                        *scale_infill_obj,
-                        *scale_wb2,
-                    );
-
+                    let g_infill_obj = if self.config.cstr_infill {
+                        self.eval_grad_infill_obj_with_cstrs(
+                            x,
+                            obj_model,
+                            cstr_models,
+                            cstr_tols,
+                            fmin,
+                            *scale_infill_obj,
+                            *scale_wb2,
+                        )
+                    } else {
+                        self.eval_grad_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+                    };
                     grad[..].copy_from_slice(&g_infill_obj);
                 }
-                self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-                    * pofs(x, cstr_models, &cstr_tols.to_vec())
+                if self.config.cstr_infill {
+                    self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+                } else {
+                    self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+                        * pofs(x, cstr_models, &cstr_tols.to_vec())
+                }
             };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)

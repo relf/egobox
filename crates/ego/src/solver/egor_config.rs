@@ -90,6 +90,8 @@ pub struct EgorConfig {
     pub(crate) seed: Option<u64>,
     /// Trego parameterization
     pub(crate) trego: TregoConfig,
+    /// Constrained infill criterion activation
+    pub(crate) cstr_infill: bool,
     /// Constraints criterion
     pub(crate) cstr_strategy: ConstraintStrategy,
 }
@@ -119,6 +121,7 @@ impl Default for EgorConfig {
             xtypes: vec![],
             seed: None,
             trego: TregoConfig::default(),
+            cstr_infill: false,
             cstr_strategy: ConstraintStrategy::MeanValue,
         }
     }
@@ -294,6 +297,12 @@ impl EgorConfig {
     /// Activate TREGO method
     pub fn trego(mut self, activated: bool) -> Self {
         self.trego.activated = activated;
+        self
+    }
+
+    /// Activate constrained infill criterion
+    pub fn cstr_infill(mut self, activated: bool) -> Self {
+        self.cstr_infill = activated;
         self
     }
 
