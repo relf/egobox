@@ -208,7 +208,7 @@ impl Egor {
         corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         infill_strategy = InfillStrategy::Wb2,
         cstr_infill = false,
-        cstr_strategy = ConstraintStrategy::Mv,
+        cstr_strategy = ConstraintStrategy::Mc,
         q_points = 1,
         par_infill_strategy = ParInfillStrategy::Kb,
         infill_optimizer = InfillOptimizer::Cobyla,
@@ -479,7 +479,7 @@ impl Egor {
 
     fn cstr_strategy(&self) -> egobox_ego::ConstraintStrategy {
         match self.cstr_strategy {
-            ConstraintStrategy::Mv => egobox_ego::ConstraintStrategy::MeanValue,
+            ConstraintStrategy::Mc => egobox_ego::ConstraintStrategy::MeanConstraint,
             ConstraintStrategy::Utb => egobox_ego::ConstraintStrategy::UpperTrustBound,
         }
     }

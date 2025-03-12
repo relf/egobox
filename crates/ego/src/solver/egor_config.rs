@@ -122,7 +122,7 @@ impl Default for EgorConfig {
             seed: None,
             trego: TregoConfig::default(),
             cstr_infill: false,
-            cstr_strategy: ConstraintStrategy::MeanValue,
+            cstr_strategy: ConstraintStrategy::MeanConstraint,
         }
     }
 }

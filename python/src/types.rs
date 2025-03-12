@@ -59,7 +59,7 @@ pub(crate) enum InfillStrategy {
 #[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ConstraintStrategy {
-    Mv = 1,
+    Mc = 1,
     Utb = 2,
 }
 

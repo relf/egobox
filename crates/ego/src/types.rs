@@ -36,7 +36,7 @@ pub enum InfillStrategy {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConstraintStrategy {
     /// Use the mean value
-    MeanValue,
+    MeanConstraint,
     /// Use the upper bound (ie mean + 3*sigma)
     UpperTrustBound,
 }
