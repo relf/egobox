@@ -152,7 +152,7 @@
 //! ```no_run
 //! # use egobox_ego::{EgorConfig, ConstraintStrategy};
 //! # let egor_config = EgorConfig::default();
-//!     egor_config.cstr_strategy(ConstraintStrategy::Utb);
+//!     egor_config.cstr_strategy(ConstraintStrategy::UpperTrustBound);
 //! ```
 //!
 //! * The default gaussian process surrogate is parameterized with a constant trend and a squared exponential correlation kernel, also
