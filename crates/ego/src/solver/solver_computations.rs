@@ -200,12 +200,16 @@ where
                 let res = (0..self.config.n_start)
                     .into_par_iter()
                     .map(|i| {
-                        Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &self.xlimits)
-                            .xinit(&x_start.row(i))
-                            .max_eval(200)
-                            .ftol_rel(1e-4)
-                            .ftol_abs(1e-4)
-                            .minimize()
+                        debug!("Begin optim {}", i);
+                        let optim_res =
+                            Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &self.xlimits)
+                                .xinit(&x_start.row(i))
+                                .max_eval(200)
+                                .ftol_rel(1e-4)
+                                .ftol_abs(1e-4)
+                                .minimize();
+                        debug!("End optim {}", i);
+                        optim_res
                     })
                     .reduce(
                         || (f64::INFINITY, Array::ones((self.xlimits.nrows(),))),

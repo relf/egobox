@@ -139,7 +139,7 @@ impl<'a> Optimizer<'a> {
             .cstr_tol
             .clone()
             .unwrap_or(Array1::zeros(self.cons.len()));
-        match self.algo {
+        let res = match self.algo {
             Algorithm::Cobyla => {
                 #[cfg(feature = "nlopt")]
                 {
@@ -241,6 +241,8 @@ impl<'a> Optimizer<'a> {
                 };
                 res.minimize()
             }
-        }
+        };
+        log::debug!("... end optimization");
+        res
     }
 }
