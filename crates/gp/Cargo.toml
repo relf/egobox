@@ -40,7 +40,7 @@ ndarray-linalg = { version = "0.16", optional = true }
 ndarray_einsum_beta = "0.7"
 
 ndarray-npy.workspace = true
-nlopt = { version = "0.7.0", optional = true }
+nlopt = { version = "0.8", optional = true }
 cobyla = { version = "0.6" }
 paste = "1.0"
 

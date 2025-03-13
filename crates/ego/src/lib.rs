@@ -137,6 +137,24 @@
 //!     egor_config.infill_strategy(InfillStrategy::EI);
 //! ```
 //!
+//! * Constraints modeled with a surrogate can be integrated in the infill criterion
+//!   through their probability of feasibility. See \[[Sasena2002](#Sasena2002)\]
+//!
+//! ```no_run
+//! # use egobox_ego::{EgorConfig};
+//! # let egor_config = EgorConfig::default();
+//!     egor_config.cstr_infill(true);
+//! ```
+//!
+//! * Constraints modeled with a surrogate can be used with their mean value or their upper trust bound
+//!   See \[[Priem2019](#Priem2019)\]
+//!
+//! ```no_run
+//! # use egobox_ego::{EgorConfig, ConstraintStrategy};
+//! # let egor_config = EgorConfig::default();
+//!     egor_config.cstr_strategy(ConstraintStrategy::UpperTrustBound);
+//! ```
+//!
 //! * The default gaussian process surrogate is parameterized with a constant trend and a squared exponential correlation kernel, also
 //!   known as Kriging. The optimizer use such surrogates to approximate objective and constraint functions. The kind of surrogate
 //!   can be changed using `regression_spec` and `correlation_spec()` methods to specify trend and kernels tested to get the best
@@ -199,10 +217,6 @@
 //! optimization with application to aerodynamic wing design](https://www.sciencedirect.com/science/article/pii/S1270963818306011)
 //!  Aerospace Science and technology 90 (2019): 85-102.
 //!
-//! \[<a id="Priem2019">Priem2019</a>\] Priem, Rémy, Nathalie Bartoli, and Youssef Diouane.
-//! On the use of upper trust bounds in constrained Bayesian optimization infill criteria.
-//! AIAA aviation 2019 forum. 2019.
-//!
 //! \[<a id="Ginsbourger2010">Ginsbourger2010</a>\]: Ginsbourger, D., Le Riche, R., & Carraro, L. (2010).
 //! Kriging is well-suited to parallelize optimization.
 //!  
@@ -228,6 +242,14 @@
 //! \[<a id="Diouane2023">Diouane(2023)</a>\]: Diouane, Youssef, et al.
 //! [TREGO: a trust-region framework for efficient global optimization](https://arxiv.org/pdf/2101.06808)
 //! Journal of Global Optimization 86.1 (2023): 1-23.
+//!
+//! \[<a id="Priem2019">Priem2019</a>\]: Priem, Rémy, Nathalie Bartoli, and Youssef Diouane.
+//! On the use of upper trust bounds in constrained Bayesian optimization infill criteria.
+//! AIAA aviation 2019 forum. 2019.
+//!
+//! \[<a id="Sasena2002">Sasena2002</a>\]: Sasena M., Papalambros P., Goovaerts P., 2002.
+//! Global optimization of problems with disconnected feasible regions
+//! via surrogate modeling.” AIAA Paper.
 //!
 //! smtorg. (2018). Surrogate modeling toolbox. In [GitHub repository](https://github.com/SMTOrg/smt)
 //!

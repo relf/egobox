@@ -28,17 +28,21 @@ impl InfillCriterion for ExpectedImprovement {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                let pred = p[0];
-                let sigma = s[[0, 0]].sqrt();
-                let args0 = (fmin - pred) / sigma;
-                let args1 = (fmin - pred) * norm_cdf(args0);
-                let args2 = sigma * norm_pdf(args0);
-                args1 + args2
+                if s[[0, 0]].abs() < 10000. * f64::EPSILON {
+                    0.0
+                } else {
+                    let pred = p[0];
+                    let sigma = s[[0, 0]].sqrt();
+                    let args0 = (fmin - pred) / sigma;
+                    let args1 = (fmin - pred) * norm_cdf(args0);
+                    let args2 = sigma * norm_pdf(args0);
+                    args1 + args2
+                }
             } else {
-                -f64::INFINITY
+                0.0
             }
         } else {
-            -f64::INFINITY
+            0.0
         }
     }
 
@@ -55,7 +59,7 @@ impl InfillCriterion for ExpectedImprovement {
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
                 let sigma = s[[0, 0]].sqrt();
-                if sigma.abs() < 1e-12 {
+                if sigma.abs() < 10000. * f64::EPSILON {
                     Array1::zeros(pt.len())
                 } else {
                     let pred = p[0];
@@ -97,3 +101,62 @@ impl InfillCriterion for ExpectedImprovement {
 
 /// Expected Improvement infill criterion
 pub const EI: ExpectedImprovement = ExpectedImprovement {};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        gpmix::mixint::{MixintContext, MoeBuilder},
+        types::*,
+    };
+    use approx::assert_abs_diff_eq;
+    // use egobox_moe::GpSurrogate;
+    use finitediff::FiniteDiff;
+    use linfa::Dataset;
+    use ndarray::array;
+    // use ndarray_npy::write_npy;
+
+    #[test]
+    fn test_ei_gradients() {
+        let xtypes = vec![XType::Cont(0., 25.)];
+
+        let mixi = MixintContext::new(&xtypes);
+
+        let surrogate_builder = MoeBuilder::new();
+        let xt = array![[0.], [2.], [5.], [10.], [25.]];
+        let yt = array![0., 0.2, -0.3, 0.5, -1.];
+        let ds = Dataset::new(xt, yt);
+        let mixi_moe = mixi
+            .create_surrogate(&surrogate_builder, &ds)
+            .expect("Mixint surrogate creation");
+
+        let x = vec![3.];
+        let grad = EI.grad(&x, &mixi_moe, 0., None);
+
+        let f = |x: &Vec<f64>| -> f64 { EI.value(x, &mixi_moe, 0., None) };
+        let grad_central = x.central_diff(&f);
+        assert_abs_diff_eq!(grad[0], grad_central[0], epsilon = 1e-6);
+
+        // let cx = Array1::linspace(0., 25., 100);
+        // write_npy("ei_cx.npy", &cx).expect("save x");
+
+        // let mut cy = Array1::zeros(cx.len());
+        // Zip::from(&mut cy).and(&cx).for_each(|yi, xi| {
+        //     *yi = EI.value(&[*xi], &mixi_moe, 0., None);
+        // });
+        // write_npy("ei_cy.npy", &cy).expect("save y");
+
+        // let mut cdy = Array1::zeros(cx.len());
+        // Zip::from(&mut cdy).and(&cx).for_each(|yi, xi| {
+        //     *yi = EI.grad(&[*xi], &mixi_moe, 0., None)[0];
+        // });
+        // write_npy("ei_cdy.npy", &cdy).expect("save y");
+
+        // let cytrue = mixi_moe
+        //     .predict(&cx.insert_axis(Axis(1)).view())
+        //     .expect("prediction");
+        // write_npy("ei_cytrue.npy", &cytrue).expect("save cstr");
+
+        // println!("thetas = {}", mixi_moe);
+    }
+}

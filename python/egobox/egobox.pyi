@@ -137,6 +137,18 @@ class Egor:
         This function finds the minimum of a given function `fun`
         
         # Parameters
+
+            fun: array[n, nx]) -> array[n, ny]
+                the function to be minimized
+                fun(x) = [obj(x), cstr_1(x), ... cstr_k(x)] where
+                    obj is the objective function [n, nx] -> [n, 1]
+                    cstr_i is the ith constraint function [n, nx] -> [n, 1]
+                    an k the number of constraints (n_cstr)
+                    hence ny = 1 (obj) + k (cstrs)
+                cstr functions are expected be negative (<=0) at the optimum.
+                This constraints will be approximated using surrogates, so
+                if constraints are cheap to evaluate better to pass them through run(fcstrs=[...])
+
             max_iters:
                 the iteration budget, number of fun calls is n_doe + q_points * max_iters.
 

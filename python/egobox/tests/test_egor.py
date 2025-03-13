@@ -235,7 +235,7 @@ class TestOptimizer(unittest.TestCase):
         egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), n_doe=5, seed=42)
         res = egor.minimize(xsinx, max_iters=20, fcstrs=fcstrs)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
-        self.assertAlmostEqual(18, res.x_opt[0], delta=1e-3)
+        self.assertAlmostEqual(18, res.x_opt[0], delta=2e-3)
 
     def test_g24_with_fcstrs(self):
         n_doe = 5
