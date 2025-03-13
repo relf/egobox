@@ -19,25 +19,9 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: cargo-release Cache
-        id: cargo_release_cache
-        uses: actions/cache@v4
+      - name: Publish crates
+        uses: katyo/publish-crates@v2
         with:
-          path: ~/.cargo/bin/cargo-release
-          key: ${{ runner.os }}-cargo-release
-
-      - run: cargo install cargo-release
-        if: steps.cargo_release_cache.outputs.cache-hit != 'true'
-
-      - name: cargo login
-        run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: "cargo release publish"
-        run: |-
-          cargo release \
-            publish \
-            --workspace \
-            --all-features \
-            --no-confirm
-
+          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          ignore-unpublished-changes: true
 
