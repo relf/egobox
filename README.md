@@ -187,7 +187,7 @@ Additionally, you may consider adding a star to the repository. This positive fe
 
 ## References
 
-Bartoli, N., Lefebvre, T., Dubreuil, S., Olivanti, R., Priem, R., Bons, N., Martins, J. R. R. A., & Morlier, J. (2019). 
+Bartoli, N., Lefebvre, T., Dubreuil, S., Olivanti, R., Priem, R., Bons, N., Martins, J. R. R. A., & Morlier, J. (2019).
 [Adaptive modeling strategy for constrained global optimization with application to aerodynamic wing design](https://doi.org/10.1016/j.ast.2019.03.041).
 Aerospace Science and Technology, 90, 85–102.
 
