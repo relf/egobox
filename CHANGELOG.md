@@ -10,7 +10,7 @@
 
 ## Version 0.26.0 - 14/02/2025
 
-* `ego`: Manage constraints as functions by @relf in https://github.com/relf/egobox/pull/242
+* `ego`: Manage constraints as functions by @relf in <https://github.com/relf/egobox/pull/242>
 
 ## Version 0.25.0 - 19/12/2024
 

@@ -188,22 +188,22 @@ Additionally, you may consider adding a star to the repository. This positive fe
 ## References
 
 Bartoli, N., Lefebvre, T., Dubreuil, S., Olivanti, R., Priem, R., Bons, N., Martins, J. R. R. A., & Morlier, J. (2019). 
-[Adaptive modeling strategy for constrained global optimization with application to aerodynamic wing design](https://doi.org/10.1016/j.ast.2019.03.041). 
+[Adaptive modeling strategy for constrained global optimization with application to aerodynamic wing design](https://doi.org/10.1016/j.ast.2019.03.041).
 Aerospace Science and Technology, 90, 85–102.
 
-Bouhlel, M. A., Bartoli, N., Otsmane, A., & Morlier, J. (2016). 
+Bouhlel, M. A., Bartoli, N., Otsmane, A., & Morlier, J. (2016).
 [Improving kriging surrogates of high-dimensional design models by partial least squares dimension reduction](https://doi.org/10.1007/s00158-015-1395-9).
 Structural and Multidisciplinary Optimization, 53(5), 935–952.
 
 Bouhlel, M. A., Hwang, J. T., Bartoli, N., Lafage, R., Morlier, J., & Martins, J. R. R. A.
-(2019). [A python surrogate modeling framework with derivatives](https://doi.org/10.1016/j.advengsoft.2019.03.005). 
+(2019). [A python surrogate modeling framework with derivatives](https://doi.org/10.1016/j.advengsoft.2019.03.005).
 Advances in Engineering Software, 102662.
 
-Dubreuil, S., Bartoli, N., Gogu, C., & Lefebvre, T. (2020). 
-[Towards an efficient global multi-disciplinary design optimization algorithm](https://doi.org/10.1007/s00158-020-02514-6) 
+Dubreuil, S., Bartoli, N., Gogu, C., & Lefebvre, T. (2020).
+[Towards an efficient global multi-disciplinary design optimization algorithm](https://doi.org/10.1007/s00158-020-02514-6)
 Structural and Multidisciplinary Optimization, 62(4), 1739–1765.
 
-Jones, D. R., Schonlau, M., & Welch, W. J. (1998). 
+Jones, D. R., Schonlau, M., & Welch, W. J. (1998).
 [Efficient global optimization of expensive black-box functions. Journal of Global Optimization](https://www.researchgate.net/publication/235709802_Efficient_Global_Optimization_of_Expensive_Black-Box_Functions), 13(4), 455–492.
 
 Diouane, Youssef, et al. [TREGO: a trust-region framework for efficient global optimization](https://arxiv.org/pdf/2101.06808).
@@ -214,7 +214,7 @@ Priem, Rémy, Nathalie Bartoli, and Youssef Diouane.
 AIAA aviation 2019 forum. 2019.
 
 Sasena M., Papalambros P., Goovaerts P., 2002.
-[Global optimization of problems with disconnected feasible regions via surrogate modeling](https://deepblue.lib.umich.edu/handle/2027.42/77089). 
+[Global optimization of problems with disconnected feasible regions via surrogate modeling](https://deepblue.lib.umich.edu/handle/2027.42/77089).
 AIAA Paper.
 
 Ginsbourger, D., Le Riche, R., & Carraro, L. (2010).
