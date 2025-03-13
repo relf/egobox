@@ -48,6 +48,7 @@ print(f"Optimization f={res.y_opt} at {res.x_opt}")  # Optimization f=[-15.12510
 
 ```python
 import numpy as np
+import matplotlib.pyplot as plt
 import egobox as egx
 
 # Training
@@ -56,8 +57,13 @@ ytrain = np.array([0.0, 1.0, 1.5, 0.9, 1.0])
 gpx = egx.Gpx.builder().fit(xtrain, ytrain)
 
 # Prediction
-xtest = np.linspace(0, 4, 20).reshape((-1, 1))
+xtest = np.linspace(0, 4, 100).reshape((-1, 1))
 ytest = gpx.predict(xtest)
+
+# Plot
+plt.plot(xtest, ytest)
+plt.plot(xtrain, ytrain, "o")
+plt.show()
 ```
 
 See the [tutorial notebooks](https://github.com/relf/egobox/tree/master/doc/README.md) and [examples folder](https://github.com/relf/egobox/tree/d9db0248199558f23d966796737d7ffa8f5de589/python/egobox/examples) for more information on the usage of the optimizer and mixture of Gaussian processes surrogate model.
@@ -79,10 +85,10 @@ Depending on the sub-packages you want to use, you have to add following declara
 
 ```text
 [dependencies]
-egobox-doe = { version = "0.26" }
-egobox-gp  = { version = "0.26" }
-egobox-moe = { version = "0.26" }
-egobox-ego = { version = "0.26" }
+egobox-doe = { version = "0.27" }
+egobox-gp  = { version = "0.27" }
+egobox-moe = { version = "0.27" }
+egobox-ego = { version = "0.27" }
 ```
 
 ### Features
@@ -96,7 +102,7 @@ The table below presents the various features available depending on the subcrat
 | blas         |      | ✔️    | ✔️    | ✔️    |
 | nlopt        |      | ✔️    |      | ✔️    |
 
-(*) required for mixed-variable gaussian process
+(*) for persistent mixture of gaussian processes with discrete variable available in `ego`
 
 #### serializable
 
@@ -146,7 +152,7 @@ Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you coul
 
 ```text
 [dependencies]
-egobox-gp = { version = "0.26", features = ["blas", "linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.27", features = ["blas", "linfa/intel-mkl-static"] }
 ```
 
 or you could run the `gp` example as follows:
@@ -181,43 +187,43 @@ Additionally, you may consider adding a star to the repository. This positive fe
 
 ## References
 
-Bartoli, N., Lefebvre, T., Dubreuil, S., Olivanti, R., Priem, R., Bons, N., Martins, J. R. R. A.,
-& Morlier, J. (2019). Adaptive modeling strategy for constrained global optimization with
-application to aerodynamic wing design. Aerospace Science and Technology, 90, 85–102.
-<https://doi.org/10.1016/j.ast.2019.03.041>
+Bartoli, N., Lefebvre, T., Dubreuil, S., Olivanti, R., Priem, R., Bons, N., Martins, J. R. R. A., & Morlier, J. (2019). 
+[Adaptive modeling strategy for constrained global optimization with application to aerodynamic wing design](https://doi.org/10.1016/j.ast.2019.03.041). 
+Aerospace Science and Technology, 90, 85–102.
 
-Bouhlel, M. A., Bartoli, N., Otsmane, A., & Morlier, J. (2016). Improving kriging surrogates
-of high-dimensional design models by partial least squares dimension reduction.
-Structural and Multidisciplinary Optimization, 53(5), 935–952. <https://doi.org/10.1007/s00158-015-1395-9>
+Bouhlel, M. A., Bartoli, N., Otsmane, A., & Morlier, J. (2016). 
+[Improving kriging surrogates of high-dimensional design models by partial least squares dimension reduction](https://doi.org/10.1007/s00158-015-1395-9).
+Structural and Multidisciplinary Optimization, 53(5), 935–952.
 
 Bouhlel, M. A., Hwang, J. T., Bartoli, N., Lafage, R., Morlier, J., & Martins, J. R. R. A.
-(2019). A python surrogate modeling framework with derivatives. Advances in Engineering
-Software, 102662. <https://doi.org/10.1016/j.advengsoft.2019.03.005>
+(2019). [A python surrogate modeling framework with derivatives](https://doi.org/10.1016/j.advengsoft.2019.03.005). 
+Advances in Engineering Software, 102662.
 
-Dubreuil, S., Bartoli, N., Gogu, C., & Lefebvre, T. (2020). Towards an efficient global multi-
-disciplinary design optimization algorithm. Structural and Multidisciplinary Optimization,
-62(4), 1739–1765. <https://doi.org/10.1007/s00158-020-02514-6>
+Dubreuil, S., Bartoli, N., Gogu, C., & Lefebvre, T. (2020). 
+[Towards an efficient global multi-disciplinary design optimization algorithm](https://doi.org/10.1007/s00158-020-02514-6) 
+Structural and Multidisciplinary Optimization, 62(4), 1739–1765.
 
-Jones, D. R., Schonlau, M., & Welch, W. J. (1998). Efficient global optimization of expensive
-black-box functions. Journal of Global Optimization, 13(4), 455–492. <https://www.researchgate.net/publication/235709802_Efficient_Global_Optimization_of_Expensive_Black-Box_Functions>
+Jones, D. R., Schonlau, M., & Welch, W. J. (1998). 
+[Efficient global optimization of expensive black-box functions. Journal of Global Optimization](https://www.researchgate.net/publication/235709802_Efficient_Global_Optimization_of_Expensive_Black-Box_Functions), 13(4), 455–492.
 
-Diouane, Youssef, et al. "TREGO: a trust-region framework for efficient global optimization."
-Journal of Global Optimization 86.1 (2023): 1-23. <https://arxiv.org/pdf/2101.06808>
+Diouane, Youssef, et al. [TREGO: a trust-region framework for efficient global optimization](https://arxiv.org/pdf/2101.06808).
+Journal of Global Optimization 86.1 (2023): 1-23.
 
 Priem, Rémy, Nathalie Bartoli, and Youssef Diouane.
-On the use of upper trust bounds in constrained Bayesian optimization infill criteria.
-AIAA aviation 2019 forum. 2019. <https://hal.science/hal-02182492v1/file/Priem_24049.pdf>
+[On the use of upper trust bounds in constrained Bayesian optimization infill criteria](https://hal.science/hal-02182492v1/file/Priem_24049.pdf).
+AIAA aviation 2019 forum. 2019.
 
 Sasena M., Papalambros P., Goovaerts P., 2002.
-Global optimization of problems with disconnected feasible regions via surrogate modeling.” AIAA Paper.
+[Global optimization of problems with disconnected feasible regions via surrogate modeling](https://deepblue.lib.umich.edu/handle/2027.42/77089). 
+AIAA Paper.
 
 Ginsbourger, D., Le Riche, R., & Carraro, L. (2010).
-Kriging is well-suited to parallelize optimization.
+[Kriging is well-suited to parallelize optimization](https://www.researchgate.net/publication/226716412_Kriging_Is_Well-Suited_to_Parallelize_Optimization)
 
 E.C. Garrido-Merchan and D. Hernandez-Lobato.
-Dealing with categorical and integer-valued variables in Bayesian Optimization with Gaussian processes.
+[Dealing with categorical and integer-valued variables in Bayesian Optimization with Gaussian processes](https://arxiv.org/pdf/1805.03463).
 
-smtorg. (2018). Surrogate modeling toolbox. In GitHub repository. GitHub. <https://github.com/SMTOrg/smt>
+smtorg. (2018). [Surrogate modeling toolbox](https://github.com/SMTOrg/smt). GitHub.
 
 ## License
 
