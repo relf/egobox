@@ -126,7 +126,7 @@ where
         if make_clustering
         /* init || recluster */
         {
-            info!("{} Clustering and training...", model_name);
+            info!("{} clustering and training...", model_name);
             let model = builder
                 .train(xt.view(), yt.view())
                 .expect("GP training failure");
@@ -448,7 +448,7 @@ where
                     };
                     let make_clustering = (init && i == 0) || recluster;
                     let optimize_theta =
-                        (iter as usize * self.config.q_points) % (self.config.n_optmod) == 0;
+                        (iter as usize * self.config.q_points + i) % (self.config.n_optmod) == 0;
                     self.make_clustered_surrogate(
                         &name,
                         &xt,
