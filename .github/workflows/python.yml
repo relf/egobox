@@ -39,6 +39,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
+          maturin-version: 1.8.2
           working-directory: python
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
@@ -71,6 +72,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
+          maturin-version: 1.8.2
           working-directory: python
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter

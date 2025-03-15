@@ -30,6 +30,7 @@ print(f"Optimization f={res.y_opt} at {res.x_opt}")  # Optimization f=[-15.12510
 
 ```python
 import numpy as np
+import matplotlib.pyplot as plt
 import egobox as egx
 
 # Training
@@ -38,8 +39,13 @@ ytrain = np.array([0.0, 1.0, 1.5, 0.9, 1.0])
 gpx = egx.Gpx.builder().fit(xtrain, ytrain)
 
 # Prediction
-xtest = np.linspace(0, 4, 20).reshape((-1, 1))
+xtest = np.linspace(0, 4, 100).reshape((-1, 1))
 ytest = gpx.predict(xtest)
+
+# Plot
+plt.plot(xtest, ytest)
+plt.plot(xtrain, ytrain, "o")
+plt.show()
 ```
 
 See the [tutorial notebooks](https://github.com/relf/egobox/tree/master/doc/README.md) and [examples folder](https://github.com/relf/egobox/tree/d9db0248199558f23d966796737d7ffa8f5de589/python/egobox/examples) for more information on the usage of the optimizer and mixture of Gaussian processes surrogate model.
