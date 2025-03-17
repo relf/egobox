@@ -145,7 +145,7 @@ where
                 let inits = theta_inits
                     .unwrap()
                     .outer_iter()
-                    .map(|init| ThetaTuning::Optimized {
+                    .map(|init| ThetaTuning::Full {
                         init: init.to_vec(),
                         bounds: ThetaTuning::default().bounds().unwrap().to_vec(),
                     })

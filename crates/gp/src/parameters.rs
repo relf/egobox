@@ -13,12 +13,18 @@ pub enum ThetaTuning<F: Float> {
     /// Constant parameter (ie given not estimated)
     Fixed(Vec<F>),
     /// Parameter is optimized between given bounds (lower, upper) starting from the inital guess
-    Optimized { init: Vec<F>, bounds: Vec<(F, F)> },
+    Full { init: Vec<F>, bounds: Vec<(F, F)> },
+    // Parameter is partially optimized
+    // Partial {
+    //     init: Vec<F>,
+    //     active: Vec<bool>,
+    //     bounds: Vec<(F, F)>,
+    // },
 }
 
 impl<F: Float> Default for ThetaTuning<F> {
     fn default() -> Self {
-        ThetaTuning::Optimized {
+        ThetaTuning::Full {
             init: vec![F::cast(ThetaTuning::<F>::DEFAULT_INIT)],
             bounds: vec![(
                 F::cast(ThetaTuning::<F>::DEFAULT_BOUNDS.0),
@@ -34,14 +40,14 @@ impl<F: Float> ThetaTuning<F> {
 
     pub fn init(&self) -> &Vec<F> {
         match self {
-            ThetaTuning::Optimized { init, bounds: _ } => init,
+            ThetaTuning::Full { init, bounds: _ } => init,
             ThetaTuning::Fixed(init) => init,
         }
     }
 
     pub fn bounds(&self) -> Option<&Vec<(F, F)>> {
         match self {
-            ThetaTuning::Optimized { init: _, bounds } => Some(bounds),
+            ThetaTuning::Full { init: _, bounds } => Some(bounds),
             ThetaTuning::Fixed(_) => None,
         }
     }
@@ -166,7 +172,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     /// When theta is fixed, this set theta constant value.
     pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.theta_tuning = match self.0.theta_tuning {
-            ThetaTuning::Optimized { init: _, bounds } => ThetaTuning::Optimized {
+            ThetaTuning::Full { init: _, bounds } => ThetaTuning::Full {
                 init: theta_init,
                 bounds,
             },
@@ -180,7 +186,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     /// This function is no-op when theta tuning is fixed
     pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
         self.0.theta_tuning = match self.0.theta_tuning {
-            ThetaTuning::Optimized { init, bounds: _ } => ThetaTuning::Optimized {
+            ThetaTuning::Full { init, bounds: _ } => ThetaTuning::Full {
                 init,
                 bounds: theta_bounds,
             },

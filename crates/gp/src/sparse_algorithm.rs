@@ -463,7 +463,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         };
 
         let (init, bounds) = match self.theta_tuning() {
-            ThetaTuning::Optimized { init, bounds } => (init.clone(), bounds.clone()),
+            ThetaTuning::Full { init, bounds } => (init.clone(), bounds.clone()),
             ThetaTuning::Fixed(init) => (
                 init.clone(),
                 init.iter().map(|v| (*v, *v)).collect::<Vec<_>>(),

@@ -786,7 +786,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 // Easy path no optimization
                 Array1::from_vec(init.to_vec())
             }
-            ThetaTuning::Optimized { init, bounds } => {
+            ThetaTuning::Full { init, bounds } => {
                 // Initial guess for theta
                 let theta0_dim = init.len();
                 let theta0 = if theta0_dim == 1 {

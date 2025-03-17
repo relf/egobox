@@ -179,13 +179,13 @@ impl SparseGpMix {
 
         let mut theta_tuning = ThetaTuning::default();
         if let Some(init) = self.theta_init.as_ref() {
-            theta_tuning = ThetaTuning::Optimized {
+            theta_tuning = ThetaTuning::Full {
                 init: init.to_vec(),
                 bounds: vec![ThetaTuning::<f64>::DEFAULT_BOUNDS],
             }
         }
         if let Some(bounds) = self.theta_bounds.as_ref() {
-            theta_tuning = ThetaTuning::Optimized {
+            theta_tuning = ThetaTuning::Full {
                 init: theta_tuning.init().to_vec(),
                 bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
             }

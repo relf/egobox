@@ -175,7 +175,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     /// When theta is fixed, this set theta constant value.
     pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
         self.0.gp_params.theta_tuning = match self.0.gp_params.theta_tuning {
-            ThetaTuning::Optimized { init: _, bounds } => ThetaTuning::Optimized {
+            ThetaTuning::Full { init: _, bounds } => ThetaTuning::Full {
                 init: theta_init,
                 bounds,
             },
@@ -189,7 +189,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     /// This function is no-op when theta tuning is fixed
     pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
         self.0.gp_params.theta_tuning = match self.0.gp_params.theta_tuning {
-            ThetaTuning::Optimized { init, bounds: _ } => ThetaTuning::Optimized {
+            ThetaTuning::Full { init, bounds: _ } => ThetaTuning::Full {
                 init,
                 bounds: theta_bounds,
             },
