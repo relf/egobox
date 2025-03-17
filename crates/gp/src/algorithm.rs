@@ -862,6 +862,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 debug!("elapsed optim = {:?}", now.elapsed().as_millis());
                 opt_params.0.mapv(|v| F::cast(base.powf(v)))
             }
+            ThetaTuning::Partial {
+                init,
+                active,
+                bounds,
+            } => {
+                todo!()
+            }
         };
         let rxx = self.corr().value(&x_distances.d, &opt_params, &w_star);
         let (lkh, inner_params) =

@@ -179,6 +179,14 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
                 init: theta_init,
                 bounds,
             },
+            ThetaTuning::Partial {
+                init: _,
+                active: _,
+                bounds,
+            } => ThetaTuning::Full {
+                init: theta_init,
+                bounds,
+            },
             ThetaTuning::Fixed(_) => ThetaTuning::Fixed(theta_init),
         };
         self
@@ -190,6 +198,14 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
         self.0.gp_params.theta_tuning = match self.0.gp_params.theta_tuning {
             ThetaTuning::Full { init, bounds: _ } => ThetaTuning::Full {
+                init,
+                bounds: theta_bounds,
+            },
+            ThetaTuning::Partial {
+                init,
+                active: _,
+                bounds: _,
+            } => ThetaTuning::Full {
                 init,
                 bounds: theta_bounds,
             },

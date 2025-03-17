@@ -14,12 +14,12 @@ pub enum ThetaTuning<F: Float> {
     Fixed(Vec<F>),
     /// Parameter is optimized between given bounds (lower, upper) starting from the inital guess
     Full { init: Vec<F>, bounds: Vec<(F, F)> },
-    // Parameter is partially optimized
-    // Partial {
-    //     init: Vec<F>,
-    //     active: Vec<bool>,
-    //     bounds: Vec<(F, F)>,
-    // },
+    /// Parameter is partially optimized on specified active components
+    Partial {
+        init: Vec<F>,
+        active: Vec<bool>,
+        bounds: Vec<(F, F)>,
+    },
 }
 
 impl<F: Float> Default for ThetaTuning<F> {
@@ -41,6 +41,11 @@ impl<F: Float> ThetaTuning<F> {
     pub fn init(&self) -> &Vec<F> {
         match self {
             ThetaTuning::Full { init, bounds: _ } => init,
+            ThetaTuning::Partial {
+                init,
+                active: _,
+                bounds: _,
+            } => init,
             ThetaTuning::Fixed(init) => init,
         }
     }
@@ -48,6 +53,11 @@ impl<F: Float> ThetaTuning<F> {
     pub fn bounds(&self) -> Option<&Vec<(F, F)>> {
         match self {
             ThetaTuning::Full { init: _, bounds } => Some(bounds),
+            ThetaTuning::Partial {
+                init: _,
+                active: _,
+                bounds,
+            } => Some(bounds),
             ThetaTuning::Fixed(_) => None,
         }
     }
@@ -176,6 +186,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
                 init: theta_init,
                 bounds,
             },
+            ThetaTuning::Partial {
+                init: _,
+                active: _,
+                bounds,
+            } => ThetaTuning::Full {
+                init: theta_init,
+                bounds,
+            },
             ThetaTuning::Fixed(_) => ThetaTuning::Fixed(theta_init),
         };
         self
@@ -187,6 +205,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
         self.0.theta_tuning = match self.0.theta_tuning {
             ThetaTuning::Full { init, bounds: _ } => ThetaTuning::Full {
+                init,
+                bounds: theta_bounds,
+            },
+            ThetaTuning::Partial {
+                init,
+                active: _,
+                bounds: _,
+            } => ThetaTuning::Full {
                 init,
                 bounds: theta_bounds,
             },
