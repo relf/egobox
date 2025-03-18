@@ -17,7 +17,7 @@ use egobox_moe::{
 };
 use linfa::{traits::Fit, Dataset};
 use log::error;
-use ndarray::{Array1, Array2, Axis, Ix1, Ix2, Zip};
+use ndarray::{array, Array1, Array2, Axis, Ix1, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
@@ -180,13 +180,13 @@ impl SparseGpMix {
         let mut theta_tuning = ThetaTuning::default();
         if let Some(init) = self.theta_init.as_ref() {
             theta_tuning = ThetaTuning::Full {
-                init: init.to_vec(),
-                bounds: vec![ThetaTuning::<f64>::DEFAULT_BOUNDS],
+                init: Array1::from_vec(init.to_vec()),
+                bounds: array![ThetaTuning::<f64>::DEFAULT_BOUNDS],
             }
         }
         if let Some(bounds) = self.theta_bounds.as_ref() {
             theta_tuning = ThetaTuning::Full {
-                init: theta_tuning.init().to_vec(),
+                init: theta_tuning.init().to_owned(),
                 bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
             }
         }

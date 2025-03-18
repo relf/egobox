@@ -468,11 +468,11 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                 init,
                 active: _,
                 bounds,
-            } => (init.clone(), bounds.clone()),
-            ThetaTuning::Fixed(init) => (
-                init.clone(),
-                init.iter().map(|v| (*v, *v)).collect::<Vec<_>>(),
-            ),
+            } => {
+                log::warn!("Partial hyperparameter optimization not implemented in SparseGp, full optimization used");
+                (init.clone(), bounds.clone())
+            }
+            ThetaTuning::Fixed(init) => (init.clone(), init.iter().map(|v| (*v, *v)).collect()),
         };
 
         // Initial guess for theta
@@ -844,7 +844,7 @@ mod tests {
     use super::*;
 
     use approx::assert_abs_diff_eq;
-    use ndarray::{concatenate, Array};
+    use ndarray::{array, concatenate, Array};
     // use ndarray_npy::{read_npy, write_npy};
     use ndarray_npy::write_npy;
     use ndarray_rand::rand::SeedableRng;
@@ -1021,7 +1021,7 @@ mod tests {
         )
         .sparse_method(SparseMethod::Vfe)
         //.sparse_method(SparseMethod::Fitc)
-        .theta_init(vec![0.1])
+        .theta_init(array![0.1])
         .noise_variance(ParamTuning::Optimized {
             init: 0.02,
             bounds: (1e-3, 1.),

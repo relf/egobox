@@ -753,7 +753,41 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             };
         }
 
-        let xtrain = NormalizedData::new(x);
+        let dim = if let Some(n_components) = self.kpls_dim() {
+            *n_components
+        } else {
+            x.ncols()
+        };
+
+        let (x, y, active, init) = match self.theta_tuning() {
+            ThetaTuning::Fixed(init) | ThetaTuning::Full { init, bounds: _ } => (
+                x.to_owned(),
+                y.to_owned(),
+                (0..dim).collect::<Vec<_>>(),
+                init,
+            ),
+            ThetaTuning::Partial {
+                init,
+                bounds: _,
+                active,
+            } => (
+                x.select(Axis(1), active),
+                y.select(Axis(1), active),
+                active.to_vec(),
+                init,
+            ),
+        };
+        // Initial guess for theta
+        let theta0_dim = init.len();
+        let theta0 = if theta0_dim == 1 {
+            Array1::from_elem(dim, init[0])
+        } else if theta0_dim == dim {
+            init.to_owned()
+        } else {
+            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+        };
+
+        let xtrain = NormalizedData::new(&x);
         let ytrain = NormalizedData::new(&y);
 
         let mut w_star = Array2::eye(x.ncols());
@@ -784,26 +818,21 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let opt_params = match self.theta_tuning() {
             ThetaTuning::Fixed(init) => {
                 // Easy path no optimization
-                Array1::from_vec(init.to_vec())
+                init.to_owned()
             }
-            ThetaTuning::Full { init, bounds } => {
-                // Initial guess for theta
-                let theta0_dim = init.len();
-                let theta0 = if theta0_dim == 1 {
-                    Array1::from_elem(w_star.ncols(), init[0])
-                } else if theta0_dim == w_star.ncols() {
-                    Array::from_vec(init.to_vec())
-                } else {
-                    panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
-                };
-
+            ThetaTuning::Full { init: _, bounds }
+            | ThetaTuning::Partial {
+                init: _,
+                bounds,
+                active: _,
+            } => {
                 let base: f64 = 10.;
                 let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-                    let theta = Array1::from_shape_vec(
-                        (x.len(),),
-                        x.iter().map(|v| base.powf(*v)).collect(),
-                    )
-                    .unwrap();
+                    let mut theta = theta0.to_owned();
+                    let xarr = x.iter().map(|v| base.powf(*v)).collect::<Vec<_>>();
+                    println!("xarr={:?}, active={:?}, theta={}", xarr, active, theta);
+                    std::iter::zip(active.clone(), xarr).for_each(|(i, xi)| theta[i] = F::cast(xi));
+
                     for v in theta.iter() {
                         // check theta as optimizer may return nan values
                         if v.is_nan() {
@@ -811,7 +840,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                             return f64::INFINITY;
                         }
                     }
-                    let theta = theta.mapv(F::cast);
                     let rxx = self.corr().value(&x_distances.d, &theta, &w_star);
                     match reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget()) {
                         Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
@@ -861,13 +889,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                     );
                 debug!("elapsed optim = {:?}", now.elapsed().as_millis());
                 opt_params.0.mapv(|v| F::cast(base.powf(v)))
-            }
-            ThetaTuning::Partial {
-                init,
-                active,
-                bounds,
-            } => {
-                todo!()
             }
         };
         let rxx = self.corr().value(&x_distances.d, &opt_params, &w_star);
@@ -1133,7 +1154,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
-        .theta_init(vec![0.1])
+        .theta_init(array![0.1])
         .kpls_dim(Some(1))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fit error");
@@ -1156,7 +1177,7 @@ mod tests {
                         [<$regr Mean>]::default(),
                         [<$corr Corr>]::default(),
                     )
-                    .theta_init(vec![0.1])
+                    .theta_init(array![0.1])
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fit error");
                     let yvals = gp
@@ -1553,14 +1574,14 @@ mod tests {
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fit error");
         let default = ThetaTuning::default();
-        assert_abs_diff_ne!(*gp.theta().to_vec(), default.init());
-        let expected = gp.theta().to_vec();
+        assert_abs_diff_ne!(*gp.theta(), default.init());
+        let expected = gp.theta();
 
         let gp = Kriging::params()
             .theta_tuning(ThetaTuning::Fixed(expected.clone()))
             .fit(&Dataset::new(xt, yt))
             .expect("GP fit error");
-        assert_abs_diff_eq!(*gp.theta().to_vec(), expected);
+        assert_abs_diff_eq!(*gp.theta(), expected);
     }
 
     fn x2sinx(x: &Array2<f64>) -> Array1<f64> {
@@ -1666,7 +1687,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
-        .theta_tuning(ThetaTuning::Fixed(vec![0.0437386, 0.00697978]))
+        .theta_tuning(ThetaTuning::Fixed(array![0.0437386, 0.00697978]))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
 
