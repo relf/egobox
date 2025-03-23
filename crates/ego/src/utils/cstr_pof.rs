@@ -75,7 +75,7 @@ pub fn pofs_grad(
         Array1::zeros(x.len())
     } else {
         zip(cstr_models, cstr_tols).enumerate().fold(
-            Array1::ones(x.len()),
+            Array1::zeros(x.len()),
             |acc, (i, (cstr_model, cstr_tol))| {
                 let pof_grad_i = pof_grad(x, &**cstr_model, *cstr_tol);
                 let pof_others_product = cstr_models
@@ -85,7 +85,7 @@ pub fn pofs_grad(
                     .fold(1., |acc_j, (_, cstr_model_j)| {
                         acc_j * pof(x, &**cstr_model_j, *cstr_tol)
                     });
-                acc * (pof_grad_i * pof_others_product)
+                acc + (pof_grad_i * pof_others_product)
             },
         )
     }
@@ -149,5 +149,46 @@ mod tests {
         // write_npy("cei_cytrue.npy", &cytrue).expect("save cstr");
 
         // println!("thetas = {}", mixi_moe);
+    }
+
+    #[test]
+    fn test_pofs_grad() {
+        let xtypes = vec![XType::Cont(0., 25.)];
+
+        let mixi = MixintContext::new(&xtypes);
+
+        let surrogate_builder = MoeBuilder::new();
+        let xt = array![[0.], [2.], [5.], [10.], [25.]];
+        let yt1 = array![0., 0.2, -0.3, 0.5, -1.];
+        let yt2 = array![1., -0.5, 0.3, -0.2, 0.8];
+        // let yt2 = array![0., 0.2, -0.3, 0.5, -1.];
+        let ds1 = Dataset::new(xt.clone(), yt1);
+        let ds2 = Dataset::new(xt, yt2);
+        let mixi_moe1 = mixi
+            .create_surrogate(&surrogate_builder, &ds1)
+            .expect("Mixint surrogate creation");
+        let mixi_moe2 = mixi
+            .create_surrogate(&surrogate_builder, &ds2)
+            .expect("Mixint surrogate creation");
+
+        let cstr_models: Vec<Box<dyn MixtureGpSurrogate>> =
+            vec![Box::new(mixi_moe1), Box::new(mixi_moe2)];
+        let cstr_tols = vec![0., 0.];
+
+        let x = vec![0.3];
+        let grad = pofs_grad(&x, &cstr_models, &cstr_tols);
+
+        let f = |x: &Vec<f64>| -> f64 { pofs(x, &cstr_models, &cstr_tols) };
+        let grad_central = x.central_diff(&f);
+
+        let term1 =
+            pof_grad(&x, &*cstr_models[0], cstr_tols[0]) * pof(&x, &*cstr_models[1], cstr_tols[1]);
+        let term2 =
+            pof_grad(&x, &*cstr_models[1], cstr_tols[1]) * pof(&x, &*cstr_models[0], cstr_tols[0]);
+        let expected = term1 + term2;
+        println!("expected = {:?}", expected);
+        println!("grad = {:?}", grad);
+        println!("grad_central = {:?}", grad_central);
+        assert_abs_diff_eq!(grad[0], grad_central[0], epsilon = 1e-6);
     }
 }
