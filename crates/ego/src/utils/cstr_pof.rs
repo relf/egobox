@@ -74,18 +74,23 @@ pub fn pofs_grad(
     if cstr_models.is_empty() {
         Array1::zeros(x.len())
     } else {
-        zip(cstr_models, cstr_tols).enumerate().fold(
+        let pof_vals = zip(cstr_models, cstr_tols)
+            .map(|(cstr_model, cstr_tol)| pof(x, &**cstr_model, *cstr_tol))
+            .collect::<Vec<_>>();
+
+        let pof_grads = zip(cstr_models, cstr_tols)
+            .map(|(cstr_model, cstr_tol)| pof_grad(x, &**cstr_model, *cstr_tol))
+            .collect::<Vec<_>>();
+
+        zip(pof_vals.clone(), pof_grads).enumerate().fold(
             Array1::zeros(x.len()),
-            |acc, (i, (cstr_model, cstr_tol))| {
-                let pof_grad_i = pof_grad(x, &**cstr_model, *cstr_tol);
-                let pof_others_product = cstr_models
+            |acc, (i, (_, pof_grad_i))| {
+                let pof_others_product = pof_vals
                     .iter()
                     .enumerate()
                     .filter(|(j, _)| *j != i)
-                    .fold(1., |acc_j, (_, cstr_model_j)| {
-                        acc_j * pof(x, &**cstr_model_j, *cstr_tol)
-                    });
-                acc + (pof_grad_i * pof_others_product)
+                    .fold(1., |acc_j, (_, pof_j)| acc_j * pof_j);
+                acc + pof_grad_i * pof_others_product
             },
         )
     }
