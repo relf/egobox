@@ -58,7 +58,12 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         );
         let mut new_state = new_state.infill_value(-infill_obj);
         info!(
-            "Infill criterion {} max found = {}",
+            "{} criterion {} max found = {}",
+            if self.config.cstr_infill {
+                "Constrained infill"
+            } else {
+                "Infill"
+            },
             self.config.infill_criterion.name(),
             state.get_infill_value()
         );

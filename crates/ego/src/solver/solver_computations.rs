@@ -1,4 +1,4 @@
-use crate::errors::{EgoError, Result};
+use crate::errors::Result;
 use crate::gpmix::mixint::to_discrete_space;
 use crate::optimizers::*;
 use crate::types::*;
@@ -95,7 +95,7 @@ where
     /// Returns (infill_obj, x_opt)
     #[allow(clippy::too_many_arguments)]
     //#[allow(clippy::type_complexity)]
-    pub(crate) fn compute_best_points(
+    pub(crate) fn compute_best_point(
         &self,
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
@@ -104,13 +104,14 @@ where
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
         cstr_funcs: &[&(dyn ObjFn<InfillObjData<f64>> + Sync)],
-    ) -> Result<(f64, Array1<f64>)> {
+        current_best: (f64, Array1<f64>),
+    ) -> (f64, Array1<f64>) {
         let fmin = infill_data.fmin;
 
         let mut success = false;
         let mut n_optim = 1;
         let n_max_optim = 3;
-        let mut best_x = None;
+        let mut best_point = current_best;
 
         let algorithm = match self.config.infill_optimizer {
             InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
@@ -198,7 +199,7 @@ where
                         .minimize();
 
                 info!("LHS optimization best_x {}", x_opt);
-                best_x = Some((y_opt, x_opt));
+                best_point = (y_opt, x_opt);
                 success = true;
             } else {
                 let res = (0..self.config.n_start)
@@ -223,27 +224,24 @@ where
                 if res.0.is_nan() || res.0.is_infinite() {
                     success = false;
                 } else {
-                    best_x = Some((res.0, Array::from(res.1.clone())));
+                    best_point = (res.0, Array::from(res.1.clone()));
                     success = true;
                 }
             }
 
-            if n_optim == n_max_optim && best_x.is_none() {
+            if n_optim == n_max_optim && !success {
                 info!("All optimizations fail => Trigger LHS optimization");
                 let (y_opt, x_opt) =
                     Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &self.xlimits)
                         .minimize();
 
                 info!("LHS optimization best_x {}", x_opt);
-                best_x = Some((y_opt, x_opt));
+                best_point = (y_opt, x_opt);
                 success = true;
             }
             n_optim += 1;
         }
-        if best_x.is_some() {
-            debug!("... infill criterion optimum found");
-        }
-        best_x.ok_or_else(|| EgoError::EgoError(String::from("Can not find best point")))
+        best_point
     }
 
     pub fn mean_cstr(
@@ -294,7 +292,7 @@ where
 
     /// Return the virtual points regarding the qei strategy
     /// The default is to return GP prediction
-    pub(crate) fn compute_virtual_points(
+    pub(crate) fn compute_virtual_point(
         &self,
         xk: &ArrayBase<impl Data<Elem = f64>, Ix1>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,

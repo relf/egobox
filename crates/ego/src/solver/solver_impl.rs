@@ -321,7 +321,12 @@ where
                 .param(x_dat.row(0).to_owned())
                 .cost(y_dat.row(0).to_owned());
             info!(
-                "Infill criterion {} max found = {}",
+                "{} criterion {} max found = {}",
+                if self.config.cstr_infill {
+                    "Constrained infill"
+                } else {
+                    "Infill"
+                },
                 self.config.infill_criterion.name(),
                 state.get_infill_value()
             );
@@ -475,14 +480,15 @@ where
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
 
-            let fmin = y_data[[best_index, 0]];
+            let ymin = y_data[[best_index, 0]];
+            let xmin = x_data.row(best_index).to_owned();
             let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) =
-                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, cstr_funcs, fmin);
+                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, cstr_funcs, ymin);
 
             let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
 
             infill_data = InfillObjData {
-                fmin,
+                fmin: ymin,
                 scale_infill_obj,
                 scale_cstr: Some(all_scale_cstr.to_owned()),
                 scale_wb2,
@@ -518,7 +524,7 @@ where
                 .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
                 .collect::<Vec<_>>();
 
-            match self.compute_best_points(
+            let (infill_obj, xk) = self.compute_best_point(
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,
@@ -526,41 +532,33 @@ where
                 lhs_optim,
                 &infill_data,
                 &cstr_funcs,
-            ) {
-                Ok((infill_obj, xk)) => {
-                    match self.compute_virtual_points(&xk, y_data, obj_model.as_ref(), cstr_models)
-                    {
-                        Ok(yk) => {
-                            let yk =
-                                Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap();
-                            y_dat = concatenate![Axis(0), y_dat, yk];
+                (ymin, xmin),
+            );
 
-                            let ck = cstr_funcs
-                                .iter()
-                                .map(|cstr| cstr(&xk.to_vec(), None, &mut infill_data))
-                                .collect::<Vec<_>>();
-                            c_dat = concatenate![
-                                Axis(0),
-                                c_dat,
-                                Array2::from_shape_vec((1, cstr_funcs.len()), ck).unwrap()
-                            ];
+            match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
+                Ok(yk) => {
+                    let yk = Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap();
+                    y_dat = concatenate![Axis(0), y_dat, yk];
 
-                            x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+                    let ck = cstr_funcs
+                        .iter()
+                        .map(|cstr| cstr(&xk.to_vec(), None, &mut infill_data))
+                        .collect::<Vec<_>>();
+                    c_dat = concatenate![
+                        Axis(0),
+                        c_dat,
+                        Array2::from_shape_vec((1, cstr_funcs.len()), ck).unwrap()
+                    ];
 
-                            // infill objective was minimized while infill criterion itself
-                            // is expected to be maximized hence the negative sign here
-                            infill_val = -infill_obj;
-                        }
-                        Err(err) => {
-                            // Error while predict at best point: ignore
-                            info!("Error while getting virtual point: {}", err);
-                            break;
-                        }
-                    }
+                    x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+
+                    // infill objective was minimized while infill criterion itself
+                    // is expected to be maximized hence the negative sign here
+                    infill_val = -infill_obj;
                 }
                 Err(err) => {
-                    // Cannot find best point: ignore
-                    debug!("Find best point error: {}", err);
+                    // Error while predict at best point: ignore
+                    info!("Error while getting virtual point: {}", err);
                     break;
                 }
             }
