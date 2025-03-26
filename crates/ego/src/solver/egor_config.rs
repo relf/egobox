@@ -33,6 +33,12 @@ impl Default for TregoConfig {
     }
 }
 
+/// A structure to handle TREGO method parameterization
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub(crate) struct CoegoConfig {
+    pub(crate) activated: bool,
+}
+
 /// Egor optimizer configuration
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct EgorConfig {
@@ -90,6 +96,8 @@ pub struct EgorConfig {
     pub(crate) seed: Option<u64>,
     /// Trego parameterization
     pub(crate) trego: TregoConfig,
+    /// Trego parameterization
+    pub(crate) coego: CoegoConfig,
     /// Constrained infill criterion activation
     pub(crate) cstr_infill: bool,
     /// Constraints criterion
@@ -121,6 +129,7 @@ impl Default for EgorConfig {
             xtypes: vec![],
             seed: None,
             trego: TregoConfig::default(),
+            coego: CoegoConfig::default(),
             cstr_infill: false,
             cstr_strategy: ConstraintStrategy::MeanConstraint,
         }
@@ -297,6 +306,12 @@ impl EgorConfig {
     /// Activate TREGO method
     pub fn trego(mut self, activated: bool) -> Self {
         self.trego.activated = activated;
+        self
+    }
+
+    /// Activate CoEGO method
+    pub fn coego(mut self, activated: bool) -> Self {
+        self.coego.activated = activated;
         self
     }
 
