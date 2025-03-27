@@ -597,11 +597,11 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                 opt_res
             })
             .reduce(
-                || (Array::ones((params.ncols(),)), f64::INFINITY),
-                |a, b| if b.1 < a.1 { b } else { a },
+                || (f64::INFINITY, Array::ones((params.ncols(),))),
+                |a, b| if b.0 < a.0 { b } else { a },
             );
         debug!("elapsed optim = {:?}", now.elapsed().as_millis());
-        let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
+        let opt_params = opt_params.1.mapv(|v| F::cast(base.powf(v)));
 
         let opt_theta = opt_params
             .slice(s![..n - 1 - is_noise_estimated as usize])
