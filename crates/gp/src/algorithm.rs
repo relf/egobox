@@ -830,7 +830,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
                     let mut theta = theta0.to_owned();
                     let xarr = x.iter().map(|v| base.powf(*v)).collect::<Vec<_>>();
-                    println!("xarr={:?}, active={:?}, theta={}", xarr, active, theta);
                     std::iter::zip(active.clone(), xarr).for_each(|(i, xi)| theta[i] = F::cast(xi));
 
                     for v in theta.iter() {
@@ -884,13 +883,29 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                         opt_res
                     })
                     .reduce(
-                        || (Array::ones((params.ncols(),)), f64::INFINITY),
-                        |a, b| if b.1 < a.1 { b } else { a },
+                        || (f64::INFINITY, Array::ones((params.ncols(),))),
+                        |a, b| if b.0 < a.0 { b } else { a },
                     );
                 debug!("elapsed optim = {:?}", now.elapsed().as_millis());
-                opt_params.0.mapv(|v| F::cast(base.powf(v)))
+                opt_params.1.mapv(|v| F::cast(base.powf(v)))
             }
         };
+
+        // In case of partial optimization we set only active components
+        let opt_params = match self.theta_tuning() {
+            ThetaTuning::Fixed(_) | ThetaTuning::Full { init: _, bounds: _ } => opt_params,
+            ThetaTuning::Partial {
+                init,
+                bounds: _,
+                active,
+            } => {
+                let mut opt_theta = init.to_owned();
+                std::iter::zip(active.clone(), opt_params)
+                    .for_each(|(i, xi)| opt_theta[i] = F::cast(xi));
+                opt_theta
+            }
+        };
+
         let rxx = self.corr().value(&x_distances.d, &opt_params, &w_star);
         let (lkh, inner_params) =
             reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
