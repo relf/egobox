@@ -196,7 +196,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             .assign(&scale_cstr);
         let infill_data = InfillObjData {
             scale_cstr: Some(scale_cstr_ext),
-            ..*infill_data
+            ..infill_data.clone()
         };
 
         // Draw n_start initial points (multistart optim) in the local_area

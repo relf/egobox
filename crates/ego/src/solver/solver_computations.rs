@@ -224,7 +224,7 @@ where
                 if res.0.is_nan() || res.0.is_infinite() {
                     success = false;
                 } else {
-                    best_point = (res.0, Array::from(res.1.clone()));
+                    best_point = res;
                     success = true;
                 }
             }

@@ -33,10 +33,22 @@ impl Default for TregoConfig {
     }
 }
 
-/// A structure to handle TREGO method parameterization
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+/// A structure to handle CoEGO method parameterization
+/// CoEGO variant is intended to be used for high dimensional problems
+/// with dim > 100
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct CoegoConfig {
     pub(crate) activated: bool,
+    pub(crate) n_coop: usize,
+}
+
+impl Default for CoegoConfig {
+    fn default() -> Self {
+        CoegoConfig {
+            activated: false,
+            n_coop: 5,
+        }
+    }
 }
 
 /// Egor optimizer configuration

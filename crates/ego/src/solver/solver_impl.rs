@@ -185,10 +185,12 @@ where
         models: &[Box<dyn egobox_moe::MixtureGpSurrogate>],
     ) -> InfillObjData<f64> {
         let y_data = state.data.as_ref().unwrap().1.clone();
+        let x_data = state.data.as_ref().unwrap().0.clone();
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let sampling = state.sampling.clone().unwrap();
 
         let fmin = y_data[[state.best_index.unwrap(), 0]];
+        let xbest = x_data.row(state.best_index.unwrap()).to_vec();
 
         let pb = problem.take_problem().unwrap();
         let fcstrs = pb.fn_constraints();
@@ -198,6 +200,7 @@ where
 
         InfillObjData {
             fmin,
+            xbest,
             scale_infill_obj,
             scale_cstr: Some(scale_cstr.to_owned()),
             scale_wb2,
@@ -480,15 +483,16 @@ where
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
 
-            let ymin = y_data[[best_index, 0]];
-            let xmin = x_data.row(best_index).to_owned();
+            let fmin = y_data[[best_index, 0]];
+            let xbest = x_data.row(best_index).to_owned();
             let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) =
-                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, cstr_funcs, ymin);
+                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, cstr_funcs, fmin);
 
             let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
 
             infill_data = InfillObjData {
-                fmin: ymin,
+                fmin,
+                xbest: xbest.to_vec(),
                 scale_infill_obj,
                 scale_cstr: Some(all_scale_cstr.to_owned()),
                 scale_wb2,
@@ -532,7 +536,7 @@ where
                 lhs_optim,
                 &infill_data,
                 &cstr_funcs,
-                (ymin, xmin),
+                (fmin, xbest),
             );
 
             match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
