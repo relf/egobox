@@ -89,8 +89,10 @@ pub struct EgorState<F: Float> {
 
     /// Trego state
     pub sigma: F,
-    /// Prev step
+    /// Prev step flag marking an EGO global set
     pub prev_step_ego: bool,
+    /// Coego state
+    pub activity: Option<Array2<usize>>,
 }
 
 impl<F> EgorState<F>
@@ -243,6 +245,17 @@ where
         self.sampling.take()
     }
 
+    /// Set the activity matrix  
+    pub fn activity(mut self, activity: Array2<usize>) -> Self {
+        self.activity = Some(activity);
+        self
+    }
+
+    /// Moves the current activity out and replaces it internally with `None`.
+    pub fn take_activity(&mut self) -> Option<Array2<usize>> {
+        self.activity.take()
+    }
+
     /// Set the infill criterion value    
     pub fn infill_value(mut self, value: F) -> Self {
         self.infill_value = value;
@@ -375,6 +388,7 @@ where
             infill_data: Default::default(),
 
             sigma: F::cast(1e-1),
+            activity: None,
             prev_step_ego: false,
         }
     }

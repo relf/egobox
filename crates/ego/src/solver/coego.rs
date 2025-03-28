@@ -6,8 +6,6 @@ use crate::EgorSolver;
 #[cfg(not(feature = "nlopt"))]
 use crate::types::ObjFn;
 use ndarray::Axis;
-use ndarray_rand::rand::seq::SliceRandom;
-use ndarray_rand::rand::SeedableRng;
 #[cfg(feature = "nlopt")]
 use nlopt::ObjFn;
 
@@ -42,6 +40,7 @@ where
         infill_data: &InfillObjData<f64>,
         cstr_funcs: &[&(dyn ObjFn<InfillObjData<f64>> + Sync)],
         current_best: (f64, Array1<f64>),
+        actives: &Array2<usize>,
     ) -> (f64, Array1<f64>) {
         let fmin = infill_data.fmin;
 
@@ -50,18 +49,15 @@ where
         let n_max_optim = 3;
         let mut best_point = current_best.to_owned();
 
-        let rng = &mut Xoshiro256Plus::seed_from_u64(42);
-        let g_size = current_best.1.len() / self.config.coego.n_coop.max(1);
-        let mut indices: Vec<usize> = (0..current_best.1.len()).collect();
-        indices.shuffle(rng);
-        let actives = Array2::from_shape_vec(
-            (self.config.coego.n_coop, g_size),
-            indices[..(self.config.coego.n_coop * g_size)].to_vec(),
-        )
-        .unwrap();
-
-        // TODO: manage remaining indices, atm suppose an empty remainder
-        let _remainder = indices[(self.config.coego.n_coop * g_size)..].to_vec();
+        // let rng = &mut Xoshiro256Plus::seed_from_u64(42);
+        // let g_size = current_best.1.len() / self.config.coego.n_coop.max(1);
+        // let mut indices: Vec<usize> = (0..current_best.1.len()).collect();
+        // indices.shuffle(rng);
+        // let actives = Array2::from_shape_vec(
+        //     (self.config.coego.n_coop, g_size),
+        //     indices[..(self.config.coego.n_coop * g_size)].to_vec(),
+        // )
+        // .unwrap();
 
         let algorithm = match self.config.infill_optimizer {
             InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
@@ -111,6 +107,12 @@ where
                                 *scale_wb2,
                             )
                         };
+                        let g_infill_obj = g_infill_obj
+                            .iter()
+                            .enumerate()
+                            .filter(|(i, _)| active.to_vec().contains(i))
+                            .map(|(_, &g)| g)
+                            .collect::<Vec<_>>();
                         grad[..].copy_from_slice(&g_infill_obj);
                     }
                     if self.config.cstr_infill {
@@ -158,22 +160,20 @@ where
             let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
             cstr_refs.extend(cstr_funcs);
 
+            // Limits
+            let xlimits = self.xlimits.select(Axis(0), &active.to_vec());
+
             info!("Optimize infill criterion...");
             while !success && n_optim <= n_max_optim {
                 let x_start = sampling.sample(self.config.n_start);
                 let x_start_coop = x_start.select(Axis(1), &active.to_vec());
 
                 if let Some(seed) = lhs_optim_seed {
-                    let (y_opt, x_opt) = Optimizer::new(
-                        Algorithm::Lhs,
-                        &obj,
-                        &cstr_refs,
-                        infill_data,
-                        &self.xlimits,
-                    )
-                    .cstr_tol(cstr_tols.to_owned())
-                    .seed(seed)
-                    .minimize();
+                    let (y_opt, x_opt) =
+                        Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &xlimits)
+                            .cstr_tol(cstr_tols.to_owned())
+                            .seed(seed)
+                            .minimize();
 
                     info!("LHS optimization best_x {}", x_opt);
                     best_point = (y_opt, x_opt);
@@ -183,23 +183,18 @@ where
                         .into_par_iter()
                         .map(|i| {
                             debug!("Begin optim {}", i);
-                            let optim_res = Optimizer::new(
-                                algorithm,
-                                &obj,
-                                &cstr_refs,
-                                infill_data,
-                                &self.xlimits,
-                            )
-                            .xinit(&x_start_coop.row(i))
-                            .max_eval(200)
-                            .ftol_rel(1e-4)
-                            .ftol_abs(1e-4)
-                            .minimize();
+                            let optim_res =
+                                Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &xlimits)
+                                    .xinit(&x_start_coop.row(i))
+                                    .max_eval(200)
+                                    .ftol_rel(1e-4)
+                                    .ftol_abs(1e-4)
+                                    .minimize();
                             debug!("End optim {}", i);
                             optim_res
                         })
                         .reduce(
-                            || (f64::INFINITY, Array::ones((self.xlimits.nrows(),))),
+                            || (f64::INFINITY, Array::ones((xlimits.nrows(),))),
                             |a, b| if b.0 < a.0 { b } else { a },
                         );
 
@@ -215,14 +210,9 @@ where
 
                 if n_optim == n_max_optim && !success {
                     info!("All optimizations fail => Trigger LHS optimization");
-                    let (y_opt, x_opt) = Optimizer::new(
-                        Algorithm::Lhs,
-                        &obj,
-                        &cstr_refs,
-                        infill_data,
-                        &self.xlimits,
-                    )
-                    .minimize();
+                    let (y_opt, x_opt) =
+                        Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &xlimits)
+                            .minimize();
 
                     info!("LHS optimization best_x {}", x_opt);
                     best_point = (y_opt, x_opt);

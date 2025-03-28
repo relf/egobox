@@ -71,6 +71,8 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         let fcstrs = Vec::<Cstr>::new();
         // TODO: c_data has to be passed as argument or better computed using fcstrs(x_data)
         let c_data = Array2::zeros((x_data.nrows(), 0));
+        // TODO: Coego not implemented
+        let activity = None;
 
         let (x_dat, _, _, _, _) = self.select_next_points(
             true,
@@ -78,6 +80,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             false, // done anyway
             &mut clusterings,
             &mut theta_tunings,
+            activity,
             x_data,
             y_data,
             &c_data,
@@ -263,6 +266,7 @@ where
                 PotentialBug,
                 "EgorSolver: No theta inits!"
             ))?;
+        let activity = new_state.take_activity();
         let sampling = new_state.take_sampling().ok_or_else(argmin_error_closure!(
             PotentialBug,
             "EgorSolver: No sampling!"
@@ -294,6 +298,7 @@ where
                 recluster,
                 &mut clusterings,
                 &mut theta_inits,
+                activity.as_ref(),
                 &x_data,
                 &y_data,
                 &c_data,
@@ -414,6 +419,7 @@ where
         recluster: bool,
         clusterings: &mut [Option<Clustering>],
         theta_inits: &mut [Option<Array2<f64>>],
+        activity: Option<&Array2<usize>>,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         c_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -444,6 +450,14 @@ where
                     concatenate![Axis(0), y_data.to_owned(), y_dat.to_owned()],
                 )
             };
+
+            println!("activity: {:?}", activity);
+            let full_active = Array2::from_shape_vec(
+                (1, self.xlimits.nrows()),
+                (0..self.xlimits.nrows()).collect(),
+            )
+            .unwrap();
+            let actives = activity.unwrap_or(&full_active);
 
             info!("Train surrogates with {} points...", xt.nrows());
             let models: Vec<Box<dyn egobox_moe::MixtureGpSurrogate>> = (0..=self.config.n_cstr)
@@ -528,7 +542,7 @@ where
                 .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
                 .collect::<Vec<_>>();
 
-            let (infill_obj, xk) = self.compute_best_point(
+            let (infill_obj, xk) = self.compute_best_point_coop(
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,
@@ -537,6 +551,7 @@ where
                 &infill_data,
                 &cstr_funcs,
                 (fmin, xbest),
+                actives,
             );
 
             match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {

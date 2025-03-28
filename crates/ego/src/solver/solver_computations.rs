@@ -93,6 +93,7 @@ where
     /// The optimized value of the criterion is returned together with the
     /// optimum location
     /// Returns (infill_obj, x_opt)
+    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     //#[allow(clippy::type_complexity)]
     pub(crate) fn compute_best_point(
