@@ -154,9 +154,9 @@ where
                 }
                 if self.config.cstr_infill {
                     self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+                        * pofs(x, cstr_models, &cstr_tols.to_vec())
                 } else {
                     self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-                        * pofs(x, cstr_models, &cstr_tols.to_vec())
                 }
             };
 

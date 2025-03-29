@@ -1,6 +1,8 @@
 use crate::optimizers::*;
 use crate::utils::find_best_result_index_from;
+use crate::utils::pofs;
 use crate::utils::update_data;
+use crate::ConstraintStrategy;
 use crate::CstrFn;
 use crate::DomainConstraints;
 use crate::EgorSolver;
@@ -15,7 +17,7 @@ use egobox_doe::Lhs;
 use egobox_doe::SamplingMethod;
 use egobox_moe::MixtureGpSurrogate;
 
-use finitediff::FiniteDiff;
+// use finitediff::FiniteDiff;
 use log::debug;
 use log::info;
 use ndarray::aview1;
@@ -43,12 +45,14 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         let y_old = y_data[[best_index, 0]];
         let rho = |sigma| sigma * sigma;
         let (obj_model, cstr_models) = models.split_first().unwrap();
+        let cstr_tols = new_state.cstr_tol.clone();
         let xbest = x_data.row(best_index).to_owned();
 
         // Optimize infill criterion
         let (infill_obj, x_opt) = self.local_step(
             obj_model.as_ref(),
             cstr_models,
+            &cstr_tols,
             &xbest.view(),
             (
                 new_state.sigma * self.config.trego.d.0,
@@ -117,6 +121,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         &self,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        cstr_tols: &Array1<f64>,
         xbest: &ArrayView1<f64>,
         local_bounds: (f64, f64),
         infill_data: &InfillObjData<f64>,
@@ -127,56 +132,61 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         let scale_cstr = scale_cstr
             .clone()
             .unwrap_or(Array1::from_elem(cstr_models.len(), 1.));
-        let obj =
-            |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
-                // Defensive programming NlOpt::Cobyla may pass NaNs
-                if x.iter().any(|x| x.is_nan()) {
-                    return f64::INFINITY;
-                }
-                let InfillObjData {
-                    scale_infill_obj,
-                    scale_wb2,
-                    ..
-                } = params;
-                if let Some(grad) = gradient {
-                    let f = |x: &Vec<f64>| -> f64 {
-                        self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
-                    };
-                    grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-                }
+        let obj = |x: &[f64],
+                   gradient: Option<&mut [f64]>,
+                   params: &mut InfillObjData<f64>|
+         -> f64 {
+            // Defensive programming NlOpt::Cobyla may pass NaNs
+            if x.iter().any(|x| x.is_nan()) {
+                return f64::INFINITY;
+            }
+            let InfillObjData {
+                scale_infill_obj,
+                scale_wb2,
+                ..
+            } = params;
+            if let Some(grad) = gradient {
+                // Use finite differences
+                // let f = |x: &Vec<f64>| -> f64 {
+                //     self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+                // };
+                // grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
+
+                let g_infill_obj = if self.config.cstr_infill {
+                    self.eval_grad_infill_obj_with_cstrs(
+                        x,
+                        obj_model,
+                        cstr_models,
+                        cstr_tols,
+                        *fmin,
+                        *scale_infill_obj,
+                        *scale_wb2,
+                    )
+                } else {
+                    self.eval_grad_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
+                };
+                grad[..].copy_from_slice(&g_infill_obj);
+            }
+            if self.config.cstr_infill {
                 self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
-            };
+                    * pofs(x, cstr_models, &cstr_tols.to_vec())
+            } else {
+                self.eval_infill_obj(x, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
+            }
+        };
 
         let cstrs: Vec<_> = (0..self.config.n_cstr)
             .map(|i| {
-                let index = i;
                 let cstr = move |x: &[f64],
                                  gradient: Option<&mut [f64]>,
                                  params: &mut InfillObjData<f64>|
                       -> f64 {
-                    if let Some(grad) = gradient {
-                        let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
-                        let grd = cstr_models[i]
-                            .predict_gradients(
-                                &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                    .unwrap()
-                                    .view(),
-                            )
-                            .unwrap()
-                            .row(0)
-                            .mapv(|v| v / scale_cstr)
-                            .to_vec();
-                        grad[..].copy_from_slice(&grd);
+                    let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
+                    if self.config.cstr_strategy == ConstraintStrategy::MeanConstraint {
+                        Self::mean_cstr(&*cstr_models[i], x, gradient, scale_cstr)
+                    } else {
+                        Self::upper_trust_bound_cstr(&*cstr_models[i], x, gradient, scale_cstr)
                     }
-                    let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[index];
-                    cstr_models[index]
-                        .predict(
-                            &Array::from_shape_vec((1, x.len()), x.to_vec())
-                                .unwrap()
-                                .view(),
-                        )
-                        .unwrap()[0]
-                        / scale_cstr
                 };
                 #[cfg(feature = "nlopt")]
                 {
