@@ -284,7 +284,7 @@ where
 
     fn next_iter(
         &mut self,
-        fobj: &mut Problem<O>,
+        problem: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
         debug!(
@@ -295,9 +295,9 @@ where
         let now = Instant::now();
 
         let res = if self.config.trego.activated {
-            self.trego_iteration(fobj, state)?
+            self.trego_iteration(problem, state)?
         } else {
-            self.ego_iteration(fobj, state)?
+            self.ego_iteration(problem, state)?
         };
         let (x_data, y_data, _c_data) = res.0.data.clone().unwrap();
 
@@ -358,10 +358,10 @@ where
         O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
     >(
         &mut self,
-        fobj: &mut Problem<O>,
+        problem: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
-        match self.ego_step(fobj, state.clone()) {
+        match self.ego_step(problem, state.clone()) {
             Ok((new_state, _, _)) => Ok((new_state, None)),
             Err(EgoError::GlobalStepNoPointError) => Ok((
                 state.terminate_with(TerminationReason::SolverExit(

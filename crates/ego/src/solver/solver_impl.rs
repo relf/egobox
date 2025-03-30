@@ -250,7 +250,7 @@ where
         O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
     >(
         &mut self,
-        fobj: &mut Problem<O>,
+        problem: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> Result<(EgorState<f64>, InfillObjData<f64>, usize)> {
         let mut new_state = state.clone();
@@ -290,8 +290,8 @@ where
                 None
             };
 
-            let problem = fobj.take_problem().unwrap();
-            let fcstrs = problem.fn_constraints();
+            let pb = problem.take_problem().unwrap();
+            let fcstrs = pb.fn_constraints();
             let (x_dat, y_dat, c_dat, infill_value, infill_data) = self.select_next_points(
                 init,
                 state.get_iter(),
@@ -308,7 +308,7 @@ where
                 state.best_index.unwrap(),
                 fcstrs,
             );
-            fobj.problem = Some(problem);
+            problem.problem = Some(pb);
 
             debug!("Try adding {}", x_dat);
             let added_indices = update_data(
@@ -388,7 +388,7 @@ where
         new_state.added += add_count as usize;
         info!("+{} point(s), total: {} points", add_count, new_state.added);
         new_state.no_point_added_retries = MAX_POINT_ADDITION_RETRY;
-        let y_actual = self.eval_obj(fobj, &x_to_eval);
+        let y_actual = self.eval_obj(problem, &x_to_eval);
         Zip::from(y_data.slice_mut(s![-add_count.., ..]).rows_mut())
             .and(y_actual.rows())
             .for_each(|mut y, val| y.assign(&val));

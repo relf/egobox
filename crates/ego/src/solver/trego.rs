@@ -1,10 +1,10 @@
 use crate::optimizers::*;
+use crate::types::DomainConstraints;
 use crate::utils::find_best_result_index_from;
 use crate::utils::pofs;
 use crate::utils::update_data;
 use crate::ConstraintStrategy;
 use crate::CstrFn;
-use crate::DomainConstraints;
 use crate::EgorSolver;
 use crate::EgorState;
 use crate::InfillObjData;
@@ -22,12 +22,21 @@ use log::debug;
 use log::info;
 use ndarray::aview1;
 use ndarray::Zip;
-use ndarray::{s, Array, Array1, Array2, ArrayView1, Axis};
+use ndarray::{Array, Array1, Array2, ArrayView1, Axis};
 
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 
-impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
+#[cfg(not(feature = "nlopt"))]
+use crate::types::ObjFn;
+#[cfg(feature = "nlopt")]
+use nlopt::ObjFn;
+
+impl<SB, C> EgorSolver<SB, C>
+where
+    SB: SurrogateBuilder + DeserializeOwned,
+    C: CstrFn,
+{
     /// Local step where infill criterion is optimized within trust region
     pub fn trego_step<
         O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
@@ -48,10 +57,13 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         let cstr_tols = new_state.cstr_tol.clone();
         let xbest = x_data.row(best_index).to_owned();
 
+        let pb = problem.take_problem().unwrap();
+        let fcstrs = pb.fn_constraints();
         // Optimize infill criterion
         let (infill_obj, x_opt) = self.local_step(
             obj_model.as_ref(),
             cstr_models,
+            fcstrs,
             &cstr_tols,
             &xbest.view(),
             (
@@ -60,6 +72,8 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             ),
             infill_data,
         );
+        problem.problem = Some(pb);
+
         let mut new_state = new_state.infill_value(-infill_obj);
         info!(
             "{} criterion {} max found = {}",
@@ -117,21 +131,18 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         new_state
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn local_step(
         &self,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        cstr_funcs: &[impl CstrFn],
         cstr_tols: &Array1<f64>,
         xbest: &ArrayView1<f64>,
         local_bounds: (f64, f64),
         infill_data: &InfillObjData<f64>,
     ) -> (f64, Array1<f64>) {
-        let InfillObjData {
-            fmin, scale_cstr, ..
-        } = infill_data;
-        let scale_cstr = scale_cstr
-            .clone()
-            .unwrap_or(Array1::from_elem(cstr_models.len(), 1.));
+        let InfillObjData { fmin, .. } = infill_data;
         let obj = |x: &[f64],
                    gradient: Option<&mut [f64]>,
                    params: &mut InfillObjData<f64>|
@@ -198,16 +209,12 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
                 }
             })
             .collect();
-        let cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
-
-        let mut scale_cstr_ext = Array1::zeros(scale_cstr.len());
-        scale_cstr_ext
-            .slice_mut(s![..scale_cstr.len()])
-            .assign(&scale_cstr);
-        let infill_data = InfillObjData {
-            scale_cstr: Some(scale_cstr_ext),
-            ..infill_data.clone()
-        };
+        let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
+        let cstr_funcs = cstr_funcs
+            .iter()
+            .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
+            .collect::<Vec<_>>();
+        cstr_refs.extend(cstr_funcs);
 
         // Draw n_start initial points (multistart optim) in the local_area
         // local_area = intersection(trust_region, xlimits)
@@ -237,7 +244,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         let (infill_obj, x_opt) = (0..self.config.n_start)
             .into_par_iter()
             .map(|i| {
-                Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &local_area)
+                Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &local_area)
                     .xinit(&x_start.row(i))
                     .max_eval(200)
                     .ftol_rel(1e-4)
