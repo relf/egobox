@@ -33,6 +33,7 @@ fn main() {
                 .outdir(outdir)
                 .seed(42)
                 .coego(true)
+                .trego(true)
         })
         .min_within(&xlimits)
         .run()

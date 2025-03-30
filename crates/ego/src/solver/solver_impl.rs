@@ -451,7 +451,7 @@ where
                 )
             };
 
-            println!("activity: {:?}", activity);
+            log::debug!("activity: {:?}", activity);
             let full_active = Array2::from_shape_vec(
                 (1, self.xlimits.nrows()),
                 (0..self.xlimits.nrows()).collect(),
@@ -542,7 +542,7 @@ where
                 .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
                 .collect::<Vec<_>>();
 
-            let (infill_obj, xk) = self.compute_best_point_coop(
+            let (infill_obj, xk) = self.compute_best_point(
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,

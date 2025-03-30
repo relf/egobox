@@ -202,6 +202,12 @@ where
                             *scale_wb2,
                         )
                     };
+                    let g_infill_obj = g_infill_obj
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| active.to_vec().contains(i))
+                        .map(|(_, &g)| g)
+                        .collect::<Vec<_>>();
                     grad[..].copy_from_slice(&g_infill_obj);
                 }
                 if self.config.cstr_infill {
@@ -253,7 +259,7 @@ where
             let mut local_area = Array2::zeros((xlimits.nrows(), xlimits.ncols()));
             Zip::from(local_area.rows_mut())
                 .and(&xbest)
-                .and(self.xlimits.rows())
+                .and(xlimits.rows())
                 .for_each(|mut row, xb, xlims| {
                     let (lo, up) = (
                         xlims[0].max(xb - local_bounds.0),
