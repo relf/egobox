@@ -49,16 +49,6 @@ where
         let n_max_optim = 3;
         let mut best_point = current_best.to_owned();
 
-        // let rng = &mut Xoshiro256Plus::seed_from_u64(42);
-        // let g_size = current_best.1.len() / self.config.coego.n_coop.max(1);
-        // let mut indices: Vec<usize> = (0..current_best.1.len()).collect();
-        // indices.shuffle(rng);
-        // let actives = Array2::from_shape_vec(
-        //     (self.config.coego.n_coop, g_size),
-        //     indices[..(self.config.coego.n_coop * g_size)].to_vec(),
-        // )
-        // .unwrap();
-
         let algorithm = match self.config.infill_optimizer {
             InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
             InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
@@ -117,9 +107,9 @@ where
                     }
                     if self.config.cstr_infill {
                         self.eval_infill_obj(&xcoop, obj_model, fmin, *scale_infill_obj, *scale_wb2)
+                            * pofs(x, cstr_models, &cstr_tols.to_vec())
                     } else {
                         self.eval_infill_obj(&xcoop, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-                            * pofs(x, cstr_models, &cstr_tols.to_vec())
                     }
                 };
 
