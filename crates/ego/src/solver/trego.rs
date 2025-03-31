@@ -60,13 +60,8 @@ where
         let pb = problem.take_problem().unwrap();
         let fcstrs = pb.fn_constraints();
         // Optimize infill criterion
-        let activity = new_state.take_activity();
-        let full_active = Array2::from_shape_vec(
-            (1, self.xlimits.nrows()),
-            (0..self.xlimits.nrows()).collect(),
-        )
-        .unwrap();
-        let actives = activity.unwrap_or(full_active);
+        let activity = new_state.activity.clone();
+        let actives = activity.unwrap_or(self.full_activity()).to_owned();
         let (infill_obj, x_opt) = self.local_step(
             obj_model.as_ref(),
             cstr_models,

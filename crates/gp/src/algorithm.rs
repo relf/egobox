@@ -770,12 +770,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 init,
                 bounds: _,
                 active,
-            } => (
-                x.select(Axis(1), active),
-                y.select(Axis(1), active),
-                active.to_vec(),
-                init,
-            ),
+            } => (x.to_owned(), y.to_owned(), active.to_vec(), init),
         };
         // Initial guess for theta
         let theta0_dim = init.len();
@@ -861,7 +856,18 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                     )
                 };
 
-                let (params, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
+                // Select init params and bounds wrt to activity
+                let active_bounds = bounds
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| active.contains(i))
+                    .map(|(_, &b)| b)
+                    .collect::<Vec<_>>();
+                let (params, bounds) = prepare_multistart(
+                    self.n_start(),
+                    &theta0.select(Axis(0), &active),
+                    &active_bounds,
+                );
                 debug!(
                     "Optimize with multistart theta = {:?} and bounds = {:?}",
                     params, bounds
