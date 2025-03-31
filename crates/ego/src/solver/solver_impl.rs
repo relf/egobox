@@ -128,8 +128,10 @@ where
         builder.set_n_clusters(self.config.n_clusters.clone());
 
         let mut model = None;
+        let mut best_likelihood = -f64::INFINITY;
+        let mut best_theta_inits = theta_inits.map(|inits| inits.to_owned());
         for (i, active) in actives.outer_iter().enumerate() {
-            if make_clustering
+            let gp = if make_clustering
             /* init || recluster */
             {
                 if self.config.coego.activated {
@@ -142,8 +144,9 @@ where
                                 (nb, xt.ncols()),
                                 ThetaTuning::<f64>::DEFAULT_INIT,
                             );
-                            let theta_tunings = theta_inits
-                                .unwrap_or(&default_init)
+                            let theta_tunings = best_theta_inits
+                                .clone()
+                                .unwrap_or(default_init)
                                 .outer_iter()
                                 .map(|init| ThetaTuning::Partial {
                                     init: init.to_owned(),
@@ -173,13 +176,14 @@ where
                         gp.recombination()
                     );
                 }
-                model = Some(gp)
+                gp
             } else {
                 let clustering = clustering.unwrap();
 
                 let mut theta_tunings = if optimize_theta {
                     // set hyperparameters optimization
-                    let inits = theta_inits
+                    let inits = best_theta_inits
+                        .clone()
                         .expect("Theta initialization is provided")
                         .outer_iter()
                         .map(|init| ThetaTuning::Full {
@@ -193,7 +197,8 @@ where
                     inits
                 } else {
                     // just use previous hyperparameters
-                    let inits = theta_inits
+                    let inits = best_theta_inits
+                        .clone()
                         .unwrap()
                         .outer_iter()
                         .map(|init| ThetaTuning::Fixed(init.to_owned()))
@@ -212,10 +217,27 @@ where
                 let gp = builder
                     .train_on_clusters(xt.view(), yt.view(), clustering)
                     .expect("GP training failure");
+                gp
+            };
+
+            // CoEGO only in mono cluster, update theta if better likelihood
+            if self.config.coego.activated && self.config.n_clusters.is_mono() {
+                let likelihood = gp.experts()[0].likelihood();
+                // We update only if better likelihood
+                if likelihood > best_likelihood {
+                    log::info!("Likelihood = {}", likelihood);
+                    best_likelihood = likelihood;
+                    best_theta_inits = Some(gp.experts()[0].theta().clone().insert_axis(Axis(0)));
+                    model = Some(gp)
+                }
+            } else {
+                log::warn!(
+                    "CoEGO theta update wrt likelihood not implemented in multi-cluster setting",
+                );
                 model = Some(gp)
             }
         }
-        model.expect("Surrogate model is made")
+        model.expect("Surrogate model is trained")
     }
 
     /// Refresh infill data used to optimize infill criterion
@@ -526,6 +548,8 @@ where
                     )
                 })
                 .collect();
+
+            // Update theta initialization from optimized theta
             (0..=self.config.n_cstr).for_each(|k| {
                 clusterings[k] = Some(models[k].to_clustering());
                 let mut thetas_k = Array2::zeros((

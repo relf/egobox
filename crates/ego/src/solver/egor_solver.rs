@@ -411,7 +411,7 @@ where
                 let old = state.sigma;
                 new_state.sigma *= self.config.trego.beta;
                 info!(
-                    "Previous TREGO local step not successful: sigma {} -> {}",
+                    "Previous TREGO local step progress fail: sigma {} -> {}",
                     old, new_state.sigma
                 );
             }
@@ -425,7 +425,7 @@ where
                     old, new_state.sigma
                 );
             } else {
-                info!("Previous EGO global step not successful");
+                info!("Previous EGO global step progress fail");
             }
         }
 
