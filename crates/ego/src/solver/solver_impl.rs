@@ -221,21 +221,22 @@ where
             };
 
             // CoEGO only in mono cluster, update theta if better likelihood
-            if self.config.coego.activated && self.config.n_clusters.is_mono() {
-                let likelihood = gp.experts()[0].likelihood();
-                // We update only if better likelihood
-                if likelihood > best_likelihood {
-                    log::info!("Likelihood = {}", likelihood);
-                    best_likelihood = likelihood;
-                    best_theta_inits = Some(gp.experts()[0].theta().clone().insert_axis(Axis(0)));
-                    model = Some(gp)
+            if self.config.coego.activated {
+                if self.config.n_clusters.is_mono() {
+                    let likelihood = gp.experts()[0].likelihood();
+                    // We update only if better likelihood
+                    if likelihood > best_likelihood {
+                        log::info!("Likelihood = {}", likelihood);
+                        best_likelihood = likelihood;
+                        best_theta_inits =
+                            Some(gp.experts()[0].theta().clone().insert_axis(Axis(0)));
+                    }
+                } else {
+                    log::warn!(
+                            "CoEGO theta update wrt likelihood not implemented in multi-cluster setting");
                 }
-            } else {
-                log::warn!(
-                    "CoEGO theta update wrt likelihood not implemented in multi-cluster setting",
-                );
-                model = Some(gp)
-            }
+            };
+            model = Some(gp)
         }
         model.expect("Surrogate model is trained")
     }
