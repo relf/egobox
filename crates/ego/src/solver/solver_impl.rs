@@ -128,7 +128,7 @@ where
         builder.set_n_clusters(self.config.n_clusters.clone());
 
         let mut model = None;
-        for active in actives.outer_iter() {
+        for (i, active) in actives.outer_iter().enumerate() {
             if make_clustering
             /* init || recluster */
             {
@@ -154,21 +154,25 @@ where
                                     active: active.to_vec(),
                                 })
                                 .collect::<Vec<_>>();
-                            println!("ttheta_tuning = {:?}", theta_tunings);
                             builder.set_theta_tunings(&theta_tunings);
                         }
                     }
                 }
-                info!("{} clustering and training...", model_name);
+                if i == 0 {
+                    info!("{} clustering and training...", model_name);
+                }
                 let gp = builder
                     .train(xt.view(), yt.view())
                     .expect("GP training failure");
-                info!(
-                    "... {} trained ({} / {})",
-                    model_name,
-                    gp.n_clusters(),
-                    gp.recombination()
-                );
+
+                if i == 0 {
+                    info!(
+                        "... {} trained ({} / {})",
+                        model_name,
+                        gp.n_clusters(),
+                        gp.recombination()
+                    );
+                }
                 model = Some(gp)
             } else {
                 let clustering = clustering.unwrap();
@@ -183,7 +187,7 @@ where
                             bounds: ThetaTuning::default().bounds().unwrap().to_owned(),
                         })
                         .collect::<Vec<_>>();
-                    if model_name == "Objective" {
+                    if i == 0 && model_name == "Objective" {
                         info!("Objective model hyperparameters optim init >>> {inits:?}");
                     }
                     inits
@@ -194,7 +198,7 @@ where
                         .outer_iter()
                         .map(|init| ThetaTuning::Fixed(init.to_owned()))
                         .collect::<Vec<_>>();
-                    if model_name == "Objective" {
+                    if i == 0 && model_name == "Objective" {
                         info!("Objective model hyperparameters reused >>> {inits:?}");
                     }
                     inits

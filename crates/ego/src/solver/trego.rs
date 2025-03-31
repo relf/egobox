@@ -151,7 +151,7 @@ where
         let fmin = infill_data.fmin;
 
         let mut best_point = (fmin, xbest.to_owned());
-        for active in actives.outer_iter() {
+        for (i, active) in actives.outer_iter().enumerate() {
             let obj = |x: &[f64],
                        gradient: Option<&mut [f64]>,
                        params: &mut InfillObjData<f64>|
@@ -273,7 +273,9 @@ where
             // optimum location
             // Returns (infill_obj, x_opt)
             let algorithm = crate::optimizers::Algorithm::Slsqp;
-            info!("Optimize infill criterion...");
+            if i == 0 {
+                info!("Optimize infill criterion...");
+            }
             let res = (0..self.config.n_start)
                 .into_par_iter()
                 .map(|i| {

@@ -119,7 +119,7 @@ where
             InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
         };
 
-        for active in actives.outer_iter() {
+        for (i, active) in actives.outer_iter().enumerate() {
             let obj =
                 |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
                     let InfillObjData {
@@ -218,7 +218,9 @@ where
             // Limits
             let xlimits = self.xlimits.select(Axis(0), &active.to_vec());
 
-            info!("Optimize infill criterion...");
+            if i == 0 {
+                info!("Optimize infill criterion...");
+            }
             while !success && n_optim <= n_max_optim {
                 let x_start = sampling.sample(self.config.n_start);
                 let x_start_coop = x_start.select(Axis(1), &active.to_vec());
