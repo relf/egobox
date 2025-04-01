@@ -1,5 +1,7 @@
 use clap::Parser;
-use egobox_ego::{EgorBuilder, GroupFunc, InfillOptimizer, InfillStrategy, QEiStrategy};
+use egobox_ego::{
+    ConstraintStrategy, EgorBuilder, GroupFunc, InfillOptimizer, InfillStrategy, QEiStrategy,
+};
 use egobox_moe::{CorrelationSpec, NbClusters, RegressionSpec};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
 use std::fs::{remove_file, File};
@@ -275,6 +277,8 @@ fn main() -> anyhow::Result<()> {
                 .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
                 .infill_optimizer(InfillOptimizer::Slsqp)
                 .infill_strategy(InfillStrategy::EI)
+                .cstr_infill(true)
+                .cstr_strategy(ConstraintStrategy::UpperTrustBound)
                 //.kpls_dim(kpls_dim)
                 .q_points(5)
                 .n_optmod(5)
