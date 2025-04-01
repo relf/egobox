@@ -1,5 +1,5 @@
 use clap::Parser;
-use egobox_ego::{EgorBuilder, GroupFunc, InfillOptimizer};
+use egobox_ego::{EgorBuilder, GroupFunc, InfillOptimizer, InfillStrategy, QEiStrategy};
 use egobox_moe::{CorrelationSpec, NbClusters, RegressionSpec};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
 use std::fs::{remove_file, File};
@@ -196,7 +196,7 @@ fn mopta(x: &ArrayView2<f64>, indices: Option<&[usize]>) -> Array2<f64> {
             .expect("ls command failed to start")
             .wait();
 
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        std::thread::sleep(std::time::Duration::from_millis(200));
         let y_i = get_output().unwrap();
         remove_file(lockfile).unwrap();
         y.row_mut(i).assign(&y_i);
@@ -253,7 +253,7 @@ fn main() -> anyhow::Result<()> {
 
     let dim = args.dim;
     let outdir = args.outdir;
-    let n_doe = 4 * dim;
+    let n_doe = dim + 1;
     let max_iters = 4 * dim;
     const N_CSTR: usize = 68;
     let cstr_tol = Array1::from_elem(N_CSTR, 1e-4);
@@ -268,15 +268,20 @@ fn main() -> anyhow::Result<()> {
                 .n_cstr(N_CSTR)
                 .cstr_tol(cstr_tol.clone())
                 .n_clusters(NbClusters::fixed(1))
-                .n_start(50)
+                //.n_start(50)
                 .n_doe(n_doe)
                 .max_iters(max_iters)
                 .regression_spec(RegressionSpec::CONSTANT)
                 .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
                 .infill_optimizer(InfillOptimizer::Slsqp)
-                .kpls_dim(kpls_dim)
+                .infill_strategy(InfillStrategy::EI)
+                //.kpls_dim(kpls_dim)
+                .q_points(5)
+                .n_optmod(5)
+                .qei_strategy(QEiStrategy::KrigingBeliever)
                 .outdir(outdir)
                 .warm_start(true)
+                .coego(true)
         })
         .min_within(&xlimits)
         .run()
