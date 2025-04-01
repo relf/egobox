@@ -58,7 +58,6 @@ jobs:
           working-directory: python
           command: develop
           args: --release
-          sccache: 'true'
 
       - name: Run linter and formatter
         working-directory: python
