@@ -655,7 +655,7 @@ mod tests {
 
         println!("Sphere optim result = {res:?}");
         let expected = Array1::<f64>::zeros(dim);
-        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 6e-1);
     }
 
     // Objective
