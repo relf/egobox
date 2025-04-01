@@ -881,7 +881,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                             &params.row(i).to_owned(),
                             &bounds,
                             CobylaParams {
-                                maxeval: (10 * params.ncols()),
+                                maxeval: (10 * params.ncols()).min(CobylaParams::default().maxeval),
                                 ..CobylaParams::default()
                             },
                         );

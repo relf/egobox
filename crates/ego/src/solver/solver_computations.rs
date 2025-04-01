@@ -243,7 +243,7 @@ where
                             let optim_res =
                                 Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &xlimits)
                                     .xinit(&x_start_coop.row(i))
-                                    .max_eval(10 * x_start_coop.len())
+                                    .max_eval((10 * x_start_coop.len()).min(10 * MAX_EVAL_DEFAULT))
                                     .ftol_rel(1e-4)
                                     .ftol_abs(1e-4)
                                     .minimize();

@@ -281,7 +281,7 @@ where
                 .map(|i| {
                     Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &local_area)
                         .xinit(&x_start.row(i))
-                        .max_eval(10 * x_start.len())
+                        .max_eval((10 * x_start.len()).min(10 * MAX_EVAL_DEFAULT))
                         .ftol_rel(1e-4)
                         .ftol_abs(1e-4)
                         .minimize()
