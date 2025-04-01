@@ -19,7 +19,7 @@ use egobox_doe::{Lhs, LhsKind};
 use egobox_gp::ThetaTuning;
 use env_logger::{Builder, Env};
 
-use egobox_moe::{Clustering, MixtureGpSurrogate};
+use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters};
 use log::{debug, info, warn};
 use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 
@@ -71,6 +71,8 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         let fcstrs = Vec::<Cstr>::new();
         // TODO: c_data has to be passed as argument or better computed using fcstrs(x_data)
         let c_data = Array2::zeros((x_data.nrows(), 0));
+        // TODO: Coego not implemented
+        let activity = None;
 
         let (x_dat, _, _, _, _) = self.select_next_points(
             true,
@@ -78,6 +80,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             false, // done anyway
             &mut clusterings,
             &mut theta_tunings,
+            activity,
             x_data,
             y_data,
             &c_data,
@@ -116,6 +119,7 @@ where
         optimize_theta: bool,
         clustering: Option<&Clustering>,
         theta_inits: Option<&Array2<f64>>,
+        actives: &Array2<usize>,
     ) -> Box<dyn MixtureGpSurrogate> {
         let mut builder = self.surrogate_builder.clone();
         builder.set_kpls_dim(self.config.kpls_dim);
@@ -123,56 +127,118 @@ where
         builder.set_correlation_spec(self.config.correlation_spec);
         builder.set_n_clusters(self.config.n_clusters.clone());
 
-        if make_clustering
-        /* init || recluster */
-        {
-            info!("{} clustering and training...", model_name);
-            let model = builder
-                .train(xt.view(), yt.view())
-                .expect("GP training failure");
-            info!(
-                "... {} trained ({} / {})",
-                model_name,
-                model.n_clusters(),
-                model.recombination()
-            );
-            model
-        } else {
-            let clustering = clustering.unwrap();
-
-            let theta_tunings = if optimize_theta {
-                // set hyperparameters optimization
-                let inits = theta_inits
-                    .unwrap()
-                    .outer_iter()
-                    .map(|init| ThetaTuning::Optimized {
-                        init: init.to_vec(),
-                        bounds: ThetaTuning::default().bounds().unwrap().to_vec(),
-                    })
-                    .collect::<Vec<_>>();
-                if model_name == "Objective" {
-                    info!("Objective model hyperparameters optim init >>> {inits:?}");
+        let mut model = None;
+        let mut best_likelihood = -f64::INFINITY;
+        let mut best_theta_inits = theta_inits.map(|inits| inits.to_owned());
+        for (i, active) in actives.outer_iter().enumerate() {
+            let gp = if make_clustering
+            /* init || recluster */
+            {
+                if self.config.coego.activated {
+                    match self.config.n_clusters {
+                        NbClusters::Auto { max: _ } => log::warn!(
+                            "Automated clustering not available with CoEGO: Use CoEGO-FT"
+                        ),
+                        NbClusters::Fixed { nb } => {
+                            let default_init = Array2::from_elem(
+                                (nb, xt.ncols()),
+                                ThetaTuning::<f64>::DEFAULT_INIT,
+                            );
+                            let theta_tunings = best_theta_inits
+                                .clone()
+                                .unwrap_or(default_init)
+                                .outer_iter()
+                                .map(|init| ThetaTuning::Partial {
+                                    init: init.to_owned(),
+                                    bounds: Array1::from_vec(vec![
+                                        ThetaTuning::<f64>::DEFAULT_BOUNDS;
+                                        init.len()
+                                    ]),
+                                    active: active.to_vec(),
+                                })
+                                .collect::<Vec<_>>();
+                            builder.set_theta_tunings(&theta_tunings);
+                        }
+                    }
                 }
-                inits
+                if i == 0 {
+                    info!("{} clustering and training...", model_name);
+                }
+                let gp = builder
+                    .train(xt.view(), yt.view())
+                    .expect("GP training failure");
+
+                if i == 0 {
+                    info!(
+                        "... {} trained ({} / {})",
+                        model_name,
+                        gp.n_clusters(),
+                        gp.recombination()
+                    );
+                }
+                gp
             } else {
-                // just use previous hyperparameters
-                let inits = theta_inits
-                    .unwrap()
-                    .outer_iter()
-                    .map(|init| ThetaTuning::Fixed(init.to_vec()))
-                    .collect::<Vec<_>>();
-                if model_name == "Objective" {
-                    info!("Objective model hyperparameters reused >>> {inits:?}");
-                }
-                inits
-            };
-            builder.set_theta_tunings(&theta_tunings);
+                let clustering = clustering.unwrap();
 
-            let model = builder
-                .train_on_clusters(xt.view(), yt.view(), clustering)
-                .expect("GP training failure");
-            model
+                let mut theta_tunings = if optimize_theta {
+                    // set hyperparameters optimization
+                    let inits = best_theta_inits
+                        .clone()
+                        .expect("Theta initialization is provided")
+                        .outer_iter()
+                        .map(|init| ThetaTuning::Full {
+                            init: init.to_owned(),
+                            bounds: ThetaTuning::default().bounds().unwrap().to_owned(),
+                        })
+                        .collect::<Vec<_>>();
+                    if i == 0 && model_name == "Objective" {
+                        info!("Objective model hyperparameters optim init >>> {inits:?}");
+                    }
+                    inits
+                } else {
+                    // just use previous hyperparameters
+                    let inits = best_theta_inits
+                        .clone()
+                        .unwrap()
+                        .outer_iter()
+                        .map(|init| ThetaTuning::Fixed(init.to_owned()))
+                        .collect::<Vec<_>>();
+                    if i == 0 && model_name == "Objective" {
+                        info!("Objective model hyperparameters reused >>> {inits:?}");
+                    }
+                    inits
+                };
+
+                if self.config.coego.activated {
+                    self.set_partial_theta_tuning(&active.to_vec(), &mut theta_tunings);
+                }
+                builder.set_theta_tunings(&theta_tunings);
+
+                let gp = builder
+                    .train_on_clusters(xt.view(), yt.view(), clustering)
+                    .expect("GP training failure");
+                gp
+            };
+
+            // CoEGO only in mono cluster, update theta if better likelihood
+            if self.config.coego.activated {
+                if self.config.n_clusters.is_mono() {
+                    let likelihood = gp.experts()[0].likelihood();
+                    // We update only if better likelihood
+                    if likelihood > best_likelihood && model_name == "Objective" {
+                        log::info!("Objective likelihood = {}", likelihood);
+                        best_likelihood = likelihood;
+                        best_theta_inits =
+                            Some(gp.experts()[0].theta().clone().insert_axis(Axis(0)));
+                    }
+                } else {
+                    log::warn!(
+                            "CoEGO theta update wrt likelihood not implemented in multi-cluster setting");
+                }
+            };
+            model = Some(gp)
         }
+        model.expect("Surrogate model is trained")
     }
 
     /// Refresh infill data used to optimize infill criterion
@@ -185,10 +251,12 @@ where
         models: &[Box<dyn egobox_moe::MixtureGpSurrogate>],
     ) -> InfillObjData<f64> {
         let y_data = state.data.as_ref().unwrap().1.clone();
+        let x_data = state.data.as_ref().unwrap().0.clone();
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let sampling = state.sampling.clone().unwrap();
 
         let fmin = y_data[[state.best_index.unwrap(), 0]];
+        let xbest = x_data.row(state.best_index.unwrap()).to_vec();
 
         let pb = problem.take_problem().unwrap();
         let fcstrs = pb.fn_constraints();
@@ -198,6 +266,7 @@ where
 
         InfillObjData {
             fmin,
+            xbest,
             scale_infill_obj,
             scale_cstr: Some(scale_cstr.to_owned()),
             scale_wb2,
@@ -214,6 +283,13 @@ where
             "Train surrogates with {} points...",
             &state.data.as_ref().unwrap().0.nrows()
         );
+
+        let actives = state
+            .activity
+            .as_ref()
+            .unwrap_or(&self.full_activity())
+            .to_owned();
+
         (0..=self.config.n_cstr)
             .into_par_iter()
             .map(|k| {
@@ -230,6 +306,7 @@ where
                     true,
                     state.clusterings.as_ref().unwrap()[k].as_ref(),
                     state.theta_inits.as_ref().unwrap()[k].as_ref(),
+                    &actives,
                 )
             })
             .collect()
@@ -244,7 +321,7 @@ where
         O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
     >(
         &mut self,
-        fobj: &mut Problem<O>,
+        problem: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> Result<(EgorState<f64>, InfillObjData<f64>, usize)> {
         let mut new_state = state.clone();
@@ -260,6 +337,7 @@ where
                 PotentialBug,
                 "EgorSolver: No theta inits!"
             ))?;
+        let activity = new_state.take_activity();
         let sampling = new_state.take_sampling().ok_or_else(argmin_error_closure!(
             PotentialBug,
             "EgorSolver: No sampling!"
@@ -283,14 +361,15 @@ where
                 None
             };
 
-            let problem = fobj.take_problem().unwrap();
-            let fcstrs = problem.fn_constraints();
+            let pb = problem.take_problem().unwrap();
+            let fcstrs = pb.fn_constraints();
             let (x_dat, y_dat, c_dat, infill_value, infill_data) = self.select_next_points(
                 init,
                 state.get_iter(),
                 recluster,
                 &mut clusterings,
                 &mut theta_inits,
+                activity.as_ref(),
                 &x_data,
                 &y_data,
                 &c_data,
@@ -300,7 +379,7 @@ where
                 state.best_index.unwrap(),
                 fcstrs,
             );
-            fobj.problem = Some(problem);
+            problem.problem = Some(pb);
 
             debug!("Try adding {}", x_dat);
             let added_indices = update_data(
@@ -321,7 +400,12 @@ where
                 .param(x_dat.row(0).to_owned())
                 .cost(y_dat.row(0).to_owned());
             info!(
-                "Infill criterion {} max found = {}",
+                "{} criterion {} max found = {}",
+                if self.config.cstr_infill {
+                    "Constrained infill"
+                } else {
+                    "Infill"
+                },
                 self.config.infill_criterion.name(),
                 state.get_infill_value()
             );
@@ -375,7 +459,7 @@ where
         new_state.added += add_count as usize;
         info!("+{} point(s), total: {} points", add_count, new_state.added);
         new_state.no_point_added_retries = MAX_POINT_ADDITION_RETRY;
-        let y_actual = self.eval_obj(fobj, &x_to_eval);
+        let y_actual = self.eval_obj(problem, &x_to_eval);
         Zip::from(y_data.slice_mut(s![-add_count.., ..]).rows_mut())
             .and(y_actual.rows())
             .for_each(|mut y, val| y.assign(&val));
@@ -406,6 +490,7 @@ where
         recluster: bool,
         clusterings: &mut [Option<Clustering>],
         theta_inits: &mut [Option<Array2<f64>>],
+        activity: Option<&Array2<usize>>,
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         c_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -437,6 +522,9 @@ where
                 )
             };
 
+            log::debug!("activity: {:?}", activity);
+            let actives = activity.unwrap_or(&self.full_activity()).to_owned();
+
             info!("Train surrogates with {} points...", xt.nrows());
             let models: Vec<Box<dyn egobox_moe::MixtureGpSurrogate>> = (0..=self.config.n_cstr)
                 .into_par_iter()
@@ -457,9 +545,12 @@ where
                         optimize_theta,
                         clusterings[k].as_ref(),
                         theta_inits[k].as_ref(),
+                        &actives,
                     )
                 })
                 .collect();
+
+            // Update theta initialization from optimized theta
             (0..=self.config.n_cstr).for_each(|k| {
                 clusterings[k] = Some(models[k].to_clustering());
                 let mut thetas_k = Array2::zeros((
@@ -476,6 +567,7 @@ where
             debug!("... surrogates trained");
 
             let fmin = y_data[[best_index, 0]];
+            let xbest = x_data.row(best_index).to_owned();
             let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) =
                 self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, cstr_funcs, fmin);
 
@@ -483,6 +575,7 @@ where
 
             infill_data = InfillObjData {
                 fmin,
+                xbest: xbest.to_vec(),
                 scale_infill_obj,
                 scale_cstr: Some(all_scale_cstr.to_owned()),
                 scale_wb2,
@@ -518,7 +611,7 @@ where
                 .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
                 .collect::<Vec<_>>();
 
-            match self.compute_best_points(
+            let (infill_obj, xk) = self.compute_best_point(
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,
@@ -526,41 +619,34 @@ where
                 lhs_optim,
                 &infill_data,
                 &cstr_funcs,
-            ) {
-                Ok((infill_obj, xk)) => {
-                    match self.compute_virtual_points(&xk, y_data, obj_model.as_ref(), cstr_models)
-                    {
-                        Ok(yk) => {
-                            let yk =
-                                Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap();
-                            y_dat = concatenate![Axis(0), y_dat, yk];
+                (fmin, xbest),
+                &actives,
+            );
 
-                            let ck = cstr_funcs
-                                .iter()
-                                .map(|cstr| cstr(&xk.to_vec(), None, &mut infill_data))
-                                .collect::<Vec<_>>();
-                            c_dat = concatenate![
-                                Axis(0),
-                                c_dat,
-                                Array2::from_shape_vec((1, cstr_funcs.len()), ck).unwrap()
-                            ];
+            match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
+                Ok(yk) => {
+                    let yk = Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap();
+                    y_dat = concatenate![Axis(0), y_dat, yk];
 
-                            x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+                    let ck = cstr_funcs
+                        .iter()
+                        .map(|cstr| cstr(&xk.to_vec(), None, &mut infill_data))
+                        .collect::<Vec<_>>();
+                    c_dat = concatenate![
+                        Axis(0),
+                        c_dat,
+                        Array2::from_shape_vec((1, cstr_funcs.len()), ck).unwrap()
+                    ];
 
-                            // infill objective was minimized while infill criterion itself
-                            // is expected to be maximized hence the negative sign here
-                            infill_val = -infill_obj;
-                        }
-                        Err(err) => {
-                            // Error while predict at best point: ignore
-                            info!("Error while getting virtual point: {}", err);
-                            break;
-                        }
-                    }
+                    x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+
+                    // infill objective was minimized while infill criterion itself
+                    // is expected to be maximized hence the negative sign here
+                    infill_val = -infill_obj;
                 }
                 Err(err) => {
-                    // Cannot find best point: ignore
-                    debug!("Find best point error: {}", err);
+                    // Error while predict at best point: ignore
+                    info!("Error while getting virtual point: {}", err);
                     break;
                 }
             }

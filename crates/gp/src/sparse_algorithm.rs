@@ -463,11 +463,16 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         };
 
         let (init, bounds) = match self.theta_tuning() {
-            ThetaTuning::Optimized { init, bounds } => (init.clone(), bounds.clone()),
-            ThetaTuning::Fixed(init) => (
-                init.clone(),
-                init.iter().map(|v| (*v, *v)).collect::<Vec<_>>(),
-            ),
+            ThetaTuning::Full { init, bounds } => (init.clone(), bounds.clone()),
+            ThetaTuning::Partial {
+                init,
+                active: _,
+                bounds,
+            } => {
+                log::warn!("Partial hyperparameter optimization not implemented in SparseGp, full optimization used");
+                (init.clone(), bounds.clone())
+            }
+            ThetaTuning::Fixed(init) => (init.clone(), init.iter().map(|v| (*v, *v)).collect()),
         };
 
         // Initial guess for theta
@@ -592,11 +597,11 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                 opt_res
             })
             .reduce(
-                || (Array::ones((params.ncols(),)), f64::INFINITY),
-                |a, b| if b.1 < a.1 { b } else { a },
+                || (f64::INFINITY, Array::ones((params.ncols(),))),
+                |a, b| if b.0 < a.0 { b } else { a },
             );
         debug!("elapsed optim = {:?}", now.elapsed().as_millis());
-        let opt_params = opt_params.0.mapv(|v| F::cast(base.powf(v)));
+        let opt_params = opt_params.1.mapv(|v| F::cast(base.powf(v)));
 
         let opt_theta = opt_params
             .slice(s![..n - 1 - is_noise_estimated as usize])
@@ -839,7 +844,7 @@ mod tests {
     use super::*;
 
     use approx::assert_abs_diff_eq;
-    use ndarray::{concatenate, Array};
+    use ndarray::{array, concatenate, Array};
     // use ndarray_npy::{read_npy, write_npy};
     use ndarray_npy::write_npy;
     use ndarray_rand::rand::SeedableRng;
@@ -1016,7 +1021,7 @@ mod tests {
         )
         .sparse_method(SparseMethod::Vfe)
         //.sparse_method(SparseMethod::Fitc)
-        .theta_init(vec![0.1])
+        .theta_init(array![0.1])
         .noise_variance(ParamTuning::Optimized {
             init: 0.02,
             bounds: (1e-3, 1.),

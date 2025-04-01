@@ -369,7 +369,7 @@ mod tests {
     use serial_test::serial;
     use std::time::Instant;
 
-    use crate::{gpmix::spec::*, DOE_FILE, DOE_INITIAL_FILE};
+    use crate::{gpmix::spec::*, CoegoStatus, DOE_FILE, DOE_INITIAL_FILE};
 
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
@@ -623,6 +623,39 @@ mod tests {
         println!("Elapsed = {:?}", now.elapsed());
         let expected = array![1., 1.];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 5e-1);
+    }
+
+    fn sphere(x: &ArrayView2<f64>) -> Array2<f64> {
+        let s = (x * x).sum_axis(Axis(1));
+        s.insert_axis(Axis(1))
+    }
+
+    #[test]
+    #[serial]
+    fn test_sphere_coego_egor_builder() {
+        let outdir = "target/test_coego";
+        let dim = 10;
+        let xlimits = Array2::from_shape_vec((dim, 2), [-10.0, 10.0].repeat(dim)).unwrap();
+        let init_doe = Lhs::new(&xlimits)
+            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .sample(dim + 1);
+        let max_iters = 60;
+        let res = EgorBuilder::optimize(sphere)
+            .configure(|config| {
+                config
+                    .doe(&init_doe)
+                    .max_iters(max_iters)
+                    .outdir(outdir)
+                    .seed(42)
+                    .coego(CoegoStatus::Enabled(5))
+            })
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure");
+
+        println!("Sphere optim result = {res:?}");
+        let expected = Array1::<f64>::zeros(dim);
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 6e-1);
     }
 
     // Objective

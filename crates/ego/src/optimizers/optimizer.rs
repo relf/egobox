@@ -20,6 +20,7 @@ pub enum Algorithm {
     Lhs,
 }
 
+pub const MAX_EVAL_DEFAULT: usize = 200;
 /// Facade for various optimization algorithms
 pub(crate) struct Optimizer<'a> {
     algo: Algorithm,
@@ -50,7 +51,7 @@ impl<'a> Optimizer<'a> {
             cstr_tol: None,
             bounds: bounds.clone(),
             user_data,
-            max_eval: 200,
+            max_eval: MAX_EVAL_DEFAULT,
             xinit: None,
             ftol_abs: None,
             ftol_rel: None,

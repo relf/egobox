@@ -1,3 +1,4 @@
+mod coego;
 mod egor_config;
 mod egor_service;
 mod egor_solver;

@@ -33,6 +33,30 @@ impl Default for TregoConfig {
     }
 }
 
+/// An enum to specify CoEGO status and component number
+pub enum CoegoStatus {
+    Disabled,
+    Enabled(usize),
+}
+
+/// A structure to handle CoEGO method parameterization
+/// CoEGO variant is intended to be used for high dimensional problems
+/// with dim > 100
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct CoegoConfig {
+    pub(crate) activated: bool,
+    pub(crate) n_coop: usize,
+}
+
+impl Default for CoegoConfig {
+    fn default() -> Self {
+        CoegoConfig {
+            activated: false,
+            n_coop: 5,
+        }
+    }
+}
+
 /// Egor optimizer configuration
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct EgorConfig {
@@ -90,6 +114,8 @@ pub struct EgorConfig {
     pub(crate) seed: Option<u64>,
     /// Trego parameterization
     pub(crate) trego: TregoConfig,
+    /// Trego parameterization
+    pub(crate) coego: CoegoConfig,
     /// Constrained infill criterion activation
     pub(crate) cstr_infill: bool,
     /// Constraints criterion
@@ -121,6 +147,7 @@ impl Default for EgorConfig {
             xtypes: vec![],
             seed: None,
             trego: TregoConfig::default(),
+            coego: CoegoConfig::default(),
             cstr_infill: false,
             cstr_strategy: ConstraintStrategy::MeanConstraint,
         }
@@ -297,6 +324,18 @@ impl EgorConfig {
     /// Activate TREGO method
     pub fn trego(mut self, activated: bool) -> Self {
         self.trego.activated = activated;
+        self
+    }
+
+    /// Activate CoEGO method
+    pub fn coego(mut self, status: CoegoStatus) -> Self {
+        match status {
+            CoegoStatus::Disabled => self.coego.activated = false,
+            CoegoStatus::Enabled(n) => {
+                self.coego.activated = true;
+                self.coego.n_coop = n;
+            }
+        }
         self
     }
 

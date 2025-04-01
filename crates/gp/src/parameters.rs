@@ -3,6 +3,7 @@ use crate::errors::{GpError, Result};
 use crate::mean_models::{ConstantMean, RegressionModel};
 use linfa::{Float, ParamGuard};
 
+use ndarray::{array, Array1};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
@@ -11,16 +12,25 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum ThetaTuning<F: Float> {
     /// Constant parameter (ie given not estimated)
-    Fixed(Vec<F>),
+    Fixed(Array1<F>),
     /// Parameter is optimized between given bounds (lower, upper) starting from the inital guess
-    Optimized { init: Vec<F>, bounds: Vec<(F, F)> },
+    Full {
+        init: Array1<F>,
+        bounds: Array1<(F, F)>,
+    },
+    /// Parameter is partially optimized on specified active components
+    Partial {
+        init: Array1<F>,
+        bounds: Array1<(F, F)>,
+        active: Vec<usize>,
+    },
 }
 
 impl<F: Float> Default for ThetaTuning<F> {
     fn default() -> Self {
-        ThetaTuning::Optimized {
-            init: vec![F::cast(ThetaTuning::<F>::DEFAULT_INIT)],
-            bounds: vec![(
+        ThetaTuning::Full {
+            init: array![F::cast(ThetaTuning::<F>::DEFAULT_INIT)],
+            bounds: array![(
                 F::cast(ThetaTuning::<F>::DEFAULT_BOUNDS.0),
                 F::cast(ThetaTuning::<F>::DEFAULT_BOUNDS.1),
             )],
@@ -32,16 +42,26 @@ impl<F: Float> ThetaTuning<F> {
     pub const DEFAULT_INIT: f64 = 1e-2;
     pub const DEFAULT_BOUNDS: (f64, f64) = (1e-8, 1e2);
 
-    pub fn init(&self) -> &Vec<F> {
+    pub fn init(&self) -> &Array1<F> {
         match self {
-            ThetaTuning::Optimized { init, bounds: _ } => init,
+            ThetaTuning::Full { init, bounds: _ } => init,
+            ThetaTuning::Partial {
+                init,
+                active: _,
+                bounds: _,
+            } => init,
             ThetaTuning::Fixed(init) => init,
         }
     }
 
-    pub fn bounds(&self) -> Option<&Vec<(F, F)>> {
+    pub fn bounds(&self) -> Option<&Array1<(F, F)>> {
         match self {
-            ThetaTuning::Optimized { init: _, bounds } => Some(bounds),
+            ThetaTuning::Full { init: _, bounds } => Some(bounds),
+            ThetaTuning::Partial {
+                init: _,
+                active: _,
+                bounds,
+            } => Some(bounds),
             ThetaTuning::Fixed(_) => None,
         }
     }
@@ -164,9 +184,17 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     ///
     /// When theta is optimized, the internal optimization is started from `theta_init`.
     /// When theta is fixed, this set theta constant value.
-    pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
+    pub fn theta_init(mut self, theta_init: Array1<F>) -> Self {
         self.0.theta_tuning = match self.0.theta_tuning {
-            ThetaTuning::Optimized { init: _, bounds } => ThetaTuning::Optimized {
+            ThetaTuning::Full { init: _, bounds } => ThetaTuning::Full {
+                init: theta_init,
+                bounds,
+            },
+            ThetaTuning::Partial {
+                init: _,
+                active: _,
+                bounds,
+            } => ThetaTuning::Full {
                 init: theta_init,
                 bounds,
             },
@@ -178,9 +206,17 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     /// Set theta hyper parameter search space.
     ///
     /// This function is no-op when theta tuning is fixed
-    pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
+    pub fn theta_bounds(mut self, theta_bounds: Array1<(F, F)>) -> Self {
         self.0.theta_tuning = match self.0.theta_tuning {
-            ThetaTuning::Optimized { init, bounds: _ } => ThetaTuning::Optimized {
+            ThetaTuning::Full { init, bounds: _ } => ThetaTuning::Full {
+                init,
+                bounds: theta_bounds,
+            },
+            ThetaTuning::Partial {
+                init,
+                active: _,
+                bounds: _,
+            } => ThetaTuning::Full {
                 init,
                 bounds: theta_bounds,
             },

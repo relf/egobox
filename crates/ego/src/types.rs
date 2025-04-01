@@ -200,6 +200,7 @@ pub type Cstr = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InfillObjData<F: Float> {
     pub fmin: F,
+    pub xbest: Vec<F>,
     pub scale_infill_obj: F,
     pub scale_cstr: Option<Array1<F>>,
     pub scale_wb2: F,
@@ -209,6 +210,7 @@ impl<F: Float> Default for InfillObjData<F> {
     fn default() -> Self {
         Self {
             fmin: F::infinity(),
+            xbest: vec![],
             scale_infill_obj: F::one(),
             scale_cstr: None,
             scale_wb2: F::one(),

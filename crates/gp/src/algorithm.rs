@@ -753,7 +753,36 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
             };
         }
 
-        let xtrain = NormalizedData::new(x);
+        let dim = if let Some(n_components) = self.kpls_dim() {
+            *n_components
+        } else {
+            x.ncols()
+        };
+
+        let (x, y, active, init) = match self.theta_tuning() {
+            ThetaTuning::Fixed(init) | ThetaTuning::Full { init, bounds: _ } => (
+                x.to_owned(),
+                y.to_owned(),
+                (0..dim).collect::<Vec<_>>(),
+                init,
+            ),
+            ThetaTuning::Partial {
+                init,
+                bounds: _,
+                active,
+            } => (x.to_owned(), y.to_owned(), active.to_vec(), init),
+        };
+        // Initial guess for theta
+        let theta0_dim = init.len();
+        let theta0 = if theta0_dim == 1 {
+            Array1::from_elem(dim, init[0])
+        } else if theta0_dim == dim {
+            init.to_owned()
+        } else {
+            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+        };
+
+        let xtrain = NormalizedData::new(&x);
         let ytrain = NormalizedData::new(&y);
 
         let mut w_star = Array2::eye(x.ncols());
@@ -784,26 +813,20 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let opt_params = match self.theta_tuning() {
             ThetaTuning::Fixed(init) => {
                 // Easy path no optimization
-                Array1::from_vec(init.to_vec())
+                init.to_owned()
             }
-            ThetaTuning::Optimized { init, bounds } => {
-                // Initial guess for theta
-                let theta0_dim = init.len();
-                let theta0 = if theta0_dim == 1 {
-                    Array1::from_elem(w_star.ncols(), init[0])
-                } else if theta0_dim == w_star.ncols() {
-                    Array::from_vec(init.to_vec())
-                } else {
-                    panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
-                };
-
+            ThetaTuning::Full { init: _, bounds }
+            | ThetaTuning::Partial {
+                init: _,
+                bounds,
+                active: _,
+            } => {
                 let base: f64 = 10.;
                 let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
-                    let theta = Array1::from_shape_vec(
-                        (x.len(),),
-                        x.iter().map(|v| base.powf(*v)).collect(),
-                    )
-                    .unwrap();
+                    let mut theta = theta0.to_owned();
+                    let xarr = x.iter().map(|v| base.powf(*v)).collect::<Vec<_>>();
+                    std::iter::zip(active.clone(), xarr).for_each(|(i, xi)| theta[i] = F::cast(xi));
+
                     for v in theta.iter() {
                         // check theta as optimizer may return nan values
                         if v.is_nan() {
@@ -811,7 +834,6 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                             return f64::INFINITY;
                         }
                     }
-                    let theta = theta.mapv(F::cast);
                     let rxx = self.corr().value(&x_distances.d, &theta, &w_star);
                     match reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget()) {
                         Ok(r) => unsafe { -(*(&r.0 as *const F as *const f64)) },
@@ -834,7 +856,18 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                     )
                 };
 
-                let (params, bounds) = prepare_multistart(self.n_start(), &theta0, &bounds);
+                // Select init params and bounds wrt to activity
+                let active_bounds = bounds
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| active.contains(i))
+                    .map(|(_, &b)| b)
+                    .collect::<Vec<_>>();
+                let (params, bounds) = prepare_multistart(
+                    self.n_start(),
+                    &theta0.select(Axis(0), &active),
+                    &active_bounds,
+                );
                 debug!(
                     "Optimize with multistart theta = {:?} and bounds = {:?}",
                     params, bounds
@@ -848,7 +881,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                             &params.row(i).to_owned(),
                             &bounds,
                             CobylaParams {
-                                maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+                                maxeval: (10 * params.ncols()).min(CobylaParams::default().maxeval),
                                 ..CobylaParams::default()
                             },
                         );
@@ -856,13 +889,29 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                         opt_res
                     })
                     .reduce(
-                        || (Array::ones((params.ncols(),)), f64::INFINITY),
-                        |a, b| if b.1 < a.1 { b } else { a },
+                        || (f64::INFINITY, Array::ones((params.ncols(),))),
+                        |a, b| if b.0 < a.0 { b } else { a },
                     );
                 debug!("elapsed optim = {:?}", now.elapsed().as_millis());
-                opt_params.0.mapv(|v| F::cast(base.powf(v)))
+                opt_params.1.mapv(|v| F::cast(base.powf(v)))
             }
         };
+
+        // In case of partial optimization we set only active components
+        let opt_params = match self.theta_tuning() {
+            ThetaTuning::Fixed(_) | ThetaTuning::Full { init: _, bounds: _ } => opt_params,
+            ThetaTuning::Partial {
+                init,
+                bounds: _,
+                active,
+            } => {
+                let mut opt_theta = init.to_owned();
+                std::iter::zip(active.clone(), opt_params)
+                    .for_each(|(i, xi)| opt_theta[i] = F::cast(xi));
+                opt_theta
+            }
+        };
+
         let rxx = self.corr().value(&x_distances.d, &opt_params, &w_star);
         let (lkh, inner_params) =
             reduced_likelihood(&fx, rxx, &x_distances, &ytrain, self.nugget())?;
@@ -1126,7 +1175,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
-        .theta_init(vec![0.1])
+        .theta_init(array![0.1])
         .kpls_dim(Some(1))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fit error");
@@ -1149,7 +1198,7 @@ mod tests {
                         [<$regr Mean>]::default(),
                         [<$corr Corr>]::default(),
                     )
-                    .theta_init(vec![0.1])
+                    .theta_init(array![0.1])
                     .fit(&Dataset::new(xt, yt))
                     .expect("GP fit error");
                     let yvals = gp
@@ -1546,14 +1595,14 @@ mod tests {
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fit error");
         let default = ThetaTuning::default();
-        assert_abs_diff_ne!(*gp.theta().to_vec(), default.init());
-        let expected = gp.theta().to_vec();
+        assert_abs_diff_ne!(*gp.theta(), default.init());
+        let expected = gp.theta();
 
         let gp = Kriging::params()
             .theta_tuning(ThetaTuning::Fixed(expected.clone()))
             .fit(&Dataset::new(xt, yt))
             .expect("GP fit error");
-        assert_abs_diff_eq!(*gp.theta().to_vec(), expected);
+        assert_abs_diff_eq!(*gp.theta(), expected);
     }
 
     fn x2sinx(x: &Array2<f64>) -> Array1<f64> {
@@ -1659,7 +1708,7 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
-        .theta_tuning(ThetaTuning::Fixed(vec![0.0437386, 0.00697978]))
+        .theta_tuning(ThetaTuning::Fixed(array![0.0437386, 0.00697978]))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
 

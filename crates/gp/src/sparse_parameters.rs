@@ -4,7 +4,7 @@ use crate::mean_models::ConstantMean;
 use crate::parameters::GpValidParams;
 use crate::ThetaTuning;
 use linfa::{Float, ParamGuard};
-use ndarray::Array2;
+use ndarray::{Array1, Array2};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
@@ -173,9 +173,17 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     ///
     /// When theta is optimized, the internal optimization is started from `theta_init`.
     /// When theta is fixed, this set theta constant value.
-    pub fn theta_init(mut self, theta_init: Vec<F>) -> Self {
+    pub fn theta_init(mut self, theta_init: Array1<F>) -> Self {
         self.0.gp_params.theta_tuning = match self.0.gp_params.theta_tuning {
-            ThetaTuning::Optimized { init: _, bounds } => ThetaTuning::Optimized {
+            ThetaTuning::Full { init: _, bounds } => ThetaTuning::Full {
+                init: theta_init,
+                bounds,
+            },
+            ThetaTuning::Partial {
+                init: _,
+                active: _,
+                bounds,
+            } => ThetaTuning::Full {
                 init: theta_init,
                 bounds,
             },
@@ -187,9 +195,17 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     /// Set theta hyper parameter search space.
     ///
     /// This function is no-op when theta tuning is fixed
-    pub fn theta_bounds(mut self, theta_bounds: Vec<(F, F)>) -> Self {
+    pub fn theta_bounds(mut self, theta_bounds: Array1<(F, F)>) -> Self {
         self.0.gp_params.theta_tuning = match self.0.gp_params.theta_tuning {
-            ThetaTuning::Optimized { init, bounds: _ } => ThetaTuning::Optimized {
+            ThetaTuning::Full { init, bounds: _ } => ThetaTuning::Full {
+                init,
+                bounds: theta_bounds,
+            },
+            ThetaTuning::Partial {
+                init,
+                active: _,
+                bounds: _,
+            } => ThetaTuning::Full {
                 init,
                 bounds: theta_bounds,
             },
