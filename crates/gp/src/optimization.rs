@@ -77,7 +77,7 @@ pub(crate) fn optimize_params<ObjF, F>(
     param0: &Array1<F>,
     bounds: &[(F, F)],
     cobyla: CobylaParams,
-) -> (Array1<f64>, f64)
+) -> (f64, Array1<f64>)
 where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
     F: Float,
@@ -108,11 +108,11 @@ where
             } else {
                 fmin
             };
-            (params_opt, fval)
+            (fval, params_opt)
         }
         Err(_e) => {
             // println!("ERROR OPTIM in GP err={:?}", e);
-            (arr1(&param).mapv(|v| base.powf(v)), f64::INFINITY)
+            (f64::INFINITY, arr1(&param).mapv(|v| base.powf(v)))
         }
     }
 }

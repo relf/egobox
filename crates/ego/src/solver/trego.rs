@@ -238,7 +238,7 @@ where
                             )
                         }
                     };
-                    Box::new(cstr) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>
+                    Box::new(cstr) as Box<dyn ObjFn<InfillObjData<f64>> + Sync>
                 })
                 .collect();
             let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
