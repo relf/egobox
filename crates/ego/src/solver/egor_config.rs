@@ -33,6 +33,12 @@ impl Default for TregoConfig {
     }
 }
 
+/// An enum to specify CoEGO status and component number
+pub enum CoegoStatus {
+    Disabled,
+    Enabled(usize),
+}
+
 /// A structure to handle CoEGO method parameterization
 /// CoEGO variant is intended to be used for high dimensional problems
 /// with dim > 100
@@ -46,7 +52,7 @@ impl Default for CoegoConfig {
     fn default() -> Self {
         CoegoConfig {
             activated: false,
-            n_coop: 4,
+            n_coop: 5,
         }
     }
 }
@@ -322,8 +328,14 @@ impl EgorConfig {
     }
 
     /// Activate CoEGO method
-    pub fn coego(mut self, activated: bool) -> Self {
-        self.coego.activated = activated;
+    pub fn coego(mut self, status: CoegoStatus) -> Self {
+        match status {
+            CoegoStatus::Disabled => self.coego.activated = false,
+            CoegoStatus::Enabled(n) => {
+                self.coego.activated = true;
+                self.coego.n_coop = n;
+            }
+        }
         self
     }
 

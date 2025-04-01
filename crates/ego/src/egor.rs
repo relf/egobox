@@ -369,7 +369,7 @@ mod tests {
     use serial_test::serial;
     use std::time::Instant;
 
-    use crate::{gpmix::spec::*, DOE_FILE, DOE_INITIAL_FILE};
+    use crate::{gpmix::spec::*, CoegoStatus, DOE_FILE, DOE_INITIAL_FILE};
 
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
@@ -647,7 +647,7 @@ mod tests {
                     .max_iters(max_iters)
                     .outdir(outdir)
                     .seed(42)
-                    .coego(true)
+                    .coego(CoegoStatus::Enabled(5))
             })
             .min_within(&xlimits)
             .run()

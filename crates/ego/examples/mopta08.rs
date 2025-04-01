@@ -1,6 +1,7 @@
 use clap::Parser;
 use egobox_ego::{
-    ConstraintStrategy, EgorBuilder, GroupFunc, InfillOptimizer, InfillStrategy, QEiStrategy,
+    CoegoStatus, ConstraintStrategy, EgorBuilder, GroupFunc, InfillOptimizer, InfillStrategy,
+    QEiStrategy,
 };
 use egobox_moe::{CorrelationSpec, NbClusters, RegressionSpec};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
@@ -259,7 +260,7 @@ fn main() -> anyhow::Result<()> {
     let max_iters = 4 * dim;
     const N_CSTR: usize = 68;
     let cstr_tol = Array1::from_elem(N_CSTR, 1e-4);
-    let kpls_dim = 10;
+    let _kpls_dim = 10;
 
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
@@ -285,7 +286,7 @@ fn main() -> anyhow::Result<()> {
                 .qei_strategy(QEiStrategy::KrigingBeliever)
                 .outdir(outdir)
                 .warm_start(true)
-                .coego(true)
+                .coego(CoegoStatus::Enabled(4))
         })
         .min_within(&xlimits)
         .run()

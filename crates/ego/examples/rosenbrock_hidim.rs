@@ -30,7 +30,7 @@ fn main() {
                 .max_iters(max_iters)
                 .outdir(outdir)
                 .seed(42)
-            // .coego(true)
+            // .coego(CoegoStatus::Enabled(5))
             // .trego(true)
         })
         .min_within(&xlimits)
