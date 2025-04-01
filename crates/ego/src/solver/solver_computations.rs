@@ -173,7 +173,7 @@ where
                     }
                     if self.config.cstr_infill {
                         self.eval_infill_obj(&xcoop, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-                            * pofs(x, cstr_models, &cstr_tols.to_vec())
+                            * pofs(&xcoop, cstr_models, &cstr_tols.to_vec())
                     } else {
                         self.eval_infill_obj(&xcoop, obj_model, fmin, *scale_infill_obj, *scale_wb2)
                     }
@@ -340,7 +340,6 @@ where
                 .map(|(_, &g)| g)
                 .collect::<Vec<_>>();
             grad[..].copy_from_slice(&grd_coop);
-            grad[..].copy_from_slice(&grd);
         }
         (cstr_val + CSTR_DOUBT * sigma) / scale_cstr
     }

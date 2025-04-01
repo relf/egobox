@@ -226,7 +226,7 @@ where
                     let likelihood = gp.experts()[0].likelihood();
                     // We update only if better likelihood
                     if likelihood > best_likelihood && model_name == "Objective" {
-                        log::info!("Objective Likelihood = {}", likelihood);
+                        log::info!("Objective likelihood = {}", likelihood);
                         best_likelihood = likelihood;
                         best_theta_inits =
                             Some(gp.experts()[0].theta().clone().insert_axis(Axis(0)));
