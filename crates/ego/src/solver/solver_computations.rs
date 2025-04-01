@@ -120,6 +120,7 @@ where
         };
 
         for (i, active) in actives.outer_iter().enumerate() {
+            let active = active.to_vec();
             let obj =
                 |x: &[f64], gradient: Option<&mut [f64]>, params: &mut InfillObjData<f64>| -> f64 {
                     let InfillObjData {
@@ -129,7 +130,7 @@ where
                         ..
                     } = params;
                     let mut xcoop = xcoop.clone();
-                    Self::setx(&mut xcoop, &active.to_vec(), x);
+                    Self::setx(&mut xcoop, &active, x);
 
                     // Defensive programming NlOpt::Cobyla may pass NaNs
                     if xcoop.iter().any(|x| x.is_nan()) {
@@ -165,7 +166,7 @@ where
                         let g_infill_obj = g_infill_obj
                             .iter()
                             .enumerate()
-                            .filter(|(i, _)| active.to_vec().contains(i))
+                            .filter(|(i, _)| active.contains(i))
                             .map(|(_, &g)| g)
                             .collect::<Vec<_>>();
                         grad[..].copy_from_slice(&g_infill_obj);
@@ -180,23 +181,25 @@ where
 
             let cstrs: Vec<_> = (0..self.config.n_cstr)
                 .map(|i| {
+                    let active = active.to_vec();
                     let cstr = move |x: &[f64],
                                      gradient: Option<&mut [f64]>,
                                      params: &mut InfillObjData<f64>|
                           -> f64 {
                         let InfillObjData { xbest: xcoop, .. } = params;
                         let mut xcoop = xcoop.clone();
-                        Self::setx(&mut xcoop, &active.to_vec(), x);
+                        Self::setx(&mut xcoop, &active, x);
 
                         let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
                         if self.config.cstr_strategy == ConstraintStrategy::MeanConstraint {
-                            Self::mean_cstr(&*cstr_models[i], &xcoop, gradient, scale_cstr)
+                            Self::mean_cstr(&*cstr_models[i], &xcoop, gradient, scale_cstr, &active)
                         } else {
                             Self::upper_trust_bound_cstr(
                                 &*cstr_models[i],
                                 &xcoop,
                                 gradient,
                                 scale_cstr,
+                                &active,
                             )
                         }
                     };
@@ -216,14 +219,14 @@ where
             cstr_refs.extend(cstr_funcs);
 
             // Limits
-            let xlimits = self.xlimits.select(Axis(0), &active.to_vec());
+            let xlimits = self.xlimits.select(Axis(0), &active);
 
             if i == 0 {
                 info!("Optimize infill criterion...");
             }
             while !success && n_optim <= n_max_optim {
                 let x_start = sampling.sample(self.config.n_start);
-                let x_start_coop = x_start.select(Axis(1), &active.to_vec());
+                let x_start_coop = x_start.select(Axis(1), &active);
 
                 if let Some(seed) = lhs_optim_seed {
                     let (y_opt, x_opt) =
@@ -259,7 +262,7 @@ where
                         success = false;
                     } else {
                         let mut xopt_coop = best_point.1.to_vec();
-                        Self::setx(&mut xopt_coop, &active.to_vec(), &res.1.to_vec());
+                        Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
                         best_point = (res.0, Array1::from(xopt_coop));
                         success = true;
                     }
@@ -286,6 +289,7 @@ where
         x: &[f64],
         gradient: Option<&mut [f64]>,
         scale_cstr: f64,
+        active: &[usize],
     ) -> f64 {
         let x = Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
         if let Some(grad) = gradient {
@@ -295,7 +299,13 @@ where
                 .row(0)
                 .mapv(|v| v / scale_cstr)
                 .to_vec();
-            grad[..].copy_from_slice(&grd);
+            let grd_coop = grd
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| active.contains(i))
+                .map(|(_, &g)| g)
+                .collect::<Vec<_>>();
+            grad[..].copy_from_slice(&grd_coop);
         }
         cstr_model.predict(&x.view()).unwrap()[0] / scale_cstr
     }
@@ -305,6 +315,7 @@ where
         x: &[f64],
         gradient: Option<&mut [f64]>,
         scale_cstr: f64,
+        active: &[usize],
     ) -> f64 {
         let x = Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
         let sigma = cstr_model.predict_var(&x.view()).unwrap()[[0, 0]].sqrt();
@@ -322,6 +333,13 @@ where
                 .row(0)
                 .mapv(|v| (v + CSTR_DOUBT * sigma_prime) / scale_cstr)
                 .to_vec();
+            let grd_coop = grd
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| active.contains(i))
+                .map(|(_, &g)| g)
+                .collect::<Vec<_>>();
+            grad[..].copy_from_slice(&grd_coop);
             grad[..].copy_from_slice(&grd);
         }
         (cstr_val + CSTR_DOUBT * sigma) / scale_cstr

@@ -152,6 +152,7 @@ where
 
         let mut best_point = (fmin, xbest.to_owned());
         for (i, active) in actives.outer_iter().enumerate() {
+            let active = active.to_vec();
             let obj = |x: &[f64],
                        gradient: Option<&mut [f64]>,
                        params: &mut InfillObjData<f64>|
@@ -164,7 +165,7 @@ where
                     ..
                 } = params;
                 let mut xcoop = xcoop.clone();
-                setx(&mut xcoop, &active.to_vec(), x);
+                setx(&mut xcoop, &active, x);
 
                 // Defensive programming NlOpt::Cobyla may pass NaNs
                 if xcoop.iter().any(|x| x.is_nan()) {
@@ -200,7 +201,7 @@ where
                     let g_infill_obj = g_infill_obj
                         .iter()
                         .enumerate()
-                        .filter(|(i, _)| active.to_vec().contains(i))
+                        .filter(|(i, _)| active.contains(i))
                         .map(|(_, &g)| g)
                         .collect::<Vec<_>>();
                     grad[..].copy_from_slice(&g_infill_obj);
@@ -215,23 +216,25 @@ where
 
             let cstrs: Vec<_> = (0..self.config.n_cstr)
                 .map(|i| {
+                    let active = active.to_vec();
                     let cstr = move |x: &[f64],
                                      gradient: Option<&mut [f64]>,
                                      params: &mut InfillObjData<f64>|
                           -> f64 {
                         let InfillObjData { xbest: xcoop, .. } = params;
                         let mut xcoop = xcoop.clone();
-                        setx(&mut xcoop, &active.to_vec(), x);
+                        setx(&mut xcoop, &active, x);
 
                         let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
                         if self.config.cstr_strategy == ConstraintStrategy::MeanConstraint {
-                            Self::mean_cstr(&*cstr_models[i], &xcoop, gradient, scale_cstr)
+                            Self::mean_cstr(&*cstr_models[i], &xcoop, gradient, scale_cstr, &active)
                         } else {
                             Self::upper_trust_bound_cstr(
                                 &*cstr_models[i],
                                 &xcoop,
                                 gradient,
                                 scale_cstr,
+                                &active,
                             )
                         }
                     };

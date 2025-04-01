@@ -46,7 +46,7 @@ impl Default for CoegoConfig {
     fn default() -> Self {
         CoegoConfig {
             activated: false,
-            n_coop: 5,
+            n_coop: 4,
         }
     }
 }
