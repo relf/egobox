@@ -225,8 +225,8 @@ where
                 if self.config.n_clusters.is_mono() {
                     let likelihood = gp.experts()[0].likelihood();
                     // We update only if better likelihood
-                    if likelihood > best_likelihood {
-                        log::info!("Likelihood = {}", likelihood);
+                    if likelihood > best_likelihood && model_name == "Objective" {
+                        log::info!("Objective Likelihood = {}", likelihood);
                         best_likelihood = likelihood;
                         best_theta_inits =
                             Some(gp.experts()[0].theta().clone().insert_axis(Axis(0)));
