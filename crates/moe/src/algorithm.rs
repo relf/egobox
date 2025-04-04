@@ -127,7 +127,7 @@ impl GpMixtureValidParams<f64> {
             let covariances = gmm.covariances().slice(s![.., ..nx, ..nx]).to_owned();
             let factor = match recomb {
                 Recombination::Smooth(Some(f)) => f,
-                Recombination::Smooth(None) => 1.,
+                Recombination::Smooth(_) => 1.,
                 Recombination::Hard => 1.,
             };
             GaussianMixture::new(weights, means, covariances)?.heaviside_factor(factor)
@@ -255,7 +255,7 @@ impl GpMixtureValidParams<f64> {
         debug!("after Find best expert");
 
         let expert = match self.gp_type() {
-            GpType::FullGp { .. } => {
+            GpType::FullGp => {
                 let best_expert_params: std::result::Result<Box<dyn GpSurrogateParams>, MoeError> =
                     match best.0.as_str() {
                         "Constant_SquaredExponential" => {
@@ -439,7 +439,7 @@ impl std::fmt::Display for GpMixture {
         let recomb = match self.recombination() {
             Recombination::Hard => "Hard".to_string(),
             Recombination::Smooth(Some(f)) => format!("Smooth({f})"),
-            Recombination::Smooth(None) => "Smooth".to_string(),
+            Recombination::Smooth(_) => "Smooth".to_string(),
         };
         let experts = self
             .experts
@@ -574,8 +574,8 @@ impl GpMixture {
     pub fn set_recombination(mut self, recombination: Recombination<f64>) -> Self {
         self.recombination = match recombination {
             Recombination::Hard => recombination,
-            Recombination::Smooth(None) => Recombination::Smooth(Some(1.)),
             Recombination::Smooth(Some(_)) => recombination,
+            Recombination::Smooth(_) => Recombination::Smooth(Some(1.)),
         };
         self
     }
@@ -948,30 +948,33 @@ mod tests {
     use rand_xoshiro::Xoshiro256Plus;
 
     fn f_test_1d(x: &Array2<f64>) -> Array1<f64> {
-        let mut y = Array2::zeros(x.dim());
-        Zip::from(&mut y).and(x).for_each(|yi, &xi| {
-            if xi < 0.4 {
+        let mut y = Array1::zeros(x.len());
+        let x = Array::from_iter(x.iter().cloned());
+        Zip::from(&mut y).and(&x).for_each(|yi, xi| {
+            if *xi < 0.4 {
                 *yi = xi * xi;
-            } else if (0.4..0.8).contains(&xi) {
+            } else if (0.4..0.8).contains(xi) {
                 *yi = 3. * xi + 1.;
             } else {
                 *yi = f64::sin(10. * xi);
             }
         });
-        y.remove_axis(Axis(1))
+        y
     }
 
     fn df_test_1d(x: &Array2<f64>) -> Array2<f64> {
         let mut y = Array2::zeros(x.dim());
-        Zip::from(&mut y).and(x).for_each(|yi, &xi| {
-            if xi < 0.4 {
-                *yi = 2. * xi;
-            } else if (0.4..0.8).contains(&xi) {
-                *yi = 3.;
-            } else {
-                *yi = 10. * f64::cos(10. * xi);
-            }
-        });
+        Zip::from(y.rows_mut())
+            .and(x.rows())
+            .for_each(|mut yi, xi| {
+                if xi[0] < 0.4 {
+                    yi[0] = 2. * xi[0];
+                } else if (0.4..0.8).contains(&xi[0]) {
+                    yi[0] = 3.;
+                } else {
+                    yi[0] = 10. * f64::cos(10. * xi[0]);
+                }
+            });
         y
     }
 
