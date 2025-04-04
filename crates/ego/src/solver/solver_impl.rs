@@ -536,7 +536,7 @@ where
                     };
                     let make_clustering = (init && i == 0) || recluster;
                     let optimize_theta =
-                        (iter as usize * self.config.q_points + i) % (self.config.n_optmod) == 0;
+                        (iter as usize * self.config.q_points + i) % (self.config.q_optmod) == 0;
                     self.make_clustered_surrogate(
                         &name,
                         &xt,

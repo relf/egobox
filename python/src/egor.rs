@@ -128,7 +128,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         When set to negative number -n, the number of clusters is determined automatically in [1, n]
 ///         this is used to limit the number of trials hence the execution time.
 ///   
-///     n_optmod (int >= 1)
+///     q_optmod (int >= 1)
 ///         Number of iterations between two surrogate models training (hypermarameters optimization)
 ///         otherwise previous hyperparameters are re-used. The default value is 1 meaning surrogates are
 ///         properly trained at each iteration. The value is used as a modulo of iteration number. For instance,
@@ -174,7 +174,7 @@ pub(crate) struct Egor {
     pub kpls_dim: Option<usize>,
     pub trego: bool,
     pub n_clusters: NbClusters,
-    pub n_optmod: usize,
+    pub q_optmod: usize,
     pub target: f64,
     pub outdir: Option<String>,
     pub warm_start: bool,
@@ -215,7 +215,7 @@ impl Egor {
         kpls_dim = None,
         trego = false,
         n_clusters = 1,
-        n_optmod = 1,
+        q_optmod = 1,
         target = f64::NEG_INFINITY,
         outdir = None,
         warm_start = false,
@@ -242,7 +242,7 @@ impl Egor {
         kpls_dim: Option<usize>,
         trego: bool,
         n_clusters: isize,
-        n_optmod: usize,
+        q_optmod: usize,
         target: f64,
         outdir: Option<String>,
         warm_start: bool,
@@ -275,7 +275,7 @@ impl Egor {
             kpls_dim,
             trego,
             n_clusters,
-            n_optmod,
+            q_optmod,
             target,
             outdir,
             warm_start,
@@ -566,7 +566,7 @@ impl Egor {
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
             .trego(self.trego)
-            .n_optmod(self.n_optmod)
+            .q_optmod(self.q_optmod)
             .target(self.target)
             .warm_start(self.warm_start)
             .hot_start(self.hot_start.into());

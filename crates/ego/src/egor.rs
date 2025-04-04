@@ -453,7 +453,7 @@ mod tests {
     #[serial]
     fn test_xsinx_optmod_egor() {
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(20).n_optmod(3))
+            .configure(|config| config.max_iters(20).q_optmod(3))
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");

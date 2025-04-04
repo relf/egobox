@@ -282,7 +282,7 @@ fn main() -> anyhow::Result<()> {
                 .cstr_strategy(ConstraintStrategy::UpperTrustBound)
                 //.kpls_dim(kpls_dim)
                 .q_points(5)
-                .n_optmod(5)
+                .q_optmod(5)
                 .qei_strategy(QEiStrategy::KrigingBeliever)
                 .outdir(outdir)
                 .warm_start(true)

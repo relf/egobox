@@ -73,7 +73,7 @@ pub struct EgorState<F: Float> {
 
     /// Current clusterings for objective and constraints GP mixture surrogate models
     pub clusterings: Option<Vec<Option<Clustering>>>,
-    /// ThetaTunings controlled by n_optmod configuration triggering
+    /// ThetaTunings controlled by q_optmod configuration triggering
     /// GP surrogate models hyperparameters optimization or reusing previous ones
     pub theta_inits: Option<Vec<Option<Array2<F>>>>,
     /// Historic data (params, objective and constraints values, function constraints)
