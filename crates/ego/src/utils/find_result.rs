@@ -49,11 +49,7 @@ pub fn find_best_result_index_from<F: Float>(
     cdata: &ArrayBase<impl Data<Elem = F>, Ix2>, /* the whole function cstrs data so far */
     cstr_tol: &Array1<F>,
 ) -> usize {
-    // let new_ydata = ydata.slice(s![offset_index.., ..]);
-
     let alldata = concatenate![Axis(1), ydata.to_owned(), cdata.to_owned()];
-    let alltols = concatenate![Axis(0), cstr_tol.to_owned(), Array1::zeros(cdata.ncols())];
-
     let new_ydata = alldata.slice(s![offset_index.., ..]);
 
     let best = alldata.row(current_index);
@@ -61,7 +57,7 @@ pub fn find_best_result_index_from<F: Float>(
         .outer_iter()
         .enumerate()
         .fold((usize::MAX, best), |a, b| {
-            std::cmp::min_by(a, b, |(i, u), (j, v)| cstr_min((*i, u), (*j, v), &alltols))
+            std::cmp::min_by(a, b, |(i, u), (j, v)| cstr_min((*i, u), (*j, v), cstr_tol))
         });
     match min {
         (usize::MAX, _) => current_index,
