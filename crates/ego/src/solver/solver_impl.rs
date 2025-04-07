@@ -130,6 +130,7 @@ where
         let mut model = None;
         let mut best_likelihood = -f64::INFINITY;
         let mut best_theta_inits = theta_inits.map(|inits| inits.to_owned());
+
         for (i, active) in actives.outer_iter().enumerate() {
             let gp = if make_clustering
             /* init || recluster */
@@ -226,7 +227,11 @@ where
                     let likelihood = gp.experts()[0].likelihood();
                     // We update only if better likelihood
                     if likelihood > best_likelihood && model_name == "Objective" {
-                        log::info!("Objective likelihood = {}", likelihood);
+                        log::info!(
+                            "Partial likelihood optim c={} has improved value={}",
+                            i,
+                            likelihood
+                        );
                         best_likelihood = likelihood;
                         best_theta_inits =
                             Some(gp.experts()[0].theta().clone().insert_axis(Axis(0)));
@@ -512,6 +517,7 @@ where
         let mut c_dat = Array2::zeros((0, c_data.ncols()));
         let mut infill_val = f64::INFINITY;
         let mut infill_data = Default::default();
+
         for i in 0..self.config.q_points {
             let (xt, yt) = if i == 0 {
                 (x_data.to_owned(), y_data.to_owned())
@@ -567,7 +573,9 @@ where
             debug!("... surrogates trained");
 
             let fmin = y_data[[best_index, 0]];
+            let ybest = y_data.row(best_index).to_owned();
             let xbest = x_data.row(best_index).to_owned();
+            let cbest = c_data.row(best_index).to_owned();
             let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) =
                 self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, cstr_funcs, fmin);
 
@@ -619,7 +627,7 @@ where
                 lhs_optim,
                 &infill_data,
                 &cstr_funcs,
-                (fmin, xbest),
+                (fmin, xbest, ybest, cbest),
                 &actives,
             );
 
