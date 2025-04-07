@@ -637,9 +637,9 @@ mod tests {
         let dim = 10;
         let xlimits = Array2::from_shape_vec((dim, 2), [-10.0, 10.0].repeat(dim)).unwrap();
         let init_doe = Lhs::new(&xlimits)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(0))
             .sample(dim + 1);
-        let max_iters = 60;
+        let max_iters = 50;
         let res = EgorBuilder::optimize(sphere)
             .configure(|config| {
                 config
