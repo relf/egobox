@@ -526,6 +526,8 @@ impl Egor {
         xtypes
     }
 
+    /// Either use user defined cstr_tol or else use default tolerance for all constraints
+    /// n_fcstr is the number of function constraints
     fn cstr_tol(&self, n_fcstr: usize) -> Array1<f64> {
         let cstr_tol = self
             .cstr_tol
