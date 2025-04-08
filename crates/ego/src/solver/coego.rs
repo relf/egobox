@@ -30,26 +30,28 @@ where
         active: &[usize],
         theta_tunings: &mut [ThetaTuning<f64>],
     ) {
-        let _ = theta_tunings.iter_mut().map(|theta| match theta {
-            ThetaTuning::Fixed(init) => ThetaTuning::Partial {
-                init: init.clone(),
-                bounds: Array1::from_vec(vec![ThetaTuning::<f64>::DEFAULT_BOUNDS; init.len()]),
-                active: active.to_vec(),
-            },
-            ThetaTuning::Full { init, bounds } => ThetaTuning::Partial {
-                init: init.clone(),
-                bounds: bounds.clone(),
-                active: active.to_vec(),
-            },
-            ThetaTuning::Partial {
-                init,
-                bounds,
-                active: _,
-            } => ThetaTuning::Partial {
-                init: init.clone(),
-                bounds: bounds.clone(),
-                active: active.to_vec(),
-            },
+        theta_tunings.iter_mut().for_each(|theta| {
+            *theta = match theta {
+                ThetaTuning::Fixed(init) => ThetaTuning::Partial {
+                    init: init.clone(),
+                    bounds: Array1::from_vec(vec![ThetaTuning::<f64>::DEFAULT_BOUNDS; init.len()]),
+                    active: active.to_vec(),
+                },
+                ThetaTuning::Full { init, bounds } => ThetaTuning::Partial {
+                    init: init.clone(),
+                    bounds: bounds.clone(),
+                    active: active.to_vec(),
+                },
+                ThetaTuning::Partial {
+                    init,
+                    bounds,
+                    active: _,
+                } => ThetaTuning::Partial {
+                    init: init.clone(),
+                    bounds: bounds.clone(),
+                    active: active.to_vec(),
+                },
+            };
         });
     }
 }

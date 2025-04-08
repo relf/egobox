@@ -244,14 +244,12 @@ where
             indices.shuffle(&mut self.rng.clone());
             // TODO: manage remaining indices, atm suppose an empty remainder
             let _remainder = indices[(self.config.coego.n_coop * g_size)..].to_vec();
-
-            Some(
-                Array2::from_shape_vec(
-                    (self.config.coego.n_coop, g_size),
-                    indices[..xdim].to_vec(),
-                )
-                .unwrap(),
-            )
+            let activity = Array2::from_shape_vec(
+                (self.config.coego.n_coop, g_size),
+                indices[..xdim].to_vec(),
+            );
+            debug!("Component activity = {:?}", activity);
+            Some(activity.unwrap())
         } else {
             None
         };
@@ -322,6 +320,7 @@ where
                 indices[..xdim].to_vec(),
             )
             .unwrap();
+            debug!("Component activity = {:?}", activity);
             (res.0.activity(activity), res.1)
         } else {
             res

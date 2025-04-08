@@ -168,6 +168,15 @@ where
                 let gp = builder
                     .train(xt.view(), yt.view())
                     .expect("GP training failure");
+                let inits = Array2::from_shape_vec(
+                    (gp.experts().len(), gp.experts()[0].theta().len()),
+                    gp.experts()
+                        .iter()
+                        .flat_map(|expert| expert.theta().to_vec())
+                        .collect(),
+                )
+                .expect("Theta initialization failure");
+                best_theta_inits = Some(inits);
 
                 if i == 0 {
                     info!(
@@ -232,7 +241,6 @@ where
                             i,
                             likelihood
                         );
-                        info!("Active set: {:?}", active);
                         best_likelihood = likelihood;
                         let inits = Array2::from_shape_vec(
                             (gp.experts().len(), gp.experts()[0].theta().len()),
@@ -244,12 +252,11 @@ where
                         .expect("Theta initialization failure");
                         best_theta_inits = Some(inits);
                     } else if model_name == "Objective" {
-                        log::info!(
+                        log::debug!(
                             "Partial likelihood optim c={} has not improved value={}",
                             i,
                             likelihood
                         );
-                        info!("Active set: {:?}", active);
                     };
                 } else {
                     log::warn!(
@@ -428,7 +435,7 @@ where
                     "Infill"
                 },
                 self.config.infill_criterion.name(),
-                state.get_infill_value()
+                new_state.get_infill_value()
             );
 
             let rejected_count = x_dat.nrows() - added_indices.len();
@@ -570,19 +577,10 @@ where
             });
             let (models, inits): (Vec<_>, Vec<_>) = models_and_inits.unzip();
 
-            // Update theta initialization from optimized theta
-            clusterings = models
-                .iter()
-                .map(|model| {
-                    let clustering = model.to_clustering();
-                    Some(clustering)
-                })
-                .collect::<Vec<_>>()
-                .as_slice();
-            // (0..=self.config.n_cstr).for_each(|k| {
-            //     clusterings[k] = Some(models[k].to_clustering());
-            //     theta_inits[k] = inits[k];
-            // });
+            (0..=self.config.n_cstr).for_each(|k| {
+                clusterings[k] = Some(models[k].to_clustering());
+                theta_inits[k] = inits[k].to_owned();
+            });
 
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
