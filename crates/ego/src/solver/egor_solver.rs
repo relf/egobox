@@ -381,7 +381,9 @@ where
         problem: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
-        let rho = |sigma| sigma * sigma;
+        let rho = |sigma| pow(10,6)*sigma * sigma;
+        let mut s = 0; // initializing the global loops counter
+
         let (_, y_data, _) = state.data.as_ref().unwrap(); // initialized in init
         let best = state.best_index.unwrap(); // initialized in init
         let prev_best = state.prev_best_index.unwrap(); // initialized in init
@@ -428,19 +430,22 @@ where
                 info!("Previous EGO global step progress fail");
             }
         }
-
+        
         let is_global_phase = (last_iter_success && state.prev_step_ego)
-            || ((state.get_iter() % (1 + self.config.trego.n_local_steps)) == 0);
-
+            || ((state.get_iter() % (1 + self.config.trego.n_local_steps)) == 0)
+            || (s % (self.config.trego_n_global_steps)!=0);
+        
         if is_global_phase {
             // Global step
             info!(">>> TREGO global step (aka EGO)");
             let mut res = self.ego_iteration(problem, new_state)?;
+            s += 1;
             res.0.prev_step_ego = true;
             Ok(res)
         } else {
             info!(">>> TREGO local step");
             // Local step
+            
             let models = self.refresh_surrogates(&new_state);
             let infill_data = self.refresh_infill_data(problem, &new_state, &models);
             let mut new_state = self.trego_step(problem, new_state, models, &infill_data);
