@@ -14,7 +14,7 @@
 use std::cmp::Ordering;
 
 use crate::types::*;
-use egobox_ego::{find_best_result_index, InfillObjData};
+use egobox_ego::{find_best_result_index, CoegoStatus, InfillObjData};
 use egobox_moe::NbClusters;
 use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
@@ -127,6 +127,11 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///     trego (bool)
 ///         When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
 ///
+///     coego_n_coop (int >= 0)
+///        Number of cooperative components which will be used by the CoEGO algorithm.
+///        It should be an exact divider of the input dimension. The CoEGO algorithm is used
+///        to tackle high-dimensional problems. The default value is 0 meaning that the CoEGO algorithm is not used.
+///
 ///     n_clusters (int)
 ///         Number of clusters used by the mixture of surrogate experts (default is 1).
 ///         When set to 0, the number of cluster is determined automatically and refreshed every
@@ -175,6 +180,7 @@ pub(crate) struct Egor {
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub trego: bool,
+    pub coego_n_coop: usize,
     pub n_clusters: NbClusters,
     pub q_optmod: usize,
     pub target: f64,
@@ -216,6 +222,7 @@ impl Egor {
         infill_optimizer = InfillOptimizer::Cobyla,
         kpls_dim = None,
         trego = false,
+        coego_n_coop = 0,
         n_clusters = 1,
         q_optmod = 1,
         target = f64::NEG_INFINITY,
@@ -243,6 +250,7 @@ impl Egor {
         infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
         trego: bool,
+        coego_n_coop: usize,
         n_clusters: isize,
         q_optmod: usize,
         target: f64,
@@ -276,6 +284,7 @@ impl Egor {
             infill_optimizer,
             kpls_dim,
             trego,
+            coego_n_coop,
             n_clusters,
             q_optmod,
             target,
@@ -549,6 +558,11 @@ impl Egor {
         let cstr_strategy = self.cstr_strategy();
         let qei_strategy = self.qei_strategy();
         let infill_optimizer = self.infill_optimizer();
+        let coego_status = if self.coego_n_coop == 0 {
+            CoegoStatus::Disabled
+        } else {
+            CoegoStatus::Enabled(self.coego_n_coop)
+        };
 
         let cstr_tol = self.cstr_tol(n_fcstr);
 
@@ -570,6 +584,7 @@ impl Egor {
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
             .trego(self.trego)
+            .coego(coego_status)
             .q_optmod(self.q_optmod)
             .target(self.target)
             .warm_start(self.warm_start)
