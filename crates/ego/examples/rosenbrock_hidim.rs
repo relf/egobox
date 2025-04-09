@@ -1,6 +1,7 @@
 use argmin_testfunctions::rosenbrock;
 use egobox_doe::Lhs;
 use egobox_doe::SamplingMethod;
+use egobox_ego::CoegoStatus;
 use egobox_ego::EgorBuilder;
 use ndarray::{array, Array2, ArrayView2, Zip};
 use ndarray_rand::rand::SeedableRng;
@@ -30,8 +31,8 @@ fn main() {
                 .max_iters(max_iters)
                 .outdir(outdir)
                 .seed(42)
-            // .coego(CoegoStatus::Enabled(5))
-            // .trego(true)
+                .coego(CoegoStatus::Enabled(5))
+                .trego(true)
         })
         .min_within(&xlimits)
         .run()
