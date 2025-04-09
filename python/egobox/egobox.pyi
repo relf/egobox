@@ -75,15 +75,22 @@ class Egor:
             Constraint management either use the mean value or upper bound
             Can be either ConstraintStrategy.MV (default) or ConstraintStrategy.UTB.
     
-        q_points (int > 0):
-            Number of points to be evaluated to allow parallel evaluation of the function under optimization.
-    
-        par_infill_strategy (ParInfillStrategy enum)
+        q_infill_strategy (QInfillStrategy enum)
             Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
             q parallel evaluations of the function under optimization (only used when q_points > 1)
             Can be either ParInfillStrategy.KB (Kriging Believer),
             ParInfillStrategy.KBLB (KB Lower Bound), ParInfillStrategy.KBUB (KB Upper Bound),
             ParInfillStrategy.CLMIN (Constant Liar Minimum)
+   
+        q_points (int > 0):
+            Number of points to be evaluated to allow parallel evaluation of the function under optimization.
+   
+        q_optmod (int >= 1)
+            Number of iterations between two surrogate models true training (hypermarameters optimization)
+            otherwise previous hyperparameters are re-used only when computing q_points to be evaluated in parallel. 
+            The default value is 1 meaning surrogates are properly trained for each q points determination. 
+            The value is used as a modulo of iteration number * q_points to trigger true training.
+            This is used to decrease the number of training at the expense of surrogate accuracy. 
     
         infill_optimizer (InfillOptimizer enum)
             Internal optimizer used to optimize infill criteria.
@@ -103,13 +110,7 @@ class Egor:
             but it is counted anyway).
             When set to negative number -n, the number of clusters is determined automatically in [1, n]
             this is used to limit the number of trials hence the execution time.
-      
-        n_optmod (int >= 1)
-            Number of iterations between two surrogate models training (hypermarameters optimization)
-            otherwise previous hyperparameters are re-used. The default value is 1 meaning surrogates are
-            properly trained at each iteration. The value is used as a modulo of iteration number. For instance,
-            with a value of 3, after the first iteration surrogate are trained at iteration 3, 6, 9, etc.  
-    
+          
         target (float)
             Known optimum used as stopping criterion.
     
