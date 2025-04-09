@@ -182,40 +182,52 @@ where
                     }
                 };
 
-            let cstrs: Vec<_> = (0..self.config.n_cstr)
-                .map(|i| {
-                    let active = active.to_vec();
-                    let cstr = move |x: &[f64],
-                                     gradient: Option<&mut [f64]>,
-                                     params: &mut InfillObjData<f64>|
-                          -> f64 {
-                        let InfillObjData { xbest: xcoop, .. } = params;
-                        let mut xcoop = xcoop.clone();
-                        Self::setx(&mut xcoop, &active, x);
+            let cstrs: Vec<_> = if self.config.cstr_infill {
+                vec![]
+            } else {
+                (0..self.config.n_cstr)
+                    .map(|i| {
+                        let active = active.to_vec();
+                        let cstr = move |x: &[f64],
+                                         gradient: Option<&mut [f64]>,
+                                         params: &mut InfillObjData<f64>|
+                              -> f64 {
+                            let InfillObjData { xbest: xcoop, .. } = params;
+                            let mut xcoop = xcoop.clone();
+                            Self::setx(&mut xcoop, &active, x);
 
-                        let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
-                        if self.config.cstr_strategy == ConstraintStrategy::MeanConstraint {
-                            Self::mean_cstr(&*cstr_models[i], &xcoop, gradient, scale_cstr, &active)
-                        } else {
-                            Self::upper_trust_bound_cstr(
-                                &*cstr_models[i],
-                                &xcoop,
-                                gradient,
-                                scale_cstr,
-                                &active,
-                            )
+                            let scale_cstr =
+                                params.scale_cstr.as_ref().expect("constraint scaling")[i];
+                            if self.config.cstr_strategy == ConstraintStrategy::MeanConstraint {
+                                Self::mean_cstr(
+                                    &*cstr_models[i],
+                                    &xcoop,
+                                    gradient,
+                                    scale_cstr,
+                                    &active,
+                                )
+                            } else {
+                                Self::upper_trust_bound_cstr(
+                                    &*cstr_models[i],
+                                    &xcoop,
+                                    gradient,
+                                    scale_cstr,
+                                    &active,
+                                )
+                            }
+                        };
+                        #[cfg(feature = "nlopt")]
+                        {
+                            Box::new(cstr) as Box<dyn nlopt::ObjFn<InfillObjData<f64>> + Sync>
                         }
-                    };
-                    #[cfg(feature = "nlopt")]
-                    {
-                        Box::new(cstr) as Box<dyn nlopt::ObjFn<InfillObjData<f64>> + Sync>
-                    }
-                    #[cfg(not(feature = "nlopt"))]
-                    {
-                        Box::new(cstr) as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>
-                    }
-                })
-                .collect();
+                        #[cfg(not(feature = "nlopt"))]
+                        {
+                            Box::new(cstr)
+                                as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>
+                        }
+                    })
+                    .collect()
+            };
 
             // We merge metamodelized constraints and function constraints
             let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
@@ -306,7 +318,7 @@ where
     }
 
     #[allow(clippy::type_complexity)]
-    fn is_result_better(
+    pub(crate) fn is_result_better(
         &self,
         current_best: &(f64, Array1<f64>, Array1<f64>, Array1<f64>),
         xcoop: &Array1<f64>,

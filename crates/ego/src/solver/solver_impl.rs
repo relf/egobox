@@ -236,11 +236,13 @@ where
                     let likelihood = gp.experts()[0].likelihood();
                     // We update only if better likelihood
                     if likelihood > best_likelihood && model_name == "Objective" {
-                        log::info!(
-                            "Partial likelihood optim c={} has improved value={}",
-                            i,
-                            likelihood
-                        );
+                        if i > 0 {
+                            log::info!(
+                                "Partial likelihood optim c={} has improved value={}",
+                                i,
+                                likelihood
+                            );
+                        };
                         best_likelihood = likelihood;
                         let inits = Array2::from_shape_vec(
                             (gp.experts().len(), gp.experts()[0].theta().len()),
