@@ -263,7 +263,7 @@ where
                 .iter()
                 .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
                 .collect::<Vec<_>>();
-            cstr_refs.extend(cstr_funcs.to_owned());
+            cstr_refs.extend(cstr_funcs.clone());
 
             // Limits
             let xlimits = self.xlimits.select(Axis(0), &active.to_vec());

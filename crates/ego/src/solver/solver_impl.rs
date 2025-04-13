@@ -7,11 +7,6 @@ use crate::{find_best_result_index, EgorConfig};
 use crate::{types::*, EgorState};
 use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
 
-#[cfg(not(feature = "nlopt"))]
-use crate::types::ObjFn;
-#[cfg(feature = "nlopt")]
-use nlopt::ObjFn;
-
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
 
@@ -629,19 +624,15 @@ where
                     }
                 })
                 .collect::<Vec<_>>();
-            let cstr_funcs = cstr_funcs
-                .iter()
-                .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
-                .collect::<Vec<_>>();
 
             let (infill_obj, xk) = self.compute_best_point(
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,
+                &cstr_funcs,
                 cstr_tol,
                 lhs_optim,
                 &infill_data,
-                &cstr_funcs,
                 (fmin, xbest, ybest, cbest),
                 &actives,
             );
