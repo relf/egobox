@@ -78,9 +78,9 @@ class Egor:
         q_infill_strategy (QInfillStrategy enum)
             Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
             q parallel evaluations of the function under optimization (only used when q_points > 1)
-            Can be either ParInfillStrategy.KB (Kriging Believer),
-            ParInfillStrategy.KBLB (KB Lower Bound), ParInfillStrategy.KBUB (KB Upper Bound),
-            ParInfillStrategy.CLMIN (Constant Liar Minimum)
+            Can be either QInfillStrategy.KB (Kriging Believer),
+            QInfillStrategy.KBLB (KB Lower Bound), QInfillStrategy.KBUB (KB Upper Bound),
+            QInfillStrategy.CLMIN (Constant Liar Minimum)
    
         q_points (int > 0):
             Number of points to be evaluated to allow parallel evaluation of the function under optimization.
@@ -102,7 +102,12 @@ class Egor:
     
         trego (bool)
             When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
-    
+
+        coego_n_coop (int >= 0)
+            Number of cooperative components which will be used by the CoEGO algorithm.
+            It should be an exact divider of the input dimension. The CoEGO algorithm is used
+            to tackle high-dimensional problems. The default value is 0 meaning that the CoEGO algorithm is not used.
+            
         n_clusters (int)
             Number of clusters used by the mixture of surrogate experts (default is 1).
             When set to 0, the number of cluster is determined automatically and refreshed every
@@ -681,7 +686,7 @@ class ConstraintStrategy(Enum):
     Mv = auto()
     Utb = auto()
 
-class ParInfillStrategy(Enum):
+class QInfillStrategy(Enum):
     Kb = auto()
     Kblb = auto()
     Kbub = auto()
