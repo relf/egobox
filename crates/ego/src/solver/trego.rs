@@ -318,23 +318,28 @@ where
             let mut xopt_coop = current_best_point.1.to_vec();
             Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
             let xopt_coop = Array1::from(xopt_coop);
-            let (is_better, best) = self.is_result_better(
-                &current_best_point,
-                &xopt_coop,
-                obj_model,
-                cstr_models,
-                cstr_tols,
-                &cstr_funcs,
-            );
-            if is_better || i == 0 {
-                if i > 0 {
-                    info!(
-                        "Partial infill criterion optim c={} has better result={}",
-                        i, res.0
-                    );
+
+            if crate::solver::coego::COEGO_IMPROVEMENT_CHECK {
+                let (is_better, best) = self.is_objective_improved(
+                    &current_best_point,
+                    &xopt_coop,
+                    obj_model,
+                    cstr_models,
+                    cstr_tols,
+                    &cstr_funcs,
+                );
+                if is_better || i == 0 {
+                    if i > 0 {
+                        info!(
+                            "Partial infill criterion optim c={} has better result={}",
+                            i, res.0
+                        );
+                    }
+                    best_point = (res.0, xopt_coop);
+                    current_best_point = best;
                 }
+            } else {
                 best_point = (res.0, xopt_coop);
-                current_best_point = best;
             }
         }
         best_point

@@ -2,7 +2,7 @@ use crate::errors::Result;
 use crate::gpmix::mixint::to_discrete_space;
 use crate::optimizers::*;
 use crate::types::*;
-use crate::utils::find_best_result_index_from;
+
 use crate::utils::{compute_cstr_scales, pofs, pofs_grad};
 use crate::EgorSolver;
 
@@ -285,23 +285,28 @@ where
                         let mut xopt_coop = current_best_point.1.to_vec();
                         Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
                         let xopt_coop = Array1::from(xopt_coop);
-                        let (is_better, best) = self.is_result_better(
-                            &current_best_point,
-                            &xopt_coop,
-                            obj_model,
-                            cstr_models,
-                            cstr_tols,
-                            &cstr_funcs,
-                        );
-                        if is_better || i == 0 {
-                            if i > 0 {
-                                info!(
-                                    "Partial infill criterion optim c={} has better result={} at x={}",
-                                    i, best.0, xopt_coop
-                                );
+
+                        if crate::solver::coego::COEGO_IMPROVEMENT_CHECK {
+                            let (is_better, best) = self.is_objective_improved(
+                                &current_best_point,
+                                &xopt_coop,
+                                obj_model,
+                                cstr_models,
+                                cstr_tols,
+                                &cstr_funcs,
+                            );
+                            if is_better || i == 0 {
+                                if i > 0 {
+                                    info!(
+                                        "Partial infill criterion optim c={} has better result={} at x={}",
+                                        i, best.0, xopt_coop
+                                    );
+                                }
+                                best_point = (res.0, xopt_coop);
+                                current_best_point = best;
                             }
+                        } else {
                             best_point = (res.0, xopt_coop);
-                            current_best_point = best;
                         }
                         success = true;
                     }
@@ -321,46 +326,6 @@ where
             }
         }
         best_point
-    }
-
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn is_result_better(
-        &self,
-        current_best: &(f64, Array1<f64>, Array1<f64>, Array1<f64>),
-        xcoop: &Array1<f64>,
-        obj_model: &dyn MixtureGpSurrogate,
-        cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        cstr_tols: &Array1<f64>,
-        cstr_funcs: &[&(dyn ObjFn<InfillObjData<f64>> + Sync)],
-    ) -> (bool, (f64, Array1<f64>, Array1<f64>, Array1<f64>)) {
-        let mut y_data = Array2::zeros((2, 1 + self.config.n_cstr));
-        // Assign metamodelized objective (1) and constraints (n_cstr) values
-        y_data.slice_mut(s![0, ..]).assign(&current_best.2);
-        y_data.slice_mut(s![1, ..]).assign(
-            &self
-                .predict_virtual_point(xcoop, obj_model, cstr_models)
-                .unwrap(),
-        );
-        // Assign function constraints values
-        let mut c_data = Array2::zeros((2, cstr_funcs.len()));
-        c_data.slice_mut(s![0, ..]).assign(&current_best.3);
-        let evals = self.eval_fcstrs(cstr_funcs, &xcoop.to_owned().insert_axis(Axis(0)));
-        if !cstr_funcs.is_empty() {
-            c_data.slice_mut(s![1, ..]).assign(&evals.row(0));
-        }
-        let best_index = find_best_result_index_from(0, 1, &y_data, &c_data, cstr_tols);
-
-        let best = if best_index == 0 {
-            current_best.clone()
-        } else {
-            (
-                y_data[[best_index, 0]],
-                xcoop.to_owned(),
-                y_data.row(1).to_owned(),
-                c_data.row(1).to_owned(),
-            )
-        };
-        (best_index != 0, best)
     }
 
     pub fn mean_cstr(
@@ -456,23 +421,6 @@ where
             }
             Ok(res)
         }
-    }
-
-    /// Compute predicted objective and constraints values at the given x location
-    pub(crate) fn predict_virtual_point(
-        &self,
-        x: &ArrayBase<impl Data<Elem = f64>, Ix1>,
-        obj_model: &dyn MixtureGpSurrogate,
-        cstr_models: &[Box<dyn MixtureGpSurrogate>],
-    ) -> Result<Array1<f64>> {
-        let mut res: Vec<f64> = vec![];
-        let x = &x.view().insert_axis(Axis(0));
-        let pred = obj_model.predict(x)?[0];
-        res.push(pred);
-        for cstr_model in cstr_models {
-            res.push(cstr_model.predict(x)?[0]);
-        }
-        Ok(Array1::from_vec(res))
     }
 
     /// The infill criterion scaling is computed using x (n points of nx dim)
