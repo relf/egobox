@@ -22,6 +22,8 @@ use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 
+use super::coego::COEGO_IMPROVEMENT_CHECK;
+
 impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     /// Constructor of the optimization of the function `f` with specified random generator
     /// to get reproducibility.
@@ -228,17 +230,35 @@ where
             // CoEGO only in mono cluster, update theta if better likelihood
             if self.config.coego.activated {
                 if self.config.n_clusters.is_mono() {
-                    let likelihood = gp.experts()[0].likelihood();
-                    // We update only if better likelihood
-                    if likelihood > best_likelihood && model_name == "Objective" {
-                        if i > 0 {
-                            log::info!(
-                                "Partial likelihood optim c={} has improved value={}",
+                    if COEGO_IMPROVEMENT_CHECK {
+                        let likelihood = gp.experts()[0].likelihood();
+                        // We update only if better likelihood
+                        if likelihood > best_likelihood && model_name == "Objective" {
+                            if i > 0 {
+                                log::info!(
+                                    "Partial likelihood optim c={} has improved value={}",
+                                    i,
+                                    likelihood
+                                );
+                            };
+                            best_likelihood = likelihood;
+                            let inits = Array2::from_shape_vec(
+                                (gp.experts().len(), gp.experts()[0].theta().len()),
+                                gp.experts()
+                                    .iter()
+                                    .flat_map(|expert| expert.theta().to_vec())
+                                    .collect(),
+                            )
+                            .expect("Theta initialization failure");
+                            best_theta_inits = Some(inits);
+                        } else if model_name == "Objective" {
+                            log::debug!(
+                                "Partial likelihood optim c={} has not improved value={}",
                                 i,
                                 likelihood
                             );
                         };
-                        best_likelihood = likelihood;
+                    } else {
                         let inits = Array2::from_shape_vec(
                             (gp.experts().len(), gp.experts()[0].theta().len()),
                             gp.experts()
@@ -248,13 +268,7 @@ where
                         )
                         .expect("Theta initialization failure");
                         best_theta_inits = Some(inits);
-                    } else if model_name == "Objective" {
-                        log::debug!(
-                            "Partial likelihood optim c={} has not improved value={}",
-                            i,
-                            likelihood
-                        );
-                    };
+                    }
                 } else {
                     log::warn!(
                             "CoEGO theta update wrt likelihood not implemented in multi-cluster setting");
