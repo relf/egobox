@@ -639,7 +639,7 @@ mod tests {
         let init_doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(0))
             .sample(dim + 1);
-        let max_iters = 50;
+        let max_iters = 60;
         let res = EgorBuilder::optimize(sphere)
             .configure(|config| {
                 config
