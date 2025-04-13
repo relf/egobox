@@ -175,7 +175,7 @@ pub(crate) struct Egor {
     pub cstr_infill: bool,
     pub cstr_strategy: ConstraintStrategy,
     pub q_points: usize,
-    pub par_infill_strategy: QInfillStrategy,
+    pub q_infill_strategy: QInfillStrategy,
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub trego: bool,
@@ -217,7 +217,7 @@ impl Egor {
         cstr_infill = false,
         cstr_strategy = ConstraintStrategy::Mc,
         q_points = 1,
-        par_infill_strategy = QInfillStrategy::Kb,
+        q_infill_strategy = QInfillStrategy::Kb,
         infill_optimizer = InfillOptimizer::Cobyla,
         kpls_dim = None,
         trego = false,
@@ -245,7 +245,7 @@ impl Egor {
         cstr_infill: bool,
         cstr_strategy: ConstraintStrategy,
         q_points: usize,
-        par_infill_strategy: QInfillStrategy,
+        q_infill_strategy: QInfillStrategy,
         infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
         trego: bool,
@@ -279,7 +279,7 @@ impl Egor {
             cstr_infill,
             cstr_strategy,
             q_points,
-            par_infill_strategy,
+            q_infill_strategy,
             infill_optimizer,
             kpls_dim,
             trego,
@@ -495,7 +495,7 @@ impl Egor {
     }
 
     fn qei_strategy(&self) -> egobox_ego::QEiStrategy {
-        match self.par_infill_strategy {
+        match self.q_infill_strategy {
             QInfillStrategy::Kb => egobox_ego::QEiStrategy::KrigingBeliever,
             QInfillStrategy::Kblb => egobox_ego::QEiStrategy::KrigingBelieverLowerBound,
             QInfillStrategy::Kbub => egobox_ego::QEiStrategy::KrigingBelieverUpperBound,
