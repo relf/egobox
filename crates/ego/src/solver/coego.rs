@@ -8,6 +8,11 @@ use egobox_moe::MixtureGpSurrogate;
 use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1};
 use serde::de::DeserializeOwned;
 
+#[cfg(not(feature = "nlopt"))]
+use crate::types::ObjFn;
+#[cfg(feature = "nlopt")]
+use nlopt::ObjFn;
+
 /// Whether GP objective improves when setting a component set
 /// TODO: at the moment not sure improvement check is required, to be validated
 pub const COEGO_IMPROVEMENT_CHECK: bool = false;
