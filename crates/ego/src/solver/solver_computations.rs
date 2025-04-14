@@ -108,11 +108,12 @@ where
         current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
         actives: &Array2<usize>,
     ) -> (f64, Array1<f64>) {
-        //let fmin = infill_data.fmin;
         let algorithm = match self.config.infill_optimizer {
             InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
             InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
         };
+
+        let mut infill_data = infill_data.clone();
 
         let mut best_point = (current_best.0, current_best.1.to_owned());
         let mut current_best_point = current_best.to_owned();
@@ -251,7 +252,7 @@ where
 
                 if let Some(seed) = lhs_optim_seed {
                     let (y_opt, x_opt) =
-                        Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &xlimits)
+                        Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &infill_data, &xlimits)
                             .cstr_tol(cstr_tols.to_owned())
                             .seed(seed)
                             .minimize();
@@ -265,7 +266,7 @@ where
                         .map(|i| {
                             debug!("Begin optim {}", i);
                             let optim_res =
-                                Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &xlimits)
+                                Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &xlimits)
                                     .xinit(&x_start_coop.row(i))
                                     .max_eval((10 * x_start_coop.len()).min(10 * MAX_EVAL_DEFAULT))
                                     .ftol_rel(1e-4)
@@ -284,6 +285,7 @@ where
                     } else {
                         let mut xopt_coop = current_best_point.1.to_vec();
                         Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
+                        infill_data.xbest = xopt_coop.clone();
                         let xopt_coop = Array1::from(xopt_coop);
 
                         if crate::solver::coego::COEGO_IMPROVEMENT_CHECK {
@@ -306,7 +308,9 @@ where
                                 current_best_point = best;
                             }
                         } else {
-                            best_point = (res.0, xopt_coop);
+                            best_point = (res.0, xopt_coop.to_owned());
+                            current_best_point =
+                                (res.0, xopt_coop, current_best_point.2, current_best_point.3);
                         }
                         success = true;
                     }
@@ -315,7 +319,7 @@ where
                 if n_optim == n_max_optim && !success {
                     warn!("All optimizations fail => Trigger LHS optimization");
                     let (y_opt, x_opt) =
-                        Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, infill_data, &xlimits)
+                        Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &infill_data, &xlimits)
                             .minimize();
 
                     info!("LHS optimization best_x {}", x_opt);

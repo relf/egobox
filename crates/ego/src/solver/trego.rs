@@ -154,6 +154,8 @@ where
         current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
         actives: &Array2<usize>,
     ) -> (f64, Array1<f64>) {
+        let mut infill_data = infill_data.clone();
+
         let mut best_point = (current_best.0, current_best.1.to_owned());
         let mut current_best_point = current_best.to_owned();
 
@@ -299,7 +301,7 @@ where
             let res = (0..self.config.n_start)
                 .into_par_iter()
                 .map(|i| {
-                    Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &local_area)
+                    Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &local_area)
                         .xinit(&x_start.row(i))
                         .max_eval((10 * x_start.len()).min(10 * MAX_EVAL_DEFAULT))
                         .ftol_rel(1e-4)
@@ -317,6 +319,7 @@ where
 
             let mut xopt_coop = current_best_point.1.to_vec();
             Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
+            infill_data.xbest = xopt_coop.clone();
             let xopt_coop = Array1::from(xopt_coop);
 
             if crate::solver::coego::COEGO_IMPROVEMENT_CHECK {
@@ -339,7 +342,8 @@ where
                     current_best_point = best;
                 }
             } else {
-                best_point = (res.0, xopt_coop);
+                best_point = (res.0, xopt_coop.to_owned());
+                current_best_point = (res.0, xopt_coop, current_best_point.2, current_best_point.3);
             }
         }
         best_point
