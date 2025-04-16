@@ -453,7 +453,7 @@ mod tests {
     #[serial]
     fn test_xsinx_optmod_egor() {
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(20).n_optmod(3))
+            .configure(|config| config.max_iters(20).q_optmod(3))
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize");
@@ -637,7 +637,7 @@ mod tests {
         let dim = 10;
         let xlimits = Array2::from_shape_vec((dim, 2), [-10.0, 10.0].repeat(dim)).unwrap();
         let init_doe = Lhs::new(&xlimits)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(0))
             .sample(dim + 1);
         let max_iters = 60;
         let res = EgorBuilder::optimize(sphere)
@@ -647,7 +647,7 @@ mod tests {
                     .max_iters(max_iters)
                     .outdir(outdir)
                     .seed(42)
-                    .coego(CoegoStatus::Enabled(5))
+                    .coego(CoegoStatus::Enabled(6))
             })
             .min_within(&xlimits)
             .run()

@@ -14,7 +14,7 @@
 //!   weighted regarding their responsability (probability of the given point being part
 //!   of the cluster corresponding to the expert GP). In this case the MoE model is continuous.
 //!   The smoothness is automatically adjusted using a factor, the heaviside factor,
-//!    which can also be set manually.
+//!   which can also be set manually.
 //!
 //! # Implementation
 //!

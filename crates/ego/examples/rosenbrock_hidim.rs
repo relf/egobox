@@ -1,6 +1,7 @@
 use argmin_testfunctions::rosenbrock;
 use egobox_doe::Lhs;
 use egobox_doe::SamplingMethod;
+use egobox_ego::CoegoStatus;
 use egobox_ego::EgorBuilder;
 use ndarray::{array, Array2, ArrayView2, Zip};
 use ndarray_rand::rand::SeedableRng;
@@ -20,7 +21,7 @@ fn main() {
     let dim = 20;
     let xlimits = Array2::from_shape_vec((dim, 2), [-2.0, 2.0].repeat(dim)).unwrap();
     let init_doe = Lhs::new(&xlimits)
-        .with_rng(Xoshiro256Plus::seed_from_u64(42))
+        .with_rng(Xoshiro256Plus::seed_from_u64(0))
         .sample(100);
     let max_iters = 200;
     let res = EgorBuilder::optimize(rosenb)
@@ -30,8 +31,9 @@ fn main() {
                 .max_iters(max_iters)
                 .outdir(outdir)
                 .seed(42)
-            // .coego(CoegoStatus::Enabled(5))
-            // .trego(true)
+                .coego(CoegoStatus::Enabled(5))
+                .infill_optimizer(egobox_ego::InfillOptimizer::Cobyla)
+            //.trego(true)
         })
         .min_within(&xlimits)
         .run()

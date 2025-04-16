@@ -55,7 +55,11 @@ where
         let rho = |sigma| sigma * sigma;
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let cstr_tols = new_state.cstr_tol.clone();
+
+        let fmin = y_data[[best_index, 0]];
+        let ybest = y_data.row(best_index).to_owned();
         let xbest = x_data.row(best_index).to_owned();
+        let cbest = c_data.row(best_index).to_owned();
 
         let pb = problem.take_problem().unwrap();
         let fcstrs = pb.fn_constraints();
@@ -73,6 +77,7 @@ where
                 new_state.sigma * self.config.trego.d.1,
             ),
             infill_data,
+            (fmin, xbest.to_owned(), ybest, cbest),
             &actives,
         );
 
@@ -146,11 +151,14 @@ where
         xbest: &ArrayView1<f64>,
         local_bounds: (f64, f64),
         infill_data: &InfillObjData<f64>,
+        current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
         actives: &Array2<usize>,
     ) -> (f64, Array1<f64>) {
-        let fmin = infill_data.fmin;
+        let mut infill_data = infill_data.clone();
 
-        let mut best_point = (fmin, xbest.to_owned());
+        let mut best_point = (current_best.0, current_best.1.to_owned());
+        let mut current_best_point = current_best.to_owned();
+
         for (i, active) in actives.outer_iter().enumerate() {
             let active = active.to_vec();
             let obj = |x: &[f64],
@@ -165,7 +173,7 @@ where
                     ..
                 } = params;
                 let mut xcoop = xcoop.clone();
-                setx(&mut xcoop, &active, x);
+                Self::setx(&mut xcoop, &active, x);
 
                 // Defensive programming NlOpt::Cobyla may pass NaNs
                 if xcoop.iter().any(|x| x.is_nan()) {
@@ -214,43 +222,54 @@ where
                 }
             };
 
-            let cstrs: Vec<_> = (0..self.config.n_cstr)
-                .map(|i| {
-                    let active = active.to_vec();
-                    let cstr = move |x: &[f64],
-                                     gradient: Option<&mut [f64]>,
-                                     params: &mut InfillObjData<f64>|
-                          -> f64 {
-                        let InfillObjData { xbest: xcoop, .. } = params;
-                        let mut xcoop = xcoop.clone();
-                        setx(&mut xcoop, &active, x);
+            let cstrs: Vec<_> = if self.config.cstr_infill {
+                vec![]
+            } else {
+                (0..self.config.n_cstr)
+                    .map(|i| {
+                        let active = active.to_vec();
+                        let cstr = move |x: &[f64],
+                                         gradient: Option<&mut [f64]>,
+                                         params: &mut InfillObjData<f64>|
+                              -> f64 {
+                            let InfillObjData { xbest: xcoop, .. } = params;
+                            let mut xcoop = xcoop.clone();
+                            Self::setx(&mut xcoop, &active, x);
 
-                        let scale_cstr = params.scale_cstr.as_ref().expect("constraint scaling")[i];
-                        if self.config.cstr_strategy == ConstraintStrategy::MeanConstraint {
-                            Self::mean_cstr(&*cstr_models[i], &xcoop, gradient, scale_cstr, &active)
-                        } else {
-                            Self::upper_trust_bound_cstr(
-                                &*cstr_models[i],
-                                &xcoop,
-                                gradient,
-                                scale_cstr,
-                                &active,
-                            )
-                        }
-                    };
-                    Box::new(cstr) as Box<dyn ObjFn<InfillObjData<f64>> + Sync>
-                })
-                .collect();
+                            let scale_cstr =
+                                params.scale_cstr.as_ref().expect("constraint scaling")[i];
+                            if self.config.cstr_strategy == ConstraintStrategy::MeanConstraint {
+                                Self::mean_cstr(
+                                    &*cstr_models[i],
+                                    &xcoop,
+                                    gradient,
+                                    scale_cstr,
+                                    &active,
+                                )
+                            } else {
+                                Self::upper_trust_bound_cstr(
+                                    &*cstr_models[i],
+                                    &xcoop,
+                                    gradient,
+                                    scale_cstr,
+                                    &active,
+                                )
+                            }
+                        };
+                        Box::new(cstr) as Box<dyn ObjFn<InfillObjData<f64>> + Sync>
+                    })
+                    .collect()
+            };
             let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
             let cstr_funcs = cstr_funcs
                 .iter()
                 .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
                 .collect::<Vec<_>>();
-            cstr_refs.extend(cstr_funcs);
+            cstr_refs.extend(cstr_funcs.clone());
 
             // Limits
-            let xlimits = self.xlimits.select(Axis(0), &active.to_vec());
-            let xbest = xbest.select(Axis(0), &active.to_vec());
+            let xlimits = Self::getx(&self.xlimits, Axis(0), &active);
+            let xbest = Self::getx(&xbest.to_owned(), Axis(0), &active.to_vec());
 
             // Draw n_start initial points (multistart optim) in the local_area
             // local_area = intersection(trust_region, xlimits)
@@ -282,7 +301,7 @@ where
             let res = (0..self.config.n_start)
                 .into_par_iter()
                 .map(|i| {
-                    Optimizer::new(algorithm, &obj, &cstr_refs, infill_data, &local_area)
+                    Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &local_area)
                         .xinit(&x_start.row(i))
                         .max_eval((10 * x_start.len()).min(10 * MAX_EVAL_DEFAULT))
                         .ftol_rel(1e-4)
@@ -294,16 +313,45 @@ where
                     |a, b| if b.0 < a.0 { b } else { a },
                 );
 
-            let mut xopt_coop = best_point.1.to_vec();
-            setx(&mut xopt_coop, &active.to_vec(), &res.1.to_vec());
-            best_point = (res.0, Array1::from(xopt_coop));
+            // let mut xopt_coop = best_point.1.to_vec();
+            // setx(&mut xopt_coop, &active.to_vec(), &res.1.to_vec());
+            // best_point = (res.0, Array1::from(xopt_coop));
+
+            let mut xopt_coop = current_best_point.1.to_vec();
+            Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
+            infill_data.xbest = xopt_coop.clone();
+            let xopt_coop = Array1::from(xopt_coop);
+
+            if crate::solver::coego::COEGO_IMPROVEMENT_CHECK {
+                let (is_better, best) = self.is_objective_improved(
+                    &current_best_point,
+                    &xopt_coop,
+                    obj_model,
+                    cstr_models,
+                    cstr_tols,
+                    &cstr_funcs,
+                );
+                if is_better || i == 0 {
+                    if i > 0 {
+                        info!(
+                            "Partial infill criterion optim c={} has better result={}",
+                            i, res.0
+                        );
+                    }
+                    best_point = (res.0, xopt_coop);
+                    current_best_point = best;
+                }
+            } else {
+                best_point = (res.0, xopt_coop.to_owned());
+                current_best_point = (res.0, xopt_coop, current_best_point.2, current_best_point.3);
+            }
         }
         best_point
     }
 }
 
-/// Set active components to xcoop using xopt values
-/// active and values must have the same size
-fn setx(xcoop: &mut [f64], active: &[usize], values: &[f64]) {
-    std::iter::zip(active, values).for_each(|(&i, &xi)| xcoop[i] = xi)
-}
+// /// Set active components to xcoop using xopt values
+// /// active and values must have the same size
+// fn setx(xcoop: &mut [f64], active: &[usize], values: &[f64]) {
+//     std::iter::zip(active, values).for_each(|(&i, &xi)| xcoop[i] = xi)
+// }

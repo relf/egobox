@@ -26,7 +26,16 @@ features = ["pyo3/extension-module"]
 # cargo-extra-args = "--features linfa/intel-mkl-static"
 
 [tool.uv]
-dev-dependencies = ["pip", "pytest>=8.0.2", "ruff>=0.8.0", "pre-commit>=4.0.1"]
+dev-dependencies = [
+    "pip",
+    "pytest>=8.0.2",
+    "ruff>=0.8.0",
+    "pre-commit>=4.0.1",
+    "nbval>=0.11",         # for notebooks
+    "matplotlib>=3.7.1",   # for notebooks
+    "scikit-learn>=1.2.2", # for notebooks
+    "pandas>=2.0.3",       # for notebooks
+]
 
 [tool.ruff]
 extend-exclude = ["egobox/egobox.pyi"]

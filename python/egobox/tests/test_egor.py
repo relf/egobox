@@ -148,7 +148,7 @@ class TestOptimizer(unittest.TestCase):
             cstr_tol=np.array([1e-3, 1e-3]),
             n_cstr=n_cstr,
             seed=42,
-            n_optmod=2,
+            q_optmod=2,
             n_doe=n_doe,
             cstr_strategy=egx.ConstraintStrategy.UTB,
         )
@@ -243,7 +243,7 @@ class TestOptimizer(unittest.TestCase):
         egor = egx.Egor(
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             seed=42,
-            n_optmod=2,
+            q_optmod=2,
             n_doe=n_doe,
         )
         start = time.process_time()

@@ -14,7 +14,7 @@
 use std::cmp::Ordering;
 
 use crate::types::*;
-use egobox_ego::{find_best_result_index, InfillObjData};
+use egobox_ego::{find_best_result_index, CoegoStatus, InfillObjData};
 use egobox_moe::NbClusters;
 use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
@@ -99,15 +99,22 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         Constraint management either use the mean value or upper bound
 ///         Can be either ConstraintStrategy.MeanValue or ConstraintStrategy.UpperTrustedBound.
 ///
+///     q_infill_strategy (QInfillStrategy enum)
+///         Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
+///         q parallel evaluations of the function under optimization (only used when q_points > 1)
+///         Can be either QInfillStrategy.KB (Kriging Believer),
+///         QInfillStrategy.KBLB (KB Lower Bound), QInfillStrategy.KBUB (KB Upper Bound),
+///         QInfillStrategy.CLMIN (Constant Liar Minimum)
+///
 ///     q_points (int > 0):
 ///         Number of points to be evaluated to allow parallel evaluation of the function under optimization.
 ///
-///     par_infill_strategy (ParInfillStrategy enum)
-///         Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
-///         q parallel evaluations of the function under optimization (only used when q_points > 1)
-///         Can be either ParInfillStrategy.KB (Kriging Believer),
-///         ParInfillStrategy.KBLB (KB Lower Bound), ParInfillStrategy.KBUB (KB Upper Bound),
-///         ParInfillStrategy.CLMIN (Constant Liar Minimum)
+///     q_optmod (int >= 1)
+///         Number of iterations between two surrogate models true training (hypermarameters optimization)
+///         otherwise previous hyperparameters are re-used only when computing q_points to be evaluated in parallel.
+///         The default value is 1 meaning surrogates are properly trained for each q points determination.
+///         The value is used as a modulo of iteration number * q_points to trigger true training.
+///         This is used to decrease the number of training at the expense of surrogate accuracy.    
 ///
 ///     infill_optimizer (InfillOptimizer enum)
 ///         Internal optimizer used to optimize infill criteria.
@@ -120,6 +127,13 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///     trego (bool)
 ///         When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
 ///
+///     coego_n_coop (int >= 0)
+///         Number of cooperative components groups which will be used by the CoEGO algorithm.
+///         Better to have n_coop a divider of nx or if not with a remainder as large as possible.  
+///         The CoEGO algorithm is used to tackle high-dimensional problems turning it in a set of
+///         partial optimizations using only nx / n_coop components at a time.
+///         The default value is 0 meaning that the CoEGO algorithm is not used.
+///
 ///     n_clusters (int)
 ///         Number of clusters used by the mixture of surrogate experts (default is 1).
 ///         When set to 0, the number of cluster is determined automatically and refreshed every
@@ -128,12 +142,6 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         When set to negative number -n, the number of clusters is determined automatically in [1, n]
 ///         this is used to limit the number of trials hence the execution time.
 ///   
-///     n_optmod (int >= 1)
-///         Number of iterations between two surrogate models training (hypermarameters optimization)
-///         otherwise previous hyperparameters are re-used. The default value is 1 meaning surrogates are
-///         properly trained at each iteration. The value is used as a modulo of iteration number. For instance,
-///         with a value of 3, after the first iteration surrogate are trained at iteration 3, 6, 9, etc.  
-///
 ///     target (float)
 ///         Known optimum used as stopping criterion.
 ///
@@ -169,12 +177,13 @@ pub(crate) struct Egor {
     pub cstr_infill: bool,
     pub cstr_strategy: ConstraintStrategy,
     pub q_points: usize,
-    pub par_infill_strategy: ParInfillStrategy,
+    pub q_infill_strategy: QInfillStrategy,
     pub infill_optimizer: InfillOptimizer,
     pub kpls_dim: Option<usize>,
     pub trego: bool,
+    pub coego_n_coop: usize,
     pub n_clusters: NbClusters,
-    pub n_optmod: usize,
+    pub q_optmod: usize,
     pub target: f64,
     pub outdir: Option<String>,
     pub warm_start: bool,
@@ -210,12 +219,13 @@ impl Egor {
         cstr_infill = false,
         cstr_strategy = ConstraintStrategy::Mc,
         q_points = 1,
-        par_infill_strategy = ParInfillStrategy::Kb,
+        q_infill_strategy = QInfillStrategy::Kb,
         infill_optimizer = InfillOptimizer::Cobyla,
         kpls_dim = None,
         trego = false,
+        coego_n_coop = 0,
         n_clusters = 1,
-        n_optmod = 1,
+        q_optmod = 1,
         target = f64::NEG_INFINITY,
         outdir = None,
         warm_start = false,
@@ -237,12 +247,13 @@ impl Egor {
         cstr_infill: bool,
         cstr_strategy: ConstraintStrategy,
         q_points: usize,
-        par_infill_strategy: ParInfillStrategy,
+        q_infill_strategy: QInfillStrategy,
         infill_optimizer: InfillOptimizer,
         kpls_dim: Option<usize>,
         trego: bool,
+        coego_n_coop: usize,
         n_clusters: isize,
-        n_optmod: usize,
+        q_optmod: usize,
         target: f64,
         outdir: Option<String>,
         warm_start: bool,
@@ -270,12 +281,13 @@ impl Egor {
             cstr_infill,
             cstr_strategy,
             q_points,
-            par_infill_strategy,
+            q_infill_strategy,
             infill_optimizer,
             kpls_dim,
             trego,
+            coego_n_coop,
             n_clusters,
-            n_optmod,
+            q_optmod,
             target,
             outdir,
             warm_start,
@@ -485,11 +497,11 @@ impl Egor {
     }
 
     fn qei_strategy(&self) -> egobox_ego::QEiStrategy {
-        match self.par_infill_strategy {
-            ParInfillStrategy::Kb => egobox_ego::QEiStrategy::KrigingBeliever,
-            ParInfillStrategy::Kblb => egobox_ego::QEiStrategy::KrigingBelieverLowerBound,
-            ParInfillStrategy::Kbub => egobox_ego::QEiStrategy::KrigingBelieverUpperBound,
-            ParInfillStrategy::Clmin => egobox_ego::QEiStrategy::ConstantLiarMinimum,
+        match self.q_infill_strategy {
+            QInfillStrategy::Kb => egobox_ego::QEiStrategy::KrigingBeliever,
+            QInfillStrategy::Kblb => egobox_ego::QEiStrategy::KrigingBelieverLowerBound,
+            QInfillStrategy::Kbub => egobox_ego::QEiStrategy::KrigingBelieverUpperBound,
+            QInfillStrategy::Clmin => egobox_ego::QEiStrategy::ConstantLiarMinimum,
         }
     }
 
@@ -526,6 +538,8 @@ impl Egor {
         xtypes
     }
 
+    /// Either use user defined cstr_tol or else use default tolerance for all constraints
+    /// n_fcstr is the number of function constraints
     fn cstr_tol(&self, n_fcstr: usize) -> Array1<f64> {
         let cstr_tol = self
             .cstr_tol
@@ -545,6 +559,11 @@ impl Egor {
         let cstr_strategy = self.cstr_strategy();
         let qei_strategy = self.qei_strategy();
         let infill_optimizer = self.infill_optimizer();
+        let coego_status = if self.coego_n_coop == 0 {
+            CoegoStatus::Disabled
+        } else {
+            CoegoStatus::Enabled(self.coego_n_coop)
+        };
 
         let cstr_tol = self.cstr_tol(n_fcstr);
 
@@ -566,7 +585,8 @@ impl Egor {
             .qei_strategy(qei_strategy)
             .infill_optimizer(infill_optimizer)
             .trego(self.trego)
-            .n_optmod(self.n_optmod)
+            .coego(coego_status)
+            .q_optmod(self.q_optmod)
             .target(self.target)
             .warm_start(self.warm_start)
             .hot_start(self.hot_start.into());

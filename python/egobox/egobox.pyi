@@ -75,15 +75,22 @@ class Egor:
             Constraint management either use the mean value or upper bound
             Can be either ConstraintStrategy.MV (default) or ConstraintStrategy.UTB.
     
-        q_points (int > 0):
-            Number of points to be evaluated to allow parallel evaluation of the function under optimization.
-    
-        par_infill_strategy (ParInfillStrategy enum)
+        q_infill_strategy (QInfillStrategy enum)
             Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
             q parallel evaluations of the function under optimization (only used when q_points > 1)
-            Can be either ParInfillStrategy.KB (Kriging Believer),
-            ParInfillStrategy.KBLB (KB Lower Bound), ParInfillStrategy.KBUB (KB Upper Bound),
-            ParInfillStrategy.CLMIN (Constant Liar Minimum)
+            Can be either QInfillStrategy.KB (Kriging Believer),
+            QInfillStrategy.KBLB (KB Lower Bound), QInfillStrategy.KBUB (KB Upper Bound),
+            QInfillStrategy.CLMIN (Constant Liar Minimum)
+   
+        q_points (int > 0):
+            Number of points to be evaluated to allow parallel evaluation of the function under optimization.
+   
+        q_optmod (int >= 1)
+            Number of iterations between two surrogate models true training (hypermarameters optimization)
+            otherwise previous hyperparameters are re-used only when computing q_points to be evaluated in parallel. 
+            The default value is 1 meaning surrogates are properly trained for each q points determination. 
+            The value is used as a modulo of iteration number * q_points to trigger true training.
+            This is used to decrease the number of training at the expense of surrogate accuracy. 
     
         infill_optimizer (InfillOptimizer enum)
             Internal optimizer used to optimize infill criteria.
@@ -95,7 +102,14 @@ class Egor:
     
         trego (bool)
             When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
-    
+
+        coego_n_coop (int >= 0)
+            Number of cooperative components groups which will be used by the CoEGO algorithm.
+            Better to have n_coop a divider of nx or if not with a remainder as large as possible.  
+            The CoEGO algorithm is used to tackle high-dimensional problems turning it in a set of 
+            partial optimizations using only nx / n_coop components at a time.
+            The default value is 0 meaning that the CoEGO algorithm is not used.
+            
         n_clusters (int)
             Number of clusters used by the mixture of surrogate experts (default is 1).
             When set to 0, the number of cluster is determined automatically and refreshed every
@@ -103,13 +117,7 @@ class Egor:
             but it is counted anyway).
             When set to negative number -n, the number of clusters is determined automatically in [1, n]
             this is used to limit the number of trials hence the execution time.
-      
-        n_optmod (int >= 1)
-            Number of iterations between two surrogate models training (hypermarameters optimization)
-            otherwise previous hyperparameters are re-used. The default value is 1 meaning surrogates are
-            properly trained at each iteration. The value is used as a modulo of iteration number. For instance,
-            with a value of 3, after the first iteration surrogate are trained at iteration 3, 6, 9, etc.  
-    
+          
         target (float)
             Known optimum used as stopping criterion.
     
@@ -131,7 +139,7 @@ class Egor:
         seed (int >= 0)
             Random generator seed to allow computation reproducibility.
     """
-    def __new__(cls,xspecs,n_cstr = ...,cstr_tol = ...,n_start = ...,n_doe = ...,doe = ...,regr_spec = ...,corr_spec = ...,infill_strategy = ...,q_points = ...,par_infill_strategy = ...,infill_optimizer = ...,kpls_dim = ...,trego = ...,n_clusters = ...,n_optmod = ...,target = ...,outdir = ...,warm_start = ...,hot_start = ...,seed = ...): ...
+    def __new__(cls,xspecs,n_cstr = ...,cstr_tol = ...,n_start = ...,n_doe = ...,doe = ...,regr_spec = ...,corr_spec = ...,infill_strategy = ...,q_points = ...,q_infill_strategy = ...,q_optmod = ...,infill_optimizer = ...,kpls_dim = ...,trego = ...,n_clusters = ...,target = ...,outdir = ...,warm_start = ...,hot_start = ...,seed = ...): ...
     def minimize(self, fun,max_iters = ..., fcstrs = ...) -> OptimResult:
         r"""
         This function finds the minimum of a given function `fun`
@@ -680,7 +688,7 @@ class ConstraintStrategy(Enum):
     Mv = auto()
     Utb = auto()
 
-class ParInfillStrategy(Enum):
+class QInfillStrategy(Enum):
     Kb = auto()
     Kblb = auto()
     Kbub = auto()

@@ -7,11 +7,6 @@ use crate::{find_best_result_index, EgorConfig};
 use crate::{types::*, EgorState};
 use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
 
-#[cfg(not(feature = "nlopt"))]
-use crate::types::ObjFn;
-#[cfg(feature = "nlopt")]
-use nlopt::ObjFn;
-
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
 
@@ -26,6 +21,8 @@ use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Z
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
+
+use super::coego::COEGO_IMPROVEMENT_CHECK;
 
 impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     /// Constructor of the optimization of the function `f` with specified random generator
@@ -120,7 +117,7 @@ where
         clustering: Option<&Clustering>,
         theta_inits: Option<&Array2<f64>>,
         actives: &Array2<usize>,
-    ) -> Box<dyn MixtureGpSurrogate> {
+    ) -> (Box<dyn MixtureGpSurrogate>, Option<Array2<f64>>) {
         let mut builder = self.surrogate_builder.clone();
         builder.set_kpls_dim(self.config.kpls_dim);
         builder.set_regression_spec(self.config.regression_spec);
@@ -130,33 +127,22 @@ where
         let mut model = None;
         let mut best_likelihood = -f64::INFINITY;
         let mut best_theta_inits = theta_inits.map(|inits| inits.to_owned());
+
         for (i, active) in actives.outer_iter().enumerate() {
             let gp = if make_clustering
             /* init || recluster */
             {
                 if self.config.coego.activated {
                     match self.config.n_clusters {
-                        NbClusters::Auto { max: _ } => log::warn!(
-                            "Automated clustering not available with CoEGO: Use CoEGO-FT"
-                        ),
+                        NbClusters::Auto { max: _ } => {
+                            log::warn!("Automated clustering not available with CoEGO")
+                        }
                         NbClusters::Fixed { nb } => {
-                            let default_init = Array2::from_elem(
+                            let theta_tunings = Self::set_initial_partial_theta_tuning(
                                 (nb, xt.ncols()),
-                                ThetaTuning::<f64>::DEFAULT_INIT,
+                                &active.to_vec(),
+                                best_theta_inits,
                             );
-                            let theta_tunings = best_theta_inits
-                                .clone()
-                                .unwrap_or(default_init)
-                                .outer_iter()
-                                .map(|init| ThetaTuning::Partial {
-                                    init: init.to_owned(),
-                                    bounds: Array1::from_vec(vec![
-                                        ThetaTuning::<f64>::DEFAULT_BOUNDS;
-                                        init.len()
-                                    ]),
-                                    active: active.to_vec(),
-                                })
-                                .collect::<Vec<_>>();
                             builder.set_theta_tunings(&theta_tunings);
                         }
                     }
@@ -167,6 +153,15 @@ where
                 let gp = builder
                     .train(xt.view(), yt.view())
                     .expect("GP training failure");
+                let inits = Array2::from_shape_vec(
+                    (gp.experts().len(), gp.experts()[0].theta().len()),
+                    gp.experts()
+                        .iter()
+                        .flat_map(|expert| expert.theta().to_vec())
+                        .collect(),
+                )
+                .expect("Theta initialization failure");
+                best_theta_inits = Some(inits);
 
                 if i == 0 {
                     info!(
@@ -180,9 +175,9 @@ where
             } else {
                 let clustering = clustering.unwrap();
 
-                let mut theta_tunings = if optimize_theta {
+                let theta_tunings = if optimize_theta {
                     // set hyperparameters optimization
-                    let inits = best_theta_inits
+                    let mut inits = best_theta_inits
                         .clone()
                         .expect("Theta initialization is provided")
                         .outer_iter()
@@ -191,6 +186,9 @@ where
                             bounds: ThetaTuning::default().bounds().unwrap().to_owned(),
                         })
                         .collect::<Vec<_>>();
+                    if self.config.coego.activated {
+                        self.set_partial_theta_tuning(&active.to_vec(), &mut inits);
+                    }
                     if i == 0 && model_name == "Objective" {
                         info!("Objective model hyperparameters optim init >>> {inits:?}");
                     }
@@ -209,9 +207,6 @@ where
                     inits
                 };
 
-                if self.config.coego.activated {
-                    self.set_partial_theta_tuning(&active.to_vec(), &mut theta_tunings);
-                }
                 builder.set_theta_tunings(&theta_tunings);
 
                 let gp = builder
@@ -223,13 +218,44 @@ where
             // CoEGO only in mono cluster, update theta if better likelihood
             if self.config.coego.activated {
                 if self.config.n_clusters.is_mono() {
-                    let likelihood = gp.experts()[0].likelihood();
-                    // We update only if better likelihood
-                    if likelihood > best_likelihood && model_name == "Objective" {
-                        log::info!("Objective likelihood = {}", likelihood);
-                        best_likelihood = likelihood;
-                        best_theta_inits =
-                            Some(gp.experts()[0].theta().clone().insert_axis(Axis(0)));
+                    if COEGO_IMPROVEMENT_CHECK {
+                        let likelihood = gp.experts()[0].likelihood();
+                        // We update only if better likelihood
+                        if likelihood > best_likelihood && model_name == "Objective" {
+                            if i > 0 {
+                                log::info!(
+                                    "Partial likelihood optim c={} has improved value={}",
+                                    i,
+                                    likelihood
+                                );
+                            };
+                            best_likelihood = likelihood;
+                            let inits = Array2::from_shape_vec(
+                                (gp.experts().len(), gp.experts()[0].theta().len()),
+                                gp.experts()
+                                    .iter()
+                                    .flat_map(|expert| expert.theta().to_vec())
+                                    .collect(),
+                            )
+                            .expect("Theta initialization failure");
+                            best_theta_inits = Some(inits);
+                        } else if model_name == "Objective" {
+                            log::debug!(
+                                "Partial likelihood optim c={} has not improved value={}",
+                                i,
+                                likelihood
+                            );
+                        };
+                    } else {
+                        let inits = Array2::from_shape_vec(
+                            (gp.experts().len(), gp.experts()[0].theta().len()),
+                            gp.experts()
+                                .iter()
+                                .flat_map(|expert| expert.theta().to_vec())
+                                .collect(),
+                        )
+                        .expect("Theta initialization failure");
+                        best_theta_inits = Some(inits);
                     }
                 } else {
                     log::warn!(
@@ -238,7 +264,7 @@ where
             };
             model = Some(gp)
         }
-        model.expect("Surrogate model is trained")
+        (model.expect("Surrogate model is trained"), best_theta_inits)
     }
 
     /// Refresh infill data used to optimize infill criterion
@@ -308,6 +334,7 @@ where
                     state.theta_inits.as_ref().unwrap()[k].as_ref(),
                     &actives,
                 )
+                .0
             })
             .collect()
     }
@@ -407,7 +434,7 @@ where
                     "Infill"
                 },
                 self.config.infill_criterion.name(),
-                state.get_infill_value()
+                new_state.get_infill_value()
             );
 
             let rejected_count = x_dat.nrows() - added_indices.len();
@@ -512,6 +539,7 @@ where
         let mut c_dat = Array2::zeros((0, c_data.ncols()));
         let mut infill_val = f64::INFINITY;
         let mut infill_data = Default::default();
+
         for i in 0..self.config.q_points {
             let (xt, yt) = if i == 0 {
                 (x_data.to_owned(), y_data.to_owned())
@@ -526,48 +554,40 @@ where
             let actives = activity.unwrap_or(&self.full_activity()).to_owned();
 
             info!("Train surrogates with {} points...", xt.nrows());
-            let models: Vec<Box<dyn egobox_moe::MixtureGpSurrogate>> = (0..=self.config.n_cstr)
-                .into_par_iter()
-                .map(|k| {
-                    let name = if k == 0 {
-                        "Objective".to_string()
-                    } else {
-                        format!("Constraint[{k}]")
-                    };
-                    let make_clustering = (init && i == 0) || recluster;
-                    let optimize_theta =
-                        (iter as usize * self.config.q_points + i) % (self.config.n_optmod) == 0;
-                    self.make_clustered_surrogate(
-                        &name,
-                        &xt,
-                        &yt.slice(s![.., k]).to_owned(),
-                        make_clustering,
-                        optimize_theta,
-                        clusterings[k].as_ref(),
-                        theta_inits[k].as_ref(),
-                        &actives,
-                    )
-                })
-                .collect();
+            let models_and_inits = (0..=self.config.n_cstr).into_par_iter().map(|k| {
+                let name = if k == 0 {
+                    "Objective".to_string()
+                } else {
+                    format!("Constraint[{k}]")
+                };
+                let make_clustering = (init && i == 0) || recluster;
+                let optimize_theta =
+                    (iter as usize * self.config.q_points + i) % (self.config.q_optmod) == 0;
+                self.make_clustered_surrogate(
+                    &name,
+                    &xt,
+                    &yt.slice(s![.., k]).to_owned(),
+                    make_clustering,
+                    optimize_theta,
+                    clusterings[k].as_ref(),
+                    theta_inits[k].as_ref(),
+                    &actives,
+                )
+            });
+            let (models, inits): (Vec<_>, Vec<_>) = models_and_inits.unzip();
 
-            // Update theta initialization from optimized theta
             (0..=self.config.n_cstr).for_each(|k| {
                 clusterings[k] = Some(models[k].to_clustering());
-                let mut thetas_k = Array2::zeros((
-                    models[k].experts().len(),
-                    models[k].experts()[0].theta().len(),
-                ));
-                for (i, expert) in models[k].experts().iter().enumerate() {
-                    thetas_k.row_mut(i).assign(expert.theta());
-                }
-                theta_inits[k] = Some(thetas_k);
+                theta_inits[k] = inits[k].to_owned();
             });
 
             let (obj_model, cstr_models) = models.split_first().unwrap();
             debug!("... surrogates trained");
 
             let fmin = y_data[[best_index, 0]];
+            let ybest = y_data.row(best_index).to_owned();
             let xbest = x_data.row(best_index).to_owned();
+            let cbest = c_data.row(best_index).to_owned();
             let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) =
                 self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, cstr_funcs, fmin);
 
@@ -606,20 +626,16 @@ where
                     }
                 })
                 .collect::<Vec<_>>();
-            let cstr_funcs = cstr_funcs
-                .iter()
-                .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
-                .collect::<Vec<_>>();
 
             let (infill_obj, xk) = self.compute_best_point(
                 sampling,
                 obj_model.as_ref(),
                 cstr_models,
+                &cstr_funcs,
                 cstr_tol,
                 lhs_optim,
                 &infill_data,
-                &cstr_funcs,
-                (fmin, xbest),
+                (fmin, xbest, ybest, cbest),
                 &actives,
             );
 

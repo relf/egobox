@@ -67,12 +67,6 @@ pub struct EgorConfig {
     pub(crate) max_iters: usize,
     /// Number of starts for multistart approach used for hyperparameters optimization
     pub(crate) n_start: usize,
-    /// Interval between two hyperparameters optimizations (as iteration number modulo)
-    /// hyperparameters are optimized or re-used from an iteration to another
-    pub(crate) n_optmod: usize,
-    /// Number of points returned by EGO iteration (aka qEI Multipoint strategy)
-    /// Actually as some point determination may fail (at most q_points are returned)
-    pub(crate) q_points: usize,
     /// Number of initial doe drawn using Latin hypercube sampling
     /// Note: n_doe > 0; otherwise n_doe = max(xdim + 1, 5)
     pub(crate) n_doe: usize,
@@ -86,6 +80,12 @@ pub struct EgorConfig {
     pub(crate) doe: Option<Array2<f64>>,
     /// Multipoint strategy used to get several points to be evaluated at each iteration
     pub(crate) q_ei: QEiStrategy,
+    /// Interval between two hyperparameters optimizations (as iteration number modulo)
+    /// hyperparameters are optimized or re-used from an iteration to another when getting q points
+    pub(crate) q_optmod: usize,
+    /// Number of points returned by EGO iteration (aka qEI Multipoint strategy)
+    /// Actually as some point determination may fail (at most q_points are returned)
+    pub(crate) q_points: usize,
     /// Criterion to select next point to evaluate
     pub(crate) infill_criterion: Box<dyn InfillCriterion>,
     /// The optimizer used to optimize infill criterium
@@ -127,13 +127,13 @@ impl Default for EgorConfig {
         EgorConfig {
             max_iters: 20,
             n_start: 20,
-            n_optmod: 1,
-            q_points: 1,
             n_doe: 0,
             n_cstr: 0,
             cstr_tol: None,
             doe: None,
             q_ei: QEiStrategy::KrigingBeliever,
+            q_optmod: 1,
+            q_points: 1,
             infill_criterion: Box::new(WB2),
             infill_optimizer: InfillOptimizer::Slsqp,
             regression_spec: RegressionSpec::CONSTANT,
@@ -169,18 +169,6 @@ impl EgorConfig {
     /// Sets the number of runs of infill strategy optimizations (best result taken)
     pub fn n_start(mut self, n_start: usize) -> Self {
         self.n_start = n_start;
-        self
-    }
-
-    /// Sets the number of iteration interval between two hyperparameter optimization
-    pub fn n_optmod(mut self, n_optmod: usize) -> Self {
-        self.n_optmod = n_optmod;
-        self
-    }
-
-    /// Sets Number of parallel evaluations of the function under optimization
-    pub fn q_points(mut self, q_points: usize) -> Self {
-        self.q_points = q_points;
         self
     }
 
@@ -229,6 +217,18 @@ impl EgorConfig {
         self
     }
 
+    /// Sets the number of iteration interval between two hyperparameter optimization
+    /// when computing q points to be evaluated in parallel
+    pub fn q_optmod(mut self, q_optmod: usize) -> Self {
+        self.q_optmod = q_optmod;
+        self
+    }
+
+    /// Sets Number of parallel evaluations of the function under optimization
+    pub fn q_points(mut self, q_points: usize) -> Self {
+        self.q_points = q_points;
+        self
+    }
     /// Sets the infill strategy
     pub fn infill_strategy(mut self, infill: InfillStrategy) -> Self {
         self.infill_criterion = match infill {
