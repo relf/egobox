@@ -173,7 +173,7 @@ where
                     ..
                 } = params;
                 let mut xcoop = xcoop.clone();
-                setx(&mut xcoop, &active, x);
+                Self::setx(&mut xcoop, &active, x);
 
                 // Defensive programming NlOpt::Cobyla may pass NaNs
                 if xcoop.iter().any(|x| x.is_nan()) {
@@ -234,7 +234,7 @@ where
                               -> f64 {
                             let InfillObjData { xbest: xcoop, .. } = params;
                             let mut xcoop = xcoop.clone();
-                            setx(&mut xcoop, &active, x);
+                            Self::setx(&mut xcoop, &active, x);
 
                             let scale_cstr =
                                 params.scale_cstr.as_ref().expect("constraint scaling")[i];
@@ -350,8 +350,8 @@ where
     }
 }
 
-/// Set active components to xcoop using xopt values
-/// active and values must have the same size
-fn setx(xcoop: &mut [f64], active: &[usize], values: &[f64]) {
-    std::iter::zip(active, values).for_each(|(&i, &xi)| xcoop[i] = xi)
-}
+// /// Set active components to xcoop using xopt values
+// /// active and values must have the same size
+// fn setx(xcoop: &mut [f64], active: &[usize], values: &[f64]) {
+//     std::iter::zip(active, values).for_each(|(&i, &xi)| xcoop[i] = xi)
+// }
