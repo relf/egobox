@@ -307,10 +307,11 @@ where
         };
 
         info!(
-            "********* End iteration {}/{} in {:.3}s: Best fun(x)={} at x={}",
+            "********* End iteration {}/{} in {:.3}s: Best fun(x[{}])={} at x={}",
             res.0.get_iter() + 1,
             res.0.get_max_iters(),
             now.elapsed().as_secs_f64(),
+            res.0.best_index.unwrap(),
             y_data.row(res.0.best_index.unwrap()),
             x_data.row(res.0.best_index.unwrap())
         );
