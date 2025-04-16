@@ -128,9 +128,11 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///         When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
 ///
 ///     coego_n_coop (int >= 0)
-///         Number of cooperative components which will be used by the CoEGO algorithm.
-///         It should be an exact divider of the input dimension. The CoEGO algorithm is used
-///         to tackle high-dimensional problems. The default value is 0 meaning that the CoEGO algorithm is not used.
+///         Number of cooperative components groups which will be used by the CoEGO algorithm.
+///         Better to have n_coop a divider of nx or if not with a remainder as large as possible.  
+///         The CoEGO algorithm is used to tackle high-dimensional problems turning it in a set of
+///         partial optimizations using only nx / n_coop components at a time.
+///         The default value is 0 meaning that the CoEGO algorithm is not used.
 ///
 ///     n_clusters (int)
 ///         Number of clusters used by the mixture of surrogate experts (default is 1).

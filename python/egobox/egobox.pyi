@@ -104,9 +104,11 @@ class Egor:
             When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
 
         coego_n_coop (int >= 0)
-            Number of cooperative components which will be used by the CoEGO algorithm.
-            It should be an exact divider of the input dimension. The CoEGO algorithm is used
-            to tackle high-dimensional problems. The default value is 0 meaning that the CoEGO algorithm is not used.
+            Number of cooperative components groups which will be used by the CoEGO algorithm.
+            Better to have n_coop a divider of nx or if not with a remainder as large as possible.  
+            The CoEGO algorithm is used to tackle high-dimensional problems turning it in a set of 
+            partial optimizations using only nx / n_coop components at a time.
+            The default value is 0 meaning that the CoEGO algorithm is not used.
             
         n_clusters (int)
             Number of clusters used by the mixture of surrogate experts (default is 1).
@@ -137,7 +139,7 @@ class Egor:
         seed (int >= 0)
             Random generator seed to allow computation reproducibility.
     """
-    def __new__(cls,xspecs,n_cstr = ...,cstr_tol = ...,n_start = ...,n_doe = ...,doe = ...,regr_spec = ...,corr_spec = ...,infill_strategy = ...,q_points = ...,par_infill_strategy = ...,infill_optimizer = ...,kpls_dim = ...,trego = ...,n_clusters = ...,n_optmod = ...,target = ...,outdir = ...,warm_start = ...,hot_start = ...,seed = ...): ...
+    def __new__(cls,xspecs,n_cstr = ...,cstr_tol = ...,n_start = ...,n_doe = ...,doe = ...,regr_spec = ...,corr_spec = ...,infill_strategy = ...,q_points = ...,q_infill_strategy = ...,q_optmod = ...,infill_optimizer = ...,kpls_dim = ...,trego = ...,n_clusters = ...,target = ...,outdir = ...,warm_start = ...,hot_start = ...,seed = ...): ...
     def minimize(self, fun,max_iters = ..., fcstrs = ...) -> OptimResult:
         r"""
         This function finds the minimum of a given function `fun`
