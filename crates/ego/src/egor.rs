@@ -647,7 +647,7 @@ mod tests {
                     .max_iters(max_iters)
                     .outdir(outdir)
                     .seed(42)
-                    .coego(CoegoStatus::Enabled(5))
+                    .coego(CoegoStatus::Enabled(6))
             })
             .min_within(&xlimits)
             .run()

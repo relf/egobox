@@ -138,23 +138,11 @@ where
                             log::warn!("Automated clustering not available with CoEGO")
                         }
                         NbClusters::Fixed { nb } => {
-                            let default_init = Array2::from_elem(
+                            let theta_tunings = Self::set_initial_partial_theta_tuning(
                                 (nb, xt.ncols()),
-                                ThetaTuning::<f64>::DEFAULT_INIT,
+                                &active.to_vec(),
+                                best_theta_inits,
                             );
-                            let theta_tunings = best_theta_inits
-                                .clone()
-                                .unwrap_or(default_init)
-                                .outer_iter()
-                                .map(|init| ThetaTuning::Partial {
-                                    init: init.to_owned(),
-                                    bounds: Array1::from_vec(vec![
-                                        ThetaTuning::<f64>::DEFAULT_BOUNDS;
-                                        init.len()
-                                    ]),
-                                    active: active.to_vec(),
-                                })
-                                .collect::<Vec<_>>();
                             builder.set_theta_tunings(&theta_tunings);
                         }
                     }

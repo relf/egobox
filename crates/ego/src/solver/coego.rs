@@ -47,19 +47,20 @@ where
         xcoop.select(axis, &selection)
     }
 
-    pub(crate) fn get_random_activity(&self) -> Array2<usize> {
+    pub(crate) fn get_random_activity(&mut self) -> Array2<usize> {
         let xdim = self.xlimits.nrows();
         let g_size = xdim / self.config.coego.n_coop.max(1);
         let g_nb = if xdim % self.config.coego.n_coop == 0 {
             xdim / g_size
         } else {
             xdim / g_size + 1
-        };
+        }
+        .min(xdim);
 
         // When n_coop is not a diviser of xdim, indice is set to xdim
         // (ie out of range) as to be filtered when handling last activity row
         let mut idx: Vec<usize> = (0..xdim).collect();
-        idx.shuffle(&mut self.rng.clone());
+        idx.shuffle(&mut self.rng);
         let mut indices = vec![xdim; g_size * g_nb];
         indices[..xdim].copy_from_slice(&idx);
 
@@ -74,6 +75,24 @@ where
         .unwrap()
     }
 
+    pub(crate) fn set_initial_partial_theta_tuning(
+        shape: (usize, usize),
+        active: &[usize],
+        theta_inits: Option<Array2<f64>>,
+    ) -> Vec<ThetaTuning<f64>> {
+        let default_init = Array2::from_elem(shape, ThetaTuning::<f64>::DEFAULT_INIT);
+        theta_inits
+            .clone()
+            .unwrap_or(default_init)
+            .outer_iter()
+            .map(|init| ThetaTuning::Partial {
+                init: init.to_owned(),
+                bounds: Array1::from_vec(vec![ThetaTuning::<f64>::DEFAULT_BOUNDS; init.len()]),
+                active: Self::strip(active, init.len()),
+            })
+            .collect()
+    }
+
     pub(crate) fn set_partial_theta_tuning(
         &self,
         active: &[usize],
@@ -84,20 +103,12 @@ where
                 ThetaTuning::Fixed(init) => ThetaTuning::Partial {
                     init: init.clone(),
                     bounds: Array1::from_vec(vec![ThetaTuning::<f64>::DEFAULT_BOUNDS; init.len()]),
-                    active: active
-                        .iter()
-                        .filter(|&&i| i < init.len())
-                        .cloned()
-                        .collect(),
+                    active: Self::strip(active, init.len()),
                 },
                 ThetaTuning::Full { init, bounds } => ThetaTuning::Partial {
                     init: init.clone(),
                     bounds: bounds.clone(),
-                    active: active
-                        .iter()
-                        .filter(|&&i| i < init.len())
-                        .cloned()
-                        .collect(),
+                    active: Self::strip(active, init.len()),
                 },
                 ThetaTuning::Partial {
                     init,
@@ -106,14 +117,14 @@ where
                 } => ThetaTuning::Partial {
                     init: init.clone(),
                     bounds: bounds.clone(),
-                    active: active
-                        .iter()
-                        .filter(|&&i| i < init.len())
-                        .cloned()
-                        .collect(),
+                    active: Self::strip(active, init.len()),
                 },
             };
         });
+    }
+
+    fn strip(active: &[usize], dim: usize) -> Vec<usize> {
+        active.iter().filter(|&&i| i < dim).cloned().collect()
     }
 
     #[allow(clippy::type_complexity)]

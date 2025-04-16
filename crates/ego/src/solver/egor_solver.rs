@@ -237,7 +237,7 @@ where
 
         let activity = if self.config.coego.activated {
             let activity = self.get_random_activity();
-            info!("Component activity = {:?}", activity);
+            debug!("Component activity = {:?}", activity);
             Some(activity)
         } else {
             None
@@ -300,7 +300,7 @@ where
         // Update Coop activity
         let res = if self.config.coego.activated {
             let activity = self.get_random_activity();
-            info!("Component activity = {:?}", activity);
+            debug!("Component activity = {:?}", activity);
             (res.0.activity(activity), res.1)
         } else {
             res

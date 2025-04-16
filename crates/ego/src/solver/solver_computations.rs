@@ -241,8 +241,6 @@ where
             cstr_refs.extend(cstr_funcs.clone());
 
             // Limits
-            log::info!("self.xlimits={}", self.xlimits);
-            log::info!("active={:?}", &active);
             let xlimits = Self::getx(&self.xlimits, Axis(0), &active);
 
             if i == 0 {
