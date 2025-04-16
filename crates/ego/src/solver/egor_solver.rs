@@ -119,7 +119,6 @@ use argmin::core::{
     CostFunction, Problem, Solver, State, TerminationReason, TerminationStatus, KV,
 };
 
-use ndarray_rand::rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::marker::PhantomData;
@@ -237,19 +236,9 @@ where
         let c_data = self.eval_problem_fcstrs(problem, &x_data);
 
         let activity = if self.config.coego.activated {
-            let xdim = self.xlimits.nrows();
-            let g_size = xdim / self.config.coego.n_coop.max(1);
-            let mut indices: Vec<usize> = (0..xdim).collect();
-            // TODO: for now xdim has to be a multiple of n_coop
-            indices.shuffle(&mut self.rng.clone());
-            // TODO: manage remaining indices, atm suppose an empty remainder
-            let _remainder = indices[(self.config.coego.n_coop * g_size)..].to_vec();
-            let activity = Array2::from_shape_vec(
-                (self.config.coego.n_coop, g_size),
-                indices[..xdim].to_vec(),
-            );
-            debug!("Component activity = {:?}", activity);
-            Some(activity.unwrap())
+            let activity = self.get_random_activity();
+            info!("Component activity = {:?}", activity);
+            Some(activity)
         } else {
             None
         };
@@ -310,17 +299,8 @@ where
 
         // Update Coop activity
         let res = if self.config.coego.activated {
-            let xdim = self.xlimits.nrows();
-            let g_size = xdim / self.config.coego.n_coop.max(1);
-            let mut indices: Vec<usize> = (0..xdim).collect();
-            // TODO: for now xdim has to be a multiple of n_coop
-            indices.shuffle(&mut self.rng);
-            let activity = Array2::from_shape_vec(
-                (self.config.coego.n_coop, g_size),
-                indices[..xdim].to_vec(),
-            )
-            .unwrap();
-            debug!("Component activity = {:?}", activity);
+            let activity = self.get_random_activity();
+            info!("Component activity = {:?}", activity);
             (res.0.activity(activity), res.1)
         } else {
             res

@@ -268,8 +268,8 @@ where
             cstr_refs.extend(cstr_funcs.clone());
 
             // Limits
-            let xlimits = self.xlimits.select(Axis(0), &active.to_vec());
-            let xbest = xbest.select(Axis(0), &active.to_vec());
+            let xlimits = Self::getx(&self.xlimits, Axis(0), &active);
+            let xbest = Self::getx(&xbest.to_owned(), Axis(0), &active.to_vec());
 
             // Draw n_start initial points (multistart optim) in the local_area
             // local_area = intersection(trust_region, xlimits)

@@ -5,8 +5,10 @@ use crate::EgorSolver;
 
 use egobox_gp::ThetaTuning;
 use egobox_moe::MixtureGpSurrogate;
-use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, Ix1};
+use ndarray::{s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, RemoveAxis};
 use serde::de::DeserializeOwned;
+
+use ndarray_rand::rand::seq::SliceRandom;
 
 #[cfg(not(feature = "nlopt"))]
 use crate::types::ObjFn;
@@ -24,9 +26,44 @@ where
     C: CstrFn,
 {
     /// Set active components to xcoop using xopt values
-    /// active and values must have the same size
+    /// active may be longer than values
     pub(crate) fn setx(xcoop: &mut [f64], active: &[usize], values: &[f64]) {
-        std::iter::zip(active, values).for_each(|(&i, &xi)| xcoop[i] = xi)
+        std::iter::zip(&active[..values.len()], values).for_each(|(&i, &xi)| xcoop[i] = xi)
+    }
+
+    /// Get active components from given ndarray following given axis
+    /// active may contain out of range indices meaning it should be ignore
+    pub(crate) fn getx<A, D>(xcoop: &Array<A, D>, axis: Axis, active: &[usize]) -> Array<A, D>
+    where
+        A: Clone,
+        D: RemoveAxis,
+    {
+        let size = xcoop.len_of(axis);
+        let selection = active
+            .iter()
+            .filter(|&&i| i < size)
+            .cloned()
+            .collect::<Vec<usize>>();
+        xcoop.select(axis, &selection)
+    }
+
+    pub(crate) fn get_random_activity(&self) -> Array2<usize> {
+        let xdim = self.xlimits.nrows();
+        let g_size = xdim / self.config.coego.n_coop.max(1);
+        let g_nb = if xdim % self.config.coego.n_coop == 0 {
+            xdim / g_size
+        } else {
+            xdim / g_size + 1
+        };
+
+        // When n_coop is not a diviser of xdim, indice is set to xdim
+        // (ie out of range) as to be filtered when handling last activity row
+        let mut idx: Vec<usize> = (0..xdim).collect();
+        idx.shuffle(&mut self.rng.clone());
+        let mut indices = vec![xdim; g_size * g_nb];
+        indices[..xdim].copy_from_slice(&idx);
+
+        Array2::from_shape_vec((g_nb, g_size), indices.to_vec()).unwrap()
     }
 
     pub(crate) fn full_activity(&self) -> Array2<usize> {
@@ -47,12 +84,20 @@ where
                 ThetaTuning::Fixed(init) => ThetaTuning::Partial {
                     init: init.clone(),
                     bounds: Array1::from_vec(vec![ThetaTuning::<f64>::DEFAULT_BOUNDS; init.len()]),
-                    active: active.to_vec(),
+                    active: active
+                        .iter()
+                        .filter(|&&i| i < init.len())
+                        .cloned()
+                        .collect(),
                 },
                 ThetaTuning::Full { init, bounds } => ThetaTuning::Partial {
                     init: init.clone(),
                     bounds: bounds.clone(),
-                    active: active.to_vec(),
+                    active: active
+                        .iter()
+                        .filter(|&&i| i < init.len())
+                        .cloned()
+                        .collect(),
                 },
                 ThetaTuning::Partial {
                     init,
@@ -61,7 +106,11 @@ where
                 } => ThetaTuning::Partial {
                     init: init.clone(),
                     bounds: bounds.clone(),
-                    active: active.to_vec(),
+                    active: active
+                        .iter()
+                        .filter(|&&i| i < init.len())
+                        .cloned()
+                        .collect(),
                 },
             };
         });

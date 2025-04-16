@@ -241,14 +241,16 @@ where
             cstr_refs.extend(cstr_funcs.clone());
 
             // Limits
-            let xlimits = self.xlimits.select(Axis(0), &active);
+            log::info!("self.xlimits={}", self.xlimits);
+            log::info!("active={:?}", &active);
+            let xlimits = Self::getx(&self.xlimits, Axis(0), &active);
 
             if i == 0 {
                 info!("Optimize infill criterion...");
             }
             while !success && n_optim <= n_max_optim {
                 let x_start = sampling.sample(self.config.n_start);
-                let x_start_coop = x_start.select(Axis(1), &active);
+                let x_start_coop = Self::getx(&x_start, Axis(1), &active);
 
                 if let Some(seed) = lhs_optim_seed {
                     let (y_opt, x_opt) =
