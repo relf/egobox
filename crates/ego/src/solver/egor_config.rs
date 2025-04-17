@@ -35,7 +35,7 @@ impl Default for TregoConfig {
 
 /// An enum to specify CoEGO status and component number
 pub enum CoegoStatus {
-    /// Do ont use CoEGO algorithm
+    /// Do not use CoEGO algorithm
     Disabled,
     /// Apply CoEGO algorithm with a specified number of groups of components
     /// meaning at most nx / n_coop components will be optimized at a time
