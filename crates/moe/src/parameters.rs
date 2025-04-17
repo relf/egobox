@@ -208,7 +208,7 @@ impl<F: Float> GpMixtureParams<F> {
 }
 
 impl<F: Float> GpMixtureParams<F> {
-    /// Constructor of Gp mixture parameters specifying randon number generator for reproducibility
+    /// Constructor of Gp mixture parameters specifying random number generator for reproducibility
     ///
     /// See [`new`](GpMixtureParams::new) for default parameters.
     pub fn new_with_rng(gp_type: GpType<F>, rng: Xoshiro256Plus) -> GpMixtureParams<F> {
