@@ -35,7 +35,10 @@ impl Default for TregoConfig {
 
 /// An enum to specify CoEGO status and component number
 pub enum CoegoStatus {
+    /// Do ont use CoEGO algorithm
     Disabled,
+    /// Apply CoEGO algorithm with a specified number of groups of components
+    /// meaning at most nx / n_coop components will be optimized at a time
     Enabled(usize),
 }
 
@@ -112,9 +115,9 @@ pub struct EgorConfig {
     pub(crate) xtypes: Vec<XType>,
     /// A random generator seed used to get reproductible results.
     pub(crate) seed: Option<u64>,
-    /// Trego parameterization
+    /// TREGO parameterization
     pub(crate) trego: TregoConfig,
-    /// Trego parameterization
+    /// CoEGO  parameterization
     pub(crate) coego: CoegoConfig,
     /// Constrained infill criterion activation
     pub(crate) cstr_infill: bool,

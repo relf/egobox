@@ -211,7 +211,7 @@
 //! * Mixed integer approach is implemented using continuous relaxation. See \[[Garrido2018](#Garrido2018)\]
 //! * TREGO algorithm is implemented. See \[[Diouane2023](#Diouane2023)\]
 //! * CoEGO approach is implemented with CCBO setting where expensive evaluations are run after context vector update.
-//! See \[[Zhan2024](#Zhan024)\] and \[[Pretsch2024](#Pretsch024)\]
+//!   See \[[Zhan2024](#Zhan024)\] and \[[Pretsch2024](#Pretsch024)\]
 //!
 //! # References
 //!
