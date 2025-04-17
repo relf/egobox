@@ -72,7 +72,10 @@ pub enum QEiStrategy {
 pub trait GroupFunc: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
+/// A trait to retrieve functions constraints specifying
+/// the domain of the input variables.
 pub trait DomainConstraints<C: CstrFn> {
+    /// Returns the list of constraints functions
     fn fn_constraints(&self) -> &[impl CstrFn];
 }
 
