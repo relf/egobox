@@ -223,6 +223,12 @@ Ginsbourger, D., Le Riche, R., & Carraro, L. (2010).
 E.C. Garrido-Merchan and D. Hernandez-Lobato.
 [Dealing with categorical and integer-valued variables in Bayesian Optimization with Gaussian processes](https://arxiv.org/pdf/1805.03463).
 
+Zhan, Dawei, et al. 
+[A cooperative approach to efficient global optimization](https://link.springer.com/article/10.1007/s10898-023-01316-6). Journal of Global Optimization 88.2 (2024): 327-357
+
+Lisa Pretsch et al.
+Bayesian optimization of cooperative components for multi-stage aero-structural compressor blade design. 2024
+
 smtorg. (2018). [Surrogate modeling toolbox](https://github.com/SMTOrg/smt). GitHub.
 
 ## License

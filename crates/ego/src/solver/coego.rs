@@ -47,6 +47,10 @@ where
         xcoop.select(axis, &selection)
     }
 
+    /// Compute array of components indices each row being used as
+    /// active component during partial optimizations
+    /// Array is (group nb, group size) where nb and size are computed
+    /// from nx dimension and n_coop configuration.  
     pub(crate) fn get_random_activity(&mut self) -> Array2<usize> {
         let xdim = self.xlimits.nrows();
         let g_size = xdim / self.config.coego.n_coop.max(1);
@@ -67,6 +71,9 @@ where
         Array2::from_shape_vec((g_nb, g_size), indices.to_vec()).unwrap()
     }
 
+    /// Returns activity when optimization is not partial, that is
+    /// all components are activated hence the result is an (1, nx) array
+    /// containing [0, nx-1] integers.
     pub(crate) fn full_activity(&self) -> Array2<usize> {
         Array2::from_shape_vec(
             (1, self.xlimits.nrows()),
@@ -75,6 +82,9 @@ where
         .unwrap()
     }
 
+    /// Set intial partial theta tunings from active components
+    /// and optional set of initial values.
+    /// Use during initialisation of theta partial optimizations
     pub(crate) fn set_initial_partial_theta_tuning(
         shape: (usize, usize),
         active: &[usize],
@@ -93,6 +103,7 @@ where
             .collect()
     }
 
+    /// Set partial theta tuning from previous theta tuning and given activity
     pub(crate) fn set_partial_theta_tuning(
         &self,
         active: &[usize],
@@ -123,10 +134,20 @@ where
         });
     }
 
+    /// Used to remove out of range indices from activity last row
+    /// Indeed the last row of activity matrix may be incomplete
+    /// as n_coop might not be a divider of nx. so this last row
+    /// may contain indices with an 'nx value' used as a marker
+    /// meaning to discard the indice information while keeping
+    /// rows of the same length.
     fn strip(active: &[usize], dim: usize) -> Vec<usize> {
         active.iter().filter(|&&i| i < dim).cloned().collect()
     }
 
+    /// Check whether the objective is improved using surrogates at xcoop location
+    /// Given a current best information, surrogates are used
+    /// to predict objective and constraints at xcoop location
+    /// to find which one is best.
     #[allow(clippy::type_complexity)]
     pub(crate) fn is_objective_improved(
         &self,
@@ -165,7 +186,9 @@ where
         (best_index != 0, best)
     }
 
-    /// Compute predicted objective and constraints values at the given x location
+    /// Compute predicted objective and constraints values at the given x location.
+    /// An optimistic approach is used as lower bound is taken for the objective
+    /// and upper bound for constraints
     pub(crate) fn predict_point(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix1>,
@@ -182,7 +205,6 @@ where
             let sigma = cstr_model.predict_var(&x.view()).unwrap()[[0, 0]].sqrt();
             // Use upper trust bound
             res.push(cstr_model.predict(x)?[0] + CSTR_DOUBT * sigma);
-            res.push(cstr_model.predict(x)?[0]);
         }
         Ok(Array1::from_vec(res))
     }
