@@ -257,7 +257,8 @@ fn main() -> anyhow::Result<()> {
     let dim = args.dim;
     let outdir = args.outdir;
     let n_doe = dim + 1;
-    let max_iters = 4 * dim;
+    let _max_iters = 4 * dim;
+    let max_iters = 90;
     const N_CSTR: usize = 68;
     let cstr_tol = Array1::from_elem(N_CSTR, 1e-4);
     let _kpls_dim = 10;
@@ -276,17 +277,17 @@ fn main() -> anyhow::Result<()> {
                 .max_iters(max_iters)
                 .regression_spec(RegressionSpec::CONSTANT)
                 .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
-                .infill_optimizer(InfillOptimizer::Slsqp)
+                .infill_optimizer(InfillOptimizer::Cobyla)
                 .infill_strategy(InfillStrategy::EI)
                 .cstr_infill(true)
-                .cstr_strategy(ConstraintStrategy::UpperTrustBound)
+                //.cstr_strategy(ConstraintStrategy::MeanConstraint)
                 //.kpls_dim(kpls_dim)
-                .q_points(5)
-                .q_optmod(5)
+                .q_points(10)
+                .q_optmod(2)
                 .qei_strategy(QEiStrategy::KrigingBeliever)
                 .outdir(outdir)
                 .warm_start(true)
-                .coego(CoegoStatus::Enabled(4))
+                .coego(CoegoStatus::Enabled(5))
         })
         .min_within(&xlimits)
         .run()
