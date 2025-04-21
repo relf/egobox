@@ -56,7 +56,7 @@ impl<F: Float> Clone for WoodburyData<F> {
 ///
 /// [`SparseGaussianProcess`] inducing points definition can be either random or provided by the user through
 /// the [`Inducings`] specification. The used sparse method is specified with the [`SparseMethod`].
-/// Noise variance can be either specified as a known constant or estimated (see [`ParamEstimation`]).
+/// Noise variance can be either specified as a known constant or estimated (see [`ParamTuning`]).
 /// Unlike [`GaussianProcess`]([crate::GaussianProcess]) implementation [`SparseGaussianProcess`]
 /// does not allow choosing a trend which is supposed to be zero.
 /// The correlation kernel might be selected amongst [available kernels](crate::correlation_models).

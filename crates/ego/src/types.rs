@@ -72,7 +72,10 @@ pub enum QEiStrategy {
 pub trait GroupFunc: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 impl<T> GroupFunc for T where T: Clone + Fn(&ArrayView2<f64>) -> Array2<f64> {}
 
+/// A trait to retrieve functions constraints specifying
+/// the domain of the input variables.
 pub trait DomainConstraints<C: CstrFn> {
+    /// Returns the list of constraints functions
     fn fn_constraints(&self) -> &[impl CstrFn];
 }
 
@@ -189,12 +192,12 @@ pub trait CstrFn: Clone + ObjFn<InfillObjData<f64>> + Sync {}
 impl<T> CstrFn for T where T: Clone + ObjFn<InfillObjData<f64>> + Sync {}
 
 /// A function type for domain constraints which will be used by the internal optimizer
-/// which is the default value for [`EgorBuilder`] generic `C` parameter.
+/// which is the default value for [`crate::EgorFactory`] generic `C` parameter.
 pub type Cstr = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
 
 /// Data used by internal infill criteria optimization
 /// Internally this type is used to carry the information required to
-/// compute the various infill criteria implemented by [`Egor`].
+/// compute the various infill criteria implemented by [`crate::Egor`].
 ///
 /// See [`crate::criteria`]
 #[derive(Clone, Debug, Serialize, Deserialize)]

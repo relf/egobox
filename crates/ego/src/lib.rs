@@ -207,9 +207,11 @@
 //! # Implementation notes
 //!
 //! * Mixture of experts and PLS dimension reduction is explained in \[[Bartoli2019](#Bartoli2019)\]
-//! * Parallel optimization is available through the selection of a qei strategy. See in \[[Ginsbourger2010](#Ginsbourger2010)\]
+//! * Parallel evaluation is available through the selection of a qei strategy. See in \[[Ginsbourger2010](#Ginsbourger2010)\]
 //! * Mixed integer approach is implemented using continuous relaxation. See \[[Garrido2018](#Garrido2018)\]
-//! * TREGO algorithm is not enabled by default. See \[[Diouane2023](#Diouane2023)\]
+//! * TREGO algorithm is implemented. See \[[Diouane2023](#Diouane2023)\]
+//! * CoEGO approach is implemented with CCBO setting where expensive evaluations are run after context vector update.
+//!   See \[[Zhan2024](#Zhan024)\] and \[[Pretsch2024](#Pretsch024)\]
 //!
 //! # References
 //!
@@ -244,12 +246,24 @@
 //! Journal of Global Optimization 86.1 (2023): 1-23.
 //!
 //! \[<a id="Priem2019">Priem2019</a>\]: Priem, Rémy, Nathalie Bartoli, and Youssef Diouane.
-//! On the use of upper trust bounds in constrained Bayesian optimization infill criteria.
+//! [On the use of upper trust bounds in constrained Bayesian optimization infill criteria](https://hal.science/hal-02182492v1/file/Priem_24049.pdf).
 //! AIAA aviation 2019 forum. 2019.
 //!
 //! \[<a id="Sasena2002">Sasena2002</a>\]: Sasena M., Papalambros P., Goovaerts P., 2002.
-//! Global optimization of problems with disconnected feasible regions
-//! via surrogate modeling.” AIAA Paper.
+//! [Global optimization of problems with disconnected feasible regions via surrogate modeling](https://deepblue.lib.umich.edu/handle/2027.42/77089). AIAA Paper.
+//!
+//! \[<a id="Ginsbourger2010">Ginsbourger2010</a>\]: Ginsbourger, D., Le Riche, R., & Carraro, L. (2010).
+//! [Kriging is well-suited to parallelize optimization](https://www.researchgate.net/publication/226716412_Kriging_Is_Well-Suited_to_Parallelize_Optimization).
+//!
+//! \[<a id="Garrido2018">Garrido2018</a>\]: E.C. Garrido-Merchan and D. Hernandez-Lobato.
+//! [Dealing with categorical and integer-valued variables in Bayesian Optimization with Gaussian processes](https://arxiv.org/pdf/1805.03463).
+//!
+//! \[<a id="Zhan2024">Zhan2024</a>\]: Zhan, Dawei, et al.
+//! [A cooperative approach to efficient global optimization](https://link.springer.com/article/10.1007/s10898-023-01316-6).
+//! Journal of Global Optimization 88.2 (2024): 327-357
+//!
+//! \[<a id="Pretsch024">Pretsch024</a>\]: Lisa Pretsch et al.
+//! Bayesian optimization of cooperative components for multi-stage aero-structural compressor blade design.
 //!
 //! smtorg. (2018). Surrogate modeling toolbox. In [GitHub repository](https://github.com/SMTOrg/smt)
 //!
