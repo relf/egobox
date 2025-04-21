@@ -1,7 +1,6 @@
 use clap::Parser;
 use egobox_ego::{
-    CoegoStatus, ConstraintStrategy, EgorBuilder, GroupFunc, InfillOptimizer, InfillStrategy,
-    QEiStrategy,
+    CoegoStatus, EgorBuilder, GroupFunc, InfillOptimizer, InfillStrategy, QEiStrategy,
 };
 use egobox_moe::{CorrelationSpec, NbClusters, RegressionSpec};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
