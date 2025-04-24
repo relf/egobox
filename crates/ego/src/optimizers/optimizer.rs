@@ -1,3 +1,4 @@
+use crate::optimizers::gbnm;
 use crate::InfillObjData;
 use ndarray::{arr1, Array1, Array2, ArrayView1};
 
@@ -13,6 +14,7 @@ use nlopt::ObjFn;
 pub enum Algorithm {
     Cobyla,
     Slsqp,
+    Gbnm,
 }
 
 pub const INFILL_MAX_EVAL_DEFAULT: usize = 1000;
@@ -216,6 +218,11 @@ impl<'a> Optimizer<'a> {
                         Err((_, x_opt, _)) => (f64::INFINITY, arr1(&x_opt)),
                     }
                 }
+            }
+            Algorithm::Gbnm => {
+                // gbnm::minimize(self.fun, &self.bounds, &self.cons, self.user_data);
+
+                todo!()
             }
         };
         log::debug!("... end optimization");
