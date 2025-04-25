@@ -398,6 +398,31 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_xsinx_gbnm_optimizer_egor_builder() {
+        let outdir = "target/test_egor_builder_01";
+        let outfile = format!("{outdir}/{DOE_INITIAL_FILE}");
+        let _ = std::fs::remove_file(&outfile);
+        let initial_doe = array![[0.], [7.], [25.]];
+        let res = EgorBuilder::optimize(xsinx)
+            .configure(|cfg| {
+                cfg.infill_strategy(InfillStrategy::EI)
+                    .infill_optimizer(InfillOptimizer::Gbnm)
+                    .max_iters(30)
+                    .doe(&initial_doe)
+                    .target(-15.1)
+                    .outdir(outdir)
+            })
+            .min_within(&array![[0.0, 25.0]])
+            .run()
+            .expect("Egor should minimize xsinx");
+        let expected = array![-15.1];
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
+        let saved_doe: Array2<f64> = read_npy(&outfile).unwrap();
+        assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
+    }
+
+    #[test]
+    #[serial]
     fn test_xsinx_with_domain_constraint() {
         let initial_doe = array![[0.], [7.], [10.]];
         let res = EgorBuilder::optimize(xsinx)

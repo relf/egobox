@@ -220,9 +220,31 @@ impl<'a> Optimizer<'a> {
                 }
             }
             Algorithm::Gbnm => {
-                // gbnm::minimize(self.fun, &self.bounds, &self.cons, self.user_data);
+                let bounds: Vec<_> = self
+                    .bounds
+                    .outer_iter()
+                    .map(|row| (row[0], row[1]))
+                    .collect();
+                let res = gbnm::minimize(
+                    |x: &[f64]| {
+                        let mut u = InfillObjData::default();
+                        (self.fun)(x, None, &mut u)
+                    },
+                    &bounds,
+                    gbnm::Options {
+                        max_evals: self.max_eval,
+                        ..gbnm::Options::default()
+                    },
+                );
+                let xinit = self.xinit.clone().unwrap().to_vec();
 
-                todo!()
+                match res {
+                    Ok(gbnm::Result {
+                        x: x_opt,
+                        fval: y_opt,
+                    }) => (y_opt, arr1(&x_opt)),
+                    Err(_) => (f64::INFINITY, arr1(&xinit)),
+                }
             }
         };
         log::debug!("... end optimization");

@@ -17,6 +17,7 @@ pub struct GbnmOptions {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct GbnmResult {
     pub x: Array1<f64>,
     pub fval: f64,

@@ -2,7 +2,7 @@
 
 mod internal;
 
-pub use internal::{GbnmOptions, gbnm};
+pub use internal::{gbnm, GbnmOptions};
 use ndarray::Array1;
 
 /// Options to control the optimizer
@@ -45,19 +45,20 @@ pub struct Result {
 /// Run the optimizer
 pub fn minimize<F>(
     fun: F,
-    xmin: &[f64],
-    xmax: &[f64],
+    bounds: &[(f64, f64)],
     options: Options,
 ) -> std::result::Result<Result, &'static str>
 where
     F: Fn(&[f64]) -> f64,
 {
-    if xmin.len() != xmax.len() {
-        return Err("xmin and xmax must have the same length");
+    if bounds.is_empty() {
+        return Err("Bounds cannot be empty");
     }
-
-    let xmin = Array1::from(xmin.to_vec());
-    let xmax = Array1::from(xmax.to_vec());
+    if bounds.len() != 2 {
+        return Err("Bounds must be a 2D array with shape (n, 2)");
+    }
+    let xmin: Array1<f64> = bounds.iter().map(|b| b.0).collect();
+    let xmax: Array1<f64> = bounds.iter().map(|b| b.1).collect();
 
     let wrapped_fun = |x: &Array1<f64>| fun(x.as_slice().unwrap());
 
