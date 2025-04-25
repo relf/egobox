@@ -18,7 +18,7 @@ impl Default for CobylaParams {
         CobylaParams {
             rhobeg: 0.5,
             ftol_rel: 1e-4,
-            maxeval: 25,
+            maxeval: 200,
         }
     }
 }
