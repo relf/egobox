@@ -219,9 +219,14 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
         let exec = Executor::new(self.fobj.clone(), self.solver.clone());
 
         let exec = if self.solver.config.hot_start != HotStartMode::Disabled {
+            let chkpt_dir = if let Some(outdir) = self.solver.config.outdir.as_ref() {
+                outdir
+            } else {
+                ".checkpoints"
+            };
             let checkpoint = HotStartCheckpoint::new(
-                ".checkpoints",
-                "egor",
+                chkpt_dir,
+                "egor_checkpoint",
                 CheckpointingFrequency::Always,
                 self.solver.config.hot_start.clone(),
             );
@@ -488,6 +493,7 @@ mod tests {
                     .max_iters(n_iter)
                     .seed(42)
                     .hot_start(HotStartMode::Enabled)
+                    .outdir("checkpoint_test_dir")
             })
             .min_within(&array![[0.0, 25.0]])
             .run()
@@ -516,6 +522,7 @@ mod tests {
                 config
                     .seed(42)
                     .hot_start(HotStartMode::ExtendedIters(ext_iters))
+                    .outdir("checkpoint_test_dir")
             })
             .min_within(&array![[0.0, 25.0]])
             .run()
@@ -523,7 +530,7 @@ mod tests {
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
         assert_eq!(n_iter as u64 + ext_iters, res.state.get_iter());
-        let _ = std::fs::remove_file(".checkpoints/egor.arg");
+        //let _ = std::fs::remove_file("checkpoint_test_dir/egor_checkpoint.arg");
     }
 
     #[test]
