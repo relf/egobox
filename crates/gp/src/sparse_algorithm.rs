@@ -589,7 +589,8 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                     &params.row(i).to_owned(),
                     &bounds,
                     CobylaParams {
-                        maxeval: (10 * theta0_dim).max(CobylaParams::default().maxeval),
+                        maxeval: (10 * theta0_dim)
+                            .clamp(crate::GP_MIN_COBYLA_EVAL, crate::GP_MAX_COBYLA_EVAL),
                         ..CobylaParams::default()
                     },
                 );
