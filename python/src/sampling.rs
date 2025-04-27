@@ -3,7 +3,9 @@ use egobox_doe::{LhsKind, SamplingMethod};
 use egobox_ego::gpmix::mixint::MixintContext;
 use numpy::{IntoPyArray, PyArray2};
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass_enum, gen_stub_pyfunction};
 
+#[gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Sampling {
@@ -27,6 +29,7 @@ pub enum Sampling {
 /// # Returns
 ///    ndarray of shape (n_samples, n_variables)
 ///
+#[gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (method, xspecs, n_samples, seed=None))]
 pub fn sampling(
@@ -76,7 +79,7 @@ pub fn sampling(
         }
     }
     .sample(n_samples);
-    doe.into_pyarray_bound(py)
+    doe.into_pyarray(py)
 }
 
 /// Samples generation using optimized Latin Hypercube Sampling
@@ -89,6 +92,7 @@ pub fn sampling(
 /// # Returns
 ///    ndarray of shape (n_samples, n_variables)
 ///
+#[gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (xspecs, n_samples, seed=None))]
 pub(crate) fn lhs(

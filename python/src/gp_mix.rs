@@ -22,6 +22,7 @@ use ndarray::{array, Array1, Array2, Axis, Ix1, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2, PyReadonlyArrayDyn};
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use rand_xoshiro::Xoshiro256Plus;
 
 /// Gaussian processes mixture builder
@@ -71,6 +72,7 @@ use rand_xoshiro::Xoshiro256Plus;
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///         
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct GpMix {
     pub n_clusters: NbClusters,
@@ -84,6 +86,7 @@ pub(crate) struct GpMix {
     pub seed: Option<u64>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl GpMix {
     #[new]
@@ -226,9 +229,11 @@ impl GpMix {
 }
 
 /// A trained Gaussian processes mixture
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct Gpx(Box<GpMixture>);
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl Gpx {
     /// Get Gaussian processes mixture builder aka `GpMix`
@@ -328,7 +333,7 @@ impl Gpx {
             .predict(&x.as_array())
             .unwrap()
             .insert_axis(Axis(1))
-            .into_pyarray_bound(py)
+            .into_pyarray(py)
     }
 
     /// Predict variances at nsample points.
@@ -345,10 +350,7 @@ impl Gpx {
         py: Python<'py>,
         x: PyReadonlyArray2<f64>,
     ) -> Bound<'py, PyArray2<f64>> {
-        self.0
-            .predict_var(&x.as_array())
-            .unwrap()
-            .into_pyarray_bound(py)
+        self.0.predict_var(&x.as_array()).unwrap().into_pyarray(py)
     }
 
     /// Predict surrogate output derivatives at nsamples points.
@@ -369,7 +371,7 @@ impl Gpx {
         self.0
             .predict_gradients(&x.as_array())
             .unwrap()
-            .into_pyarray_bound(py)
+            .into_pyarray(py)
     }
 
     /// Predict variance derivatives at nsamples points.
@@ -390,7 +392,7 @@ impl Gpx {
         self.0
             .predict_var_gradients(&x.as_array())
             .unwrap()
-            .into_pyarray_bound(py)
+            .into_pyarray(py)
     }
 
     /// Sample gaussian process trajectories.
@@ -412,7 +414,7 @@ impl Gpx {
         self.0
             .sample(&x.as_array(), n_traj)
             .unwrap()
-            .into_pyarray_bound(py)
+            .into_pyarray(py)
     }
 
     /// Get the input and output dimensions of the surrogate
@@ -435,8 +437,8 @@ impl Gpx {
     ) -> (Bound<'py, PyArray2<f64>>, Bound<'py, PyArray1<f64>>) {
         let (xdata, ydata) = self.0.training_data();
         (
-            xdata.to_owned().into_pyarray_bound(py),
-            ydata.to_owned().into_pyarray_bound(py),
+            xdata.to_owned().into_pyarray(py),
+            ydata.to_owned().into_pyarray(py),
         )
     }
 
@@ -452,7 +454,7 @@ impl Gpx {
         Zip::from(thetas.rows_mut())
             .and(experts)
             .for_each(|mut theta, expert| theta.assign(expert.theta()));
-        thetas.into_pyarray_bound(py)
+        thetas.into_pyarray(py)
     }
 
     /// Get GP expert variance (ie posterior GP variance)
@@ -466,7 +468,7 @@ impl Gpx {
         Zip::from(&mut variances)
             .and(experts)
             .for_each(|var, expert| *var = expert.variance());
-        variances.into_pyarray_bound(py)
+        variances.into_pyarray(py)
     }
 
     /// Get reduced likelihood values gotten when fitting the GP experts
@@ -482,6 +484,6 @@ impl Gpx {
         Zip::from(&mut likelihoods)
             .and(experts)
             .for_each(|lkh, expert| *lkh = expert.likelihood());
-        likelihoods.into_pyarray_bound(py)
+        likelihoods.into_pyarray(py)
     }
 }

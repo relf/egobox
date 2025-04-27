@@ -21,6 +21,7 @@ use ndarray::{array, Array1, Array2, Axis, Ix1, Ix2, Zip};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use rand_xoshiro::Xoshiro256Plus;
 
 /// Sparse Gaussian processes mixture builder
@@ -58,6 +59,7 @@ use rand_xoshiro::Xoshiro256Plus;
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///         
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct SparseGpMix {
     pub correlation_spec: CorrelationSpec,
@@ -71,6 +73,7 @@ pub(crate) struct SparseGpMix {
     pub seed: Option<u64>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl SparseGpMix {
     #[new]
@@ -216,9 +219,11 @@ impl SparseGpMix {
 }
 
 /// A trained Gaussian processes mixture
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct SparseGpx(Box<GpMixture>);
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl SparseGpx {
     /// Get Gaussian processes mixture builder aka `GpSparse`
@@ -314,10 +319,7 @@ impl SparseGpx {
     ///     the output values at nsamples x points (array[nsamples])
     ///
     fn predict<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> Bound<'py, PyArray1<f64>> {
-        self.0
-            .predict(&x.as_array())
-            .unwrap()
-            .into_pyarray_bound(py)
+        self.0.predict(&x.as_array()).unwrap().into_pyarray(py)
     }
 
     /// Predict variances at nsample points.
@@ -337,7 +339,7 @@ impl SparseGpx {
         self.0
             .predict_var(&x.as_array().to_owned())
             .unwrap()
-            .into_pyarray_bound(py)
+            .into_pyarray(py)
     }
 
     /// Predict surrogate output derivatives at nsamples points.
@@ -361,7 +363,7 @@ impl SparseGpx {
         self.0
             .predict_gradients(&x.as_array())
             .unwrap()
-            .into_pyarray_bound(py)
+            .into_pyarray(py)
     }
 
     /// Predict variance derivatives at nsamples points.
@@ -385,7 +387,7 @@ impl SparseGpx {
         self.0
             .predict_var_gradients(&x.as_array())
             .unwrap()
-            .into_pyarray_bound(py)
+            .into_pyarray(py)
     }
 
     /// Sample gaussian process trajectories.
@@ -407,7 +409,7 @@ impl SparseGpx {
         self.0
             .sample(&x.as_array(), n_traj)
             .unwrap()
-            .into_pyarray_bound(py)
+            .into_pyarray(py)
     }
 
     /// Get optimized thetas hyperparameters (ie once GP experts are fitted)
@@ -422,7 +424,7 @@ impl SparseGpx {
         Zip::from(thetas.rows_mut())
             .and(experts)
             .for_each(|mut theta, expert| theta.assign(expert.theta()));
-        thetas.into_pyarray_bound(py)
+        thetas.into_pyarray(py)
     }
 
     /// Get GP expert variance (ie posterior GP variance)
@@ -436,7 +438,7 @@ impl SparseGpx {
         Zip::from(&mut variances)
             .and(experts)
             .for_each(|var, expert| *var = expert.variance());
-        variances.into_pyarray_bound(py)
+        variances.into_pyarray(py)
     }
 
     /// Get reduced likelihood values gotten when fitting the GP experts
@@ -452,6 +454,6 @@ impl SparseGpx {
         Zip::from(&mut likelihoods)
             .and(experts)
             .for_each(|lkh, expert| *lkh = expert.likelihood());
-        likelihoods.into_pyarray_bound(py)
+        likelihoods.into_pyarray(py)
     }
 }
