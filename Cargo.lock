@@ -1723,6 +1723,7 @@ dependencies = [
 [[package]]
 name = "pyo3-stub-gen"
 version = "0.8.2"
+source = "git+https://github.com/zao111222333/pyo3-stub-gen.git#6c3f352d7e912b1afa92664029e9724a5794466f"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1742,6 +1743,7 @@ dependencies = [
 [[package]]
 name = "pyo3-stub-gen-derive"
 version = "0.8.2"
+source = "git+https://github.com/zao111222333/pyo3-stub-gen.git#6c3f352d7e912b1afa92664029e9724a5794466f"
 dependencies = [
  "heck",
  "proc-macro2",
