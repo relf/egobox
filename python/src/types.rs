@@ -14,19 +14,6 @@ pub enum Recombination {
     Smooth = 1,
 }
 
-#[test]
-fn ttt(){
-    pyo3::prepare_freethreaded_python();
-    pyo3::Python::with_gil(|py| {
-        dbg!(<Recombination as pyo3::IntoPyObjectExt>::into_bound_py_any(Recombination::Hard, py));
-        // if let Ok(py_obj) = <Recombination as pyo3::IntoPyObjectExt>::into_bound_py_any(Recombination::Hard, py) {
-        //     ::pyo3_stub_gen::util::fmt_py_obj(&py_obj)
-        // } else {
-        //     "...".to_owned()
-        // }
-    });
-}
-
 #[gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
