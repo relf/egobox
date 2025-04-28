@@ -133,7 +133,7 @@ class Egor:
         seed (int >= 0)
             Random generator seed to allow computation reproducibility.
     """
-    def __new__(cls, xspecs:typing.Any, n_cstr:builtins.int=0, cstr_tol:typing.Optional[typing.Sequence[builtins.float]]=None, n_start:builtins.int=20, n_doe:builtins.int=0, doe:typing.Optional[numpy.typing.NDArray[numpy.float64]]=None, regr_spec:builtins.int=1, corr_spec:builtins.int=1, infill_strategy:InfillStrategy=..., cstr_infill:builtins.bool=False, cstr_strategy:ConstraintStrategy=..., q_points:builtins.int=1, q_infill_strategy:QInfillStrategy=..., infill_optimizer:InfillOptimizer=..., kpls_dim:typing.Optional[builtins.int]=None, trego:builtins.bool=False, coego_n_coop:builtins.int=0, n_clusters:builtins.int=1, q_optmod:builtins.int=1, target:builtins.float=-inf, outdir:typing.Optional[builtins.str]=None, warm_start:builtins.bool=False, hot_start:typing.Optional[builtins.int]=None, seed:typing.Optional[builtins.int]=None) -> Egor: ...
+    def __new__(cls, xspecs:typing.Any, n_cstr:builtins.int=0, cstr_tol:typing.Optional[typing.Sequence[builtins.float]]=None, n_start:builtins.int=20, n_doe:builtins.int=0, doe:typing.Optional[numpy.typing.NDArray[numpy.float64]]=None, regr_spec:builtins.int=1, corr_spec:builtins.int=1, infill_strategy:InfillStrategy=InfillStrategy.WB2, cstr_infill:builtins.bool=False, cstr_strategy:ConstraintStrategy=ConstraintStrategy.MC, q_points:builtins.int=1, q_infill_strategy:QInfillStrategy=QInfillStrategy.KB, infill_optimizer:InfillOptimizer=InfillOptimizer.COBYLA, kpls_dim:typing.Optional[builtins.int]=None, trego:builtins.bool=False, coego_n_coop:builtins.int=0, n_clusters:builtins.int=1, q_optmod:builtins.int=1, target:builtins.float=-inf, outdir:typing.Optional[builtins.str]=None, warm_start:builtins.bool=False, hot_start:typing.Optional[builtins.int]=None, seed:typing.Optional[builtins.int]=None) -> Egor: ...
     def minimize(self, fun:typing.Any, fcstrs:typing.Sequence[typing.Any]=[], max_iters:builtins.int=20) -> OptimResult:
         r"""
         This function finds the minimum of a given function `fun`
@@ -262,7 +262,7 @@ class GpMix:
         seed (int >= 0)
             Random generator seed to allow computation reproducibility.
     """
-    def __new__(cls, n_clusters:builtins.int=1, regr_spec:builtins.int=1, corr_spec:builtins.int=1, recombination:Recombination=..., theta_init:typing.Optional[typing.Sequence[builtins.float]]=None, theta_bounds:typing.Optional[typing.Sequence[typing.Sequence[builtins.float]]]=None, kpls_dim:typing.Optional[builtins.int]=None, n_start:builtins.int=10, seed:typing.Optional[builtins.int]=None) -> GpMix: ...
+    def __new__(cls, n_clusters:builtins.int=1, regr_spec:builtins.int=1, corr_spec:builtins.int=1, recombination:Recombination=Recombination.HARD, theta_init:typing.Optional[typing.Sequence[builtins.float]]=None, theta_bounds:typing.Optional[typing.Sequence[typing.Sequence[builtins.float]]]=None, kpls_dim:typing.Optional[builtins.int]=None, n_start:builtins.int=10, seed:typing.Optional[builtins.int]=None) -> GpMix: ...
     def fit(self, xt:numpy.typing.NDArray[numpy.float64], yt:numpy.typing.NDArray[numpy.float64]) -> Gpx:
         r"""
         Fit the parameters of the model using the training dataset to build a trained model
@@ -280,7 +280,7 @@ class Gpx:
     A trained Gaussian processes mixture
     """
     @staticmethod
-    def builder(n_clusters:builtins.int=1, regr_spec:builtins.int=1, corr_spec:builtins.int=1, recombination:Recombination=..., theta_init:typing.Optional[typing.Sequence[builtins.float]]=None, theta_bounds:typing.Optional[typing.Sequence[typing.Sequence[builtins.float]]]=None, kpls_dim:typing.Optional[builtins.int]=None, n_start:builtins.int=10, seed:typing.Optional[builtins.int]=None) -> GpMix:
+    def builder(n_clusters:builtins.int=1, regr_spec:builtins.int=1, corr_spec:builtins.int=1, recombination:Recombination=Recombination.SMOOTH, theta_init:typing.Optional[typing.Sequence[builtins.float]]=None, theta_bounds:typing.Optional[typing.Sequence[typing.Sequence[builtins.float]]]=None, kpls_dim:typing.Optional[builtins.int]=None, n_start:builtins.int=10, seed:typing.Optional[builtins.int]=None) -> GpMix:
         r"""
         Get Gaussian processes mixture builder aka `GpMix`
         
@@ -457,7 +457,7 @@ class SparseGpMix:
         seed (int >= 0)
             Random generator seed to allow computation reproducibility.
     """
-    def __new__(cls, corr_spec:builtins.int=1, theta_init:typing.Optional[typing.Sequence[builtins.float]]=None, theta_bounds:typing.Optional[typing.Sequence[typing.Sequence[builtins.float]]]=None, kpls_dim:typing.Optional[builtins.int]=None, n_start:builtins.int=10, nz:typing.Optional[builtins.int]=None, z:typing.Optional[numpy.typing.NDArray[numpy.float64]]=None, method:SparseMethod=..., seed:typing.Optional[builtins.int]=None) -> SparseGpMix: ...
+    def __new__(cls, corr_spec:builtins.int=1, theta_init:typing.Optional[typing.Sequence[builtins.float]]=None, theta_bounds:typing.Optional[typing.Sequence[typing.Sequence[builtins.float]]]=None, kpls_dim:typing.Optional[builtins.int]=None, n_start:builtins.int=10, nz:typing.Optional[builtins.int]=None, z:typing.Optional[numpy.typing.NDArray[numpy.float64]]=None, method:SparseMethod=SparseMethod.FITC, seed:typing.Optional[builtins.int]=None) -> SparseGpMix: ...
     def fit(self, xt:numpy.typing.NDArray[numpy.float64], yt:numpy.typing.NDArray[numpy.float64]) -> SparseGpx:
         r"""
         Fit the parameters of the model using the training dataset to build a trained model
@@ -475,7 +475,7 @@ class SparseGpx:
     A trained Gaussian processes mixture
     """
     @staticmethod
-    def builder(corr_spec:builtins.int=1, theta_init:typing.Optional[typing.Sequence[builtins.float]]=None, theta_bounds:typing.Optional[typing.Sequence[typing.Sequence[builtins.float]]]=None, kpls_dim:typing.Optional[builtins.int]=None, n_start:builtins.int=10, nz:typing.Optional[builtins.int]=None, z:typing.Optional[numpy.typing.NDArray[numpy.float64]]=None, method:SparseMethod=..., seed:typing.Optional[builtins.int]=None) -> SparseGpMix:
+    def builder(corr_spec:builtins.int=1, theta_init:typing.Optional[typing.Sequence[builtins.float]]=None, theta_bounds:typing.Optional[typing.Sequence[typing.Sequence[builtins.float]]]=None, kpls_dim:typing.Optional[builtins.int]=None, n_start:builtins.int=10, nz:typing.Optional[builtins.int]=None, z:typing.Optional[numpy.typing.NDArray[numpy.float64]]=None, method:SparseMethod=SparseMethod.FITC, seed:typing.Optional[builtins.int]=None) -> SparseGpMix:
         r"""
         Get Gaussian processes mixture builder aka `GpSparse`
         
@@ -625,7 +625,16 @@ class QInfillStrategy(Enum):
 
 class Recombination(Enum):
     HARD = auto()
+    r"""
+    prediction is taken from the expert with highest responsability
+    resulting in a model with discontinuities
+    """
     SMOOTH = auto()
+    r"""
+    Prediction is a combination experts prediction wrt their responsabilities,
+    an optional heaviside factor might be used control steepness of the change between
+    experts regions.
+    """
 
 class Sampling(Enum):
     LHS = auto()
