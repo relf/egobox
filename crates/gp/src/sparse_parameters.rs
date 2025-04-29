@@ -4,7 +4,7 @@ use crate::mean_models::ConstantMean;
 use crate::parameters::GpValidParams;
 use crate::ThetaTuning;
 use linfa::{Float, ParamGuard};
-use ndarray::{Array1, Array2};
+use ndarray::{array, Array1, Array2};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
@@ -147,7 +147,10 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
             gp_params: GpValidParams {
                 mean: ConstantMean::default(),
                 corr,
-                theta_tuning: ThetaTuning::default(),
+                theta_tuning: ThetaTuning::Full {
+                    init: array![F::cast(ThetaTuning::<F>::DEFAULT_INIT)],
+                    bounds: array![(F::cast(ThetaTuning::<F>::DEFAULT_BOUNDS.0), F::cast(1e2),)],
+                }, // upper bound increased wrt Gp default parameters
                 kpls_dim: None,
                 n_start: 10,
                 nugget: F::cast(1000.0) * F::epsilon(),
