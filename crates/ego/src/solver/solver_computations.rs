@@ -95,10 +95,8 @@ where
     /// optimum location
     /// Returns (infill_obj, x_opt)
     #[allow(clippy::too_many_arguments)]
-    //#[allow(clippy::type_complexity)]
     pub(crate) fn compute_best_point(
         &self,
-        sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
         cstr_funcs: &[impl CstrFn],
@@ -107,12 +105,8 @@ where
         infill_data: &InfillObjData<f64>,
         current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
         actives: &Array2<usize>,
+        sampling: &Lhs<f64, Xoshiro256Plus>,
     ) -> (f64, Array1<f64>) {
-        let algorithm = match self.config.infill_optimizer {
-            InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
-            InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
-        };
-
         let mut infill_data = infill_data.clone();
 
         let mut best_point = (current_best.0, current_best.1.to_owned());
@@ -243,6 +237,11 @@ where
             // Limits
             let xlimits = Self::getx(&self.xlimits, Axis(0), &active);
 
+            let algorithm = match self.config.infill_optimizer {
+                InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
+                InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
+            };
+
             if i == 0 {
                 info!("Optimize infill criterion...");
             }
@@ -317,7 +316,7 @@ where
                 }
 
                 if n_optim == n_max_optim && !success {
-                    warn!("All optimizations fail => Trigger LHS optimization");
+                    log::warn!("All optimizations fail => Trigger LHS optimization");
                     let (y_opt, x_opt) =
                         Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &infill_data, &xlimits)
                             .minimize();

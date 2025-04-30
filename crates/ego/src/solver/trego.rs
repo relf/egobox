@@ -8,6 +8,7 @@ use crate::CstrFn;
 use crate::EgorSolver;
 use crate::EgorState;
 use crate::InfillObjData;
+use crate::InfillOptimizer;
 use crate::SurrogateBuilder;
 
 use argmin::core::CostFunction;
@@ -66,20 +67,20 @@ where
         // Optimize infill criterion
         let activity = new_state.activity.clone();
         let actives = activity.unwrap_or(self.full_activity()).to_owned();
-        let (infill_obj, x_opt) = self.local_step(
+        let (infill_obj, x_opt) = self.compute_local_best_point(
             obj_model.as_ref(),
             cstr_models,
             fcstrs,
             &cstr_tols,
+            None,
+            infill_data,
+            (fmin, xbest.to_owned(), ybest, cbest),
+            &actives,
             &xbest.view(),
             (
                 new_state.sigma * self.config.trego.d.0,
                 new_state.sigma * self.config.trego.d.1,
             ),
-            None,
-            infill_data,
-            (fmin, xbest.to_owned(), ybest, cbest),
-            &actives,
         );
 
         problem.problem = Some(pb);
@@ -141,20 +142,19 @@ where
         new_state
     }
 
-    // TODO: DRY the code with compute_best_point
     #[allow(clippy::too_many_arguments)]
-    fn local_step(
+    fn compute_local_best_point(
         &self,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
         cstr_funcs: &[impl CstrFn],
         cstr_tols: &Array1<f64>,
-        xbest: &ArrayView1<f64>,
-        local_bounds: (f64, f64),
         lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
         current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
         actives: &Array2<usize>,
+        xbest: &ArrayView1<f64>,
+        local_bounds: (f64, f64),
     ) -> (f64, Array1<f64>) {
         let mut infill_data = infill_data.clone();
 
@@ -262,10 +262,20 @@ where
                                 )
                             }
                         };
-                        Box::new(cstr) as Box<dyn ObjFn<InfillObjData<f64>> + Sync>
+                        #[cfg(feature = "nlopt")]
+                        {
+                            Box::new(cstr) as Box<dyn nlopt::ObjFn<InfillObjData<f64>> + Sync>
+                        }
+                        #[cfg(not(feature = "nlopt"))]
+                        {
+                            Box::new(cstr)
+                                as Box<dyn crate::types::ObjFn<InfillObjData<f64>> + Sync>
+                        }
                     })
                     .collect()
             };
+
+            // We merge metamodelized constraints and function constraints
             let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
             let cstr_funcs = cstr_funcs
                 .iter()
@@ -277,11 +287,10 @@ where
             let xlimits = Self::getx(&self.xlimits, Axis(0), &active);
             let xbest = Self::getx(&xbest.to_owned(), Axis(0), &active.to_vec());
 
-            // Find best x promising points by optimizing the chosen infill criterion
-            // The optimized value of the criterion is returned together with the
-            // optimum location
-            // Returns (infill_obj, x_opt)
-            let algorithm = crate::optimizers::Algorithm::Slsqp;
+            let algorithm = match self.config.infill_optimizer {
+                InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
+                InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
+            };
             if i == 0 {
                 info!("Optimize infill criterion...");
             }

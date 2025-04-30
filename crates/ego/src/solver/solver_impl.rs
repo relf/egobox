@@ -628,7 +628,6 @@ where
                 .collect::<Vec<_>>();
 
             let (infill_obj, xk) = self.compute_best_point(
-                sampling,
                 obj_model.as_ref(),
                 cstr_models,
                 &cstr_funcs,
@@ -637,6 +636,7 @@ where
                 &infill_data,
                 (fmin, xbest, ybest, cbest),
                 &actives,
+                sampling,
             );
 
             match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
