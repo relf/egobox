@@ -7,6 +7,7 @@ use crate::{find_best_result_index, EgorConfig};
 use crate::{types::*, EgorState};
 use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
 
+use super::solver_computations::GlobalMultiStarter;
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
 
@@ -627,7 +628,9 @@ where
                 })
                 .collect::<Vec<_>>();
 
-            let (infill_obj, xk) = self.compute_best_point(
+            let multistarter = GlobalMultiStarter::new(self.config.n_start, sampling);
+
+            let (infill_obj, xk) = self.optimize_infill_criterion(
                 obj_model.as_ref(),
                 cstr_models,
                 &cstr_funcs,
@@ -636,7 +639,7 @@ where
                 &infill_data,
                 (fmin, xbest, ybest, cbest),
                 &actives,
-                sampling,
+                multistarter,
             );
 
             match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
