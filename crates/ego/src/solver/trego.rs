@@ -27,15 +27,15 @@ use super::solver_infill_optim::MultiStarter;
 
 /// LocalMultiStarter is a multistart strategy that samples points in the local area
 /// defined by the trust region and the xlimits.
-struct LocalMultiStarter<R: Rng + Clone> {
+struct LocalMultiStarter<'a, R: Rng + Clone> {
     n_start: usize,
     xlimits: Array2<f64>,
     origin: Array1<f64>,
     local_bounds: (f64, f64),
-    rng: R,
+    rng: &'a R,
 }
 
-impl<R: Rng + Clone> MultiStarter for LocalMultiStarter<R> {
+impl<R: Rng + Clone> MultiStarter for LocalMultiStarter<'_, R> {
     fn multistart(&self) -> Array2<f64> {
         // Draw n_start initial points (multistart optim) in the local_area
         // local_area = intersection(trust_region, xlimits)
@@ -93,12 +93,13 @@ where
         let activity = new_state.activity.clone();
         let actives = activity.unwrap_or(self.full_activity()).to_owned();
 
+        let rng = new_state.take_rng().unwrap();
         let multistarter = LocalMultiStarter {
             n_start: self.config.n_start,
             xlimits: self.xlimits.clone(),
             origin: xbest.to_owned(),
             local_bounds: (self.config.trego.d.0, self.config.trego.d.1),
-            rng: self.rng.clone(),
+            rng: &rng,
         };
 
         let (infill_obj, x_opt) = self.optimize_infill_criterion(
@@ -166,7 +167,7 @@ where
             &c_data,
             &new_state.cstr_tol,
         );
-        new_state = new_state.data((x_data, y_data, c_data));
+        new_state = new_state.data((x_data, y_data, c_data)).rng(rng);
         new_state.prev_best_index = new_state.best_index;
         new_state.best_index = Some(new_best_index);
         new_state

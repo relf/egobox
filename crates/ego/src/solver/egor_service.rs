@@ -46,8 +46,7 @@ use crate::{to_xtypes, types::*, EgorConfig, EgorSolver};
 
 use egobox_moe::GpMixtureParams;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
-use ndarray_rand::rand::SeedableRng;
-use rand_xoshiro::Xoshiro256Plus;
+
 use serde::de::DeserializeOwned;
 
 /// EGO optimizer service builder allowing to use Egor optimizer
@@ -84,17 +83,12 @@ impl<C: CstrFn> EgorServiceFactory<C> {
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> EgorServiceApi<GpMixtureParams<f64>, C> {
-        let rng = if let Some(seed) = self.config.seed {
-            Xoshiro256Plus::seed_from_u64(seed)
-        } else {
-            Xoshiro256Plus::from_entropy()
-        };
         let config = EgorConfig {
             xtypes: to_xtypes(xlimits),
             ..self.config.clone()
         };
         EgorServiceApi {
-            solver: EgorSolver::new(config, rng),
+            solver: EgorSolver::new(config),
         }
     }
 
@@ -105,17 +99,12 @@ impl<C: CstrFn> EgorServiceFactory<C> {
         self,
         xtypes: &[XType],
     ) -> EgorServiceApi<MixintGpMixtureParams, C> {
-        let rng = if let Some(seed) = self.config.seed {
-            Xoshiro256Plus::seed_from_u64(seed)
-        } else {
-            Xoshiro256Plus::from_entropy()
-        };
         let config = EgorConfig {
             xtypes: xtypes.to_vec(),
             ..self.config.clone()
         };
         EgorServiceApi {
-            solver: EgorSolver::new(config, rng),
+            solver: EgorSolver::new(config),
         }
     }
 }

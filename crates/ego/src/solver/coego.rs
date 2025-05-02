@@ -6,6 +6,7 @@ use crate::EgorSolver;
 use egobox_gp::ThetaTuning;
 use egobox_moe::MixtureGpSurrogate;
 use ndarray::{s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, RemoveAxis};
+use rand_xoshiro::Xoshiro256Plus;
 use serde::de::DeserializeOwned;
 
 use ndarray_rand::rand::seq::SliceRandom;
@@ -51,7 +52,7 @@ where
     /// active component during partial optimizations
     /// Array is (group nb, group size) where nb and size are computed
     /// from nx dimension and n_coop configuration.  
-    pub(crate) fn get_random_activity(&mut self) -> Array2<usize> {
+    pub(crate) fn get_random_activity(&mut self, rng: &mut Xoshiro256Plus) -> Array2<usize> {
         let xdim = self.xlimits.nrows();
         let g_size = xdim / self.config.coego.n_coop.max(1);
         let g_nb = if xdim % self.config.coego.n_coop == 0 {
@@ -64,7 +65,7 @@ where
         // When n_coop is not a diviser of xdim, indice is set to xdim
         // (ie out of range) as to be filtered when handling last activity row
         let mut idx: Vec<usize> = (0..xdim).collect();
-        idx.shuffle(&mut self.rng);
+        idx.shuffle(rng);
         let mut indices = vec![xdim; g_size * g_nb];
         indices[..xdim].copy_from_slice(&idx);
 

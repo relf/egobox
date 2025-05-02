@@ -6,6 +6,7 @@ use egobox_moe::Clustering;
 use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationStatus};
 use linfa::Float;
 use ndarray::{Array1, Array2};
+use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -18,7 +19,7 @@ pub(crate) const MAX_POINT_ADDITION_RETRY: i32 = 3;
 /// Maintains the state from iteration to iteration of the [crate::EgorSolver].
 ///
 /// This struct is passed from one iteration of an algorithm to the next.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EgorState<F: Float> {
     /// Current parameter vector
     pub param: Option<Array1<F>>,
@@ -93,6 +94,9 @@ pub struct EgorState<F: Float> {
     pub prev_step_ego: bool,
     /// Coego state
     pub activity: Option<Array2<usize>>,
+
+    /// Random number generator for reproducibility
+    pub rng: Option<Xoshiro256Plus>,
 }
 
 impl<F> EgorState<F>
@@ -256,6 +260,17 @@ where
         self.activity.take()
     }
 
+    /// Set the random number generator used to draw random points
+    pub fn rng(mut self, rng: Xoshiro256Plus) -> Self {
+        self.rng = Some(rng);
+        self
+    }
+
+    /// Moves the current random number generator out and replaces it internally with `None`.
+    pub fn take_rng(&mut self) -> Option<Xoshiro256Plus> {
+        self.rng.take()
+    }
+
     /// Set the infill criterion value    
     pub fn infill_value(mut self, value: F) -> Self {
         self.infill_value = value;
@@ -390,6 +405,7 @@ where
             sigma: F::cast(1e-1),
             activity: None,
             prev_step_ego: false,
+            rng: Some(Xoshiro256Plus::from_entropy()),
         }
     }
 

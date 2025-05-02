@@ -24,11 +24,10 @@
 //!         .par_for_each(|mut yi, xi| yi.assign(&array![rosenbrock(&xi.to_vec())]));
 //!     y
 //! }
-//! let rng = Xoshiro256Plus::seed_from_u64(42);
 //! let xtypes = to_xtypes(&array![[-2., 2.], [-2., 2.]]);
 //! let fobj = ObjFunc::new(rosenb);
-//! let config = EgorConfig::default().xtypes(&xtypes);
-//! let solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config, rng);
+//! let config = EgorConfig::default().xtypes(&xtypes).seed(42);
+//! let solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config);
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(20))
 //!             .run()
@@ -80,7 +79,6 @@
 //!     y
 //! }
 //!
-//! let rng = Xoshiro256Plus::seed_from_u64(42);
 //! let xlimits = array![[0., 3.], [0., 4.]];
 //! let doe = Lhs::new(&xlimits).sample(10);
 //! let xtypes = to_xtypes(&xlimits);
@@ -93,10 +91,11 @@
 //!     .infill_strategy(InfillStrategy::EI)
 //!     .infill_optimizer(InfillOptimizer::Cobyla)
 //!     .doe(&doe)
+//!     .seed(42)
 //!     .target(-5.5080);
 //!
 //! let solver: EgorSolver<GpMixtureParams<f64>> =
-//!   EgorSolver::new(config, rng);
+//!   EgorSolver::new(config);
 //!
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(40))
@@ -119,6 +118,7 @@ use argmin::core::{
     CostFunction, Problem, Solver, State, TerminationReason, TerminationStatus, KV,
 };
 
+use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::marker::PhantomData;
@@ -145,9 +145,6 @@ pub struct EgorSolver<SB: SurrogateBuilder, C: CstrFn = Cstr> {
     /// functions, otherwise [mixture of expert](egobox_moe) is used
     /// Note: if specified takes precedence over individual settings
     pub(crate) surrogate_builder: SB,
-    /// A random generator used to get reproductible results.
-    /// For instance: Xoshiro256Plus::from_u64_seed(42) for reproducibility
-    pub(crate) rng: Xoshiro256Plus,
 
     pub phantom: PhantomData<C>,
 }
@@ -174,8 +171,14 @@ where
         problem: &mut Problem<O>,
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
-        let rng = self.rng.clone();
-        let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
+        let mut rng = if let Some(seed) = self.config.seed {
+            Xoshiro256Plus::seed_from_u64(seed)
+        } else {
+            Xoshiro256Plus::from_entropy()
+        };
+        let sampling = Lhs::new(&self.xlimits)
+            .with_rng(rng.clone())
+            .kind(LhsKind::Maximin);
 
         let hstart_doe: Option<Array2<f64>> =
             if self.config.warm_start && self.config.outdir.is_some() {
@@ -236,7 +239,7 @@ where
         let c_data = self.eval_problem_fcstrs(problem, &x_data);
 
         let activity = if self.config.coego.activated {
-            let activity = self.get_random_activity();
+            let activity = self.get_random_activity(&mut rng);
             debug!("Component activity = {:?}", activity);
             Some(activity)
         } else {
@@ -281,7 +284,7 @@ where
         );
         let now = Instant::now();
 
-        let res = if self.config.trego.activated {
+        let mut res = if self.config.trego.activated {
             self.trego_iteration(problem, state)?
         } else {
             self.ego_iteration(problem, state)?
@@ -299,9 +302,10 @@ where
 
         // Update Coop activity
         let res = if self.config.coego.activated {
-            let activity = self.get_random_activity();
+            let mut rng = res.0.take_rng().unwrap();
+            let activity = self.get_random_activity(&mut rng);
             debug!("Component activity = {:?}", activity);
-            (res.0.activity(activity), res.1)
+            (res.0.rng(rng).activity(activity), res.1)
         } else {
             res
         };

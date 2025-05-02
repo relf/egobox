@@ -113,8 +113,6 @@ use argmin::core::observers::ObserverMode;
 use egobox_moe::GpMixtureParams;
 use log::info;
 use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
-use ndarray_rand::rand::SeedableRng;
-use rand_xoshiro::Xoshiro256Plus;
 
 use argmin::core::{observers::Observe, Error, Executor, State, KV};
 use serde::de::DeserializeOwned;
@@ -169,18 +167,13 @@ impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Egor<O, C, GpMixtureParams<f64>> {
-        let rng = if let Some(seed) = self.config.seed {
-            Xoshiro256Plus::seed_from_u64(seed)
-        } else {
-            Xoshiro256Plus::from_entropy()
-        };
         let config = EgorConfig {
             xtypes: to_xtypes(xlimits),
             ..self.config.clone()
         };
         Egor {
             fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
-            solver: EgorSolver::new(config, rng),
+            solver: EgorSolver::new(config),
         }
     }
 
@@ -188,18 +181,13 @@ impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
     pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, C, MixintGpMixtureParams> {
-        let rng = if let Some(seed) = self.config.seed {
-            Xoshiro256Plus::seed_from_u64(seed)
-        } else {
-            Xoshiro256Plus::from_entropy()
-        };
         let config = EgorConfig {
             xtypes: xtypes.into(),
             ..self.config.clone()
         };
         Egor {
             fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
-            solver: EgorSolver::new(config, rng),
+            solver: EgorSolver::new(config),
         }
     }
 }
@@ -363,6 +351,8 @@ mod tests {
     use egobox_doe::{Lhs, SamplingMethod};
     use egobox_moe::NbClusters;
     use ndarray::{array, s, Array1, Array2, ArrayView2, Ix1, Zip};
+    use ndarray_rand::rand::SeedableRng;
+    use rand_xoshiro::Xoshiro256Plus;
 
     use ndarray_npy::read_npy;
 
