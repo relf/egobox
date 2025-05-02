@@ -25,6 +25,7 @@ use ndarray::aview1;
 use ndarray::Zip;
 use ndarray::{Array, Array1, Array2, ArrayView1, Axis};
 
+use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 
@@ -294,8 +295,9 @@ where
             if i == 0 {
                 info!("Optimize infill criterion...");
             }
+            let mut rng = self.rng.clone();
             while !success && n_optim <= n_max_optim {
-                let x_start = self.local_sampling(local_bounds, &xlimits, xbest.clone());
+                let x_start = self.local_sampling(local_bounds, &xlimits, xbest.clone(), &mut rng);
                 let x_start_coop = Self::getx(&x_start, Axis(1), &active);
 
                 if let Some(seed) = lhs_optim_seed {
@@ -385,6 +387,7 @@ where
         local_bounds: (f64, f64),
         xlimits: &ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>>,
         xbest: ndarray::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 1]>>,
+        rng: &mut Xoshiro256Plus,
     ) -> Array2<f64> {
         // Draw n_start initial points (multistart optim) in the local_area
         // local_area = intersection(trust_region, xlimits)
@@ -399,7 +402,6 @@ where
                 );
                 row.assign(&aview1(&[lo, up]))
             });
-        let rng = self.rng.clone();
         let lhs = Lhs::new(&local_area)
             .kind(egobox_doe::LhsKind::Maximin)
             .with_rng(rng);
