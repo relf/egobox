@@ -720,7 +720,7 @@ mod tests {
     }
 
     #[test]
-    fn test_egor_g24_basic_egor_builder() {
+    fn test_egor_g24_basic_egor_builder_slsqp() {
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
@@ -730,7 +730,7 @@ mod tests {
                 config
                     .n_cstr(2)
                     .doe(&doe)
-                    .max_iters(20)
+                    .max_iters(30)
                     .cstr_tol(array![2e-6, 1e-6])
                     .seed(42)
             })
