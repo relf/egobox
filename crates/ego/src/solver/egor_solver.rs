@@ -353,7 +353,7 @@ where
         }
     }
 
-    /// Itertation of TREGO algorithm
+    /// Iteration of TREGO algorithm
     fn trego_iteration<
         O: CostFunction<Param = Array2<f64>, Output = Array2<f64>> + DomainConstraints<C>,
     >(
