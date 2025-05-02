@@ -39,7 +39,7 @@ type RngRef<R> = Arc<RwLock<R>>;
 /// The selection method gives different kind of LHS (see [LhsKind])
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct Lhs<F: Float, R: Rng + Clone> {
+pub struct Lhs<F: Float, R: Rng> {
     /// Sampling space definition as a (nx, 2) matrix
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of x
     xlimits: Array2<F>,
@@ -64,7 +64,7 @@ impl<F: Float> Lhs<F, Xoshiro256Plus> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> SamplingMethod<F> for Lhs<F, R> {
+impl<F: Float, R: Rng> SamplingMethod<F> for Lhs<F, R> {
     fn sampling_space(&self) -> &Array2<F> {
         &self.xlimits
     }
@@ -86,7 +86,7 @@ impl<F: Float, R: Rng + Clone> SamplingMethod<F> for Lhs<F, R> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> Lhs<F, R> {
+impl<F: Float, R: Rng> Lhs<F, R> {
     /// Constructor with given design space and random generator.
     /// * `xlimits`: (nx, 2) matrix where nx is the dimension of the samples and the ith row
     ///   is the definition interval of the ith component of x.
@@ -109,7 +109,7 @@ impl<F: Float, R: Rng + Clone> Lhs<F, R> {
     }
 
     /// Sets the random generator
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Lhs<F, R2> {
+    pub fn with_rng<R2: Rng>(self, rng: R2) -> Lhs<F, R2> {
         Lhs {
             xlimits: self.xlimits,
             kind: self.kind,
