@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use crate::SamplingMethod;
 use linfa::Float;
 use ndarray::{Array, Array2, ArrayBase, Data, Ix2};
@@ -7,15 +9,16 @@ use rand_xoshiro::Xoshiro256Plus;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
+type RngRef<R> = Arc<RwLock<R>>;
 /// The Random design consists in drawing samples randomly.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-pub struct Random<F: Float, R: Rng + Clone> {
+pub struct Random<F: Float, R: Rng> {
     /// Sampling space definition as a (nx, 2) matrix
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of x
     xlimits: Array2<F>,
-    /// Random generator used for reproducibility (not used in case of Centered LHS)
-    rng: R,
+    /// Random generator used for reproducibility
+    rng: RngRef<R>,
 }
 
 impl<F: Float> Random<F, Xoshiro256Plus> {
@@ -32,7 +35,7 @@ impl<F: Float> Random<F, Xoshiro256Plus> {
     }
 }
 
-impl<F: Float, R: Rng + Clone> Random<F, R> {
+impl<F: Float, R: Rng> Random<F, R> {
     /// Constructor given a design space given a (nx, 2) matrix \[\[lower bound, upper bound\], ...\]
     /// and a random generator for reproducibility
     ///
@@ -43,28 +46,28 @@ impl<F: Float, R: Rng + Clone> Random<F, R> {
         }
         Random {
             xlimits: xlimits.to_owned(),
-            rng,
+            rng: Arc::new(RwLock::new(rng)),
         }
     }
 
     /// Set random generator
-    pub fn with_rng<R2: Rng + Clone>(self, rng: R2) -> Random<F, R2> {
+    pub fn with_rng<R2: Rng>(self, rng: R2) -> Random<F, R2> {
         Random {
             xlimits: self.xlimits,
-            rng,
+            rng: Arc::new(RwLock::new(rng)),
         }
     }
 }
 
-impl<F: Float, R: Rng + Clone> SamplingMethod<F> for Random<F, R> {
+impl<F: Float, R: Rng> SamplingMethod<F> for Random<F, R> {
     fn sampling_space(&self) -> &Array2<F> {
         &self.xlimits
     }
 
     fn normalized_sample(&self, ns: usize) -> Array2<F> {
-        let mut rng = self.rng.clone();
+        let mut rng = self.rng.write().unwrap();
         let nx = self.xlimits.nrows();
-        Array::random_using((ns, nx), Uniform::new(0., 1.), &mut rng).mapv(|v| F::cast(v))
+        Array::random_using((ns, nx), Uniform::new(0., 1.), &mut *rng).mapv(|v| F::cast(v))
     }
 }
 
