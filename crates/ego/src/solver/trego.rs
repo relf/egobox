@@ -1,9 +1,6 @@
-use crate::optimizers::*;
 use crate::types::DomainConstraints;
 use crate::utils::find_best_result_index_from;
-use crate::utils::pofs;
 use crate::utils::update_data;
-use crate::ConstraintStrategy;
 use crate::CstrFn;
 use crate::EgorSolver;
 use crate::EgorState;
@@ -17,20 +14,49 @@ use egobox_doe::Lhs;
 use egobox_doe::SamplingMethod;
 use egobox_moe::MixtureGpSurrogate;
 
-// use finitediff::FiniteDiff;
 use log::debug;
 use log::info;
 use ndarray::aview1;
 use ndarray::Zip;
-use ndarray::{Array, Array1, Array2, ArrayView1, Axis};
+use ndarray::{Array1, Array2, Axis};
 
-use rayon::prelude::*;
+use ndarray_rand::rand::Rng;
 use serde::de::DeserializeOwned;
 
-#[cfg(not(feature = "nlopt"))]
-use crate::types::ObjFn;
-#[cfg(feature = "nlopt")]
-use nlopt::ObjFn;
+use super::solver_infill_optim::MultiStarter;
+
+/// LocalMultiStarter is a multistart strategy that samples points in the local area
+/// defined by the trust region and the xlimits.
+struct LocalMultiStarter<'a, R: Rng + Clone> {
+    n_start: usize,
+    xlimits: Array2<f64>,
+    origin: Array1<f64>,
+    local_bounds: (f64, f64),
+    rng: &'a R,
+}
+
+impl<R: Rng + Clone> MultiStarter for LocalMultiStarter<'_, R> {
+    fn multistart(&self) -> Array2<f64> {
+        // Draw n_start initial points (multistart optim) in the local_area
+        // local_area = intersection(trust_region, xlimits)
+        let mut local_area = Array2::zeros((self.xlimits.nrows(), self.xlimits.ncols()));
+        Zip::from(local_area.rows_mut())
+            .and(&self.origin)
+            .and(self.xlimits.rows())
+            .for_each(|mut row, xb, xlims| {
+                let (lo, up) = (
+                    xlims[0].max(xb - self.local_bounds.0),
+                    xlims[1].min(xb + self.local_bounds.1),
+                );
+                row.assign(&aview1(&[lo, up]))
+            });
+
+        let lhs = Lhs::new(&local_area)
+            .kind(egobox_doe::LhsKind::Maximin)
+            .with_rng(self.rng.clone());
+        lhs.sample(self.n_start)
+    }
+}
 
 impl<SB, C> EgorSolver<SB, C>
 where
@@ -66,19 +92,26 @@ where
         // Optimize infill criterion
         let activity = new_state.activity.clone();
         let actives = activity.unwrap_or(self.full_activity()).to_owned();
-        let (infill_obj, x_opt) = self.local_step(
+
+        let rng = new_state.take_rng().unwrap();
+        let multistarter = LocalMultiStarter {
+            n_start: self.config.n_start,
+            xlimits: self.xlimits.clone(),
+            origin: xbest.to_owned(),
+            local_bounds: (self.config.trego.d.0, self.config.trego.d.1),
+            rng: &rng,
+        };
+
+        let (infill_obj, x_opt) = self.optimize_infill_criterion(
             obj_model.as_ref(),
             cstr_models,
             fcstrs,
             &cstr_tols,
-            &xbest.view(),
-            (
-                new_state.sigma * self.config.trego.d.0,
-                new_state.sigma * self.config.trego.d.1,
-            ),
+            None,
             infill_data,
             (fmin, xbest.to_owned(), ybest, cbest),
             &actives,
+            multistarter,
         );
 
         problem.problem = Some(pb);
@@ -134,224 +167,9 @@ where
             &c_data,
             &new_state.cstr_tol,
         );
-        new_state = new_state.data((x_data, y_data, c_data));
+        new_state = new_state.data((x_data, y_data, c_data)).rng(rng);
         new_state.prev_best_index = new_state.best_index;
         new_state.best_index = Some(new_best_index);
         new_state
     }
-
-    // TODO: DRY the code with compute_best_point
-    #[allow(clippy::too_many_arguments)]
-    fn local_step(
-        &self,
-        obj_model: &dyn MixtureGpSurrogate,
-        cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        cstr_funcs: &[impl CstrFn],
-        cstr_tols: &Array1<f64>,
-        xbest: &ArrayView1<f64>,
-        local_bounds: (f64, f64),
-        infill_data: &InfillObjData<f64>,
-        current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
-        actives: &Array2<usize>,
-    ) -> (f64, Array1<f64>) {
-        let mut infill_data = infill_data.clone();
-
-        let mut best_point = (current_best.0, current_best.1.to_owned());
-        let mut current_best_point = current_best.to_owned();
-
-        for (i, active) in actives.outer_iter().enumerate() {
-            let active = active.to_vec();
-            let obj = |x: &[f64],
-                       gradient: Option<&mut [f64]>,
-                       params: &mut InfillObjData<f64>|
-             -> f64 {
-                let InfillObjData {
-                    scale_infill_obj,
-                    scale_wb2,
-                    xbest: xcoop,
-                    fmin,
-                    ..
-                } = params;
-                let mut xcoop = xcoop.clone();
-                Self::setx(&mut xcoop, &active, x);
-
-                // Defensive programming NlOpt::Cobyla may pass NaNs
-                if xcoop.iter().any(|x| x.is_nan()) {
-                    return f64::INFINITY;
-                }
-
-                if let Some(grad) = gradient {
-                    // Use finite differences
-                    // let f = |x: &Vec<f64>| -> f64 {
-                    //     self.eval_infill_obj(x, obj_model, fmin, *scale_infill_obj, *scale_wb2)
-                    // };
-                    // grad[..].copy_from_slice(&x.to_vec().central_diff(&f));
-
-                    let g_infill_obj = if self.config.cstr_infill {
-                        self.eval_grad_infill_obj_with_cstrs(
-                            &xcoop,
-                            obj_model,
-                            cstr_models,
-                            cstr_tols,
-                            *fmin,
-                            *scale_infill_obj,
-                            *scale_wb2,
-                        )
-                    } else {
-                        self.eval_grad_infill_obj(
-                            &xcoop,
-                            obj_model,
-                            *fmin,
-                            *scale_infill_obj,
-                            *scale_wb2,
-                        )
-                    };
-                    let g_infill_obj = g_infill_obj
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, _)| active.contains(i))
-                        .map(|(_, &g)| g)
-                        .collect::<Vec<_>>();
-                    grad[..].copy_from_slice(&g_infill_obj);
-                }
-                if self.config.cstr_infill {
-                    self.eval_infill_obj(&xcoop, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
-                        * pofs(&xcoop, cstr_models, &cstr_tols.to_vec())
-                } else {
-                    self.eval_infill_obj(&xcoop, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
-                }
-            };
-
-            let cstrs: Vec<_> = if self.config.cstr_infill {
-                vec![]
-            } else {
-                (0..self.config.n_cstr)
-                    .map(|i| {
-                        let active = active.to_vec();
-                        let cstr = move |x: &[f64],
-                                         gradient: Option<&mut [f64]>,
-                                         params: &mut InfillObjData<f64>|
-                              -> f64 {
-                            let InfillObjData { xbest: xcoop, .. } = params;
-                            let mut xcoop = xcoop.clone();
-                            Self::setx(&mut xcoop, &active, x);
-
-                            let scale_cstr =
-                                params.scale_cstr.as_ref().expect("constraint scaling")[i];
-                            if self.config.cstr_strategy == ConstraintStrategy::MeanConstraint {
-                                Self::mean_cstr(
-                                    &*cstr_models[i],
-                                    &xcoop,
-                                    gradient,
-                                    scale_cstr,
-                                    &active,
-                                )
-                            } else {
-                                Self::upper_trust_bound_cstr(
-                                    &*cstr_models[i],
-                                    &xcoop,
-                                    gradient,
-                                    scale_cstr,
-                                    &active,
-                                )
-                            }
-                        };
-                        Box::new(cstr) as Box<dyn ObjFn<InfillObjData<f64>> + Sync>
-                    })
-                    .collect()
-            };
-            let mut cstr_refs: Vec<_> = cstrs.iter().map(|c| c.as_ref()).collect();
-            let cstr_funcs = cstr_funcs
-                .iter()
-                .map(|cstr| cstr as &(dyn ObjFn<InfillObjData<f64>> + Sync))
-                .collect::<Vec<_>>();
-            cstr_refs.extend(cstr_funcs.clone());
-
-            // Limits
-            let xlimits = Self::getx(&self.xlimits, Axis(0), &active);
-            let xbest = Self::getx(&xbest.to_owned(), Axis(0), &active.to_vec());
-
-            // Draw n_start initial points (multistart optim) in the local_area
-            // local_area = intersection(trust_region, xlimits)
-            let mut local_area = Array2::zeros((xlimits.nrows(), xlimits.ncols()));
-            Zip::from(local_area.rows_mut())
-                .and(&xbest)
-                .and(xlimits.rows())
-                .for_each(|mut row, xb, xlims| {
-                    let (lo, up) = (
-                        xlims[0].max(xb - local_bounds.0),
-                        xlims[1].min(xb + local_bounds.1),
-                    );
-                    row.assign(&aview1(&[lo, up]))
-                });
-            let rng = self.rng.clone();
-            let lhs = Lhs::new(&local_area)
-                .kind(egobox_doe::LhsKind::Maximin)
-                .with_rng(rng);
-            let x_start = lhs.sample(self.config.n_start);
-
-            // Find best x promising points by optimizing the chosen infill criterion
-            // The optimized value of the criterion is returned together with the
-            // optimum location
-            // Returns (infill_obj, x_opt)
-            let algorithm = crate::optimizers::Algorithm::Slsqp;
-            if i == 0 {
-                info!("Optimize infill criterion...");
-            }
-            let res = (0..self.config.n_start)
-                .into_par_iter()
-                .map(|i| {
-                    Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &local_area)
-                        .xinit(&x_start.row(i))
-                        .max_eval((10 * x_start.len()).min(MAX_EVAL_DEFAULT))
-                        .ftol_rel(1e-4)
-                        .ftol_abs(1e-4)
-                        .minimize()
-                })
-                .reduce(
-                    || (f64::INFINITY, Array::ones((xbest.len(),))),
-                    |a, b| if b.0 < a.0 { b } else { a },
-                );
-
-            // let mut xopt_coop = best_point.1.to_vec();
-            // setx(&mut xopt_coop, &active.to_vec(), &res.1.to_vec());
-            // best_point = (res.0, Array1::from(xopt_coop));
-
-            let mut xopt_coop = current_best_point.1.to_vec();
-            Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
-            infill_data.xbest = xopt_coop.clone();
-            let xopt_coop = Array1::from(xopt_coop);
-
-            if crate::solver::coego::COEGO_IMPROVEMENT_CHECK {
-                let (is_better, best) = self.is_objective_improved(
-                    &current_best_point,
-                    &xopt_coop,
-                    obj_model,
-                    cstr_models,
-                    cstr_tols,
-                    &cstr_funcs,
-                );
-                if is_better || i == 0 {
-                    if i > 0 {
-                        info!(
-                            "Partial infill criterion optim c={} has better result={}",
-                            i, res.0
-                        );
-                    }
-                    best_point = (res.0, xopt_coop);
-                    current_best_point = best;
-                }
-            } else {
-                best_point = (res.0, xopt_coop.to_owned());
-                current_best_point = (res.0, xopt_coop, current_best_point.2, current_best_point.3);
-            }
-        }
-        best_point
-    }
 }
-
-// /// Set active components to xcoop using xopt values
-// /// active and values must have the same size
-// fn setx(xcoop: &mut [f64], active: &[usize], values: &[f64]) {
-//     std::iter::zip(active, values).for_each(|(&i, &xi)| xcoop[i] = xi)
-// }

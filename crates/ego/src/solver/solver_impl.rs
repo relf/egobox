@@ -7,6 +7,7 @@ use crate::{find_best_result_index, EgorConfig};
 use crate::{types::*, EgorState};
 use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
 
+use super::solver_computations::GlobalMultiStarter;
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
 
@@ -18,6 +19,7 @@ use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters};
 use log::{debug, info, warn};
 use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 
+use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
@@ -30,7 +32,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     ///
     /// The function `f` should return an objective but also constraint values if any.
     /// Design space is specified by a list of types for input variables `x` of `f` (see [`XType`]).
-    pub fn new(config: EgorConfig, rng: Xoshiro256Plus) -> Self {
+    pub fn new(config: EgorConfig) -> Self {
         let env = Env::new().filter_or("EGOBOX_LOG", "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
@@ -40,7 +42,6 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             config,
             xlimits: as_continuous_limits(&xtypes),
             surrogate_builder: SB::new_with_xtypes(&xtypes),
-            rng,
             phantom: PhantomData,
         }
     }
@@ -54,7 +55,11 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        let rng = self.rng.clone();
+        let rng = if let Some(seed) = self.config.seed {
+            Xoshiro256Plus::seed_from_u64(seed)
+        } else {
+            Xoshiro256Plus::from_entropy()
+        };
         let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
         let mut clusterings = vec![None; 1 + self.config.n_cstr];
         let mut theta_tunings = vec![None; 1 + self.config.n_cstr];
@@ -627,8 +632,9 @@ where
                 })
                 .collect::<Vec<_>>();
 
-            let (infill_obj, xk) = self.compute_best_point(
-                sampling,
+            let multistarter = GlobalMultiStarter::new(self.config.n_start, sampling);
+
+            let (infill_obj, xk) = self.optimize_infill_criterion(
                 obj_model.as_ref(),
                 cstr_models,
                 &cstr_funcs,
@@ -637,6 +643,7 @@ where
                 &infill_data,
                 (fmin, xbest, ybest, cbest),
                 &actives,
+                multistarter,
             );
 
             match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {

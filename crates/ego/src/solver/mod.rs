@@ -5,6 +5,7 @@ mod egor_solver;
 mod egor_state;
 mod solver_computations;
 mod solver_impl;
+mod solver_infill_optim;
 mod trego;
 
 pub use egor_config::*;

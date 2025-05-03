@@ -28,6 +28,8 @@ mopta08_elf64.bin
 **/.checkpoints
 **/checkpoint*
 *.arg
+slurm*.out
+slurm*.err
 
 # JOSS
 joss/paper.jats

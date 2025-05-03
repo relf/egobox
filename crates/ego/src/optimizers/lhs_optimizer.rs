@@ -16,7 +16,7 @@ use ndarray_stats::QuantileExt;
 #[cfg(feature = "nlopt")]
 use nlopt::ObjFn;
 
-pub(crate) struct LhsOptimizer<'a, R: Rng + Clone + Sync + Send> {
+pub(crate) struct LhsOptimizer<'a, R: Rng + Sync + Send> {
     xlimits: Array2<f64>,
     n_start: usize,
     n_points: usize,
@@ -64,7 +64,7 @@ impl<'a, R: Rng + Clone + Sync + Send> LhsOptimizer<'a, R> {
         }
     }
 
-    pub fn with_rng<R2: Rng + Clone + Sync + Send>(self, rng: R2) -> LhsOptimizer<'a, R2> {
+    pub fn with_rng<R2: Rng + Sync + Send>(self, rng: R2) -> LhsOptimizer<'a, R2> {
         LhsOptimizer {
             xlimits: self.xlimits,
             n_start: self.n_start,
