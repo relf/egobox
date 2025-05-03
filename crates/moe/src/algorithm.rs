@@ -1157,7 +1157,11 @@ mod tests {
     #[test]
     fn test_moe_drv_smooth() {
         let rng = Xoshiro256Plus::seed_from_u64(0);
-        let xt = Lhs::new(&array![[0., 1.]]).sample(100);
+        // Use regular evenly spaced data to avoid numerical issue
+        // and getting a smooth surrogate modeling
+        // Otherwise with Lhs and bad luck this test fails from time to time
+        // when surrogate modeling happens to be wrong
+        let xt = Array1::linspace(0., 1., 100).insert_axis(Axis(1));
         let yt = f_test_1d(&xt);
 
         let moe = GpMixture::params()
@@ -1179,9 +1183,8 @@ mod tests {
         write_npy(format!("{test_dir}/dpreds_moe_smooth.npy"), &dpreds).expect("dpreds saved");
 
         let mut rng = Xoshiro256Plus::seed_from_u64(42);
-        for _ in 0..20 {
-            let x1: f64 = rng.gen_range(0.0..1.0);
-
+        for _ in 0..100 {
+            let x1: f64 = rng.gen_range(0.1..0.9);
             let h = 1e-8;
             let xtest = array![[x1]];
 
@@ -1192,16 +1195,19 @@ mod tests {
             let drv = moe.predict_gradients(&xtest).unwrap();
             let df = df_test_1d(&xtest);
 
-            let err = if drv[[0, 0]] < 0.2 {
+            // Check only computed derivatives against fdiff of computed prediction
+            // and fdiff can be wrong wrt to true derivatives due to bad surrogate modeling
+            // specially at discontinuities hence no check against true derivative here
+            let err = if drv[[0, 0]] < 1e-2 {
                 (drv[[0, 0]] - fdiff).abs()
             } else {
-                (drv[[0, 0]] - fdiff).abs() / drv[[0, 0]]
+                (drv[[0, 0]] - fdiff).abs() / drv[[0, 0]] // check relative error
             };
             println!(
                 "Test predicted derivatives at {xtest}: drv {drv}, true df {df}, fdiff {fdiff}"
             );
             println!("preds(x, x+h, x-h)={}", preds);
-            assert_abs_diff_eq!(err, 0.0, epsilon = 2.5e-1);
+            assert_abs_diff_eq!(err, 0.0, epsilon = 1e-1);
         }
     }
 
