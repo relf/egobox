@@ -1,4 +1,3 @@
-use crate::optimizers::LhsOptimizer;
 use crate::InfillObjData;
 use ndarray::{arr1, Array1, Array2, ArrayView1};
 
@@ -10,14 +9,10 @@ use cobyla::RhoBeg;
 #[cfg(feature = "nlopt")]
 use nlopt::ObjFn;
 
-use ndarray_rand::rand::SeedableRng;
-use rand_xoshiro::Xoshiro256Plus;
-
 #[derive(Copy, Clone, Debug)]
 pub enum Algorithm {
     Cobyla,
     Slsqp,
-    Lhs,
 }
 
 pub const MAX_EVAL_DEFAULT: usize = 2000;
@@ -33,7 +28,6 @@ pub(crate) struct Optimizer<'a> {
     xinit: Option<Array1<f64>>,
     ftol_abs: Option<f64>,
     ftol_rel: Option<f64>,
-    seed: Option<u64>,
 }
 
 impl<'a> Optimizer<'a> {
@@ -55,7 +49,6 @@ impl<'a> Optimizer<'a> {
             xinit: None,
             ftol_abs: None,
             ftol_rel: None,
-            seed: None,
         }
     }
 
@@ -69,18 +62,8 @@ impl<'a> Optimizer<'a> {
         self
     }
 
-    pub fn cstr_tol(&mut self, cstr_tol: Array1<f64>) -> &mut Self {
-        self.cstr_tol = Some(cstr_tol);
-        self
-    }
-
     pub fn max_eval(&mut self, max_eval: usize) -> &mut Self {
         self.max_eval = max_eval;
-        self
-    }
-
-    pub fn seed(&mut self, seed: u64) -> &mut Self {
-        self.seed = Some(seed);
         self
     }
 
@@ -232,15 +215,6 @@ impl<'a> Optimizer<'a> {
                         Err((_, x_opt, _)) => (f64::INFINITY, arr1(&x_opt)),
                     }
                 }
-            }
-            Algorithm::Lhs => {
-                let res = LhsOptimizer::new(&self.bounds, self.fun, &self.cons, self.user_data);
-                let res = if let Some(seed) = self.seed {
-                    res.with_rng(Xoshiro256Plus::seed_from_u64(seed))
-                } else {
-                    res.with_rng(Xoshiro256Plus::from_entropy())
-                };
-                res.minimize()
             }
         };
         log::debug!("... end optimization");

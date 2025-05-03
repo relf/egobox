@@ -46,7 +46,7 @@ pub fn is_update_ok(
     x_new: &ArrayBase<impl Data<Elem = f64>, Ix1>,
 ) -> bool {
     for row in x_data.rows() {
-        if row.l1_dist(x_new).unwrap() < 1e-6 {
+        if row.l1_dist(x_new).unwrap() < 100. * f64::EPSILON {
             return false;
         }
     }
@@ -97,7 +97,7 @@ mod tests {
     fn test_is_update_ok() {
         let data = array![[0., 1.], [2., 3.]];
         assert!(is_update_ok(&data, &array![3., 4.]));
-        assert!(!is_update_ok(&data, &array![1e-7, 1.]));
+        assert!(!is_update_ok(&data, &array![1e-15, 1.]));
     }
 
     #[test]
@@ -110,7 +110,7 @@ mod tests {
                 &mut xdata,
                 &mut ydata,
                 &mut cdata,
-                &array![[3., 4.], [1e-7, 1.]],
+                &array![[3., 4.], [1e-15, 1.]],
                 &array![[6.], [7.]],
                 &array![[8.], [9.]],
             ),

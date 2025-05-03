@@ -16,7 +16,7 @@ use egobox_gp::ThetaTuning;
 use env_logger::{Builder, Env};
 
 use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters};
-use log::{debug, info, warn};
+use log::{debug, info};
 use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 
 use ndarray_rand::rand::SeedableRng;
@@ -88,7 +88,6 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             &c_data,
             &cstr_tol,
             &sampling,
-            None,
             find_best_result_index(y_data, &c_data, &cstr_tol),
             &fcstrs,
         );
@@ -355,7 +354,7 @@ where
         &mut self,
         problem: &mut Problem<O>,
         state: EgorState<f64>,
-    ) -> Result<(EgorState<f64>, InfillObjData<f64>, usize)> {
+    ) -> Result<EgorState<f64>> {
         let mut new_state = state.clone();
         let mut clusterings = new_state
             .take_clusterings()
@@ -378,21 +377,9 @@ where
             .take_data()
             .ok_or_else(argmin_error_closure!(PotentialBug, "EgorSolver: No data!"))?;
 
-        let (rejected_count, infill_data) = loop {
+        let (rejected_count, _) = loop {
             let recluster = self.have_to_recluster(new_state.added, new_state.prev_added);
             let init = new_state.get_iter() == 0;
-            let lhs_optim_seed = if new_state.no_point_added_retries == 0 {
-                debug!("Try Lhs optimization!");
-                Some(new_state.added as u64)
-            } else {
-                debug!(
-                    "Try point addition {}/{}",
-                    MAX_POINT_ADDITION_RETRY - new_state.no_point_added_retries,
-                    MAX_POINT_ADDITION_RETRY
-                );
-                None
-            };
-
             let pb = problem.take_problem().unwrap();
             let fcstrs = pb.fn_constraints();
             let (x_dat, y_dat, c_dat, infill_value, infill_data) = self.select_next_points(
@@ -407,7 +394,6 @@ where
                 &c_data,
                 &state.cstr_tol,
                 &sampling,
-                lhs_optim_seed,
                 state.best_index.unwrap(),
                 fcstrs,
             );
@@ -444,11 +430,16 @@ where
 
             let rejected_count = x_dat.nrows() - added_indices.len();
             for i in 0..x_dat.nrows() {
-                debug!(
+                let msg = format!(
                     "  {} {}",
                     if added_indices.contains(&i) { "A" } else { "R" },
                     x_dat.row(i)
                 );
+                if added_indices.contains(&i) {
+                    debug!("{}", msg);
+                } else {
+                    info!("{}", msg)
+                }
             }
             if rejected_count > 0 {
                 info!(
@@ -462,12 +453,8 @@ where
                 new_state.no_point_added_retries -= 1;
                 if new_state.no_point_added_retries == 0 {
                     info!("Max number of retries ({}) without adding point", 3);
-                    info!("Use LHS optimization to ensure a point addition");
-                }
-                if new_state.no_point_added_retries < 0 {
-                    // no luck with LHS optimization
-                    warn!("Fail to add another point to improve the surrogate models. Abort!");
-                    return Err(EgoError::GlobalStepNoPointError);
+                    info!("Consider solver has converged");
+                    return Err(EgoError::NoMorePointToAddError(Box::new(new_state)));
                 }
             } else {
                 // ok point added we can go on, just output number of rejected point
@@ -495,7 +482,6 @@ where
         Zip::from(y_data.slice_mut(s![-add_count.., ..]).rows_mut())
             .and(y_actual.rows())
             .for_each(|mut y, val| y.assign(&val));
-
         let best_index = find_best_result_index_from(
             state.best_index.unwrap(),
             y_data.nrows() - add_count as usize,
@@ -506,8 +492,7 @@ where
         new_state.prev_best_index = state.best_index;
         new_state.best_index = Some(best_index);
         new_state = new_state.data((x_data.clone(), y_data.clone(), c_data.clone()));
-
-        Ok((new_state, infill_data, best_index))
+        Ok(new_state)
     }
 
     /// Returns next promising x points together with virtual (predicted) y values
@@ -528,7 +513,6 @@ where
         c_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         cstr_tol: &Array1<f64>,
         sampling: &Lhs<f64, Xoshiro256Plus>,
-        lhs_optim: Option<u64>,
         best_index: usize,
         cstr_funcs: &[impl CstrFn],
     ) -> (
@@ -639,7 +623,6 @@ where
                 cstr_models,
                 &cstr_funcs,
                 cstr_tol,
-                lhs_optim,
                 &infill_data,
                 (fmin, xbest, ybest, cbest),
                 &actives,

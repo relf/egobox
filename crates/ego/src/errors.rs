@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::EgorState;
+
 /// A result type for EGO errors
 pub type Result<T> = std::result::Result<T, EgoError>;
 
@@ -35,5 +37,5 @@ pub enum EgoError {
     ArgminError(#[from] argmin::core::Error),
     /// When global EGO step cannot add any point
     #[error("EGO exit (no more point)")]
-    GlobalStepNoPointError,
+    NoMorePointToAddError(Box<EgorState<f64>>),
 }

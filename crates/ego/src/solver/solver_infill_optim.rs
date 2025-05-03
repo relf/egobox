@@ -36,7 +36,6 @@ where
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
         cstr_funcs: &[impl CstrFn],
         cstr_tols: &Array1<f64>,
-        lhs_optim_seed: Option<u64>,
         infill_data: &InfillObjData<f64>,
         current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
         actives: &Array2<usize>,
@@ -187,80 +186,57 @@ where
                 let x_start = multistarter.multistart();
                 let x_start_coop = Self::getx(&x_start, Axis(1), &active);
 
-                if let Some(seed) = lhs_optim_seed {
-                    let (y_opt, x_opt) =
-                        Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &infill_data, &xlimits)
-                            .cstr_tol(cstr_tols.to_owned())
-                            .seed(seed)
-                            .minimize();
+                let res = (0..self.config.n_start)
+                    .into_par_iter()
+                    .map(|i| {
+                        debug!("Begin optim {}", i);
+                        let optim_res =
+                            Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &xlimits)
+                                .xinit(&x_start_coop.row(i))
+                                .max_eval((10 * x_start_coop.len()).min(MAX_EVAL_DEFAULT))
+                                .ftol_rel(1e-4)
+                                .ftol_abs(1e-4)
+                                .minimize();
+                        debug!("End optim {}", i);
+                        optim_res
+                    })
+                    .reduce(
+                        || (f64::INFINITY, Array::ones((xlimits.nrows(),))),
+                        |a, b| if b.0 < a.0 { b } else { a },
+                    );
 
-                    info!("LHS optimization best_x {}", x_opt);
-                    best_point = (y_opt, x_opt);
-                    success = true;
+                if res.0.is_nan() || res.0.is_infinite() {
+                    success = false;
                 } else {
-                    let res = (0..self.config.n_start)
-                        .into_par_iter()
-                        .map(|i| {
-                            debug!("Begin optim {}", i);
-                            let optim_res =
-                                Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &xlimits)
-                                    .xinit(&x_start_coop.row(i))
-                                    .max_eval((10 * x_start_coop.len()).min(MAX_EVAL_DEFAULT))
-                                    .ftol_rel(1e-4)
-                                    .ftol_abs(1e-4)
-                                    .minimize();
-                            debug!("End optim {}", i);
-                            optim_res
-                        })
-                        .reduce(
-                            || (f64::INFINITY, Array::ones((xlimits.nrows(),))),
-                            |a, b| if b.0 < a.0 { b } else { a },
+                    let mut xopt_coop = current_best_point.1.to_vec();
+                    Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
+                    infill_data.xbest = xopt_coop.clone();
+                    let xopt_coop = Array1::from(xopt_coop);
+
+                    if crate::solver::coego::COEGO_IMPROVEMENT_CHECK {
+                        let (is_better, best) = self.is_objective_improved(
+                            &current_best_point,
+                            &xopt_coop,
+                            obj_model,
+                            cstr_models,
+                            cstr_tols,
+                            &cstr_funcs,
                         );
-
-                    if res.0.is_nan() || res.0.is_infinite() {
-                        success = false;
-                    } else {
-                        let mut xopt_coop = current_best_point.1.to_vec();
-                        Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
-                        infill_data.xbest = xopt_coop.clone();
-                        let xopt_coop = Array1::from(xopt_coop);
-
-                        if crate::solver::coego::COEGO_IMPROVEMENT_CHECK {
-                            let (is_better, best) = self.is_objective_improved(
-                                &current_best_point,
-                                &xopt_coop,
-                                obj_model,
-                                cstr_models,
-                                cstr_tols,
-                                &cstr_funcs,
-                            );
-                            if is_better || i == 0 {
-                                if i > 0 {
-                                    info!(
+                        if is_better || i == 0 {
+                            if i > 0 {
+                                info!(
                                         "Partial infill criterion optim c={} has better result={} at x={}",
                                         i, best.0, xopt_coop
                                     );
-                                }
-                                best_point = (res.0, xopt_coop);
-                                current_best_point = best;
                             }
-                        } else {
-                            best_point = (res.0, xopt_coop.to_owned());
-                            current_best_point =
-                                (res.0, xopt_coop, current_best_point.2, current_best_point.3);
+                            best_point = (res.0, xopt_coop);
+                            current_best_point = best;
                         }
-                        success = true;
+                    } else {
+                        best_point = (res.0, xopt_coop.to_owned());
+                        current_best_point =
+                            (res.0, xopt_coop, current_best_point.2, current_best_point.3);
                     }
-                }
-
-                if n_optim == n_max_optim && !success {
-                    log::warn!("All optimizations fail => Trigger LHS optimization");
-                    let (y_opt, x_opt) =
-                        Optimizer::new(Algorithm::Lhs, &obj, &cstr_refs, &infill_data, &xlimits)
-                            .minimize();
-
-                    info!("LHS optimization best_x {}", x_opt);
-                    best_point = (y_opt, x_opt);
                     success = true;
                 }
                 n_optim += 1;
