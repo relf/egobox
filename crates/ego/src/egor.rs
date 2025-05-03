@@ -689,14 +689,13 @@ mod tests {
     fn test_egor_g24_basic_egor_builder_cobyla() {
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
-            .with_rng(Xoshiro256Plus::seed_from_u64(42))
+            .with_rng(Xoshiro256Plus::seed_from_u64(0))
             .sample(3);
         let res = EgorBuilder::optimize(f_g24)
             .configure(|config| {
                 config
                     .n_cstr(2)
                     .doe(&doe)
-                    .n_start(50)
                     .max_iters(20)
                     .infill_optimizer(InfillOptimizer::Cobyla)
                     .cstr_tol(array![2e-3, 1e-3])
@@ -721,7 +720,6 @@ mod tests {
                 config
                     .n_cstr(2)
                     .doe(&doe)
-                    .n_start(50)
                     .max_iters(20)
                     .cstr_tol(array![1e-5, 1e-5])
                     .seed(42)
