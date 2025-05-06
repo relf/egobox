@@ -882,7 +882,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                             &bounds,
                             CobylaParams {
                                 maxeval: (10 * theta_inits.ncols())
-                                    .clamp(GP_MIN_COBYLA_EVAL, GP_MAX_COBYLA_EVAL),
+                                    .clamp(GP_MIN_COBYLA_EVAL, self.max_eval()),
                                 ..CobylaParams::default()
                             },
                         );
