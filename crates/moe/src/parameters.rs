@@ -8,7 +8,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
-use egobox_gp::GP_MAX_COBYLA_EVAL;
+use egobox_gp::GP_COBYLA_MAX_EVAL;
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -126,7 +126,7 @@ impl<F: Float> Default for GpMixtureValidParams<F> {
             theta_tunings: vec![ThetaTuning::default()],
             kpls_dim: None,
             n_start: 10,
-            max_eval: GP_MAX_COBYLA_EVAL,
+            max_eval: GP_COBYLA_MAX_EVAL,
             gmm: None,
             gmx: None,
             rng: Xoshiro256Plus::from_entropy(),

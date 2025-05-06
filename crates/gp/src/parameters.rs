@@ -1,7 +1,7 @@
 use crate::correlation_models::CorrelationModel;
 use crate::errors::{GpError, Result};
 use crate::mean_models::RegressionModel;
-use crate::{GP_MAX_COBYLA_EVAL, GP_MIN_COBYLA_EVAL};
+use crate::{GP_COBYLA_MAX_EVAL, GP_COBYLA_MIN_EVAL};
 use linfa::{Float, ParamGuard};
 
 use ndarray::{array, Array1};
@@ -105,7 +105,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Default
             corr: Corr::default(),
             kpls_dim: None,
             n_start: 10,
-            max_eval: GP_MAX_COBYLA_EVAL,
+            max_eval: GP_COBYLA_MAX_EVAL,
             nugget: F::cast(100.0) * F::epsilon(),
         }
     }
@@ -249,7 +249,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     /// Given max_eval has to be greater than [crate::GP_MIN_COBYLA_EVAL] otherwise
     /// max_eval is set to crate::GP_MIN_COBYLA_EVAL.
     pub fn max_eval(mut self, max_eval: usize) -> Self {
-        self.0.max_eval = GP_MIN_COBYLA_EVAL.max(max_eval);
+        self.0.max_eval = GP_COBYLA_MIN_EVAL.max(max_eval);
         self
     }
 

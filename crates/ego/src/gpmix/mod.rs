@@ -49,6 +49,11 @@ impl SurrogateBuilder for GpMixtureParams<f64> {
         *self = self.clone().theta_tunings(theta_tunings);
     }
 
+    /// Sets the number of clusters used by the mixture of surrogate experts.
+    fn set_optim_params(&mut self, n_start: usize, max_eval: usize) {
+        *self = self.clone().n_start(n_start).max_eval(max_eval);
+    }
+
     fn train(
         &self,
         xt: ArrayView2<f64>,

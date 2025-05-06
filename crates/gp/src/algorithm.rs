@@ -29,8 +29,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::Instant;
 
-pub const GP_MIN_COBYLA_EVAL: usize = 25;
-pub const GP_MAX_COBYLA_EVAL: usize = 1000;
+pub const GP_COBYLA_MIN_EVAL: usize = 25;
+pub const GP_COBYLA_MAX_EVAL: usize = 1000;
 
 /// Internal parameters computed Gp during training
 /// used later on in prediction computations
@@ -882,7 +882,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                             &bounds,
                             CobylaParams {
                                 maxeval: (10 * theta_inits.ncols())
-                                    .clamp(GP_MIN_COBYLA_EVAL, self.max_eval()),
+                                    .clamp(GP_COBYLA_MIN_EVAL, self.max_eval()),
                                 ..CobylaParams::default()
                             },
                         );

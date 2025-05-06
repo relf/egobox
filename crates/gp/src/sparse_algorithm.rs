@@ -590,7 +590,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                     &bounds,
                     CobylaParams {
                         maxeval: (10 * theta0_dim)
-                            .clamp(crate::GP_MIN_COBYLA_EVAL, self.max_eval()),
+                            .clamp(crate::GP_COBYLA_MIN_EVAL, self.max_eval()),
                         ..CobylaParams::default()
                     },
                 );
