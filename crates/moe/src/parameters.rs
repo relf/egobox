@@ -8,6 +8,7 @@ use egobox_gp::correlation_models::{
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
+use egobox_gp::GP_MAX_COBYLA_EVAL;
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -104,6 +105,8 @@ pub struct GpMixtureValidParams<F: Float> {
     kpls_dim: Option<usize>,
     /// Number of GP hyperparameters optimization restarts
     n_start: usize,
+    /// Max number of likelihood evaluations during GP hyperparameters optimization
+    max_eval: usize,
     /// Gaussian Mixture model used to cluster
     gmm: Option<GaussianMixtureModel<F>>,
     /// GaussianMixture preset
@@ -123,6 +126,7 @@ impl<F: Float> Default for GpMixtureValidParams<F> {
             theta_tunings: vec![ThetaTuning::default()],
             kpls_dim: None,
             n_start: 10,
+            max_eval: GP_MAX_COBYLA_EVAL,
             gmm: None,
             gmx: None,
             rng: Xoshiro256Plus::from_entropy(),
@@ -166,9 +170,14 @@ impl<F: Float> GpMixtureValidParams<F> {
         self.kpls_dim
     }
 
-    /// The number of hypermarameters optimization restarts
+    /// The number of hyperparameters optimization restarts
     pub fn n_start(&self) -> usize {
         self.n_start
+    }
+
+    /// The max number of likelihood optimization during hyperparameters optimization
+    pub fn max_eval(&self) -> usize {
+        self.max_eval
     }
 
     /// An optional gaussian mixture to be fitted to generate multivariate normal
@@ -214,16 +223,9 @@ impl<F: Float> GpMixtureParams<F> {
     pub fn new_with_rng(gp_type: GpType<F>, rng: Xoshiro256Plus) -> GpMixtureParams<F> {
         Self(GpMixtureValidParams {
             gp_type,
-            n_clusters: NbClusters::default(),
             recombination: Recombination::Smooth(Some(F::one())),
-            regression_spec: RegressionSpec::CONSTANT,
-            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
-            theta_tunings: vec![ThetaTuning::default()],
-            kpls_dim: None,
-            n_start: 10,
-            gmm: None,
-            gmx: None,
             rng,
+            ..Default::default()
         })
     }
 
@@ -278,6 +280,12 @@ impl<F: Float> GpMixtureParams<F> {
     /// Sets the number of hyperparameters optimization restarts
     pub fn n_start(mut self, n_start: usize) -> Self {
         self.0.n_start = n_start;
+        self
+    }
+
+    /// Sets The max number of likelihood optimization during hyperparameters optimization
+    pub fn max_eval(mut self, max_eval: usize) -> Self {
+        self.0.max_eval = max_eval;
         self
     }
 
