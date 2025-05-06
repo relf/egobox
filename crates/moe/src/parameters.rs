@@ -210,7 +210,6 @@ impl<F: Float> Default for GpMixtureParams<F> {
 
 impl<F: Float> GpMixtureParams<F> {
     /// Constructor of GP parameters.
-    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> GpMixtureParams<F> {
         Self::new_with_rng(GpType::FullGp, Xoshiro256Plus::from_entropy())
     }
