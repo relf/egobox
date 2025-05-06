@@ -15,7 +15,8 @@ pub enum Algorithm {
     Slsqp,
 }
 
-pub const MAX_EVAL_DEFAULT: usize = 2000;
+pub const INFILL_MAX_EVAL_DEFAULT: usize = 1000;
+
 /// Facade for various optimization algorithms
 pub(crate) struct Optimizer<'a> {
     algo: Algorithm,
@@ -45,7 +46,7 @@ impl<'a> Optimizer<'a> {
             cstr_tol: None,
             bounds: bounds.clone(),
             user_data,
-            max_eval: MAX_EVAL_DEFAULT,
+            max_eval: INFILL_MAX_EVAL_DEFAULT,
             xinit: None,
             ftol_abs: None,
             ftol_rel: None,
