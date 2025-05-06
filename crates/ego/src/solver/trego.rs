@@ -107,7 +107,6 @@ where
             cstr_models,
             fcstrs,
             &cstr_tols,
-            None,
             infill_data,
             (fmin, xbest.to_owned(), ybest, cbest),
             &actives,

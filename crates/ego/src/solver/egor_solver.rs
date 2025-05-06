@@ -346,11 +346,9 @@ where
         state: EgorState<f64>,
     ) -> std::result::Result<(EgorState<f64>, Option<KV>), argmin::core::Error> {
         match self.ego_step(problem, state.clone()) {
-            Ok((new_state, _, _)) => Ok((new_state, None)),
-            Err(EgoError::GlobalStepNoPointError) => Ok((
-                state.terminate_with(TerminationReason::SolverExit(
-                    "Even LHS optimization failed to add a new point".to_string(),
-                )),
+            Ok(new_state) => Ok((new_state, None)),
+            Err(EgoError::NoMorePointToAddError(state)) => Ok((
+                state.terminate_with(TerminationReason::SolverConverged),
                 None,
             )),
             Err(err) => Err(err.into()),
