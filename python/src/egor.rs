@@ -20,6 +20,7 @@ use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
 /// Utility function converting `xlimits` float data list specifying bounds of x components
 /// to x specified as a list of XType.Float types [egobox.XType]
@@ -29,17 +30,18 @@ use pyo3::prelude::*;
 ///
 /// # Returns
 ///     xtypes: nx-size list of XSpec(XType(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
+#[gen_stub_pyfunction]
 #[pyfunction]
-pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject> {
+pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<pyo3::Bound<'_, PyAny>> {
     if xlimits.is_empty() || xlimits[0].is_empty() {
         let err = "Error: xspecs argument cannot be empty";
         return Err(PyValueError::new_err(err.to_string()));
     }
-    Ok(xlimits
+    xlimits
         .iter()
         .map(|xlimit| XSpec::new(XType::Float, xlimit.clone(), vec![]))
         .collect::<Vec<XSpec>>()
-        .into_py(py))
+        .into_pyobject(py)
 }
 
 /// Optimizer constructor
@@ -163,6 +165,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<PyObject>
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///      
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct Egor {
     pub xspecs: PyObject,
@@ -191,6 +194,7 @@ pub(crate) struct Egor {
     pub seed: Option<u64>,
 }
 
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct OptimResult {
     #[pyo3(get)]
@@ -203,6 +207,7 @@ pub(crate) struct OptimResult {
     y_doe: Py<PyArray2<f64>>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl Egor {
     #[new]
@@ -336,7 +341,7 @@ impl Egor {
     ) -> PyResult<OptimResult> {
         let obj = |x: &ArrayView2<f64>| -> Array2<f64> {
             Python::with_gil(|py| {
-                let args = (x.to_owned().into_pyarray_bound(py),);
+                let args = (x.to_owned().into_pyarray(py),);
                 let res = fun.bind(py).call1(args).unwrap();
                 let pyarray = res.downcast_into::<PyArray2<f64>>().unwrap();
                 pyarray.to_owned_array()
@@ -350,12 +355,12 @@ impl Egor {
                 let cstr = |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| -> f64 {
                     Python::with_gil(|py| {
                         if let Some(g) = g {
-                            let args = (Array1::from(x.to_vec()).into_pyarray_bound(py), true);
+                            let args = (Array1::from(x.to_vec()).into_pyarray(py), true);
                             let grad = cstr.bind(py).call1(args).unwrap();
                             let grad = grad.downcast_into::<PyArray1<f64>>().unwrap().readonly();
                             g.copy_from_slice(grad.as_slice().unwrap())
                         }
-                        let args = (Array1::from(x.to_vec()).into_pyarray_bound(py), false);
+                        let args = (Array1::from(x.to_vec()).into_pyarray(py), false);
                         let res = cstr.bind(py).call1(args).unwrap().extract().unwrap();
                         res
                     })
@@ -378,10 +383,10 @@ impl Egor {
                 .run()
                 .expect("Egor should optimize the objective function")
         });
-        let x_opt = res.x_opt.into_pyarray_bound(py).to_owned();
-        let y_opt = res.y_opt.into_pyarray_bound(py).to_owned();
-        let x_doe = res.x_doe.into_pyarray_bound(py).to_owned();
-        let y_doe = res.y_doe.into_pyarray_bound(py).to_owned();
+        let x_opt = res.x_opt.into_pyarray(py).to_owned();
+        let y_opt = res.y_opt.into_pyarray(py).to_owned();
+        let x_doe = res.x_doe.into_pyarray(py).to_owned();
+        let y_doe = res.y_doe.into_pyarray(py).to_owned();
         Ok(OptimResult {
             x_opt: x_opt.into(),
             y_opt: y_opt.into(),
@@ -419,7 +424,7 @@ impl Egor {
             .min_within_mixint_space(&xtypes);
 
         let x_suggested = py.allow_threads(|| mixintegor.suggest(&x_doe, &y_doe));
-        x_suggested.to_pyarray_bound(py).into()
+        x_suggested.to_pyarray(py).into()
     }
 
     /// This function gives the best evaluation index given the outputs
@@ -467,10 +472,10 @@ impl Egor {
         let n_fcstrs = 0;
         let c_doe = Array2::zeros((y_doe.ncols(), n_fcstrs));
         let idx = find_best_result_index(&y_doe, &c_doe, &self.cstr_tol(n_fcstrs));
-        let x_opt = x_doe.row(idx).to_pyarray_bound(py).into();
-        let y_opt = y_doe.row(idx).to_pyarray_bound(py).into();
-        let x_doe = x_doe.to_pyarray_bound(py).into();
-        let y_doe = y_doe.to_pyarray_bound(py).into();
+        let x_opt = x_doe.row(idx).to_pyarray(py).into();
+        let y_opt = y_doe.row(idx).to_pyarray(py).into();
+        let x_doe = x_doe.to_pyarray(py).into();
+        let y_doe = y_doe.to_pyarray(py).into();
         OptimResult {
             x_opt,
             y_opt,
