@@ -17,7 +17,7 @@ pub enum Algorithm {
     Gbnm,
 }
 
-pub const INFILL_MAX_EVAL_DEFAULT: usize = 1000;
+pub const INFILL_MAX_EVAL_DEFAULT: usize = 2000;
 
 /// Facade for various optimization algorithms
 pub(crate) struct Optimizer<'a> {
