@@ -29,8 +29,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::Instant;
 
-pub const GP_MIN_COBYLA_EVAL: usize = 25;
-pub const GP_MAX_COBYLA_EVAL: usize = 1000;
+pub const GP_COBYLA_MIN_EVAL: usize = 25;
+pub const GP_COBYLA_MAX_EVAL: usize = 1000;
 
 /// Internal parameters computed Gp during training
 /// used later on in prediction computations
@@ -863,26 +863,26 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                     .filter(|(i, _)| active.contains(i))
                     .map(|(_, &b)| b)
                     .collect::<Vec<_>>();
-                let (params, bounds) = prepare_multistart(
+                let (theta_inits, bounds) = prepare_multistart(
                     self.n_start(),
                     &theta0.select(Axis(0), &active),
                     &active_bounds,
                 );
                 debug!(
                     "Optimize with multistart theta = {:?} and bounds = {:?}",
-                    params, bounds
+                    theta_inits, bounds
                 );
                 let now = Instant::now();
-                let opt_params = (0..params.nrows())
+                let opt_params = (0..theta_inits.nrows())
                     .into_par_iter()
                     .map(|i| {
                         let opt_res = optimize_params(
                             objfn,
-                            &params.row(i).to_owned(),
+                            &theta_inits.row(i).to_owned(),
                             &bounds,
                             CobylaParams {
-                                maxeval: (10 * params.ncols())
-                                    .clamp(GP_MIN_COBYLA_EVAL, GP_MAX_COBYLA_EVAL),
+                                maxeval: (10 * theta_inits.ncols())
+                                    .clamp(GP_COBYLA_MIN_EVAL, self.max_eval()),
                                 ..CobylaParams::default()
                             },
                         );
@@ -890,7 +890,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                         opt_res
                     })
                     .reduce(
-                        || (f64::INFINITY, Array::ones((params.ncols(),))),
+                        || (f64::INFINITY, Array::ones((theta_inits.ncols(),))),
                         |a, b| if b.0 < a.0 { b } else { a },
                     );
                 debug!("elapsed optim = {:?}", now.elapsed().as_millis());

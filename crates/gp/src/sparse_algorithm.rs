@@ -560,10 +560,10 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
             )
         };
 
-        let (params, mut bounds) = prepare_multistart(self.n_start(), &params_0, &bounds);
+        let (theta_inits, mut bounds) = prepare_multistart(self.n_start(), &params_0, &bounds);
 
         // variance bounds
-        bounds[params.ncols() - 1 - is_noise_estimated as usize] =
+        bounds[theta_inits.ncols() - 1 - is_noise_estimated as usize] =
             (F::cast(1e-12).log10(), (F::cast(9.) * sigma2_0).log10());
         // optionally adjust noise variance bounds
         if let ParamTuning::Optimized {
@@ -578,19 +578,19 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         }
         debug!(
             "Optimize with multistart theta = {:?} and bounds = {:?}",
-            params, bounds
+            theta_inits, bounds
         );
         let now = Instant::now();
-        let opt_params = (0..params.nrows())
+        let opt_params = (0..theta_inits.nrows())
             .into_par_iter()
             .map(|i| {
                 let opt_res = optimize_params(
                     objfn,
-                    &params.row(i).to_owned(),
+                    &theta_inits.row(i).to_owned(),
                     &bounds,
                     CobylaParams {
                         maxeval: (10 * theta0_dim)
-                            .clamp(crate::GP_MIN_COBYLA_EVAL, crate::GP_MAX_COBYLA_EVAL),
+                            .clamp(crate::GP_COBYLA_MIN_EVAL, self.max_eval()),
                         ..CobylaParams::default()
                     },
                 );
@@ -598,7 +598,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                 opt_res
             })
             .reduce(
-                || (f64::INFINITY, Array::ones((params.ncols(),))),
+                || (f64::INFINITY, Array::ones((theta_inits.ncols(),))),
                 |a, b| if b.0 < a.0 { b } else { a },
             );
         debug!("elapsed optim = {:?}", now.elapsed().as_millis());

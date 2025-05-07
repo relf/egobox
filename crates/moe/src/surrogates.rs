@@ -24,8 +24,10 @@ pub trait GpSurrogateParams {
     fn theta_tuning(&mut self, theta_tuning: ThetaTuning<f64>);
     /// Set the number of PLS components
     fn kpls_dim(&mut self, kpls_dim: Option<usize>);
-    /// Set the nuber of internal optimization restarts
+    /// Set the number of internal optimization restarts
     fn n_start(&mut self, n_start: usize);
+    /// Set the max number of internal likelihood evaluations per optimization
+    fn max_eval(&mut self, max_eval: usize);
     /// Set the nugget parameter to improve numerical stability
     fn nugget(&mut self, nugget: f64);
     /// Train the surrogate
@@ -122,6 +124,10 @@ macro_rules! declare_surrogate {
 
                 fn n_start(&mut self, n_start: usize) {
                     self.0 = self.0.clone().n_start(n_start);
+                }
+
+                fn max_eval(&mut self, max_eval: usize) {
+                    self.0 = self.0.clone().max_eval(max_eval);
                 }
 
                 fn nugget(&mut self, nugget: f64) {
@@ -270,6 +276,10 @@ macro_rules! declare_sgp_surrogate {
 
                 fn n_start(&mut self, n_start: usize) {
                     self.0 = self.0.clone().n_start(n_start);
+                }
+
+                fn max_eval(&mut self, max_eval: usize) {
+                    self.0 = self.0.clone().max_eval(max_eval);
                 }
 
                 fn nugget(&mut self, nugget: f64) {

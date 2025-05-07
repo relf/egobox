@@ -1,8 +1,8 @@
-use crate::correlation_models::{CorrelationModel, SquaredExponentialCorr};
+use crate::correlation_models::CorrelationModel;
 use crate::errors::{GpError, Result};
 use crate::mean_models::ConstantMean;
 use crate::parameters::GpValidParams;
-use crate::ThetaTuning;
+use crate::{ThetaTuning, GP_COBYLA_MIN_EVAL};
 use linfa::{Float, ParamGuard};
 use ndarray::{array, Array1, Array2};
 #[cfg(feature = "serializable")]
@@ -76,8 +76,8 @@ pub struct SgpValidParams<F: Float, Corr: CorrelationModel<F>> {
     seed: Option<u64>,
 }
 
-impl<F: Float> Default for SgpValidParams<F, SquaredExponentialCorr> {
-    fn default() -> SgpValidParams<F, SquaredExponentialCorr> {
+impl<F: Float, Corr: CorrelationModel<F>> Default for SgpValidParams<F, Corr> {
+    fn default() -> SgpValidParams<F, Corr> {
         SgpValidParams {
             gp_params: GpValidParams::default(),
             noise: ParamTuning::default(),
@@ -107,6 +107,11 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
     /// Get the number of internal GP hyperparameters optimization restart
     pub fn n_start(&self) -> usize {
         self.gp_params.n_start
+    }
+
+    /// Get the max number of internal likelihood evaluations during one optimization
+    pub fn max_eval(&self) -> usize {
+        self.gp_params.max_eval
     }
 
     /// Get number of components used by PLS
@@ -151,14 +156,11 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
                     init: array![F::cast(ThetaTuning::<F>::DEFAULT_INIT)],
                     bounds: array![(F::cast(ThetaTuning::<F>::DEFAULT_BOUNDS.0), F::cast(1e2),)],
                 }, // upper bound increased wrt Gp default parameters
-                kpls_dim: None,
-                n_start: 10,
-                nugget: F::cast(1000.0) * F::epsilon(),
+                ..Default::default()
             },
-            noise: ParamTuning::default(),
+
             z: inducings,
-            method: SparseMethod::default(),
-            seed: None,
+            ..Default::default()
         })
     }
 
@@ -234,6 +236,14 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     /// Set the number of internal hyperparameters optimization restarts
     pub fn n_start(mut self, n_start: usize) -> Self {
         self.0.gp_params.n_start = n_start;
+        self
+    }
+
+    /// Set the max number of internal likelihood evaluations during one optimization
+    /// Given max_eval has to be greater than [crate::GP_MIN_COBYLA_EVAL] otherwise
+    /// max_eval is set to crate::GP_MIN_COBYLA_EVAL.
+    pub fn max_eval(mut self, max_eval: usize) -> Self {
+        self.0.gp_params.max_eval = GP_COBYLA_MIN_EVAL.max(max_eval);
         self
     }
 

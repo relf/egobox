@@ -157,6 +157,9 @@ pub trait SurrogateBuilder: Clone + Serialize + Sync {
     /// Sets the hyperparameters tuning strategy
     fn set_theta_tunings(&mut self, theta_tunings: &[ThetaTuning<f64>]);
 
+    /// Set likelihood optimization parameters
+    fn set_optim_params(&mut self, n_start: usize, max_eval: usize);
+
     /// Train the surrogate with given training dataset (x, y)
     fn train(
         &self,

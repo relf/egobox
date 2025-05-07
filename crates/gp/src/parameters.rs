@@ -1,6 +1,7 @@
-use crate::correlation_models::{CorrelationModel, SquaredExponentialCorr};
+use crate::correlation_models::CorrelationModel;
 use crate::errors::{GpError, Result};
-use crate::mean_models::{ConstantMean, RegressionModel};
+use crate::mean_models::RegressionModel;
+use crate::{GP_COBYLA_MAX_EVAL, GP_COBYLA_MIN_EVAL};
 use linfa::{Float, ParamGuard};
 
 use ndarray::{array, Array1};
@@ -86,20 +87,25 @@ pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationMo
     pub(crate) corr: Corr,
     /// Optionally apply dimension reduction (KPLS) or not
     pub(crate) kpls_dim: Option<usize>,
-    /// Number of optimization restart
+    /// Number of internal likelihood optimization restart
     pub(crate) n_start: usize,
+    /// Max number of internal likelihood evaluation during optimization
+    pub(crate) max_eval: usize,
     /// Parameter to improve numerical stability
     pub(crate) nugget: F,
 }
 
-impl<F: Float> Default for GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
-    fn default() -> GpValidParams<F, ConstantMean, SquaredExponentialCorr> {
+impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Default
+    for GpValidParams<F, Mean, Corr>
+{
+    fn default() -> GpValidParams<F, Mean, Corr> {
         GpValidParams {
             theta_tuning: ThetaTuning::default(),
-            mean: ConstantMean(),
-            corr: SquaredExponentialCorr(),
+            mean: Mean::default(),
+            corr: Corr::default(),
             kpls_dim: None,
             n_start: 10,
+            max_eval: GP_COBYLA_MAX_EVAL,
             nugget: F::cast(100.0) * F::epsilon(),
         }
     }
@@ -131,6 +137,11 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpValidParam
         self.n_start
     }
 
+    /// Get the max number of internal likelihood evaluations during one optimization
+    pub fn max_eval(&self) -> usize {
+        self.max_eval
+    }
+
     /// Get number of components used by PLS
     pub fn nugget(&self) -> F {
         self.nugget
@@ -148,12 +159,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     /// A constructor for GP parameters given mean and correlation models
     pub fn new(mean: Mean, corr: Corr) -> GpParams<F, Mean, Corr> {
         Self(GpValidParams {
-            theta_tuning: ThetaTuning::default(),
             mean,
             corr,
-            kpls_dim: None,
-            n_start: 10,
-            nugget: F::cast(100.0) * F::epsilon(),
+            ..Default::default()
         })
     }
 
@@ -234,6 +242,14 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
     /// Set the number of internal GP hyperparameter theta optimization restarts
     pub fn n_start(mut self, n_start: usize) -> Self {
         self.0.n_start = n_start;
+        self
+    }
+
+    /// Set the max number of internal likelihood evaluations during one optimization
+    /// Given max_eval has to be greater than [crate::GP_MIN_COBYLA_EVAL] otherwise
+    /// max_eval is set to crate::GP_MIN_COBYLA_EVAL.
+    pub fn max_eval(mut self, max_eval: usize) -> Self {
+        self.0.max_eval = GP_COBYLA_MIN_EVAL.max(max_eval);
         self
     }
 

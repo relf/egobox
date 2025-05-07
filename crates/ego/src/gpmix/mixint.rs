@@ -457,6 +457,20 @@ impl SurrogateBuilder for MixintGpMixtureParams {
         }
     }
 
+    fn set_optim_params(&mut self, n_start: usize, max_eval: usize) {
+        let builder = self
+            .0
+            .surrogate_builder
+            .clone()
+            .n_start(n_start)
+            .max_eval(max_eval);
+        self.0 = MixintGpMixtureValidParams {
+            surrogate_builder: builder,
+            xtypes: self.0.xtypes.clone(),
+            work_in_folded_space: self.0.work_in_folded_space,
+        }
+    }
+
     fn train(
         &self,
         xt: ArrayView2<f64>,

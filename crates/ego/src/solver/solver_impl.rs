@@ -12,7 +12,7 @@ use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
 
 use egobox_doe::{Lhs, LhsKind};
-use egobox_gp::ThetaTuning;
+use egobox_gp::{ThetaTuning, GP_COBYLA_MIN_EVAL};
 use env_logger::{Builder, Env};
 
 use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters};
@@ -25,6 +25,9 @@ use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 
 use super::coego::COEGO_IMPROVEMENT_CHECK;
+
+const EGO_GP_OPTIM_N_START: usize = 10;
+const EGO_GP_OPTIM_MAX_EVAL: usize = GP_COBYLA_MIN_EVAL;
 
 impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     /// Constructor of the optimization of the function `f` with specified random generator
@@ -127,6 +130,7 @@ where
         builder.set_regression_spec(self.config.regression_spec);
         builder.set_correlation_spec(self.config.correlation_spec);
         builder.set_n_clusters(self.config.n_clusters.clone());
+        builder.set_optim_params(EGO_GP_OPTIM_N_START, EGO_GP_OPTIM_MAX_EVAL);
 
         let mut model = None;
         let mut best_likelihood = -f64::INFINITY;
