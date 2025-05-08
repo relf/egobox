@@ -27,10 +27,16 @@ pub struct GbnmResult {
     pub n_eval: usize,
 }
 
-pub fn gbnm<F>(fun: &F, xmin: &Array1<f64>, xmax: &Array1<f64>, options: GbnmOptions) -> GbnmResult
-where
-    F: Fn(&Array1<f64>) -> f64,
-{
+pub trait Func<U>: Fn(&[f64], &mut U) -> f64 {}
+impl<T, U> Func<U> for T where T: Fn(&[f64], &mut U) -> f64 {}
+
+pub fn gbnm<F: Func<U>, U: Clone>(
+    fun: F,
+    xmin: &Array1<f64>,
+    xmax: &Array1<f64>,
+    args: U,
+    options: GbnmOptions,
+) -> GbnmResult {
     let ndim = xmin.len();
     let xrange = xmax - xmin;
 
@@ -43,7 +49,8 @@ where
         let initial_point = probabilistic_restart(&used_points, xmin, &xrange, options.n_points);
         let a = (0.02 + 0.08 * rand::random::<f64>())
             * xrange.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let (mut splx, mut fval, evals) = init_simplex(&initial_point, a, fun, xmin, xmax);
+        let (mut splx, mut fval, evals) =
+            init_simplex(&initial_point, a, &fun, args.clone(), xmin, xmax);
         n_eval += evals;
 
         used_points
@@ -82,7 +89,7 @@ where
                 xmin,
                 xmax,
             );
-            let fr = fun(&xr);
+            let fr = fun(&xr.to_vec(), &mut args.clone());
             n_eval += 1;
 
             if fr < fval[0] {
@@ -91,7 +98,7 @@ where
                     xmin,
                     xmax,
                 );
-                let fe = fun(&xe);
+                let fe = fun(&xe.to_vec(), &mut args.clone());
                 n_eval += 1;
                 if fe < fr {
                     splx.slice_mut(s![.., ndim]).assign(&xe);
@@ -109,13 +116,13 @@ where
                     fval[ndim] = fr;
                 }
                 let xc = x_cent.clone() + options.beta * (&x_worst - &x_cent);
-                let fc = fun(&xc);
+                let fc = fun(&xc.to_vec(), &mut args.clone());
                 n_eval += 1;
 
                 if fc > fval[ndim] {
                     for (k, mut column) in splx.columns_mut().into_iter().enumerate().skip(1) {
                         let xk = 0.5 * (&column + &x_best);
-                        let fk = fun(&xk);
+                        let fk = fun(&xk.to_vec(), &mut args.clone());
                         n_eval += 1;
                         column.assign(&xk);
                         fval[k] = fk;
@@ -176,16 +183,14 @@ fn probabilistic_restart(
     best_point
 }
 
-fn init_simplex<F>(
+fn init_simplex<F: Func<U>, U: Clone>(
     x0: &Array1<f64>,
     a: f64,
     fun: F,
+    args: U,
     xmin: &Array1<f64>,
     xmax: &Array1<f64>,
-) -> (Array2<f64>, Vec<f64>, usize)
-where
-    F: Fn(&Array1<f64>) -> f64,
-{
+) -> (Array2<f64>, Vec<f64>, usize) {
     let ndim = x0.len();
     let mut splx = Array2::<f64>::zeros((ndim, ndim + 1));
     let mut fval = vec![0.0; ndim + 1];
@@ -210,7 +215,7 @@ where
 
     let mut n_eval = 0;
     for (k, column) in splx.columns().into_iter().enumerate() {
-        fval[k] = fun(&column.to_owned());
+        fval[k] = fun(&column.to_vec(), &mut args.clone());
         n_eval += 1;
     }
 
@@ -269,7 +274,7 @@ mod tests {
     #[test]
     fn test_gbnm_minimization() {
         // Example of using the Gbnm optimizer with a simple quadratic function
-        let fun = |x: &Array1<f64>| x.iter().map(|&xi| xi * xi).sum();
+        let fun = |x: &[f64], _u: &mut Option<()>| x.iter().map(|&xi| xi * xi).sum();
 
         let xmin = arr1(&[-5.0, -5.0]);
         let xmax = arr1(&[5.0, 5.0]);
@@ -286,7 +291,7 @@ mod tests {
             ssigma: 1e-6,
         };
 
-        let result = gbnm(&fun, &xmin, &xmax, options);
+        let result = gbnm(fun, &xmin, &xmax, None, options);
 
         let expected = array![0., 0.];
         assert!(expected
@@ -300,7 +305,7 @@ mod tests {
     #[test]
     fn test_gbnm_with_custom_function() {
         // Example with a custom function to minimize
-        let fun = |x: &Array1<f64>| (x[0] - 2.0).powi(2) + (x[1] - 3.0).powi(2);
+        let fun = |x: &[f64], _u: &mut ()| (x[0] - 2.0).powi(2) + (x[1] - 3.0).powi(2);
 
         let xmin = arr1(&[-10.0, -10.0]);
         let xmax = arr1(&[10.0, 10.0]);
@@ -317,7 +322,7 @@ mod tests {
             ssigma: 1e-6,
         };
 
-        let result = gbnm(&fun, &xmin, &xmax, options);
+        let result = gbnm(fun, &xmin, &xmax, (), options);
 
         assert_abs_diff_eq!(result.fval, 0., epsilon = 1e-5); // We expect the minimum value to be near 0
         assert_abs_diff_eq!(result.x, array![2., 3.], epsilon = 5e-3); // The minimum should be at (2, 3)
@@ -326,7 +331,7 @@ mod tests {
     #[test]
     fn test_multiple_restarts() {
         // Test with multiple restarts to verify different initializations
-        let fun = |x: &Array1<f64>| (x[0] - 1.0).powi(2) + (x[1] - 2.0).powi(2);
+        let fun = |x: &[f64], _u: &mut ()| (x[0] - 1.0).powi(2) + (x[1] - 2.0).powi(2);
 
         let xmin = arr1(&[-5.0, -5.0]);
         let xmax = arr1(&[5.0, 5.0]);
@@ -343,7 +348,7 @@ mod tests {
             ssigma: 1e-6,
         };
 
-        let result = gbnm(&fun, &xmin, &xmax, options);
+        let result = gbnm(fun, &xmin, &xmax, (), options);
 
         assert_abs_diff_eq!(result.fval, 0., epsilon = 1e-5); // We expect the minimum value to be near 0
         assert_abs_diff_eq!(result.x, array![1., 2.], epsilon = 5e-3); // The minimum should be at (1, 2)
@@ -352,7 +357,7 @@ mod tests {
     #[test]
     fn test_max_evals() {
         // Test hitting max evaluations limit
-        let fun = |x: &Array1<f64>| x.iter().map(|&xi| xi * xi).sum();
+        let fun = |x: &[f64], _u: &mut ()| x.iter().map(|&xi| xi * xi).sum();
 
         let xmin = arr1(&[-5.0, -5.0]);
         let xmax = arr1(&[5.0, 5.0]);
@@ -369,13 +374,13 @@ mod tests {
             ssigma: 1e-6,
         };
 
-        let result = gbnm(&fun, &xmin, &xmax, options);
+        let result = gbnm(fun, &xmin, &xmax, (), options);
 
         assert_eq!(result.reason[0], "hit maxEvals".to_string()); // We should hit the max evaluations limit
     }
 
     /// This function has a known minimum at (2,3)(2,3).
-    fn objective_function(x: &ndarray::Array1<f64>) -> f64 {
+    fn objective_function(x: &[f64], _u: &mut ()) -> f64 {
         (x[0] - 2.0).powi(2) + (x[1] - 3.0).powi(2)
     }
 
@@ -398,7 +403,7 @@ mod tests {
         };
 
         // Run the optimization
-        let result = gbnm(&objective_function, &xmin, &xmax, options);
+        let result = gbnm(objective_function, &xmin, &xmax, (), options);
 
         // Print the results
         println!("Optimal x: {:?}", result.x);

@@ -226,11 +226,9 @@ impl<'a> Optimizer<'a> {
                     .map(|row| (row[0], row[1]))
                     .collect();
                 let res = gbnm::minimize(
-                    |x: &[f64]| {
-                        let mut u = InfillObjData::default();
-                        (self.fun)(x, None, &mut u)
-                    },
+                    self.fun,
                     &bounds,
+                    &mut self.user_data.clone(),
                     gbnm::Options {
                         max_evals: self.max_eval,
                         ..gbnm::Options::default()

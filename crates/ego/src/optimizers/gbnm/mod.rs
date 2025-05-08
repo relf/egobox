@@ -5,7 +5,9 @@ mod internal;
 pub use internal::{gbnm, GbnmOptions};
 use ndarray::Array1;
 
-/// Options to control the optimizer
+#[cfg(not(feature = "nlopt"))]
+use crate::types::ObjFn;
+use crate::InfillObjData;
 #[derive(Debug, Clone)]
 pub struct Options {
     pub max_restarts: usize,
@@ -46,21 +48,19 @@ pub struct Result {
 pub fn minimize<F>(
     fun: F,
     bounds: &[(f64, f64)],
+    args: &mut InfillObjData<f64>,
     options: Options,
 ) -> std::result::Result<Result, &'static str>
 where
-    F: Fn(&[f64]) -> f64,
+    F: ObjFn<InfillObjData<f64>> + Sync,
 {
     if bounds.is_empty() {
         return Err("Bounds cannot be empty");
     }
-    if bounds.len() != 2 {
-        return Err("Bounds must be a 2D array with shape (n, 2)");
-    }
     let xmin: Array1<f64> = bounds.iter().map(|b| b.0).collect();
     let xmax: Array1<f64> = bounds.iter().map(|b| b.1).collect();
 
-    let wrapped_fun = |x: &Array1<f64>| fun(x.as_slice().unwrap());
+    let wrapped_fun = |x: &[f64], u: &mut InfillObjData<f64>| fun(x, None, u);
 
     let internal_options = GbnmOptions {
         max_restarts: options.max_restarts,
@@ -74,7 +74,8 @@ where
         ssigma: options.ssigma,
     };
 
-    let result = gbnm(&wrapped_fun, &xmin, &xmax, internal_options);
+    let result = gbnm(wrapped_fun, &xmin, &xmax, args.clone(), internal_options);
+    println!("Gbnm result: {:?}", result);
 
     Ok(Result {
         x: result.x.to_vec(),
