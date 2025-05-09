@@ -11,5 +11,5 @@ fn main() {
         .expect("Kriging fitting");
 
     let xtest = Array::linspace(0., 4., 100).insert_axis(Axis(1));
-    let ytest = kriging.predict(&xtest).expect("Kriging prediction");
+    let _ytest = kriging.predict(&xtest).expect("Kriging prediction");
 }
