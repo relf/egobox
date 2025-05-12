@@ -75,7 +75,6 @@ where
     };
 
     let result = gbnm(wrapped_fun, &xmin, &xmax, args.clone(), internal_options);
-    println!("Gbnm result: {:?}", result);
 
     Ok(Result {
         x: result.x.to_vec(),
