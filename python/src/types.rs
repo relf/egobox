@@ -77,6 +77,7 @@ pub(crate) enum QInfillStrategy {
 pub(crate) enum InfillOptimizer {
     Cobyla = 1,
     Slsqp = 2,
+    Gbnm = 3,
 }
 
 #[pyclass]
