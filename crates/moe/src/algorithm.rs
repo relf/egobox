@@ -288,6 +288,7 @@ impl GpMixtureValidParams<f64> {
                     };
                 let mut expert_params = best_expert_params?;
                 expert_params.n_start(self.n_start());
+                expert_params.max_eval(self.max_eval());
                 expert_params.kpls_dim(self.kpls_dim());
                 if nc > 0 && self.theta_tunings().len() == 1 {
                     expert_params.theta_tuning(self.theta_tunings()[0].clone());
