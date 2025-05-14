@@ -7,6 +7,9 @@ use ndarray::Array1;
 
 #[cfg(not(feature = "nlopt"))]
 use crate::types::ObjFn;
+#[cfg(feature = "nlopt")]
+use nlopt::ObjFn;
+
 use crate::InfillObjData;
 #[derive(Debug, Clone)]
 pub struct Options {
