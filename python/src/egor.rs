@@ -509,6 +509,7 @@ impl Egor {
         match self.infill_optimizer {
             InfillOptimizer::Cobyla => egobox_ego::InfillOptimizer::Cobyla,
             InfillOptimizer::Slsqp => egobox_ego::InfillOptimizer::Slsqp,
+            InfillOptimizer::Gbnm => egobox_ego::InfillOptimizer::Gbnm,
         }
     }
 
