@@ -411,6 +411,7 @@ mod tests {
                     .doe(&initial_doe)
                     .target(-15.1)
                     .outdir(outdir)
+                    .seed(42)
             })
             .min_within(&array![[0.0, 25.0]])
             .run()

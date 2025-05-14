@@ -54,22 +54,33 @@ where
     /// from nx dimension and n_coop configuration.  
     pub(crate) fn get_random_activity(&mut self, rng: &mut Xoshiro256Plus) -> Array2<usize> {
         let xdim = self.xlimits.nrows();
-        let g_size = xdim / self.config.coego.n_coop.max(1);
-        let g_nb = if xdim % self.config.coego.n_coop == 0 {
-            xdim / g_size
+        let g_nb = self.config.coego.n_coop.min(xdim);
+        let remainder = xdim % g_nb;
+        if remainder == 0 {
+            let g_size = xdim / g_nb;
+            let mut idx: Vec<usize> = (0..xdim).collect();
+            idx.shuffle(rng);
+            Array2::from_shape_vec((g_nb, g_size), idx.to_vec()).unwrap()
         } else {
-            xdim / g_size + 1
+            let g_size = xdim / g_nb + 1;
+            // When n_coop is not a diviser of xdim, indice is set to xdim
+            // (ie out of range) as to be filtered when handling last activity row
+            let mut idx: Vec<usize> = (0..xdim).collect();
+            idx.shuffle(rng);
+            let cut = g_nb * (g_size - 1);
+            let fill = Array::from_shape_vec((g_nb, g_size - 1), idx[..cut].to_vec()).unwrap();
+            let last_vals = Array1::from_vec(idx[cut..].to_vec());
+
+            // Start with matrix of g_nb x g_size of <xdim> values
+            let mut indices = Array::from_elem((g_nb, g_size), xdim);
+            // Patch g_nb x (g_size - 1) indices
+            indices.slice_mut(s![.., ..(g_size - 1)]).assign(&fill);
+            // Patch last values in the last column
+            indices
+                .slice_mut(s![..remainder, g_size - 1])
+                .assign(&last_vals);
+            indices
         }
-        .min(xdim);
-
-        // When n_coop is not a diviser of xdim, indice is set to xdim
-        // (ie out of range) as to be filtered when handling last activity row
-        let mut idx: Vec<usize> = (0..xdim).collect();
-        idx.shuffle(rng);
-        let mut indices = vec![xdim; g_size * g_nb];
-        indices[..xdim].copy_from_slice(&idx);
-
-        Array2::from_shape_vec((g_nb, g_size), indices.to_vec()).unwrap()
     }
 
     /// Returns activity when optimization is not partial, that is
@@ -208,5 +219,52 @@ where
             res.push(cstr_model.predict(x)?[0] + CSTR_DOUBT * sigma);
         }
         Ok(Array1::from_vec(res))
+    }
+}
+#[cfg(test)]
+mod tests {
+    use egobox_moe::GpMixtureParams;
+    use ndarray_rand::rand::SeedableRng;
+
+    use super::*;
+    use crate::EgorConfig;
+    use crate::EgorSolver;
+
+    #[test]
+    fn test_coego_activity_balanced() {
+        let dim = 125;
+        let ng = 5;
+        let xtypes = vec![XType::Cont(0., 1.); dim];
+        let config = EgorConfig::default()
+            .coego(crate::CoegoStatus::Enabled(ng))
+            .xtypes(&xtypes);
+        let mut solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config);
+        let mut rng = Xoshiro256Plus::from_entropy();
+        let activity = solver.get_random_activity(&mut rng);
+        assert_eq!(activity.nrows(), ng);
+        let expected_ncols = 25;
+        assert_eq!(activity.ncols(), expected_ncols);
+        assert!(activity.iter().all(|&v| v < dim))
+    }
+
+    #[test]
+    fn test_coego_activity() {
+        let dim = 123;
+        let ng = 5;
+        let xtypes = vec![XType::Cont(0., 1.); dim];
+        let config = EgorConfig::default()
+            .coego(crate::CoegoStatus::Enabled(ng))
+            .xtypes(&xtypes);
+        let mut solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config);
+        let mut rng = Xoshiro256Plus::from_entropy();
+        let activity = solver.get_random_activity(&mut rng);
+        assert_eq!(activity.nrows(), ng);
+        let expected_ncols = 25;
+        assert_eq!(activity.ncols(), expected_ncols);
+        assert_eq!(activity[[3, expected_ncols - 1]], dim);
+        assert_eq!(activity[[4, expected_ncols - 1]], dim);
+        assert!(activity.iter().enumerate().all(|(i, &v)| v < dim
+            || i == ng * expected_ncols - 1 // 124
+            || i == (ng - 1) * expected_ncols - 1)) // 99
     }
 }
