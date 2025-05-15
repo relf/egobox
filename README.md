@@ -231,7 +231,7 @@ Zhan, Dawei, et al.
 [A cooperative approach to efficient global optimization](https://link.springer.com/article/10.1007/s10898-023-01316-6). Journal of Global Optimization 88.2 (2024): 327-357
 
 Lisa Pretsch et al.
-Bayesian optimization of cooperative components for multi-stage aero-structural compressor blade design. 2024
+[Bayesian optimization of cooperative components for multi-stage aero-structural compressor blade design](https://www.researchgate.net/publication/391492598_Bayesian_optimization_of_cooperative_components_for_multi-stage_aero-structural_compressor_blade_design). Struct Multidisc Optim 68, 84 (2025)
 
 smtorg. (2018). [Surrogate modeling toolbox](https://github.com/SMTOrg/smt). GitHub.
 

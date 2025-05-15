@@ -263,7 +263,9 @@
 //! Journal of Global Optimization 88.2 (2024): 327-357
 //!
 //! \[<a id="Pretsch024">Pretsch024</a>\]: Lisa Pretsch et al.
-//! Bayesian optimization of cooperative components for multi-stage aero-structural compressor blade design.
+//! [Bayesian optimization of cooperative components for multi-stage aero-structural compressor blade design]
+//! (https://www.researchgate.net/publication/391492598_Bayesian_optimization_of_cooperative_components_for_multi-stage_aero-structural_compressor_blade_design).
+//! Struct Multidisc Optim 68, 84 (2025)
 //!
 //! smtorg. (2018). Surrogate modeling toolbox. In [GitHub repository](https://github.com/SMTOrg/smt)
 //!
