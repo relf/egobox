@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 /// of levels for all components within the design space.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
-
 pub struct FullFactorial<F: Float> {
     /// Design space definition as
     /// The ith row is the [lower_bound, upper_bound] of xi, the ith component of a sample x
