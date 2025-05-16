@@ -7,6 +7,9 @@ use std::path::PathBuf;
 
 use crate::EgorState;
 
+/// Checkpoint file using argmin checkpointing
+pub const CHECKPOINT_FILE: &str = "egor_checkpoint.arg";
+
 /// An enum to specify hot start mode
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, Serialize, Deserialize)]
 pub enum HotStartMode {
@@ -71,7 +74,7 @@ impl HotStartCheckpoint {
             mode: ext_iters,
             frequency,
             directory: PathBuf::from(directory.as_ref()),
-            filename: PathBuf::from(format!("{}.arg", name.as_ref())),
+            filename: PathBuf::from(name.as_ref()),
         }
     }
 }

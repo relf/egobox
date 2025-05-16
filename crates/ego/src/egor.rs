@@ -106,7 +106,7 @@ use crate::EgorConfig;
 use crate::EgorState;
 use crate::HotStartMode;
 use crate::{to_xtypes, EgorSolver};
-use crate::{CheckpointingFrequency, HotStartCheckpoint};
+use crate::{CheckpointingFrequency, HotStartCheckpoint, CHECKPOINT_FILE};
 
 use argmin::core::observers::ObserverMode;
 
@@ -116,6 +116,9 @@ use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
 
 use argmin::core::{observers::Observe, Error, Executor, State, KV};
 use serde::de::DeserializeOwned;
+
+use ndarray_npy::write_npy;
+use std::path::PathBuf;
 
 /// Json filename for configuration
 pub const CONFIG_FILE: &str = "egor_config.json";
@@ -226,7 +229,7 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
             };
             let checkpoint = HotStartCheckpoint::new(
                 chkpt_dir,
-                "egor_checkpoint",
+                CHECKPOINT_FILE,
                 CheckpointingFrequency::Always,
                 self.solver.config.hot_start.clone(),
             );
@@ -285,7 +288,7 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
 // Note: the observer is activated only when outdir is specified
 #[derive(Default)]
 struct OptimizationObserver {
-    pub dir: String,
+    pub dir: PathBuf,
     pub best_params: Option<Array2<f64>>,
     pub best_costs: Option<Array2<f64>>,
 }
@@ -293,7 +296,7 @@ struct OptimizationObserver {
 impl OptimizationObserver {
     fn new(dir: String) -> Self {
         Self {
-            dir,
+            dir: PathBuf::from(dir),
             best_params: None,
             best_costs: None,
         }
@@ -301,47 +304,44 @@ impl OptimizationObserver {
 }
 
 impl Observe<EgorState<f64>> for OptimizationObserver {
-    fn observe_init(
-        &mut self,
-        _name: &str,
-        state: &EgorState<f64>,
-        _kv: &KV,
-    ) -> std::result::Result<(), Error> {
-        let bp = state.get_best_param().unwrap().to_owned();
-        self.best_params = Some(bp.insert_axis(Axis(0)));
-        let bc = state.get_full_best_cost().unwrap().to_owned();
-        self.best_costs = Some(bc.insert_axis(Axis(0)));
-        Ok(())
-    }
-
     fn observe_iter(&mut self, state: &EgorState<f64>, _kv: &KV) -> std::result::Result<(), Error> {
-        let bp = state
-            .get_best_param()
-            .unwrap()
-            .to_owned()
-            .insert_axis(Axis(0));
-        self.best_params = Some(concatenate![Axis(0), self.best_params.take().unwrap(), bp]);
-        let bc = state
-            .get_full_best_cost()
-            .unwrap()
-            .to_owned()
-            .insert_axis(Axis(0));
-        self.best_costs = Some(concatenate![Axis(0), self.best_costs.take().unwrap(), bc]);
+        if let Some((xdata, ydata, cdata)) = &state.data {
+            let doe = concatenate![Axis(1), xdata.view(), ydata.view(), cdata.view()];
+            if !self.dir.exists() {
+                std::fs::create_dir_all(&self.dir)?
+            }
 
-        Ok(())
-    }
+            let filepath = self.dir.join(crate::DOE_FILE);
+            info!(">>> Save doe shape {:?} in {:?}", doe.shape(), filepath);
+            write_npy(filepath, &doe).expect("Write current doe");
 
-    fn observe_final(&mut self, _state: &EgorState<f64>) -> std::result::Result<(), Error> {
-        let hist = concatenate![
-            Axis(1),
-            self.best_costs.take().unwrap(),
-            self.best_params.take().unwrap(),
-        ];
-        std::fs::create_dir_all(&self.dir)?;
-        let filepath = std::path::Path::new(&self.dir).join(HISTORY_FILE);
-        info!("Save history {:?} in {:?}", hist.shape(), filepath);
-        info!("History: {}", hist);
-        ndarray_npy::write_npy(filepath, &hist).expect("Write history");
+            if self.best_params.is_none() {
+                // Have to initialize best params and full best costs
+                let mut state = state.clone();
+                state.update();
+                let bp = state.get_best_param().unwrap().to_owned();
+                self.best_params = Some(bp.insert_axis(Axis(0)));
+                let bc = state.get_full_best_cost().unwrap().to_owned();
+                self.best_costs = Some(bc.insert_axis(Axis(0)));
+            } else {
+                let bp = state.get_best_param().unwrap().to_owned();
+                let bp = bp.insert_axis(Axis(0));
+                self.best_params =
+                    Some(concatenate![Axis(0), self.best_params.take().unwrap(), bp]);
+                let bc = state.get_full_best_cost().unwrap().to_owned();
+                let bc = bc.insert_axis(Axis(0));
+                self.best_costs = Some(concatenate![Axis(0), self.best_costs.take().unwrap(), bc]);
+            };
+            let hist = concatenate![
+                Axis(1),
+                self.best_costs.clone().unwrap(),
+                self.best_params.clone().unwrap(),
+            ];
+
+            let filepath = std::path::Path::new(&self.dir).join(HISTORY_FILE);
+            info!(">>> Save history {:?} in {:?}", hist.shape(), filepath);
+            ndarray_npy::write_npy(filepath, &hist).expect("Write current history");
+        }
         Ok(())
     }
 }
@@ -485,7 +485,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_hot_start_egor() {
-        let _ = std::fs::remove_file(".checkpoints/egor.arg");
+        let outdir = "checkpoint_test_dir";
+        let checkpoint_file = format!("{}/{}", outdir, CHECKPOINT_FILE);
+        let _ = std::fs::remove_file(&checkpoint_file);
         let n_iter = 1;
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
@@ -493,7 +495,7 @@ mod tests {
                     .max_iters(n_iter)
                     .seed(42)
                     .hot_start(HotStartMode::Enabled)
-                    .outdir("checkpoint_test_dir")
+                    .outdir(outdir)
             })
             .min_within(&array![[0.0, 25.0]])
             .run()
@@ -522,7 +524,7 @@ mod tests {
                 config
                     .seed(42)
                     .hot_start(HotStartMode::ExtendedIters(ext_iters))
-                    .outdir("checkpoint_test_dir")
+                    .outdir(outdir)
             })
             .min_within(&array![[0.0, 25.0]])
             .run()
@@ -530,7 +532,7 @@ mod tests {
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
         assert_eq!(n_iter as u64 + ext_iters, res.state.get_iter());
-        //let _ = std::fs::remove_file("checkpoint_test_dir/egor_checkpoint.arg");
+        let _ = std::fs::remove_file(&checkpoint_file);
     }
 
     #[test]
