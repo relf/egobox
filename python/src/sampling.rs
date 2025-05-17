@@ -76,7 +76,7 @@ pub fn sampling(
         }
     }
     .sample(n_samples);
-    doe.into_pyarray_bound(py)
+    doe.into_pyarray(py)
 }
 
 /// Samples generation using optimized Latin Hypercube Sampling
