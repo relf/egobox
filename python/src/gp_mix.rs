@@ -345,10 +345,7 @@ impl Gpx {
         py: Python<'py>,
         x: PyReadonlyArray2<f64>,
     ) -> Bound<'py, PyArray2<f64>> {
-        self.0
-            .predict_var(&x.as_array())
-            .unwrap()
-            .into_pyarray(py)
+        self.0.predict_var(&x.as_array()).unwrap().into_pyarray(py)
     }
 
     /// Predict surrogate output derivatives at nsamples points.
