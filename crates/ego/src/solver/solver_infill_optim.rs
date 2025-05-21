@@ -16,8 +16,13 @@ use ndarray::{Array, Array1, Array2, Axis};
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 
+use super::coego;
+
+/// A trait for multi start initial points computation
 pub(crate) trait MultiStarter {
-    fn multistart(&self) -> Array2<f64>;
+    /// Return initial points for optimization multistart
+    /// taking into account active components given as a set of indices
+    fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64>;
 }
 
 impl<SB, C> EgorSolver<SB, C>
@@ -39,7 +44,7 @@ where
         infill_data: &InfillObjData<f64>,
         current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
         actives: &Array2<usize>,
-        multistarter: MS,
+        mut multistarter: MS,
     ) -> (f64, Array1<f64>)
     where
         MS: MultiStarter,
@@ -67,7 +72,7 @@ where
                     ..
                 } = params;
                 let mut xcoop = xcoop.clone();
-                Self::setx(&mut xcoop, &active, x);
+                coego::set_active_x(&mut xcoop, &active, x);
 
                 // Defensive programming NlOpt::Cobyla may pass NaNs
                 if xcoop.iter().any(|x| x.is_nan()) {
@@ -128,7 +133,7 @@ where
                               -> f64 {
                             let InfillObjData { xbest: xcoop, .. } = params;
                             let mut xcoop = xcoop.clone();
-                            Self::setx(&mut xcoop, &active, x);
+                            coego::set_active_x(&mut xcoop, &active, x);
 
                             let scale_cstr =
                                 params.scale_cstr.as_ref().expect("constraint scaling")[i];
@@ -171,8 +176,8 @@ where
                 .collect::<Vec<_>>();
             cstr_refs.extend(cstr_funcs.clone());
 
-            // Limits
-            let xlimits = Self::getx(&self.xlimits, Axis(0), &active);
+            // Limits of activated components
+            let xlimits_active = coego::get_active_x(Axis(0), &self.xlimits, &active);
 
             let algorithm = match self.config.infill_optimizer {
                 InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
@@ -184,25 +189,29 @@ where
                 info!("Optimize infill criterion...");
             }
             while !success && n_optim <= n_max_optim {
-                let x_start = multistarter.multistart();
-                let x_start_coop = Self::getx(&x_start, Axis(1), &active);
+                let x_start = multistarter.multistart(self.config.n_start, &active);
 
                 let res = (0..self.config.n_start)
                     .into_par_iter()
                     .map(|i| {
                         debug!("Begin optim {}", i);
-                        let optim_res =
-                            Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &xlimits)
-                                .xinit(&x_start_coop.row(i))
-                                .max_eval((10 * x_start_coop.len()).min(INFILL_MAX_EVAL_DEFAULT))
-                                .ftol_rel(1e-4)
-                                .ftol_abs(1e-4)
-                                .minimize();
+                        let optim_res = Optimizer::new(
+                            algorithm,
+                            &obj,
+                            &cstr_refs,
+                            &infill_data,
+                            &xlimits_active,
+                        )
+                        .xinit(&x_start.row(i))
+                        .max_eval((10 * x_start.len()).min(INFILL_MAX_EVAL_DEFAULT))
+                        .ftol_rel(1e-4)
+                        .ftol_abs(1e-4)
+                        .minimize();
                         debug!("End optim {}", i);
                         optim_res
                     })
                     .reduce(
-                        || (f64::INFINITY, Array::ones((xlimits.nrows(),))),
+                        || (f64::INFINITY, Array::ones((xlimits_active.nrows(),))),
                         |a, b| if b.0 < a.0 { b } else { a },
                     );
 
@@ -210,7 +219,7 @@ where
                     success = false;
                 } else {
                     let mut xopt_coop = current_best_point.1.to_vec();
-                    Self::setx(&mut xopt_coop, &active, &res.1.to_vec());
+                    coego::set_active_x(&mut xopt_coop, &active, &res.1.to_vec());
                     infill_data.xbest = xopt_coop.clone();
                     let xopt_coop = Array1::from(xopt_coop);
 
