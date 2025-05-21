@@ -1,6 +1,5 @@
 /// Implementation of `argmin::IterState` for Egor optimizer
 use crate::{utils::find_best_result_index, InfillObjData};
-use egobox_doe::Lhs;
 use egobox_moe::Clustering;
 
 use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationStatus};
@@ -83,8 +82,6 @@ pub struct EgorState<F: Float> {
     pub prev_best_index: Option<usize>,
     /// index of best result in data
     pub best_index: Option<usize>,
-    /// Sampling method used to generate space filling samples
-    pub sampling: Option<Lhs<F, Xoshiro256Plus>>,
     /// Infill data used to optimized infill criterion
     pub infill_data: InfillObjData<F>,
 
@@ -236,19 +233,6 @@ where
         self.data.take()
     }
 
-    /// Set the sampling method used to draw random points
-    /// The sampling method is saved as part of the state to allow reproducible
-    /// optimization.   
-    pub fn sampling(mut self, sampling: Lhs<F, Xoshiro256Plus>) -> Self {
-        self.sampling = Some(sampling);
-        self
-    }
-
-    /// Moves the current sampling out and replaces it internally with `None`.
-    pub fn take_sampling(&mut self) -> Option<Lhs<F, Xoshiro256Plus>> {
-        self.sampling.take()
-    }
-
     /// Set the activity matrix  
     pub fn activity(mut self, activity: Array2<usize>) -> Self {
         self.activity = Some(activity);
@@ -398,7 +382,6 @@ where
             data: None,
             prev_best_index: None,
             best_index: None,
-            sampling: None,
             theta_inits: None,
             infill_data: Default::default(),
 
