@@ -21,33 +21,33 @@ use nlopt::ObjFn;
 pub const COEGO_IMPROVEMENT_CHECK: bool = false;
 const CSTR_DOUBT: f64 = 3.;
 
+/// Set active components to xcoop using xopt values
+/// active may be longer than values
+pub(crate) fn set_active_x(xcoop: &mut [f64], active: &[usize], values: &[f64]) {
+    std::iter::zip(&active[..values.len()], values).for_each(|(&i, &xi)| xcoop[i] = xi)
+}
+
+/// Get active components from given ndarray following given axis
+/// active may contain out of range indices meaning it should be ignore
+pub(crate) fn get_active_x<A, D>(axis: Axis, xcoop: &Array<A, D>, active: &[usize]) -> Array<A, D>
+where
+    A: Clone,
+    D: RemoveAxis,
+{
+    let size = xcoop.len_of(axis);
+    let selection = active
+        .iter()
+        .filter(|&&i| i < size)
+        .cloned()
+        .collect::<Vec<usize>>();
+    xcoop.select(axis, &selection)
+}
+
 impl<SB, C> EgorSolver<SB, C>
 where
     SB: SurrogateBuilder + DeserializeOwned,
     C: CstrFn,
 {
-    /// Set active components to xcoop using xopt values
-    /// active may be longer than values
-    pub(crate) fn setx(xcoop: &mut [f64], active: &[usize], values: &[f64]) {
-        std::iter::zip(&active[..values.len()], values).for_each(|(&i, &xi)| xcoop[i] = xi)
-    }
-
-    /// Get active components from given ndarray following given axis
-    /// active may contain out of range indices meaning it should be ignore
-    pub(crate) fn getx<A, D>(xcoop: &Array<A, D>, axis: Axis, active: &[usize]) -> Array<A, D>
-    where
-        A: Clone,
-        D: RemoveAxis,
-    {
-        let size = xcoop.len_of(axis);
-        let selection = active
-            .iter()
-            .filter(|&&i| i < size)
-            .cloned()
-            .collect::<Vec<usize>>();
-        xcoop.select(axis, &selection)
-    }
-
     /// Compute array of components indices each row being used as
     /// active component during partial optimizations
     /// Array is (group nb, group size) where nb and size are computed
