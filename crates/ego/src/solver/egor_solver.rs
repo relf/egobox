@@ -176,9 +176,6 @@ where
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        let sampling = Lhs::new(&self.xlimits)
-            .with_rng(rng.clone())
-            .kind(LhsKind::Maximin);
 
         let hstart_doe: Option<Array2<f64>> =
             if self.config.warm_start && self.config.outdir.is_some() {
@@ -220,6 +217,9 @@ where
                 self.config.n_doe
             };
             info!("Compute initial LHS with {} points", n_doe);
+            let sampling = Lhs::new(&self.xlimits)
+                .with_rng(rng.clone())
+                .kind(LhsKind::Maximin);
             let x = sampling.sample(n_doe);
             (self.eval_obj(problem, &x), x)
         };
@@ -250,7 +250,7 @@ where
             .data((x_data, y_data.clone(), c_data.clone()))
             .clusterings(clusterings)
             .theta_inits(theta_inits)
-            .sampling(sampling);
+            .rng(rng);
 
         initial_state.doe_size = doe.nrows();
         initial_state.max_iters = self.config.max_iters as u64;
@@ -415,7 +415,7 @@ where
             info!(">>> TREGO local step");
             // Local step
             let models = self.refresh_surrogates(&new_state);
-            let infill_data = self.refresh_infill_data(problem, &new_state, &models);
+            let infill_data = self.refresh_infill_data(problem, &mut new_state, &models);
             let mut new_state = self.trego_step(problem, new_state, models, &infill_data);
             new_state.prev_step_ego = false;
             Ok((new_state, None))

@@ -19,7 +19,7 @@ use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters};
 use log::{debug, info};
 use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 
-use ndarray_rand::rand::SeedableRng;
+use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
@@ -58,12 +58,11 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         x_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Array2<f64> {
-        let rng = if let Some(seed) = self.config.seed {
+        let mut rng = if let Some(seed) = self.config.seed {
             Xoshiro256Plus::seed_from_u64(seed)
         } else {
             Xoshiro256Plus::from_entropy()
         };
-        let sampling = Lhs::new(&self.xlimits).with_rng(rng).kind(LhsKind::Maximin);
         let mut clusterings = vec![None; 1 + self.config.n_cstr];
         let mut theta_tunings = vec![None; 1 + self.config.n_cstr];
         let cstr_tol = self
@@ -90,9 +89,9 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             y_data,
             &c_data,
             &cstr_tol,
-            &sampling,
             find_best_result_index(y_data, &c_data, &cstr_tol),
             &fcstrs,
+            &mut rng,
         );
         x_dat
     }
@@ -281,19 +280,25 @@ where
     >(
         &self,
         problem: &mut Problem<O>,
-        state: &EgorState<f64>,
+        state: &mut EgorState<f64>,
         models: &[Box<dyn egobox_moe::MixtureGpSurrogate>],
     ) -> InfillObjData<f64> {
         let y_data = state.data.as_ref().unwrap().1.clone();
         let x_data = state.data.as_ref().unwrap().0.clone();
         let (obj_model, cstr_models) = models.split_first().unwrap();
-        let sampling = state.sampling.clone().unwrap();
 
         let fmin = y_data[[state.best_index.unwrap(), 0]];
         let xbest = x_data.row(state.best_index.unwrap()).to_vec();
 
         let pb = problem.take_problem().unwrap();
         let fcstrs = pb.fn_constraints();
+
+        let mut rng = state.take_rng().unwrap();
+        let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+        *state = state.clone().rng(rng.clone());
+        let sampling = Lhs::new(&self.xlimits)
+            .with_rng(sub_rng)
+            .kind(LhsKind::Maximin);
         let (scale_infill_obj, scale_cstr, _scale_fcstr, scale_wb2) =
             self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, fcstrs, fmin);
         problem.problem = Some(pb);
@@ -373,10 +378,9 @@ where
                 "EgorSolver: No theta inits!"
             ))?;
         let activity = new_state.take_activity();
-        let sampling = new_state.take_sampling().ok_or_else(argmin_error_closure!(
-            PotentialBug,
-            "EgorSolver: No sampling!"
-        ))?;
+        let mut rng = new_state
+            .take_rng()
+            .ok_or_else(argmin_error_closure!(PotentialBug, "EgorSolver: No rng!"))?;
         let (mut x_data, mut y_data, mut c_data) = new_state
             .take_data()
             .ok_or_else(argmin_error_closure!(PotentialBug, "EgorSolver: No data!"))?;
@@ -397,9 +401,9 @@ where
                 &y_data,
                 &c_data,
                 &state.cstr_tol,
-                &sampling,
                 state.best_index.unwrap(),
                 fcstrs,
+                &mut rng,
             );
             problem.problem = Some(pb);
 
@@ -418,7 +422,7 @@ where
                 .theta_inits(theta_inits.clone())
                 .data((x_data.clone(), y_data.clone(), c_data.clone()))
                 .infill_value(infill_value)
-                .sampling(sampling.clone())
+                .rng(rng.clone())
                 .param(x_dat.row(0).to_owned())
                 .cost(y_dat.row(0).to_owned());
             info!(
@@ -516,9 +520,9 @@ where
         y_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         c_data: &ArrayBase<impl Data<Elem = f64>, Ix2>,
         cstr_tol: &Array1<f64>,
-        sampling: &Lhs<f64, Xoshiro256Plus>,
         best_index: usize,
         cstr_funcs: &[impl CstrFn],
+        rng: &mut Xoshiro256Plus,
     ) -> (
         Array2<f64>,
         Array2<f64>,
@@ -581,8 +585,13 @@ where
             let ybest = y_data.row(best_index).to_owned();
             let xbest = x_data.row(best_index).to_owned();
             let cbest = c_data.row(best_index).to_owned();
+
+            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+            let sampling = Lhs::new(&self.xlimits)
+                .with_rng(sub_rng)
+                .kind(LhsKind::Maximin);
             let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) =
-                self.compute_scaling(sampling, obj_model.as_ref(), cstr_models, cstr_funcs, fmin);
+                self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, cstr_funcs, fmin);
 
             let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
 
@@ -620,7 +629,8 @@ where
                 })
                 .collect::<Vec<_>>();
 
-            let multistarter = GlobalMultiStarter::new(self.config.n_start, sampling);
+            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+            let multistarter = GlobalMultiStarter::new(&self.xlimits, sub_rng);
 
             let (infill_obj, xk) = self.optimize_infill_criterion(
                 obj_model.as_ref(),

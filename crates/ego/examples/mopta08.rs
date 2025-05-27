@@ -1,6 +1,6 @@
 use clap::Parser;
 use egobox_ego::{
-    CoegoStatus, EgorBuilder, GroupFunc, InfillOptimizer, InfillStrategy, QEiStrategy,
+    CoegoStatus, EgorBuilder, GroupFunc, HotStartMode, InfillOptimizer, InfillStrategy, QEiStrategy,
 };
 use egobox_moe::{CorrelationSpec, NbClusters, RegressionSpec};
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
@@ -287,6 +287,7 @@ fn main() -> anyhow::Result<()> {
                 .outdir(outdir)
                 .warm_start(true)
                 .coego(CoegoStatus::Enabled(5))
+                .hot_start(HotStartMode::Enabled)
         })
         .min_within(&xlimits)
         .run()

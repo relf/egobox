@@ -21,28 +21,43 @@ use ndarray::Zip;
 use ndarray::{Array1, Array2, Axis};
 
 use ndarray_rand::rand::Rng;
+use ndarray_rand::rand::SeedableRng;
+use rand_xoshiro::Xoshiro256Plus;
 use serde::de::DeserializeOwned;
 
+use super::coego;
 use super::solver_infill_optim::MultiStarter;
 
 /// LocalMultiStarter is a multistart strategy that samples points in the local area
 /// defined by the trust region and the xlimits.
-struct LocalMultiStarter<'a, R: Rng + Clone> {
-    n_start: usize,
+struct LocalMultiStarter<R: Rng + Clone> {
     xlimits: Array2<f64>,
     origin: Array1<f64>,
     local_bounds: (f64, f64),
-    rng: &'a R,
+    rng: R,
 }
 
-impl<R: Rng + Clone> MultiStarter for LocalMultiStarter<'_, R> {
-    fn multistart(&self) -> Array2<f64> {
+impl<R: Rng + Clone> LocalMultiStarter<R> {
+    fn new(xlimits: Array2<f64>, origin: Array1<f64>, local_bounds: (f64, f64), rng: R) -> Self {
+        Self {
+            xlimits,
+            origin,
+            local_bounds,
+            rng,
+        }
+    }
+}
+
+impl<R: Rng + Clone> MultiStarter for LocalMultiStarter<R> {
+    fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64> {
         // Draw n_start initial points (multistart optim) in the local_area
         // local_area = intersection(trust_region, xlimits)
-        let mut local_area = Array2::zeros((self.xlimits.nrows(), self.xlimits.ncols()));
+        let xlimits = coego::get_active_x(Axis(0), &self.xlimits, active);
+        let origin = coego::get_active_x(Axis(0), &self.origin, active);
+        let mut local_area = Array2::zeros(xlimits.dim());
         Zip::from(local_area.rows_mut())
-            .and(&self.origin)
-            .and(self.xlimits.rows())
+            .and(&origin)
+            .and(xlimits.rows())
             .for_each(|mut row, xb, xlims| {
                 let (lo, up) = (
                     xlims[0].max(xb - self.local_bounds.0),
@@ -53,8 +68,8 @@ impl<R: Rng + Clone> MultiStarter for LocalMultiStarter<'_, R> {
 
         let lhs = Lhs::new(&local_area)
             .kind(egobox_doe::LhsKind::Maximin)
-            .with_rng(self.rng.clone());
-        lhs.sample(self.n_start)
+            .with_rng(&mut self.rng);
+        lhs.sample(n_start)
     }
 }
 
@@ -93,14 +108,14 @@ where
         let activity = new_state.activity.clone();
         let actives = activity.unwrap_or(self.full_activity()).to_owned();
 
-        let rng = new_state.take_rng().unwrap();
-        let multistarter = LocalMultiStarter {
-            n_start: self.config.n_start,
-            xlimits: self.xlimits.clone(),
-            origin: xbest.to_owned(),
-            local_bounds: (self.config.trego.d.0, self.config.trego.d.1),
-            rng: &rng,
-        };
+        let mut rng = new_state.take_rng().unwrap();
+        let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+        let multistarter = LocalMultiStarter::new(
+            self.xlimits.clone(),
+            xbest.to_owned(),
+            (self.config.trego.d.0, self.config.trego.d.1),
+            sub_rng,
+        );
 
         let (infill_obj, x_opt) = self.optimize_infill_criterion(
             obj_model.as_ref(),
