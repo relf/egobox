@@ -113,8 +113,8 @@ class TestEgor(unittest.TestCase):
 
     def test_sphere(self):
         dim=5
-        egor = egx.Egor(egx.to_specs([[-5.12, 5.12]] * dim), 
-                        infill_strategy=egx.InfillStrategy.LOG_EI, 
+        egor = egx.Egor(egx.to_specs([[-5.12, 5.12]] * dim),
+                        infill_strategy=egx.InfillStrategy.LOG_EI,
                         seed=42)
         res = egor.minimize(sphere, max_iters=100)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
