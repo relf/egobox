@@ -7,6 +7,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
+
 def sphere(x: np.ndarray) -> np.ndarray:
     """
     Sphere function
@@ -16,6 +17,7 @@ def sphere(x: np.ndarray) -> np.ndarray:
     y = np.sum(x**2, axis=1).reshape(-1, 1)
     print(f"obj={y} at {x}")
     return y
+
 
 def xsinx(x: np.ndarray) -> np.ndarray:
     x = np.atleast_2d(x)
@@ -110,12 +112,13 @@ def six_humps(x):
 
 
 class TestEgor(unittest.TestCase):
-
     def test_sphere(self):
-        dim=5
-        egor = egx.Egor(egx.to_specs([[-5.12, 5.12]] * dim),
-                        infill_strategy=egx.InfillStrategy.LOG_EI,
-                        seed=42)
+        dim = 5
+        egor = egx.Egor(
+            egx.to_specs([[-5.12, 5.12]] * dim),
+            infill_strategy=egx.InfillStrategy.LOG_EI,
+            seed=42,
+        )
         res = egor.minimize(sphere, max_iters=100)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(0.0, res.y_opt[0], delta=1e-1)
