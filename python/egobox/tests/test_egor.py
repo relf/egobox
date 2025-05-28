@@ -8,6 +8,17 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
+def sphere(x: np.ndarray) -> np.ndarray:
+    """
+    Sphere function
+    Global optimum at x_opt = 0 with f_opt = 0
+    """
+    x = np.atleast_2d(x)
+    y = np.sum(x**2, axis=1).reshape(-1, 1)
+    print(f"obj={y} at {x}")
+    return y
+
+
 def xsinx(x: np.ndarray) -> np.ndarray:
     x = np.atleast_2d(x)
     y = (x - 3.5) * np.sin((x - 3.5) / (np.pi))
@@ -100,7 +111,19 @@ def six_humps(x):
     return np.atleast_2d(sum1).T
 
 
-class TestOptimizer(unittest.TestCase):
+class TestEgor(unittest.TestCase):
+    def test_sphere(self):
+        dim = 5
+        egor = egx.Egor(
+            egx.to_specs([[-5.12, 5.12]] * dim),
+            infill_strategy=egx.InfillStrategy.LOG_EI,
+            seed=42,
+        )
+        res = egor.minimize(sphere, max_iters=100)
+        print(f"Optimization f={res.y_opt} at {res.x_opt}")
+        self.assertAlmostEqual(0.0, res.y_opt[0], delta=1e-1)
+        np.testing.assert_allclose(0.0, res.x_opt, atol=2e-1)
+
     def test_xsinx(self):
         egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), seed=42)
         res = egor.minimize(xsinx, max_iters=20)

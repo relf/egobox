@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Recombination {
     /// prediction is taken from the expert with highest responsability
@@ -48,22 +48,23 @@ impl CorrelationSpec {
     pub(crate) const MATERN52: u8 = egobox_moe::CorrelationSpec::MATERN52.bits();
 }
 
-#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum InfillStrategy {
     Ei = 1,
     Wb2 = 2,
     Wb2s = 3,
+    LogEi = 4,
 }
 
-#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ConstraintStrategy {
     Mc = 1,
     Utb = 2,
 }
 
-#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum QInfillStrategy {
     Kb = 1,
@@ -72,7 +73,7 @@ pub(crate) enum QInfillStrategy {
     Clmin = 4,
 }
 
-#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum InfillOptimizer {
     Cobyla = 1,
@@ -101,7 +102,7 @@ impl ExpectedOptimum {
     }
 }
 
-#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum XType {
     Float = 1,
@@ -134,7 +135,7 @@ impl XSpec {
     }
 }
 
-#[pyclass(eq, eq_int, rename_all = "UPPERCASE")]
+#[pyclass(eq, eq_int, rename_all = "SCREAMING_SNAKE_CASE")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum SparseMethod {
     Fitc = 1,

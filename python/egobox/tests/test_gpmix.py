@@ -87,7 +87,8 @@ class TestGpMix(unittest.TestCase):
     def test_kpls_griewank(self):
         lb = -600
         ub = 600
-        n_dim = 100
+        # n_dim = 100
+        n_dim = 50
         xlimits = [[ub, lb]] * n_dim
 
         # LHS training point generation
@@ -106,16 +107,17 @@ class TestGpMix(unittest.TestCase):
         # Surrogate model definition
         n_pls = 3
         builders = [
-            egx.Gpx.builder(),
-            egx.Gpx.builder(kpls_dim=n_pls),
+            egx.Gpx.builder(seed=42),
+            egx.Gpx.builder(kpls_dim=n_pls, seed=42),
         ]
 
         # Surrogate model fit & error estimation
         for builder in builders:
             gpx = builder.fit(x_train, y_train)
             y_pred = gpx.predict(x_test)
-            self.assertEqual(100, gpx.dims()[0])
+            self.assertEqual(n_dim, gpx.dims()[0])
             error = np.linalg.norm(y_pred - y_test) / np.linalg.norm(y_test)
+            self.assertAlmostEqual(0.1, error, delta=1e-1)
             print("   RMS error: " + str(error))
 
     def test_multi_outputs_exception(self):

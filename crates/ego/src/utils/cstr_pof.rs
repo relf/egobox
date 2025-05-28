@@ -132,6 +132,8 @@ mod tests {
 
         assert_abs_diff_eq!(grad[0], grad_central[0], epsilon = 1e-6);
 
+        // for Debugging purposes, we can save the values to npy files
+
         // let cx = Array1::linspace(0., 25., 100);
         // write_npy("cei_cx.npy", &cx).expect("save x");
 
