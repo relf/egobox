@@ -410,7 +410,7 @@ mod tests {
         let initial_doe = array![[0.], [7.], [25.]];
         let res = EgorBuilder::optimize(xsinx)
             .configure(|cfg| {
-                cfg.infill_strategy(InfillStrategy::EI)
+                cfg.infill_strategy(InfillStrategy::LogEI)
                     .infill_optimizer(InfillOptimizer::Gbnm)
                     .max_iters(30)
                     .doe(&initial_doe)

@@ -236,6 +236,7 @@ impl EgorConfig {
     pub fn infill_strategy(mut self, infill: InfillStrategy) -> Self {
         self.infill_criterion = match infill {
             InfillStrategy::EI => Box::new(EI),
+            InfillStrategy::LogEI => Box::new(LOG_EI),
             InfillStrategy::WB2 => Box::new(WB2),
             InfillStrategy::WB2S => Box::new(WB2S),
         };

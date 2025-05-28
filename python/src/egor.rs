@@ -486,6 +486,7 @@ impl Egor {
             InfillStrategy::Ei => egobox_ego::InfillStrategy::EI,
             InfillStrategy::Wb2 => egobox_ego::InfillStrategy::WB2,
             InfillStrategy::Wb2s => egobox_ego::InfillStrategy::WB2S,
+            InfillStrategy::LogEi => egobox_ego::InfillStrategy::LogEI,
         }
     }
 

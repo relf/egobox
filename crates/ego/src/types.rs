@@ -26,6 +26,8 @@ pub struct OptimResult<F: Float> {
 pub enum InfillStrategy {
     /// Expected Improvement
     EI,
+    /// Log of Expected Improvement
+    LogEI,
     /// Locating the regional extreme
     WB2,
     /// Scaled WB2

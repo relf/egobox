@@ -102,6 +102,56 @@ impl InfillCriterion for ExpectedImprovement {
 /// Expected Improvement infill criterion
 pub const EI: ExpectedImprovement = ExpectedImprovement {};
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LogExpectedImprovement;
+
+#[typetag::serde]
+impl InfillCriterion for LogExpectedImprovement {
+    fn name(&self) -> &'static str {
+        "LogEI"
+    }
+
+    /// Compute LogEI infill criterion at given `x` point using the surrogate model `obj_model`
+    /// and the current minimum of the objective function.
+    fn value(
+        &self,
+        x: &[f64],
+        obj_model: &dyn MixtureGpSurrogate,
+        fmin: f64,
+        _scale: Option<f64>,
+    ) -> f64 {
+        let ei = EI.value(x, obj_model, fmin, _scale);
+        (ei + 100. * f64::EPSILON).ln()
+    }
+
+    /// Computes derivatives of EI infill criterion wrt to x components at given `x` point
+    /// using the surrogate model `obj_model` and the current minimum of the objective function.
+    fn grad(
+        &self,
+        x: &[f64],
+        obj_model: &dyn MixtureGpSurrogate,
+        fmin: f64,
+        _scale: Option<f64>,
+    ) -> Array1<f64> {
+        let ei = EI.value(x, obj_model, fmin, _scale);
+
+        let grad_ei = EI.grad(x, obj_model, fmin, _scale);
+        grad_ei / (ei + 100. * f64::EPSILON)
+    }
+
+    fn scaling(
+        &self,
+        _x: &ndarray::ArrayView2<f64>,
+        _obj_model: &dyn MixtureGpSurrogate,
+        _fmin: f64,
+    ) -> f64 {
+        1.0
+    }
+}
+
+/// Log of Expected Improvement infill criterion
+pub const LOG_EI: LogExpectedImprovement = LogExpectedImprovement {};
+
 #[cfg(test)]
 mod tests {
     use super::*;
