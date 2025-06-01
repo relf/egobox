@@ -108,7 +108,7 @@ impl GpMix {
         recombination: Recombination,
         theta_init: Option<Vec<f64>>,
         theta_bounds: Option<Vec<Vec<f64>>>,
-        n_start: usize,
+        n_start: isize,
         max_eval: usize,
         seed: Option<u64>,
     ) -> Self {
@@ -199,6 +199,14 @@ impl GpMix {
             Ordering::Equal => NbClusters::auto(),
             Ordering::Less => NbClusters::automax(-self.gp_config.n_clusters as usize),
         };
+        let n_start = if self.n_start < 0 {
+            // no multistart, use theta_init as is
+            theta_tuning = ThetaTuning::Fixed(theta_tuning.init().to_owned());
+            0 // no multistart, value not used
+        } else {
+            self.n_start.try_into().unwrap_or(10)
+        };
+
         let theta_tunings = if let NbClusters::Fixed { nb } = n_clusters {
             vec![theta_tuning; nb]
         } else {
@@ -248,7 +256,7 @@ impl Gpx {
         recombination=GpConfig::default().recombination,
         theta_init=GpConfig::default().theta_init,
         theta_bounds=GpConfig::default().theta_bounds,
-        n_start=GpConfig::default().n_start,
+        n_start=GpConfig::default().n_start as isize,
         max_eval=GpConfig::default().max_eval,
         seed = None
     ))]
@@ -261,7 +269,7 @@ impl Gpx {
         recombination: Recombination,
         theta_init: Option<Vec<f64>>,
         theta_bounds: Option<Vec<Vec<f64>>>,
-        n_start: usize,
+        n_start: isize,
         max_eval: usize,
         seed: Option<u64>,
     ) -> GpMix {
