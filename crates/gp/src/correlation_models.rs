@@ -39,7 +39,83 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display + Sy
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F>;
+
+    /// Returns the theta influence factors for the correlation model.
+    /// See https://hal.science/hal-03812073v2/document
+    fn theta_influence_factors(&self) -> (F, F) {
+        (F::one(), F::one())
+    }
 }
+
+// Squared exponential correlation models
+// #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+// #[cfg_attr(
+//     feature = "serializable",
+//     derive(Serialize, Deserialize),
+//     serde(into = "String"),
+//     serde(try_from = "String")
+// )]
+// pub struct SquaredExponentialCorr();
+
+// impl From<SquaredExponentialCorr> for String {
+//     fn from(_item: SquaredExponentialCorr) -> String {
+//         "SquaredExponential".to_string()
+//     }
+// }
+
+// impl TryFrom<String> for SquaredExponentialCorr {
+//     type Error = &'static str;
+//     fn try_from(s: String) -> Result<Self, Self::Error> {
+//         if s == "SquaredExponential" {
+//             Ok(Self::default())
+//         } else {
+//             Err("Bad string value for SquaredExponentialCorr, should be \'SquaredExponential\'")
+//         }
+//     }
+// }
+
+// impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
+//     ///   d    h
+//     /// prod prod exp( - theta_l * |weight_j_l * d_j|^2 )
+//     ///  j=1  l=1
+//     fn value(
+//         &self,
+//         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+//         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+//         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+//     ) -> Array2<F> {
+//         let theta_w = (theta * weights.mapv(|v| v.powf(F::cast(2.)))).sum_axis(Axis(1));
+//         let r = d.mapv(|v| v.powf(F::cast(2.))).dot(&theta_w);
+//         r.mapv(|v| F::exp(-v)).into_shape((d.nrows(), 1)).unwrap()
+//     }
+
+//     fn jacobian(
+//         &self,
+//         x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+//         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+//         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+//         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+//     ) -> Array2<F> {
+//         let d = differences(x, xtrain);
+//         let r = self.value(&d, theta, weights);
+
+//         let dtheta_w = (theta * weights.mapv(|v| v.powf(F::cast(2))))
+//             .sum_axis(Axis(1))
+//             .mapv(|v| F::cast(-2.) * v);
+
+//         d * &dtheta_w * &r
+//     }
+
+//     fn theta_influence_factors(&self) -> (F, F) {
+//         (F::cast(0.29), F::cast(1.96))
+//     }
+// }
+
+// impl fmt::Display for SquaredExponentialCorr {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "SquaredExponential")
+//     }
+// }
 
 /// Squared exponential correlation models
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -70,7 +146,7 @@ impl TryFrom<String> for SquaredExponentialCorr {
 
 impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
     ///   d    h
-    /// prod prod exp( - theta_l * |weight_j_l * d_j|^2 )
+    /// prod prod exp( - |theta_l * weight_j_l * d_j|^2 / 2 )
     ///  j=1  l=1
     fn value(
         &self,
@@ -78,9 +154,13 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
-        let theta_w = (theta * weights.mapv(|v| v.powf(F::cast(2.)))).sum_axis(Axis(1));
+        let theta_w = (theta * weights)
+            .mapv(|v| v.powf(F::cast(2.)))
+            .sum_axis(Axis(1));
         let r = d.mapv(|v| v.powf(F::cast(2.))).dot(&theta_w);
-        r.mapv(|v| F::exp(-v)).into_shape((d.nrows(), 1)).unwrap()
+        r.mapv(|v| F::exp(F::cast(-0.5) * v))
+            .into_shape((d.nrows(), 1))
+            .unwrap()
     }
 
     fn jacobian(
@@ -93,11 +173,16 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         let d = differences(x, xtrain);
         let r = self.value(&d, theta, weights);
 
-        let dtheta_w = (theta * weights.mapv(|v| v.powf(F::cast(2))))
+        let dtheta_w = (theta * weights)
+            .mapv(|v| v.powf(F::cast(2)))
             .sum_axis(Axis(1))
-            .mapv(|v| F::cast(-2.) * v);
+            .mapv(|v| F::cast(-v));
 
         d * &dtheta_w * &r
+    }
+
+    fn theta_influence_factors(&self) -> (F, F) {
+        (F::cast(0.29), F::cast(1.96))
     }
 }
 
@@ -165,6 +250,10 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
                 .sum_axis(Axis(1))
                 .mapv(|v| F::cast(-1.) * v);
         &dtheta_w * &r
+    }
+
+    fn theta_influence_factors(&self) -> (F, F) {
+        (F::cast(0.15), F::cast(3.76))
     }
 }
 
@@ -304,6 +393,10 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
             .into_shape((xtrain.nrows(), xtrain.ncols()))
             .unwrap();
         db + da
+    }
+
+    fn theta_influence_factors(&self) -> (F, F) {
+        (F::cast(0.21), F::cast(2.74))
     }
 }
 
@@ -450,6 +543,10 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
             .unwrap();
         db + da
     }
+
+    fn theta_influence_factors(&self) -> (F, F) {
+        (F::cast(0.23), F::cast(2.44))
+    }
 }
 
 impl fmt::Display for Matern52Corr {
@@ -470,7 +567,8 @@ mod tests {
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
         let dm = DistanceMatrix::new(&xt);
-        let res = SquaredExponentialCorr::default().value(&dm.d, &arr1(&[0.1]), &array![[1.]]);
+        let res =
+            SquaredExponentialCorr::default().value(&dm.d, &arr1(&[f64::sqrt(0.2)]), &array![[1.]]);
         let expected = array![
             [0.336552878364737],
             [0.5352614285189903],
@@ -493,12 +591,32 @@ mod tests {
         dbg!(&dm);
         let res = SquaredExponentialCorr::default().value(
             &dm.d,
-            &arr1(&[1., 2.]),
+            &arr1(&[f64::sqrt(2.), 2.]),
             &array![[1., 0.], [0., 1.]],
         );
         let expected = array![[6.14421235e-06], [1.42516408e-21], [6.14421235e-06]];
         assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
     }
+
+    // #[test]
+    // fn test_squared_exponential2() {
+    //     let xt = array![[0., 1.], [2., 3.], [4., 5.]];
+    //     let dm = DistanceMatrix::new(&xt);
+    //     dbg!(&dm);
+    //     let res = SquaredExponentialCorr::default().value(
+    //         &dm.d,
+    //         &arr1(&[1., 2.]),
+    //         &array![[1., 0.], [0., 1.]],
+    //     );
+    //     let res2 = SquaredExponentialCorr::default().value(
+    //         &dm.d,
+    //         &arr1(&[f64::sqrt(2.), 2.]),
+    //         &array![[1., 0.], [0., 1.]],
+    //     );
+    //     let expected = array![[6.14421235e-06], [1.42516408e-21], [6.14421235e-06]];
+    //     assert_abs_diff_eq!(res, expected, epsilon = 1e-6);
+    //     assert_abs_diff_eq!(res2, expected, epsilon = 1e-6);
+    // }
 
     #[test]
     fn test_matern32_2d() {
