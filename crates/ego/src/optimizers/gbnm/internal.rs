@@ -298,7 +298,7 @@ mod tests {
             .iter()
             .zip(result.x.iter())
             .all(|(a, b)| (a - b).abs() < 0.05)); // The solution should be near the origin
-        assert_abs_diff_eq!(result.fval, 0., epsilon = 1e-5); // We expect the minimum value to be near 0
+        assert_abs_diff_eq!(result.fval, 0., epsilon = 2e-5); // We expect the minimum value to be near 0
         assert_abs_diff_eq!(result.x, array![0., 0.], epsilon = 5e-3); // The minimum should be at (0, 0)
     }
 

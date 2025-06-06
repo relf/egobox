@@ -59,14 +59,17 @@ use rand_xoshiro::Xoshiro256Plus;
 ///
 ///     theta_bounds ([[lower_1, upper_1], ..., [lower_nx, upper_nx]] where nx is the dimension of inputs x)
 ///         Space search when optimizing theta GP hyperparameters
-///         When None the default is [1e-6, 1e2] for all components
+///         When None the default for all components
 ///
 ///     kpls_dim (0 < int < nx where nx is the dimension of inputs x)
 ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
 ///         This is used to address high-dimensional problems typically when nx > 9.
 ///
-///     n_start (int >= 0)
+///     n_start (int)
 ///         Number of internal GP hyperpameters optimization restart (multistart)
+///         When set to 0, only one optimization is performed.
+///         When set to negative number, there is no hyperparameter optimization
+///         theta_init value is taken as is during training.
 ///
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
@@ -80,7 +83,7 @@ pub(crate) struct GpMix {
     pub theta_init: Option<Vec<f64>>,
     pub theta_bounds: Option<Vec<Vec<f64>>>,
     pub kpls_dim: Option<usize>,
-    pub n_start: usize,
+    pub n_start: isize,
     pub seed: Option<u64>,
 }
 
@@ -107,7 +110,7 @@ impl GpMix {
         theta_init: Option<Vec<f64>>,
         theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
-        n_start: usize,
+        n_start: isize,
         seed: Option<u64>,
     ) -> Self {
         let n_clusters = match n_clusters.cmp(&0) {
@@ -194,6 +197,14 @@ impl GpMix {
                 bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
             }
         }
+        let n_start = if self.n_start < 0 {
+            // no multistart, use theta_init as is
+            theta_tuning = ThetaTuning::Fixed(theta_tuning.init().to_owned());
+            0 // no multistart, value not used
+        } else {
+            self.n_start.try_into().unwrap_or(10)
+        };
+
         let theta_tunings = if let NbClusters::Fixed { nb } = self.n_clusters {
             vec![theta_tuning; nb]
         } else {
@@ -215,7 +226,7 @@ impl GpMix {
                 )
                 .theta_tunings(&theta_tunings)
                 .kpls_dim(self.kpls_dim)
-                .n_start(self.n_start)
+                .n_start(n_start)
                 .with_rng(rng)
                 .fit(&dataset)
                 .expect("MoE model training")
@@ -255,7 +266,7 @@ impl Gpx {
         theta_init: Option<Vec<f64>>,
         theta_bounds: Option<Vec<Vec<f64>>>,
         kpls_dim: Option<usize>,
-        n_start: usize,
+        n_start: isize,
         seed: Option<u64>,
     ) -> GpMix {
         GpMix::new(
