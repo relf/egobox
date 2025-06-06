@@ -16,8 +16,10 @@ fn main() {
     let res = EgorBuilder::optimize(ackley)
         .configure(|config| {
             config
-                .regression_spec(RegressionSpec::CONSTANT)
-                .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
+                .configure_gp(|gp| {
+                    gp.regression_spec(RegressionSpec::CONSTANT)
+                        .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
+                })
                 .infill_strategy(InfillStrategy::WB2S)
                 .max_iters(200)
         })

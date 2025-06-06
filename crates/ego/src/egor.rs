@@ -385,8 +385,10 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|cfg| {
                 cfg.infill_strategy(InfillStrategy::EI)
-                    .regression_spec(RegressionSpec::QUADRATIC)
-                    .correlation_spec(CorrelationSpec::ALL)
+                    .configure_gp(|gp| {
+                        gp.regression_spec(RegressionSpec::QUADRATIC)
+                            .correlation_spec(CorrelationSpec::ALL)
+                    })
                     .max_iters(30)
                     .doe(&initial_doe)
                     .target(-15.1)
@@ -458,8 +460,10 @@ mod tests {
             .configure(|config| {
                 config
                     .max_iters(20)
-                    .regression_spec(RegressionSpec::ALL)
-                    .correlation_spec(CorrelationSpec::ALL)
+                    .configure_gp(|gp| {
+                        gp.regression_spec(RegressionSpec::ALL)
+                            .correlation_spec(CorrelationSpec::ALL)
+                    })
                     .trego(true)
                     .seed(1)
             })
@@ -539,7 +543,11 @@ mod tests {
     #[serial]
     fn test_xsinx_auto_clustering_egor_builder() {
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.n_clusters(NbClusters::auto()).max_iters(20))
+            .configure(|config| {
+                config
+                    .configure_gp(|gp| gp.n_clusters(NbClusters::auto()))
+                    .max_iters(20)
+            })
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor with auto clustering should minimize xsinx");
@@ -600,8 +608,10 @@ mod tests {
                 config
                     .doe(&doe)
                     .max_iters(50)
-                    .regression_spec(RegressionSpec::ALL)
-                    .correlation_spec(CorrelationSpec::ALL)
+                    .configure_gp(|gp| {
+                        gp.regression_spec(RegressionSpec::ALL)
+                            .correlation_spec(CorrelationSpec::ALL)
+                    })
                     .target(1e-2)
                     .seed(42)
             })
@@ -813,8 +823,10 @@ mod tests {
         let res = EgorBuilder::optimize(f_g24)
             .configure(|config| {
                 config
-                    .regression_spec(RegressionSpec::ALL)
-                    .correlation_spec(CorrelationSpec::ALL)
+                    .configure_gp(|gp| {
+                        gp.regression_spec(RegressionSpec::ALL)
+                            .correlation_spec(CorrelationSpec::ALL)
+                    })
                     .n_cstr(2)
                     .cstr_tol(array![2e-6, 2e-6])
                     .q_points(2)
@@ -895,8 +907,10 @@ mod tests {
         let res = EgorBuilder::optimize(mixsinx)
             .configure(|config| {
                 config
-                    .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
-                    .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
+                    .configure_gp(|gp| {
+                        gp.regression_spec(RegressionSpec::CONSTANT)
+                            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+                    })
                     .max_iters(max_iters)
                     .seed(42)
             })
@@ -946,8 +960,10 @@ mod tests {
         let res = EgorBuilder::optimize(mixobj)
             .configure(|config| {
                 config
-                    .regression_spec(egobox_moe::RegressionSpec::CONSTANT)
-                    .correlation_spec(egobox_moe::CorrelationSpec::SQUAREDEXPONENTIAL)
+                    .configure_gp(|gp| {
+                        gp.regression_spec(RegressionSpec::CONSTANT)
+                            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+                    })
                     .max_iters(max_iters)
                     .seed(42)
             })

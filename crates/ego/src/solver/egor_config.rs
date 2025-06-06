@@ -9,6 +9,79 @@ use ndarray::Array2;
 
 use serde::{Deserialize, Serialize};
 
+const EGO_GP_OPTIM_N_START: usize = 10;
+const EGO_GP_OPTIM_MAX_EVAL: usize = 50;
+
+/// GP configuration
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GpConfig {
+    /// Regression specification for GP models used by mixture of experts (see [egobox_moe])
+    pub(crate) regression_spec: RegressionSpec,
+    /// Correlation specification for GP models used by mixture of experts (see [egobox_moe])
+    pub(crate) correlation_spec: CorrelationSpec,
+    /// Optional dimension reduction (see [egobox_moe])
+    pub(crate) kpls_dim: Option<usize>,
+    /// Number of clusters used by mixture of experts (see [egobox_moe])
+    /// When set to Auto the clusters are computes automatically and refreshed
+    /// every 10-points (tentative) additions
+    pub(crate) n_clusters: NbClusters,
+    /// Number of starts for multistart approach used for optimization
+    pub(crate) n_start: usize,
+    /// Number of likelihood evaluation during one internal optimization
+    pub(crate) max_eval: usize,
+}
+
+impl Default for GpConfig {
+    fn default() -> Self {
+        GpConfig {
+            n_start: EGO_GP_OPTIM_N_START,
+            max_eval: EGO_GP_OPTIM_MAX_EVAL,
+            regression_spec: RegressionSpec::CONSTANT,
+            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
+            kpls_dim: None,
+            n_clusters: NbClusters::default(),
+        }
+    }
+}
+
+impl GpConfig {
+    /// Sets the allowed regression models used in gaussian processes.
+    pub fn regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
+        self.regression_spec = regression_spec;
+        self
+    }
+
+    /// Sets the allowed correlation models used in gaussian processes.
+    pub fn correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
+        self.correlation_spec = correlation_spec;
+        self
+    }
+
+    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
+    pub fn kpls_dim(mut self, kpls_dim: Option<usize>) -> Self {
+        self.kpls_dim = kpls_dim;
+        self
+    }
+
+    /// Sets the number of clusters used by the mixture of surrogate experts.
+    pub fn n_clusters(mut self, n_clusters: NbClusters) -> Self {
+        self.n_clusters = n_clusters;
+        self
+    }
+
+    /// Sets the number of starts for multistart approach used for optimization
+    pub fn n_start(mut self, n_start: usize) -> Self {
+        self.n_start = n_start;
+        self
+    }
+
+    /// Sets the number of likelihood evaluation during one internal optimization
+    pub fn max_eval(mut self, max_eval: usize) -> Self {
+        self.max_eval = max_eval;
+        self
+    }
+}
+
 /// A structure to handle TREGO method parameterization
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct TregoConfig {
@@ -68,7 +141,7 @@ pub struct EgorConfig {
     /// Note 2 : When q_points > 1, the number of cost function evaluations is (n_doe + max_iters * q_points)
     /// is is an upper bounds as some points may be rejected as being to close to previous ones.   
     pub(crate) max_iters: usize,
-    /// Number of starts for multistart approach used for hyperparameters optimization
+    /// Number of starts for multistart approach used for optimization
     pub(crate) n_start: usize,
     /// Number of initial doe drawn using Latin hypercube sampling
     /// Note: n_doe > 0; otherwise n_doe = max(xdim + 1, 5)
@@ -89,20 +162,12 @@ pub struct EgorConfig {
     /// Number of points returned by EGO iteration (aka qEI Multipoint strategy)
     /// Actually as some point determination may fail (at most q_points are returned)
     pub(crate) q_points: usize,
+    /// General configuration for GP models used by the optimizer
+    pub(crate) gp: GpConfig,
     /// Criterion to select next point to evaluate
     pub(crate) infill_criterion: Box<dyn InfillCriterion>,
     /// The optimizer used to optimize infill criterium
     pub(crate) infill_optimizer: InfillOptimizer,
-    /// Regression specification for GP models used by mixture of experts (see [egobox_moe])
-    pub(crate) regression_spec: RegressionSpec,
-    /// Correlation specification for GP models used by mixture of experts (see [egobox_moe])
-    pub(crate) correlation_spec: CorrelationSpec,
-    /// Optional dimension reduction (see [egobox_moe])
-    pub(crate) kpls_dim: Option<usize>,
-    /// Number of clusters used by mixture of experts (see [egobox_moe])
-    /// When set to Auto the clusters are computes automatically and refreshed
-    /// every 10-points (tentative) additions
-    pub(crate) n_clusters: NbClusters,
     /// Specification of a target objective value which is used to stop the algorithm once reached
     pub(crate) target: f64,
     /// Directory to save intermediate results: inital doe + evalutions at each iteration
@@ -137,12 +202,9 @@ impl Default for EgorConfig {
             q_ei: QEiStrategy::KrigingBeliever,
             q_optmod: 1,
             q_points: 1,
+            gp: GpConfig::default(),
             infill_criterion: Box::new(WB2),
             infill_optimizer: InfillOptimizer::Slsqp,
-            regression_spec: RegressionSpec::CONSTANT,
-            correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
-            kpls_dim: None,
-            n_clusters: NbClusters::default(),
             target: f64::NEG_INFINITY,
             outdir: None,
             warm_start: false,
@@ -249,37 +311,63 @@ impl EgorConfig {
         self
     }
 
+    /// Sets the configuration of the GPs
+    pub fn configure_gp<F: FnOnce(GpConfig) -> GpConfig>(mut self, init: F) -> Self {
+        self.gp = init(self.gp);
+        self
+    }
+
     /// Sets the allowed regression models used in gaussian processes.
+    #[deprecated(
+        since = "0.29.1",
+        note = "please use `gp_configure(gp_config)` instead"
+    )]
     pub fn regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
-        self.regression_spec = regression_spec;
+        self.gp.regression_spec = regression_spec;
         self
     }
 
     /// Sets the allowed correlation models used in gaussian processes.
+    #[deprecated(
+        since = "0.29.1",
+        note = "please use `gp_configure(gp_config)` instead"
+    )]
     pub fn correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
-        self.correlation_spec = correlation_spec;
+        self.gp.correlation_spec = correlation_spec;
         self
     }
 
     /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
     ///
     /// This is used to address high-dimensional problems typically when `nx` > 9 wher `nx` is the dimension of `x`.
+    #[deprecated(
+        since = "0.29.1",
+        note = "please use `gp_configure(gp_config)` instead"
+    )]
     pub fn kpls_dim(mut self, kpls_dim: usize) -> Self {
-        self.kpls_dim = Some(kpls_dim);
+        self.gp.kpls_dim = Some(kpls_dim);
         self
     }
 
     /// Removes any PLS dimension reduction usage
+    #[deprecated(
+        since = "0.29.1",
+        note = "please use `gp_configure(gp_config)` instead"
+    )]
     pub fn no_kpls(mut self) -> Self {
-        self.kpls_dim = None;
+        self.gp.kpls_dim = None;
         self
     }
 
     /// Sets the number of clusters used by the mixture of surrogate experts.
     ///
     /// When set to Auto, the number of clusters is determined automatically
+    #[deprecated(
+        since = "0.29.1",
+        note = "please use `gp_configure(gp_config)` instead"
+    )]
     pub fn n_clusters(mut self, n_clusters: NbClusters) -> Self {
-        self.n_clusters = n_clusters;
+        self.gp.n_clusters = n_clusters;
         self
     }
 
