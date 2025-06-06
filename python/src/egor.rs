@@ -173,16 +173,16 @@ pub(crate) struct Egor {
     pub doe: Option<Array2<f64>>,
     pub regression_spec: RegressionSpec,
     pub correlation_spec: CorrelationSpec,
+    pub n_clusters: NbClusters,
+    pub kpls_dim: Option<usize>,
     pub infill_strategy: InfillStrategy,
     pub cstr_infill: bool,
     pub cstr_strategy: ConstraintStrategy,
     pub q_points: usize,
     pub q_infill_strategy: QInfillStrategy,
     pub infill_optimizer: InfillOptimizer,
-    pub kpls_dim: Option<usize>,
     pub trego: bool,
     pub coego_n_coop: usize,
-    pub n_clusters: NbClusters,
     pub q_optmod: usize,
     pub target: f64,
     pub outdir: Option<String>,
@@ -570,16 +570,21 @@ impl Egor {
         let cstr_tol = self.cstr_tol(n_fcstr);
 
         let mut config = config
-            .n_clusters(self.n_clusters.clone())
             .n_cstr(self.n_cstr)
             .max_iters(max_iters.unwrap_or(1))
             .n_start(self.n_start)
             .n_doe(self.n_doe)
             .cstr_tol(cstr_tol)
-            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-            .correlation_spec(
-                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-            )
+            .configure_gp(|gp| {
+                gp.regression_spec(
+                    egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
+                )
+                .correlation_spec(
+                    egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+                )
+                .n_clusters(self.n_clusters.clone())
+                .kpls_dim(self.kpls_dim)
+            })
             .infill_strategy(infill_strategy)
             .cstr_infill(self.cstr_infill)
             .cstr_strategy(cstr_strategy)
@@ -594,9 +599,6 @@ impl Egor {
             .hot_start(self.hot_start.into());
         if let Some(doe) = doe {
             config = config.doe(doe);
-        };
-        if let Some(kpls_dim) = self.kpls_dim {
-            config = config.kpls_dim(kpls_dim);
         };
         if let Some(outdir) = self.outdir.as_ref().cloned() {
             config = config.outdir(outdir);
