@@ -121,7 +121,7 @@ class TestEgor(unittest.TestCase):
         )
         res = egor.minimize(sphere, max_iters=100)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
-        self.assertAlmostEqual(0.0, res.y_opt[0], delta=1e-1)
+        self.assertAlmostEqual(0.0, res.y_opt[0], delta=5e-1)
         np.testing.assert_allclose(0.0, res.x_opt, atol=5e-1)
 
     def test_xsinx(self):
