@@ -152,10 +152,12 @@ mod tests {
     fn test_xsinx_egor_builder() {
         let ego = EgorServiceBuilder::optimize()
             .configure(|conf| {
-                conf.regression_spec(RegressionSpec::ALL)
-                    .correlation_spec(CorrelationSpec::ALL)
-                    .infill_strategy(InfillStrategy::EI)
-                    .seed(42)
+                conf.configure_gp(|gp| {
+                    gp.regression_spec(RegressionSpec::CONSTANT)
+                        .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+                })
+                .infill_strategy(InfillStrategy::EI)
+                .seed(42)
             })
             .min_within(&array![[0., 25.]]);
 
