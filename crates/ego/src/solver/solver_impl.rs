@@ -27,7 +27,7 @@ use serde::de::DeserializeOwned;
 use super::coego::COEGO_IMPROVEMENT_CHECK;
 
 const EGO_GP_OPTIM_N_START: usize = 10;
-const EGO_GP_OPTIM_MAX_EVAL: usize = GP_COBYLA_MIN_EVAL;
+const EGO_GP_OPTIM_MAX_EVAL: usize = 50;
 
 impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     /// Constructor of the optimization of the function `f` with specified random generator
