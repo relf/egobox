@@ -12,7 +12,7 @@ use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
 
 use egobox_doe::{Lhs, LhsKind};
-use egobox_gp::{ThetaTuning, GP_COBYLA_MIN_EVAL};
+use egobox_gp::ThetaTuning;
 use env_logger::{Builder, Env};
 
 use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters};
