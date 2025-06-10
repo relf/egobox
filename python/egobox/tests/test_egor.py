@@ -132,7 +132,9 @@ class TestEgor(unittest.TestCase):
         self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
     def test_xsinx_with_reclustering(self):
-        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), seed=42, n_clusters=0)
+        egor = egx.Egor(
+            egx.to_specs([[0.0, 25.0]]), seed=42, gp_config=egx.GpConfig(n_clusters=0)
+        )
         res = egor.minimize(xsinx, max_iters=20)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
@@ -190,9 +192,11 @@ class TestEgor(unittest.TestCase):
             egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
             n_cstr=2,
             cstr_tol=np.array([5e-3, 5e-3]),
-            regr_spec=egx.RegressionSpec.CONSTANT,
-            corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
-            kpls_dim=1,
+            gp_config=egx.GpConfig(
+                regr_spec=egx.RegressionSpec.CONSTANT,
+                corr_spec=egx.CorrelationSpec.SQUARED_EXPONENTIAL,
+                kpls_dim=1,
+            ),
             seed=1,
         )
         start = time.process_time()
@@ -236,7 +240,7 @@ class TestEgor(unittest.TestCase):
 
     def test_constructor(self):
         self.assertRaises(TypeError, egx.Egor)
-        egx.Egor(egx.to_specs([[0.0, 25.0]]), 22, n_doe=10)
+        egx.Egor(egx.to_specs([[0.0, 25.0]]), n_doe=10)
 
     def test_egor_service(self):
         xlimits = egx.to_specs([[0.0, 25.0]])

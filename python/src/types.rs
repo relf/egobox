@@ -13,7 +13,7 @@ pub enum Recombination {
 }
 
 #[pyclass]
-#[derive(Clone)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct RegressionSpec(pub(crate) u8);
 
 #[pymethods]
@@ -29,7 +29,7 @@ impl RegressionSpec {
 }
 
 #[pyclass]
-#[derive(Clone)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct CorrelationSpec(pub(crate) u8);
 
 #[pymethods]

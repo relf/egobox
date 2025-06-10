@@ -11,6 +11,7 @@
 //!
 use std::{cmp::Ordering, path::Path};
 
+use crate::gp_config::GpConfig;
 use crate::types::*;
 use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{Clustered, MixtureGpSurrogate, NbClusters, ThetaTuning};
@@ -24,68 +25,65 @@ use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2, PyReadonlyArrayDy
 use pyo3::prelude::*;
 use rand_xoshiro::Xoshiro256Plus;
 
-/// Gaussian processes mixture builder
-///
-///     n_clusters (int)
-///         Number of clusters used by the mixture of surrogate experts (default is 1).
-///         When set to 0, the number of cluster is determined automatically and refreshed every
-///         10-points addition (should say 'tentative addition' because addition may fail for some points
-///         but it is counted anyway).
-///         When set to negative number -n, the number of clusters is determined automatically in [1, n]
-///         this is used to limit the number of trials hence the execution time.
-///
-///     regr_spec (RegressionSpec flags, an int in [1, 7]):
-///         Specification of regression models used in mixture.
-///         Can be RegressionSpec.CONSTANT (1), RegressionSpec.LINEAR (2), RegressionSpec.QUADRATIC (4) or
-///         any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
-///
-///     corr_spec (CorrelationSpec flags, an int in [1, 15]):
-///         Specification of correlation models used in mixture.
-///         Can be CorrelationSpec.SQUARED_EXPONENTIAL (1), CorrelationSpec.ABSOLUTE_EXPONENTIAL (2),
-///         CorrelationSpec.MATERN32 (4), CorrelationSpec.MATERN52 (8) or
-///         any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
-///
-///     recombination (Recombination.Smooth or Recombination.Hard (default))
-///         Specify how the various experts predictions are recombined
-///         * Smooth: prediction is a combination of experts prediction wrt their responsabilities,
-///         the heaviside factor which controls steepness of the change between experts regions is optimized
-///         to get best mixture quality.
-///         * Hard: prediction is taken from the expert with highest responsability
-///         resulting in a model with discontinuities.
-///
-///     theta_init ([nx] where nx is the dimension of inputs x)
-///         Initial guess for GP theta hyperparameters.
-///         When None the default is 1e-2 for all components
-///
-///     theta_bounds ([[lower_1, upper_1], ..., [lower_nx, upper_nx]] where nx is the dimension of inputs x)
-///         Space search when optimizing theta GP hyperparameters
-///         When None the default is [1e-6, 1e2] for all components
-///
-///     kpls_dim (0 < int < nx where nx is the dimension of inputs x)
-///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
-///         This is used to address high-dimensional problems typically when nx > 9.
-///
-///     n_start (int >= 0)
-///         Number of internal GP hyperpameters optimization restart (multistart)
-///
-///     seed (int >= 0)
-///         Random generator seed to allow computation reproducibility.
-///         
 #[pyclass]
 pub(crate) struct GpMix {
-    pub n_clusters: NbClusters,
-    pub regression_spec: RegressionSpec,
-    pub correlation_spec: CorrelationSpec,
-    pub recombination: Recombination,
-    pub theta_init: Option<Vec<f64>>,
-    pub theta_bounds: Option<Vec<Vec<f64>>>,
-    pub kpls_dim: Option<usize>,
-    pub n_start: usize,
-    pub seed: Option<u64>,
+    gp_config: GpConfig,
+    recombination: Recombination,
+    theta_init: Option<Vec<f64>>,
+    theta_bounds: Option<Vec<Vec<f64>>>,
+    n_start: usize,
+    seed: Option<u64>,
 }
 
 #[pymethods]
 impl GpMix {
+    /// Gaussian processes mixture builder
+    ///
+    ///     n_clusters (int)
+    ///         Number of clusters used by the mixture of surrogate experts (default is 1).
+    ///         When set to 0, the number of cluster is determined automatically and refreshed every
+    ///         10-points addition (should say 'tentative addition' because addition may fail for some points
+    ///         but it is counted anyway).
+    ///         When set to negative number -n, the number of clusters is determined automatically in [1, n]
+    ///         this is used to limit the number of trials hence the execution time.
+    ///
+    ///     regr_spec (RegressionSpec flags, an int in [1, 7]):
+    ///         Specification of regression models used in mixture.
+    ///         Can be RegressionSpec.CONSTANT (1), RegressionSpec.LINEAR (2), RegressionSpec.QUADRATIC (4) or
+    ///         any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
+    ///
+    ///     corr_spec (CorrelationSpec flags, an int in [1, 15]):
+    ///         Specification of correlation models used in mixture.
+    ///         Can be CorrelationSpec.SQUARED_EXPONENTIAL (1), CorrelationSpec.ABSOLUTE_EXPONENTIAL (2),
+    ///         CorrelationSpec.MATERN32 (4), CorrelationSpec.MATERN52 (8) or
+    ///         any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
+    ///
+    ///     recombination (Recombination.Smooth or Recombination.Hard (default))
+    ///         Specify how the various experts predictions are recombined
+    ///         * Smooth: prediction is a combination of experts prediction wrt their responsabilities,
+    ///         the heaviside factor which controls steepness of the change between experts regions is optimized
+    ///         to get best mixture quality.
+    ///         * Hard: prediction is taken from the expert with highest responsability
+    ///         resulting in a model with discontinuities.
+    ///
+    ///     theta_init ([nx] where nx is the dimension of inputs x)
+    ///         Initial guess for GP theta hyperparameters.
+    ///         When None the default is 1e-2 for all components
+    ///
+    ///     theta_bounds ([[lower_1, upper_1], ..., [lower_nx, upper_nx]] where nx is the dimension of inputs x)
+    ///         Space search when optimizing theta GP hyperparameters
+    ///         When None the default is [1e-6, 1e2] for all components
+    ///
+    ///     kpls_dim (0 < int < nx where nx is the dimension of inputs x)
+    ///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
+    ///         This is used to address high-dimensional problems typically when nx > 9.
+    ///
+    ///     n_start (int >= 0)
+    ///         Number of internal GP hyperpameters optimization restart (multistart)
+    ///
+    ///     seed (int >= 0)
+    ///         Random generator seed to allow computation reproducibility.
+    ///         
     #[new]
     #[pyo3(signature = (
         n_clusters = 1,
@@ -110,20 +108,11 @@ impl GpMix {
         n_start: usize,
         seed: Option<u64>,
     ) -> Self {
-        let n_clusters = match n_clusters.cmp(&0) {
-            Ordering::Greater => NbClusters::fixed(n_clusters as usize),
-            Ordering::Equal => NbClusters::auto(),
-            Ordering::Less => NbClusters::automax(-n_clusters as usize),
-        };
-
         GpMix {
-            n_clusters,
-            regression_spec: RegressionSpec(regr_spec),
-            correlation_spec: CorrelationSpec(corr_spec),
+            gp_config: GpConfig::new(regr_spec, corr_spec, n_clusters, kpls_dim),
             recombination,
             theta_init,
             theta_bounds,
-            kpls_dim,
             n_start,
             seed,
         }
@@ -194,7 +183,13 @@ impl GpMix {
                 bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
             }
         }
-        let theta_tunings = if let NbClusters::Fixed { nb } = self.n_clusters {
+
+        let n_clusters = match self.gp_config.n_clusters.cmp(&0) {
+            Ordering::Greater => NbClusters::fixed(self.gp_config.n_clusters as usize),
+            Ordering::Equal => NbClusters::auto(),
+            Ordering::Less => NbClusters::automax(-self.gp_config.n_clusters as usize),
+        };
+        let theta_tunings = if let NbClusters::Fixed { nb } = n_clusters {
             vec![theta_tuning; nb]
         } else {
             vec![theta_tuning; 1] // used as default theta tuning for all experts
@@ -205,16 +200,16 @@ impl GpMix {
         };
         let moe = py.allow_threads(|| {
             GpMixture::params()
-                .n_clusters(self.n_clusters.clone())
+                .n_clusters(n_clusters)
                 .recombination(recomb)
                 .regression_spec(
-                    egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap(),
+                    egobox_moe::RegressionSpec::from_bits(self.gp_config.regr_spec.0).unwrap(),
                 )
                 .correlation_spec(
-                    egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
+                    egobox_moe::CorrelationSpec::from_bits(self.gp_config.corr_spec.0).unwrap(),
                 )
                 .theta_tunings(&theta_tunings)
-                .kpls_dim(self.kpls_dim)
+                .kpls_dim(self.gp_config.kpls_dim)
                 .n_start(self.n_start)
                 .with_rng(rng)
                 .fit(&dataset)
