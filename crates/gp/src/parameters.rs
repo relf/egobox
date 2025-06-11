@@ -1,7 +1,7 @@
 use crate::correlation_models::CorrelationModel;
 use crate::errors::{GpError, Result};
 use crate::mean_models::RegressionModel;
-use crate::{GP_COBYLA_MAX_EVAL, GP_COBYLA_MIN_EVAL};
+use crate::{GP_COBYLA_MAX_EVAL, GP_COBYLA_MIN_EVAL, GP_OPTIM_N_START};
 use linfa::{Float, ParamGuard};
 
 use ndarray::{array, Array1};
@@ -104,7 +104,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> Default
             mean: Mean::default(),
             corr: Corr::default(),
             kpls_dim: None,
-            n_start: 10,
+            n_start: GP_OPTIM_N_START,
             max_eval: GP_COBYLA_MAX_EVAL,
             nugget: F::cast(100.0) * F::epsilon(),
         }

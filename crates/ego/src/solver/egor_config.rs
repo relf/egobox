@@ -152,6 +152,9 @@ impl Default for CoegoConfig {
     }
 }
 
+pub const EGO_DEFAULT_MAX_ITERS: usize = 20;
+pub const EGO_DEFAULT_N_START: usize = 20;
+
 /// Egor optimizer configuration
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct EgorConfig {
@@ -212,8 +215,8 @@ pub struct EgorConfig {
 impl Default for EgorConfig {
     fn default() -> Self {
         EgorConfig {
-            max_iters: 20,
-            n_start: 20,
+            max_iters: EGO_DEFAULT_MAX_ITERS,
+            n_start: EGO_DEFAULT_N_START,
             n_doe: 0,
             n_cstr: 0,
             cstr_tol: None,

@@ -405,6 +405,44 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_gp_config() {
+        let initial_doe = array![[0.], [7.], [25.]];
+        let egor = EgorBuilder::optimize(xsinx)
+            .configure(|cfg| {
+                cfg.infill_strategy(InfillStrategy::EI)
+                    .configure_gp(|gp| {
+                        gp.theta_tuning(egobox_gp::ThetaTuning::Full {
+                            init: array![2.0],
+                            bounds: array![(1.0, 20.)],
+                        })
+                        .recombination(egobox_moe::Recombination::Hard)
+                        .n_start(7)
+                        .max_eval(100)
+                    })
+                    .max_iters(1)
+                    .doe(&initial_doe)
+            })
+            .min_within(&array![[0.0, 25.0]]);
+        let res = egor.run().expect("Egor should minimize xsinx");
+        // Inspect internal state: theta init should be equal to
+        // lower bound of theta interval as with a smaller bound
+        // it would be around 0.8 after first iteration
+        dbg!(res.state.clone());
+        assert_eq!(
+            res.state.theta_inits.unwrap()[0].as_ref().unwrap(),
+            array![[1.0]]
+        );
+        assert_eq!(
+            res.state.clusterings.unwrap()[0]
+                .as_ref()
+                .unwrap()
+                .recombination(),
+            egobox_moe::Recombination::Hard
+        );
+    }
+
+    #[test]
+    #[serial]
     fn test_xsinx_gbnm_optimizer_egor_builder() {
         let outdir = "target/test_egor_builder_01";
         let outfile = format!("{outdir}/{DOE_INITIAL_FILE}");

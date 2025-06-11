@@ -121,13 +121,13 @@ where
         theta_inits: Option<&Array2<f64>>,
         actives: &Array2<usize>,
     ) -> (Box<dyn MixtureGpSurrogate>, Option<Array2<f64>>) {
+        dbg!(&self.config.gp.theta_tuning);
         let mut builder = self.surrogate_builder.clone();
         builder.set_kpls_dim(self.config.gp.kpls_dim);
         builder.set_regression_spec(self.config.gp.regression_spec);
         builder.set_correlation_spec(self.config.gp.correlation_spec);
         builder.set_n_clusters(self.config.gp.n_clusters.clone());
         builder.set_recombination(self.config.gp.recombination);
-        builder.set_theta_tunings(&[self.config.gp.theta_tuning.clone()]);
         builder.set_optim_params(self.config.gp.n_start, self.config.gp.max_eval);
         let mut model = None;
         let mut best_likelihood = -f64::INFINITY;
@@ -147,10 +147,14 @@ where
                                 (nb, xt.ncols()),
                                 &active.to_vec(),
                                 best_theta_inits,
+                                &self.config.gp.theta_tuning,
                             );
                             builder.set_theta_tunings(&theta_tunings);
                         }
                     }
+                } else {
+                    let theta_tunings = self.config.gp.theta_tuning.clone();
+                    builder.set_theta_tunings(&[theta_tunings]);
                 }
                 if i == 0 {
                     info!("{} clustering and training...", model_name);
@@ -188,7 +192,13 @@ where
                         .outer_iter()
                         .map(|init| ThetaTuning::Full {
                             init: init.to_owned(),
-                            bounds: ThetaTuning::default().bounds().unwrap().to_owned(),
+                            bounds: self
+                                .config
+                                .gp
+                                .theta_tuning
+                                .bounds()
+                                .cloned()
+                                .unwrap_or(ThetaTuning::default().bounds().unwrap().to_owned()),
                         })
                         .collect::<Vec<_>>();
                     if self.config.coego.activated {

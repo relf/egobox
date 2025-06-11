@@ -5,7 +5,7 @@ use crate::EgorSolver;
 
 use egobox_gp::ThetaTuning;
 use egobox_moe::MixtureGpSurrogate;
-use ndarray::{s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, RemoveAxis};
+use ndarray::{s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, RemoveAxis, Zip};
 use rand_xoshiro::Xoshiro256Plus;
 use serde::de::DeserializeOwned;
 
@@ -94,22 +94,41 @@ where
         .unwrap()
     }
 
-    /// Set intial partial theta tunings from active components
+    /// Set initial theta tunings from active components
     /// and optional set of initial values.
-    /// Use during initialisation of theta partial optimizations
     pub(crate) fn set_initial_partial_theta_tuning(
         shape: (usize, usize),
         active: &[usize],
         theta_inits: Option<Array2<f64>>,
+        default_tuning: &ThetaTuning<f64>,
     ) -> Vec<ThetaTuning<f64>> {
-        let default_init = Array2::from_elem(shape, ThetaTuning::<f64>::DEFAULT_INIT);
+        let mut default_inits = Array2::zeros(shape);
+        let default_init = default_tuning.init();
+        Zip::from(default_inits.rows_mut()).for_each(|mut r| r.assign(default_init));
+
+        let bounds = if let Some(bounds) = default_tuning.bounds() {
+            if bounds.len() == 1 {
+                // If bounds is a single value, use it for all dimensions
+                Array1::from_elem(default_inits.ncols(), bounds[0])
+            } else {
+                // If bounds is a vector, use it for each dimension
+                bounds.clone()
+            }
+        } else {
+            // If no bounds are provided, use the default bounds
+            Array1::from_vec(vec![
+                ThetaTuning::<f64>::DEFAULT_BOUNDS;
+                default_inits.ncols()
+            ])
+        };
+
         theta_inits
             .clone()
-            .unwrap_or(default_init)
+            .unwrap_or(default_inits)
             .outer_iter()
             .map(|init| ThetaTuning::Partial {
                 init: init.to_owned(),
-                bounds: Array1::from_vec(vec![ThetaTuning::<f64>::DEFAULT_BOUNDS; init.len()]),
+                bounds: bounds.to_owned(),
                 active: Self::strip(active, init.len()),
             })
             .collect()
