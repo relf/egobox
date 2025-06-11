@@ -2,15 +2,17 @@
 use crate::criteria::*;
 use crate::types::*;
 use crate::HotStartMode;
+use egobox_gp::ThetaTuning;
 use egobox_moe::NbClusters;
+use egobox_moe::Recombination;
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::Array1;
 use ndarray::Array2;
 
 use serde::{Deserialize, Serialize};
 
-const EGO_GP_OPTIM_N_START: usize = 10;
-const EGO_GP_OPTIM_MAX_EVAL: usize = 50;
+pub const EGO_GP_OPTIM_N_START: usize = 10;
+pub const EGO_GP_OPTIM_MAX_EVAL: usize = 50;
 
 /// GP configuration
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -25,6 +27,10 @@ pub struct GpConfig {
     /// When set to Auto the clusters are computes automatically and refreshed
     /// every 10-points (tentative) additions
     pub(crate) n_clusters: NbClusters,
+    /// The mode of recombination to get the output prediction from experts prediction
+    pub(crate) recombination: Recombination<f64>,
+    /// Parameter tuning hint of the autocorrelation model
+    pub(crate) theta_tuning: ThetaTuning<f64>,
     /// Number of starts for multistart approach used for optimization
     pub(crate) n_start: usize,
     /// Number of likelihood evaluation during one internal optimization
@@ -34,12 +40,14 @@ pub struct GpConfig {
 impl Default for GpConfig {
     fn default() -> Self {
         GpConfig {
-            n_start: EGO_GP_OPTIM_N_START,
-            max_eval: EGO_GP_OPTIM_MAX_EVAL,
             regression_spec: RegressionSpec::CONSTANT,
             correlation_spec: CorrelationSpec::SQUAREDEXPONENTIAL,
             kpls_dim: None,
             n_clusters: NbClusters::default(),
+            recombination: Recombination::Smooth(Some(1.)),
+            theta_tuning: ThetaTuning::default(),
+            n_start: EGO_GP_OPTIM_N_START,
+            max_eval: EGO_GP_OPTIM_MAX_EVAL,
         }
     }
 }
@@ -66,6 +74,17 @@ impl GpConfig {
     /// Sets the number of clusters used by the mixture of surrogate experts.
     pub fn n_clusters(mut self, n_clusters: NbClusters) -> Self {
         self.n_clusters = n_clusters;
+        self
+    }
+
+    /// Sets the mode of recombination to get the output prediction from experts prediction
+    pub fn recombination(mut self, recombination: Recombination<f64>) -> Self {
+        self.recombination = recombination;
+        self
+    }
+
+    pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<f64>) -> Self {
+        self.theta_tuning = theta_tuning;
         self
     }
 

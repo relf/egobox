@@ -44,7 +44,15 @@ impl SurrogateBuilder for GpMixtureParams<f64> {
         *self = self.clone().n_clusters(n_clusters);
     }
 
-    /// Sets the number of clusters used by the mixture of surrogate experts.
+    /// Sets the mode of recombination to get the output prediction from experts prediction
+    /// Onlyused if nb clusters is greater than one
+    fn set_recombination(&mut self, recombination: egobox_moe::Recombination<f64>) {
+        *self = self.clone().recombination(recombination);
+    }
+
+    /// Sets the theta tuning used by the expert during training.
+    /// When only one element tuning is used for all clusters
+    /// When several elements, the length should match the number of clusters
     fn set_theta_tunings(&mut self, theta_tunings: &[ThetaTuning<f64>]) {
         *self = self.clone().theta_tunings(theta_tunings);
     }

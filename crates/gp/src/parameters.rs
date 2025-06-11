@@ -79,7 +79,7 @@ impl<F: Float> ThetaTuning<F> {
     ))
 )]
 pub struct GpValidParams<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
-    /// Parameter guess of the autocorrelation model
+    /// Parameter tuning hint of the autocorrelation model
     pub(crate) theta_tuning: ThetaTuning<F>,
     /// Regression model representing the mean(x)
     pub(crate) mean: Mean,

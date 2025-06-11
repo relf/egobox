@@ -126,8 +126,9 @@ where
         builder.set_regression_spec(self.config.gp.regression_spec);
         builder.set_correlation_spec(self.config.gp.correlation_spec);
         builder.set_n_clusters(self.config.gp.n_clusters.clone());
+        builder.set_recombination(self.config.gp.recombination);
+        builder.set_theta_tunings(&[self.config.gp.theta_tuning.clone()]);
         builder.set_optim_params(self.config.gp.n_start, self.config.gp.max_eval);
-
         let mut model = None;
         let mut best_likelihood = -f64::INFINITY;
         let mut best_theta_inits = theta_inits.map(|inits| inits.to_owned());
