@@ -14,8 +14,9 @@
 use crate::gp_config::*;
 use crate::types::*;
 use egobox_ego::{find_best_result_index, CoegoStatus, InfillObjData};
+use egobox_gp::ThetaTuning;
 use egobox_moe::NbClusters;
-use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
+use ndarray::{array, concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -520,6 +521,30 @@ impl Egor {
         Array1::from_vec(cstr_tol)
     }
 
+    fn recombination(&self) -> egobox_moe::Recombination<f64> {
+        match self.gp_config.recombination {
+            Recombination::Hard => egobox_moe::Recombination::Hard,
+            Recombination::Smooth => egobox_moe::Recombination::Smooth(Some(1.0)),
+        }
+    }
+
+    fn theta_tuning(&self) -> ThetaTuning<f64> {
+        let mut theta_tuning = ThetaTuning::<f64>::default();
+        if let Some(init) = self.gp_config.theta_init.as_ref() {
+            theta_tuning = ThetaTuning::Full {
+                init: Array1::from_vec(init.to_vec()),
+                bounds: array![ThetaTuning::<f64>::DEFAULT_BOUNDS],
+            }
+        }
+        if let Some(bounds) = self.gp_config.theta_bounds.as_ref() {
+            theta_tuning = ThetaTuning::Full {
+                init: theta_tuning.init().to_owned(),
+                bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
+            }
+        }
+        theta_tuning
+    }
+
     fn apply_config(
         &self,
         config: egobox_ego::EgorConfig,
@@ -539,7 +564,6 @@ impl Egor {
 
         let cstr_tol = self.cstr_tol(n_fcstr);
 
-        dbg!("COUCOU");
         let mut config = config
             .n_cstr(self.n_cstr)
             .max_iters(max_iters.unwrap_or(1))
@@ -547,14 +571,16 @@ impl Egor {
             .n_doe(self.n_doe)
             .cstr_tol(cstr_tol)
             .configure_gp(|gp| {
-                let regr = self.gp_config.regr_spec.0;
-                dbg!("regr={}", regr);
-                let corr = self.gp_config.corr_spec.0;
-                dbg!("corr={}", corr);
-                gp.regression_spec(egobox_moe::RegressionSpec::from_bits(regr).unwrap())
-                    .correlation_spec(egobox_moe::CorrelationSpec::from_bits(corr).unwrap())
-                    .n_clusters(self.n_clusters())
+                let regr = RegressionSpec(self.gp_config.regr_spec);
+                let corr = CorrelationSpec(self.gp_config.corr_spec);
+                gp.regression_spec(egobox_moe::RegressionSpec::from_bits(regr.0).unwrap())
+                    .correlation_spec(egobox_moe::CorrelationSpec::from_bits(corr.0).unwrap())
                     .kpls_dim(self.gp_config.kpls_dim)
+                    .n_clusters(self.n_clusters())
+                    .recombination(self.recombination())
+                    .theta_tuning(self.theta_tuning())
+                    .n_start(self.gp_config.n_start)
+                    .max_eval(self.gp_config.max_eval)
             })
             .infill_strategy(infill_strategy)
             .cstr_infill(self.cstr_infill)
