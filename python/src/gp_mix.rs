@@ -13,6 +13,7 @@ use std::{cmp::Ordering, path::Path};
 
 use crate::gp_config::GpConfig;
 use crate::types::*;
+use egobox_ego::{EGO_GP_OPTIM_MAX_EVAL, EGO_GP_OPTIM_N_START};
 use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{Clustered, MixtureGpSurrogate, NbClusters, ThetaTuning};
 #[allow(unused_imports)] // Avoid linting problem
@@ -95,8 +96,8 @@ impl GpMix {
         recombination=Recombination::Hard,
         theta_init=None,
         theta_bounds=None,
-        n_start=10,
-        max_eval=50,
+        n_start=EGO_GP_OPTIM_N_START as isize,
+        max_eval=EGO_GP_OPTIM_MAX_EVAL,
         seed=None
     ))]
     #[allow(clippy::too_many_arguments)]
@@ -199,12 +200,12 @@ impl GpMix {
             Ordering::Equal => NbClusters::auto(),
             Ordering::Less => NbClusters::automax(-self.gp_config.n_clusters as usize),
         };
-        let n_start = if self.n_start < 0 {
+        let n_start: usize = if self.gp_config.n_start < 0 {
             // no multistart, use theta_init as is
             theta_tuning = ThetaTuning::Fixed(theta_tuning.init().to_owned());
             0 // no multistart, value not used
         } else {
-            self.n_start.try_into().unwrap_or(10)
+            self.gp_config.n_start.try_into().unwrap()
         };
 
         let theta_tunings = if let NbClusters::Fixed { nb } = n_clusters {
@@ -226,7 +227,7 @@ impl GpMix {
                 .correlation_spec(egobox_moe::CorrelationSpec::from_bits(corr.0).unwrap())
                 .theta_tunings(&theta_tunings)
                 .kpls_dim(self.gp_config.kpls_dim)
-                .n_start(self.gp_config.n_start)
+                .n_start(n_start)
                 .with_rng(rng)
                 .fit(&dataset)
                 .expect("MoE model training")
@@ -256,7 +257,7 @@ impl Gpx {
         recombination=GpConfig::default().recombination,
         theta_init=GpConfig::default().theta_init,
         theta_bounds=GpConfig::default().theta_bounds,
-        n_start=GpConfig::default().n_start as isize,
+        n_start=GpConfig::default().n_start,
         max_eval=GpConfig::default().max_eval,
         seed = None
     ))]
