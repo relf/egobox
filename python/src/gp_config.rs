@@ -1,7 +1,9 @@
 use crate::types::*;
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::gen_stub_pyclass;
 
 /// GP configuration used by `Egor` and `GpMix`
+#[gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone, Debug)]
 pub(crate) struct GpConfig {

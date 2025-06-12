@@ -20,6 +20,7 @@ use ndarray::{array, concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 use std::cmp::Ordering;
 
 /// Utility function converting `xlimits` float data list specifying bounds of x components
@@ -30,6 +31,7 @@ use std::cmp::Ordering;
 ///
 /// # Returns
 ///     xtypes: nx-size list of XSpec(XType(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
+#[gen_stub_pyfunction]
 #[pyfunction]
 pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_, PyAny>> {
     if xlimits.is_empty() || xlimits[0].is_empty() {
@@ -80,19 +82,19 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///             either nt = nx then only x are specified and ns evals are done to get y doe values,
 ///             or nt = nx + ny then x = doe[:, :nx] and y = doe[:, nx:] are specified
 ///
-///     infill_strategy (InfillStrategy enum)
+///     infill_strategy (InfillStrategy enum):
 ///         Infill criteria to decide best next promising point.
 ///         Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S.
 ///
-///     cstr_infill (bool)
+///     cstr_infill (bool):
 ///         Activate constrained infill criterion where the product of probability of feasibility of constraints
 ///         used as a factor of the infill criterion specified via infill_strategy
 ///         
-///     cstr_strategy (ConstraintStrategy enum)
+///     cstr_strategy (ConstraintStrategy enum):
 ///         Constraint management either use the mean value or upper bound
 ///         Can be either ConstraintStrategy.MeanValue or ConstraintStrategy.UpperTrustedBound.
 ///
-///     q_infill_strategy (QInfillStrategy enum)
+///     q_infill_strategy (QInfillStrategy enum):
 ///         Parallel infill criteria (aka qEI) to get virtual next promising points in order to allow
 ///         q parallel evaluations of the function under optimization (only used when q_points > 1)
 ///         Can be either QInfillStrategy.KB (Kriging Believer),
@@ -102,37 +104,37 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///     q_points (int > 0):
 ///         Number of points to be evaluated to allow parallel evaluation of the function under optimization.
 ///
-///     q_optmod (int >= 1)
+///     q_optmod (int >= 1):
 ///         Number of iterations between two surrogate models true training (hypermarameters optimization)
 ///         otherwise previous hyperparameters are re-used only when computing q_points to be evaluated in parallel.
 ///         The default value is 1 meaning surrogates are properly trained for each q points determination.
 ///         The value is used as a modulo of iteration number * q_points to trigger true training.
 ///         This is used to decrease the number of training at the expense of surrogate accuracy.    
 ///
-///     infill_optimizer (InfillOptimizer enum)
+///     infill_optimizer (InfillOptimizer enum):
 ///         Internal optimizer used to optimize infill criteria.
 ///         Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP
 ///
-///     trego (bool)
+///     trego (bool):
 ///         When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
 ///
-///     coego_n_coop (int >= 0)
+///     coego_n_coop (int >= 0):
 ///         Number of cooperative components groups which will be used by the CoEGO algorithm.
 ///         Better to have n_coop a divider of nx or if not with a remainder as large as possible.  
 ///         The CoEGO algorithm is used to tackle high-dimensional problems turning it in a set of
 ///         partial optimizations using only nx / n_coop components at a time.
 ///         The default value is 0 meaning that the CoEGO algorithm is not used.
 ///   
-///     target (float)
+///     target (float):
 ///         Known optimum used as stopping criterion.
 ///
-///     outdir (String)
+///     outdir (String):
 ///         Directory to write optimization history and used as search path for warm start doe
 ///
-///     warm_start (bool)
+///     warm_start (bool):
 ///         Start by loading initial doe from <outdir> directory
 ///
-///     hot_start (int >= 0 or None)
+///     hot_start (int >= 0 or None):
 ///         When hot_start>=0 saves optimizer state at each iteration and starts from a previous checkpoint
 ///         if any for the given hot_start number of iterations beyond the max_iters nb of iterations.
 ///         In an unstable environment were there can be crashes it allows to restart the optimization
@@ -141,9 +143,10 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///         hot_start nb of iters is reached (provided the stopping criterion is max_iters)
 ///         Checkpoint information is stored in .checkpoint/egor.arg binary file.
 ///
-///     seed (int >= 0)
+///     seed (int >= 0):
 ///         Random generator seed to allow computation reproducibility.
 ///      
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct Egor {
     pub xspecs: PyObject,
@@ -169,6 +172,7 @@ pub(crate) struct Egor {
     pub seed: Option<u64>,
 }
 
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct OptimResult {
     #[pyo3(get)]
@@ -181,6 +185,7 @@ pub(crate) struct OptimResult {
     y_doe: Py<PyArray2<f64>>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl Egor {
     #[new]
@@ -259,11 +264,11 @@ impl Egor {
         }
     }
 
-    /// This function finds the minimum of a given function `fun`
+    /// ```ignore
+    /// This function finds the minimum of a given function "fun"
     ///
-    /// # Parameters
-    ///
-    ///     fun: array[n, nx]) -> array[n, ny]
+    /// Parameters
+    ///     fun: (array[n, nx] -> array[n, ny])
     ///         the function to be minimized
     ///         fun(x) = [obj(x), cstr_1(x), ... cstr_k(x)] where
     ///            obj is the objective function [n, nx] -> [n, 1]
@@ -275,16 +280,16 @@ impl Egor {
     ///         if constraints are cheap to evaluate better to pass them through run(fcstrs=[...])
     ///
     ///     max_iters:
-    ///         the iteration budget, number of fun calls is `n_doe + q_points * max_iters`.
+    ///         the iteration budget, number of fun calls is "n_doe + q_points * max_iters".
     ///
     ///     fcstrs:
     ///         list of constraints functions defined as g(x, return_grad): (ndarray[nx], bool) -> float or ndarray[nx,]
-    ///         If the given `return_grad` boolean is `False` the function has to return the constraint float value
-    ///         to be made negative by the optimizer (which drives the input array `x`).
+    ///         If the given "return_grad" boolean is "False" the function has to return the constraint float value
+    ///         to be made negative by the optimizer (which drives the input array "x").
     ///         Otherwise the function has to return the gradient (ndarray[nx,]) of the constraint function
-    ///         wrt the `nx` components of `x`.
+    ///         wrt the "nx" components of "x".
     ///
-    /// # Returns
+    /// Returns
     ///     optimization result
     ///         x_opt (array[1, nx]): x value where fun is at its minimum subject to constraints
     ///         y_opt (array[1, nx]): fun(x_opt)
@@ -357,12 +362,11 @@ impl Egor {
     /// under optimization wrt to previous evaluations.
     /// The function returns several point when multi point qEI strategy is used.
     ///
-    /// # Parameters
+    /// Parameters
     ///     x_doe (array[ns, nx]): ns samples where function has been evaluated
     ///     y_doe (array[ns, 1 + n_cstr]): ns values of objecctive and constraints
-    ///     
     ///
-    /// # Returns
+    /// Returns
     ///     (array[1, nx]): suggested location where to evaluate objective and constraints
     ///
     #[pyo3(signature = (x_doe, y_doe))]
@@ -389,10 +393,10 @@ impl Egor {
     /// of the function (objective wrt constraints) under minimization.
     /// Caveat: This function does not take into account function constraints values
     ///
-    /// # Parameters
+    /// Parameters
     ///     y_doe (array[ns, 1 + n_cstr]): ns values of objective and constraints
     ///     
-    /// # Returns
+    /// Returns
     ///     index in y_doe of the best evaluation
     ///
     #[pyo3(signature = (y_doe))]
@@ -408,12 +412,12 @@ impl Egor {
     /// of the function (objective wrt constraints) under minimization.
     /// Caveat: This function does not take into account function constraints values
     ///
-    /// # Parameters
+    /// Parameters
     ///     x_doe (array[ns, nx]): ns samples where function has been evaluated
     ///     y_doe (array[ns, 1 + n_cstr]): ns values of objective and constraints
     ///     
-    /// # Returns
-    ///     optimization result
+    /// Returns
+    ///     result
     ///         x_opt (array[1, nx]): x value where fun is at its minimum subject to constraints
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
