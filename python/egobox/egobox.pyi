@@ -710,26 +710,26 @@ def lhs(xspecs:typing.Any, n_samples:builtins.int, seed:typing.Optional[builtins
     r"""
     Samples generation using optimized Latin Hypercube Sampling
     
-    Parameters
+    # Parameters
         xspecs: list of XSpec
         n_samples: number of samples
         seed: random seed
     
-    Returns
-        ndarray of shape (n_samples, n_variables)
+    # Returns
+       ndarray of shape (n_samples, n_variables)
     """
 
 def sampling(method:Sampling, xspecs:typing.Any, n_samples:builtins.int, seed:typing.Optional[builtins.int]=None) -> numpy.typing.NDArray[numpy.float64]:
     r"""
     Samples generation using given method
     
-    Parameters
+    # Parameters
         method: LHS, FULL_FACTORIAL or RANDOM
         xspecs: list of XSpec
         n_samples: number of samples
         seed: random seed
     
-    Returns
+    # Returns
        ndarray of shape (n_samples, n_variables)
     """
 
