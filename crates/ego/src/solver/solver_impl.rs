@@ -121,7 +121,6 @@ where
         theta_inits: Option<&Array2<f64>>,
         actives: &Array2<usize>,
     ) -> (Box<dyn MixtureGpSurrogate>, Option<Array2<f64>>) {
-        dbg!(&self.config.gp.theta_tuning);
         let mut builder = self.surrogate_builder.clone();
         builder.set_kpls_dim(self.config.gp.kpls_dim);
         builder.set_regression_spec(self.config.gp.regression_spec);
