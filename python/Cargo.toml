@@ -12,6 +12,7 @@ readme = "README.md"
 [lib]
 name = "egobox"
 crate-type = ["cdylib", "rlib"]
+doctest = false                 # do not doctest as doc uses Python style for Python API doc
 
 [features]
 default = []
@@ -48,7 +49,7 @@ serde_json.workspace = true
 ctrlc.workspace = true
 
 argmin_testfunctions.workspace = true
-pyo3-stub-gen = { path = "../../pyo3-stub-gen/pyo3-stub-gen", features = ["numpy"] }
+pyo3-stub-gen = { version = "0.9", features = ["numpy"] }
 
 [[bin]]
 name = "stub_gen"
