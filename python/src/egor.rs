@@ -20,6 +20,7 @@ use ndarray::{array, concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 use std::cmp::Ordering;
 
 /// Utility function converting `xlimits` float data list specifying bounds of x components
@@ -30,6 +31,7 @@ use std::cmp::Ordering;
 ///
 /// # Returns
 ///     xtypes: nx-size list of XSpec(XType(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
+#[gen_stub_pyfunction]
 #[pyfunction]
 pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_, PyAny>> {
     if xlimits.is_empty() || xlimits[0].is_empty() {
@@ -144,6 +146,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///     seed (int >= 0)
 ///         Random generator seed to allow computation reproducibility.
 ///      
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct Egor {
     pub xspecs: PyObject,
@@ -169,6 +172,7 @@ pub(crate) struct Egor {
     pub seed: Option<u64>,
 }
 
+#[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct OptimResult {
     #[pyo3(get)]
@@ -181,6 +185,7 @@ pub(crate) struct OptimResult {
     y_doe: Py<PyArray2<f64>>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl Egor {
     #[new]
