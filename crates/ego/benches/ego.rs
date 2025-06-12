@@ -21,8 +21,10 @@ fn criterion_ego(c: &mut Criterion) {
                 EgorBuilder::optimize(ackley)
                     .configure(|config| {
                         config
-                            .regression_spec(RegressionSpec::CONSTANT)
-                            .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
+                            .configure_gp(|conf| {
+                                conf.regression_spec(RegressionSpec::CONSTANT)
+                                    .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
+                            })
                             .infill_strategy(InfillStrategy::WB2S)
                             .max_iters(10)
                             .target(5e-1)

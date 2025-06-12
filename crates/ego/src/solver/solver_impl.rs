@@ -26,9 +26,6 @@ use serde::de::DeserializeOwned;
 
 use super::coego::COEGO_IMPROVEMENT_CHECK;
 
-const EGO_GP_OPTIM_N_START: usize = 10;
-const EGO_GP_OPTIM_MAX_EVAL: usize = 50;
-
 impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     /// Constructor of the optimization of the function `f` with specified random generator
     /// to get reproducibility.
@@ -103,7 +100,7 @@ where
     C: CstrFn,
 {
     pub fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
-        self.config.n_clusters.is_auto()
+        self.config.gp.n_clusters.is_auto()
             && (added != 0 && added % 10 == 0 && added - prev_added > 0)
     }
 
@@ -125,12 +122,12 @@ where
         actives: &Array2<usize>,
     ) -> (Box<dyn MixtureGpSurrogate>, Option<Array2<f64>>) {
         let mut builder = self.surrogate_builder.clone();
-        builder.set_kpls_dim(self.config.kpls_dim);
-        builder.set_regression_spec(self.config.regression_spec);
-        builder.set_correlation_spec(self.config.correlation_spec);
-        builder.set_n_clusters(self.config.n_clusters.clone());
-        builder.set_optim_params(EGO_GP_OPTIM_N_START, EGO_GP_OPTIM_MAX_EVAL);
-
+        builder.set_kpls_dim(self.config.gp.kpls_dim);
+        builder.set_regression_spec(self.config.gp.regression_spec);
+        builder.set_correlation_spec(self.config.gp.correlation_spec);
+        builder.set_n_clusters(self.config.gp.n_clusters.clone());
+        builder.set_recombination(self.config.gp.recombination);
+        builder.set_optim_params(self.config.gp.n_start, self.config.gp.max_eval);
         let mut model = None;
         let mut best_likelihood = -f64::INFINITY;
         let mut best_theta_inits = theta_inits.map(|inits| inits.to_owned());
@@ -140,7 +137,7 @@ where
             /* init || recluster */
             {
                 if self.config.coego.activated {
-                    match self.config.n_clusters {
+                    match self.config.gp.n_clusters {
                         NbClusters::Auto { max: _ } => {
                             log::warn!("Automated clustering not available with CoEGO")
                         }
@@ -149,10 +146,14 @@ where
                                 (nb, xt.ncols()),
                                 &active.to_vec(),
                                 best_theta_inits,
+                                &self.config.gp.theta_tuning,
                             );
                             builder.set_theta_tunings(&theta_tunings);
                         }
                     }
+                } else {
+                    let theta_tunings = self.config.gp.theta_tuning.clone();
+                    builder.set_theta_tunings(&[theta_tunings]);
                 }
                 if i == 0 {
                     info!("{} clustering and training...", model_name);
@@ -190,7 +191,13 @@ where
                         .outer_iter()
                         .map(|init| ThetaTuning::Full {
                             init: init.to_owned(),
-                            bounds: ThetaTuning::default().bounds().unwrap().to_owned(),
+                            bounds: self
+                                .config
+                                .gp
+                                .theta_tuning
+                                .bounds()
+                                .cloned()
+                                .unwrap_or(ThetaTuning::default().bounds().unwrap().to_owned()),
                         })
                         .collect::<Vec<_>>();
                     if self.config.coego.activated {
@@ -224,7 +231,7 @@ where
 
             // CoEGO only in mono cluster, update theta if better likelihood
             if self.config.coego.activated {
-                if self.config.n_clusters.is_mono() {
+                if self.config.gp.n_clusters.is_mono() {
                     if COEGO_IMPROVEMENT_CHECK {
                         let likelihood = gp.experts()[0].likelihood();
                         // We update only if better likelihood

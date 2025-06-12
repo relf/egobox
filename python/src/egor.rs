@@ -11,15 +11,16 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Egor_Tutorial.ipynb) for usage.
 //!
 
-use std::cmp::Ordering;
-
+use crate::gp_config::*;
 use crate::types::*;
 use egobox_ego::{find_best_result_index, CoegoStatus, InfillObjData};
+use egobox_gp::ThetaTuning;
 use egobox_moe::NbClusters;
-use ndarray::{concatenate, Array1, Array2, ArrayView2, Axis};
+use ndarray::{array, concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use std::cmp::Ordering;
 
 /// Utility function converting `xlimits` float data list specifying bounds of x components
 /// to x specified as a list of XType.Float types [egobox.XType]
@@ -43,15 +44,6 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 }
 
 /// Optimizer constructor
-///     n_cstr (int):
-///         the number of constraints which will be approximated by surrogates (see `fun` argument)
-///
-///     cstr_tol (list(n_cstr + n_fcstr,)):
-///         List of tolerances for constraints to be satisfied (cstr < tol),
-///         list size should be equal to n_cstr + n_fctrs where n_cstr is the `n_cstr` argument
-///         and `n_fcstr` the number of constraints passed as functions.
-///         When None, tolerances default to DEFAULT_CSTR_TOL=1e-4.
-///
 ///     xspecs (list(XSpec)) where XSpec(xtype=FLOAT|INT|ORD|ENUM, xlimits=[<f(xtype)>] or tags=[strings]):
 ///         Specifications of the nx components of the input x (eg. len(xspecs) == nx)
 ///         Depending on the x type we get the following for xlimits:
@@ -62,6 +54,18 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///           (eg xlimits=[3] or tags=["red", "green", "blue"], tags are there for documention purpose but
 ///            tags specific values themselves are not used only indices in the enum are used hence
 ///            we can just specify the size of the enum, xlimits=[3]),
+///
+///     gp_config (GpConfig):
+///        GP configuration used by the optimizer, see GpConfig for details.
+///
+///     n_cstr (int):
+///         the number of constraints which will be approximated by surrogates (see `fun` argument)
+///
+///     cstr_tol (list(n_cstr + n_fcstr,)):
+///         List of tolerances for constraints to be satisfied (cstr < tol),
+///         list size should be equal to n_cstr + n_fctrs where n_cstr is the `n_cstr` argument
+///         and `n_fcstr` the number of constraints passed as functions.
+///         When None, tolerances default to DEFAULT_CSTR_TOL=1e-4.
 ///
 ///     n_start (int > 0):
 ///         Number of runs of infill strategy optimizations (best result taken)
@@ -74,18 +78,7 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///     doe (array[ns, nt]):
 ///         Initial DOE containing ns samples:
 ///             either nt = nx then only x are specified and ns evals are done to get y doe values,
-///             or nt = nx + ny then x = doe[:, :nx] and y = doe[:, nx:] are specified  
-///
-///     regr_spec (RegressionSpec flags, an int in [1, 7]):
-///         Specification of regression models used in gaussian processes.
-///         Can be RegressionSpec.CONSTANT (1), RegressionSpec.LINEAR (2), RegressionSpec.QUADRATIC (4) or
-///         any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
-///
-///     corr_spec (CorrelationSpec flags, an int in [1, 15]):
-///         Specification of correlation models used in gaussian processes.
-///         Can be CorrelationSpec.SQUARED_EXPONENTIAL (1), CorrelationSpec.ABSOLUTE_EXPONENTIAL (2),
-///         CorrelationSpec.MATERN32 (4), CorrelationSpec.MATERN52 (8) or
-///         any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
+///             or nt = nx + ny then x = doe[:, :nx] and y = doe[:, nx:] are specified
 ///
 ///     infill_strategy (InfillStrategy enum)
 ///         Infill criteria to decide best next promising point.
@@ -120,10 +113,6 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///         Internal optimizer used to optimize infill criteria.
 ///         Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP
 ///
-///     kpls_dim (0 < int < nx)
-///         Number of components to be used when PLS projection is used (a.k.a KPLS method).
-///         This is used to address high-dimensional problems typically when nx > 9.
-///
 ///     trego (bool)
 ///         When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
 ///
@@ -133,14 +122,6 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///         The CoEGO algorithm is used to tackle high-dimensional problems turning it in a set of
 ///         partial optimizations using only nx / n_coop components at a time.
 ///         The default value is 0 meaning that the CoEGO algorithm is not used.
-///
-///     n_clusters (int)
-///         Number of clusters used by the mixture of surrogate experts (default is 1).
-///         When set to 0, the number of cluster is determined automatically and refreshed every
-///         10-points addition (should say 'tentative addition' because addition may fail for some points
-///         but it is counted anyway).
-///         When set to negative number -n, the number of clusters is determined automatically in [1, n]
-///         this is used to limit the number of trials hence the execution time.
 ///   
 ///     target (float)
 ///         Known optimum used as stopping criterion.
@@ -166,23 +147,20 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 #[pyclass]
 pub(crate) struct Egor {
     pub xspecs: PyObject,
+    pub gp_config: GpConfig,
     pub n_cstr: usize,
     pub cstr_tol: Option<Vec<f64>>,
     pub n_start: usize,
     pub n_doe: usize,
     pub doe: Option<Array2<f64>>,
-    pub regression_spec: RegressionSpec,
-    pub correlation_spec: CorrelationSpec,
     pub infill_strategy: InfillStrategy,
     pub cstr_infill: bool,
     pub cstr_strategy: ConstraintStrategy,
     pub q_points: usize,
     pub q_infill_strategy: QInfillStrategy,
     pub infill_optimizer: InfillOptimizer,
-    pub kpls_dim: Option<usize>,
     pub trego: bool,
     pub coego_n_coop: usize,
-    pub n_clusters: NbClusters,
     pub q_optmod: usize,
     pub target: f64,
     pub outdir: Option<String>,
@@ -208,23 +186,20 @@ impl Egor {
     #[new]
     #[pyo3(signature = (
         xspecs,
+        gp_config = GpConfig::default(),
         n_cstr = 0,
         cstr_tol = None,
         n_start = 20,
         n_doe = 0,
         doe = None,
-        regr_spec = RegressionSpec::CONSTANT,
-        corr_spec = CorrelationSpec::SQUARED_EXPONENTIAL,
         infill_strategy = InfillStrategy::Wb2,
         cstr_infill = false,
         cstr_strategy = ConstraintStrategy::Mc,
         q_points = 1,
         q_infill_strategy = QInfillStrategy::Kb,
         infill_optimizer = InfillOptimizer::Cobyla,
-        kpls_dim = None,
         trego = false,
         coego_n_coop = 0,
-        n_clusters = 1,
         q_optmod = 1,
         target = f64::NEG_INFINITY,
         outdir = None,
@@ -236,23 +211,20 @@ impl Egor {
     fn new(
         _py: Python,
         xspecs: PyObject,
+        gp_config: GpConfig,
         n_cstr: usize,
         cstr_tol: Option<Vec<f64>>,
         n_start: usize,
         n_doe: usize,
         doe: Option<PyReadonlyArray2<f64>>,
-        regr_spec: u8,
-        corr_spec: u8,
         infill_strategy: InfillStrategy,
         cstr_infill: bool,
         cstr_strategy: ConstraintStrategy,
         q_points: usize,
         q_infill_strategy: QInfillStrategy,
         infill_optimizer: InfillOptimizer,
-        kpls_dim: Option<usize>,
         trego: bool,
         coego_n_coop: usize,
-        n_clusters: isize,
         q_optmod: usize,
         target: f64,
         outdir: Option<String>,
@@ -262,31 +234,22 @@ impl Egor {
     ) -> Self {
         let doe = doe.map(|x| x.to_owned_array());
 
-        let n_clusters = match n_clusters.cmp(&0) {
-            Ordering::Greater => NbClusters::fixed(n_clusters as usize),
-            Ordering::Equal => NbClusters::auto(),
-            Ordering::Less => NbClusters::automax(-n_clusters as usize),
-        };
-
         Egor {
             xspecs,
+            gp_config,
             n_cstr,
             cstr_tol,
             n_start,
             n_doe,
             doe,
-            regression_spec: RegressionSpec(regr_spec),
-            correlation_spec: CorrelationSpec(corr_spec),
             infill_strategy,
             cstr_infill,
             cstr_strategy,
             q_points,
             q_infill_strategy,
             infill_optimizer,
-            kpls_dim,
             trego,
             coego_n_coop,
-            n_clusters,
             q_optmod,
             target,
             outdir,
@@ -481,6 +444,14 @@ impl Egor {
 }
 
 impl Egor {
+    fn n_clusters(&self) -> NbClusters {
+        match self.gp_config.n_clusters.cmp(&0) {
+            Ordering::Greater => NbClusters::fixed(self.gp_config.n_clusters as usize),
+            Ordering::Equal => NbClusters::auto(),
+            Ordering::Less => NbClusters::automax(-self.gp_config.n_clusters as usize),
+        }
+    }
+
     fn infill_strategy(&self) -> egobox_ego::InfillStrategy {
         match self.infill_strategy {
             InfillStrategy::Ei => egobox_ego::InfillStrategy::EI,
@@ -550,6 +521,30 @@ impl Egor {
         Array1::from_vec(cstr_tol)
     }
 
+    fn recombination(&self) -> egobox_moe::Recombination<f64> {
+        match self.gp_config.recombination {
+            Recombination::Hard => egobox_moe::Recombination::Hard,
+            Recombination::Smooth => egobox_moe::Recombination::Smooth(Some(1.0)),
+        }
+    }
+
+    fn theta_tuning(&self) -> ThetaTuning<f64> {
+        let mut theta_tuning = ThetaTuning::<f64>::default();
+        if let Some(init) = self.gp_config.theta_init.as_ref() {
+            theta_tuning = ThetaTuning::Full {
+                init: Array1::from_vec(init.to_vec()),
+                bounds: array![ThetaTuning::<f64>::DEFAULT_BOUNDS],
+            }
+        }
+        if let Some(bounds) = self.gp_config.theta_bounds.as_ref() {
+            theta_tuning = ThetaTuning::Full {
+                init: theta_tuning.init().to_owned(),
+                bounds: bounds.iter().map(|v| (v[0], v[1])).collect(),
+            }
+        }
+        theta_tuning
+    }
+
     fn apply_config(
         &self,
         config: egobox_ego::EgorConfig,
@@ -570,16 +565,23 @@ impl Egor {
         let cstr_tol = self.cstr_tol(n_fcstr);
 
         let mut config = config
-            .n_clusters(self.n_clusters.clone())
             .n_cstr(self.n_cstr)
             .max_iters(max_iters.unwrap_or(1))
             .n_start(self.n_start)
             .n_doe(self.n_doe)
             .cstr_tol(cstr_tol)
-            .regression_spec(egobox_moe::RegressionSpec::from_bits(self.regression_spec.0).unwrap())
-            .correlation_spec(
-                egobox_moe::CorrelationSpec::from_bits(self.correlation_spec.0).unwrap(),
-            )
+            .configure_gp(|gp| {
+                let regr = RegressionSpec(self.gp_config.regr_spec);
+                let corr = CorrelationSpec(self.gp_config.corr_spec);
+                gp.regression_spec(egobox_moe::RegressionSpec::from_bits(regr.0).unwrap())
+                    .correlation_spec(egobox_moe::CorrelationSpec::from_bits(corr.0).unwrap())
+                    .kpls_dim(self.gp_config.kpls_dim)
+                    .n_clusters(self.n_clusters())
+                    .recombination(self.recombination())
+                    .theta_tuning(self.theta_tuning())
+                    .n_start(self.gp_config.n_start)
+                    .max_eval(self.gp_config.max_eval)
+            })
             .infill_strategy(infill_strategy)
             .cstr_infill(self.cstr_infill)
             .cstr_strategy(cstr_strategy)
@@ -594,9 +596,6 @@ impl Egor {
             .hot_start(self.hot_start.into());
         if let Some(doe) = doe {
             config = config.doe(doe);
-        };
-        if let Some(kpls_dim) = self.kpls_dim {
-            config = config.kpls_dim(kpls_dim);
         };
         if let Some(outdir) = self.outdir.as_ref().cloned() {
             config = config.outdir(outdir);

@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::Instant;
 
+pub const GP_OPTIM_N_START: usize = 10;
 pub const GP_COBYLA_MIN_EVAL: usize = 25;
 pub const GP_COBYLA_MAX_EVAL: usize = 1000;
 
