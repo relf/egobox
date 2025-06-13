@@ -674,6 +674,7 @@ dependencies = [
  "ndarray-rand",
  "ndarray-stats",
  "nlopt",
+ "paste",
  "rand_xoshiro",
  "rawpointer",
  "rayon",
