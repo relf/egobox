@@ -133,10 +133,8 @@ where
         let mut best_theta_inits = theta_inits.map(|inits| inits.to_owned());
 
         for (i, active) in actives.outer_iter().enumerate() {
-            let gp = if make_clustering
-            /* init || recluster */
-            {
-                //                if self.config.coego.activated {
+            let gp = if make_clustering {
+                /* init || recluster */
                 match self.config.gp.n_clusters {
                     NbClusters::Auto { max: _ } => {
                         log::warn!("Automated clustering not available with CoEGO")
@@ -650,7 +648,7 @@ where
                 &actives,
                 multistarter,
             );
-            println!("+++++++  xk = {}", xk);
+            debug!("+++++++  xk = {}", xk);
 
             match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
                 Ok(yk) => {
