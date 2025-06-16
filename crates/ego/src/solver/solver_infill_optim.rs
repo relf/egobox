@@ -10,7 +10,7 @@ use crate::types::ObjFn;
 use nlopt::ObjFn;
 
 use egobox_moe::MixtureGpSurrogate;
-use log::{debug, info};
+use log::info;
 use ndarray::{Array, Array1, Array2, Axis};
 
 use rayon::prelude::*;
@@ -194,7 +194,6 @@ where
                 let res = (0..self.config.n_start)
                     .into_par_iter()
                     .map(|i| {
-                        debug!("Begin optim {}", i);
                         let optim_res = Optimizer::new(
                             algorithm,
                             &obj,
@@ -207,7 +206,6 @@ where
                         .ftol_rel(1e-4)
                         .ftol_abs(1e-4)
                         .minimize();
-                        debug!("End optim {}", i);
                         optim_res
                     })
                     .reduce(

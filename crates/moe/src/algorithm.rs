@@ -781,7 +781,7 @@ impl GpMixture {
                 let x = xi.to_owned().insert_axis(Axis(0));
                 let x_drv: ArrayBase<ndarray::OwnedRepr<f64>, ndarray::Dim<[usize; 2]>> =
                     self.experts[c].predict_gradients(&x.view()).unwrap();
-                drv_i.assign(&x_drv.column(0))
+                drv_i.assign(&x_drv.row(0))
             });
         Ok(drv)
     }
@@ -1382,5 +1382,67 @@ mod tests {
             );
             assert_abs_diff_eq!(nrmse, 0., epsilon = 1e-2);
         });
+    }
+
+    fn sphere(x: &Array2<f64>) -> Array1<f64> {
+        (x * x)
+            .sum_axis(Axis(1))
+            .into_shape((x.nrows(),))
+            .expect("Cannot reshape sphere output")
+    }
+
+    #[test]
+    fn test_moe_smooth_vs_hard_one_cluster() {
+        let mut rng = Xoshiro256Plus::seed_from_u64(42);
+        let xt = Array2::random_using((50, 2), Uniform::new(0., 1.), &mut rng);
+        let yt = sphere(&xt);
+        let ds = Dataset::new(xt, yt.to_owned());
+
+        // Fit hard
+        let moe_hard = GpMixture::params()
+            .n_clusters(NbClusters::fixed(1))
+            .recombination(Recombination::Hard)
+            .with_rng(rng.clone())
+            .fit(&ds)
+            .expect("MOE hard fitted");
+
+        // Fit smooth
+        let moe_smooth = GpMixture::params()
+            .n_clusters(NbClusters::fixed(1))
+            .recombination(Recombination::Smooth(Some(1.0)))
+            .with_rng(rng)
+            .fit(&ds)
+            .expect("MOE smooth fitted");
+
+        // Predict
+        let mut rng = Xoshiro256Plus::seed_from_u64(43);
+        let x = Array2::random_using((1, 2), Uniform::new(0., 1.), &mut rng);
+        let preds_hard = moe_hard.predict(&x).expect("MOE hard prediction");
+        let preds_smooth = moe_smooth.predict(&x).expect("MOE smooth prediction");
+        println!("predict hard = {} smooth = {}", preds_hard, preds_smooth);
+        assert_abs_diff_eq!(preds_hard, preds_smooth, epsilon = 1e-5);
+
+        // Predict var
+        let preds_hard = moe_hard.predict_var(&x).expect("MOE hard prediction");
+        let preds_smooth = moe_smooth.predict_var(&x).expect("MOE smooth prediction");
+        assert_abs_diff_eq!(preds_hard, preds_smooth, epsilon = 1e-5);
+
+        // Predict gradients
+        println!("Check pred gradients at x = {}", x);
+        let preds_smooth = moe_smooth
+            .predict_gradients(&x)
+            .expect("MOE smooth prediction");
+        println!("smooth gradients = {}", preds_smooth);
+        let preds_hard = moe_hard.predict_gradients(&x).expect("MOE hard prediction");
+        assert_abs_diff_eq!(preds_hard, preds_smooth, epsilon = 1e-5);
+
+        // Predict var gradients
+        let preds_hard = moe_hard
+            .predict_var_gradients(&x)
+            .expect("MOE hard prediction");
+        let preds_smooth = moe_smooth
+            .predict_var_gradients(&x)
+            .expect("MOE smooth prediction");
+        assert_abs_diff_eq!(preds_hard, preds_smooth, epsilon = 1e-5);
     }
 }
