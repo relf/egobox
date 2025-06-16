@@ -155,10 +155,7 @@ where
                         builder.set_theta_tunings(&theta_tunings);
                     }
                 }
-                // } else {
-                //     let theta_tunings = self.config.gp.theta_tuning.clone();
-                //     builder.set_theta_tunings(&[theta_tunings]);
-                // }
+
                 if i == 0 {
                     info!("{} clustering and training...", model_name);
                 }
