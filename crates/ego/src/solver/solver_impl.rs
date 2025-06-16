@@ -136,25 +136,29 @@ where
             let gp = if make_clustering
             /* init || recluster */
             {
-                if self.config.coego.activated {
-                    match self.config.gp.n_clusters {
-                        NbClusters::Auto { max: _ } => {
-                            log::warn!("Automated clustering not available with CoEGO")
-                        }
-                        NbClusters::Fixed { nb } => {
-                            let theta_tunings = Self::set_initial_partial_theta_tuning(
-                                (nb, xt.ncols()),
-                                &active.to_vec(),
-                                best_theta_inits,
-                                &self.config.gp.theta_tuning,
-                            );
-                            builder.set_theta_tunings(&theta_tunings);
-                        }
+                //                if self.config.coego.activated {
+                match self.config.gp.n_clusters {
+                    NbClusters::Auto { max: _ } => {
+                        log::warn!("Automated clustering not available with CoEGO")
                     }
-                } else {
-                    let theta_tunings = self.config.gp.theta_tuning.clone();
-                    builder.set_theta_tunings(&[theta_tunings]);
+                    NbClusters::Fixed { nb } => {
+                        let theta_tunings = Self::set_initial_partial_theta_tuning(
+                            (
+                                nb,
+                                xt.ncols()
+                                    .min(self.config.gp.kpls_dim.unwrap_or(xt.ncols())),
+                            ),
+                            &active.to_vec(),
+                            best_theta_inits,
+                            &self.config.gp.theta_tuning,
+                        );
+                        builder.set_theta_tunings(&theta_tunings);
+                    }
                 }
+                // } else {
+                //     let theta_tunings = self.config.gp.theta_tuning.clone();
+                //     builder.set_theta_tunings(&[theta_tunings]);
+                // }
                 if i == 0 {
                     info!("{} clustering and training...", model_name);
                 }
@@ -649,6 +653,7 @@ where
                 &actives,
                 multistarter,
             );
+            println!("+++++++  xk = {}", xk);
 
             match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
                 Ok(yk) => {
