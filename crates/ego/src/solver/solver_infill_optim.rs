@@ -10,7 +10,7 @@ use crate::types::ObjFn;
 use nlopt::ObjFn;
 
 use egobox_moe::MixtureGpSurrogate;
-use log::{debug, info};
+use log::info;
 use ndarray::{Array, Array1, Array2, Axis};
 
 use rayon::prelude::*;
