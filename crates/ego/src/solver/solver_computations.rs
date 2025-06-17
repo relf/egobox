@@ -1,6 +1,6 @@
 use crate::errors::Result;
 use crate::gpmix::mixint::to_discrete_space;
-use crate::types::*;
+use crate::{types::*, utils};
 
 use crate::utils::{compute_cstr_scales, pofs, pofs_grad};
 use crate::{solver::coego, EgorSolver};
@@ -11,7 +11,8 @@ use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::MixtureGpSurrogate;
 
 use log::{debug, info, warn};
-use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
+use ndarray_rand::rand::seq::SliceRandom;
 
 use ndarray_rand::rand::Rng;
 use ndarray_stats::QuantileExt;
@@ -20,6 +21,7 @@ use serde::de::DeserializeOwned;
 
 const CSTR_DOUBT: f64 = 3.;
 
+#[allow(dead_code)]
 pub(crate) struct GlobalMultiStarter<'a, R: Rng + Clone> {
     xlimits: &'a Array2<f64>,
     rng: R,
@@ -36,8 +38,59 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter for GlobalMultiSta
 }
 
 impl<'a, R: Rng + Clone> GlobalMultiStarter<'a, R> {
+    #[allow(dead_code)]
     pub fn new(xlimits: &'a Array2<f64>, rng: R) -> Self {
         GlobalMultiStarter { xlimits, rng }
+    }
+}
+
+pub(crate) struct MiddlePickerMultiStarter<'a, 'b, R: Rng + Clone> {
+    xlimits: &'a Array2<f64>,
+    xtrain: &'b Array2<f64>,
+    rng: R,
+}
+
+impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
+    for MiddlePickerMultiStarter<'_, '_, R>
+{
+    fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64> {
+        let xlimits = coego::get_active_x(Axis(0), self.xlimits, active);
+        let n = (n_start - 2) / 2;
+        if self.xtrain.nrows() > n_start {
+            let xt = self.xtrain;
+            let mut indices: Vec<usize> = (0..xt.nrows()).collect();
+            indices.shuffle(&mut self.rng);
+            let selected: Vec<_> = indices
+                .iter()
+                .take(n)
+                .map(|&i| xt.slice(s![i, ..]).to_owned())
+                .collect();
+            let vxt = selected.iter().map(|p| p.view()).collect::<Vec<_>>();
+            let xt = stack(Axis(0), &vxt).unwrap();
+
+            let xt = coego::get_active_x(Axis(1), &xt, active);
+            utils::start_points(
+                &xt,
+                &xlimits.column(0).to_owned(),
+                &xlimits.column(1).to_owned(),
+            )
+        } else {
+            // fallback on LHS
+            let sampling = Lhs::new(&xlimits)
+                .with_rng(&mut self.rng)
+                .kind(LhsKind::Maximin);
+            sampling.sample(n_start)
+        }
+    }
+}
+
+impl<'a, 'b, R: Rng + Clone> MiddlePickerMultiStarter<'a, 'b, R> {
+    pub fn new(xlimits: &'a Array2<f64>, xtrain: &'b Array2<f64>, rng: R) -> Self {
+        MiddlePickerMultiStarter {
+            xlimits,
+            xtrain,
+            rng,
+        }
     }
 }
 
