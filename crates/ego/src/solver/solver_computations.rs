@@ -21,13 +21,14 @@ use serde::de::DeserializeOwned;
 
 const CSTR_DOUBT: f64 = 3.;
 
+/// LocalMultiStarter is a multistart strategy that samples points in the xlimits.
 #[allow(dead_code)]
-pub(crate) struct GlobalMultiStarter<'a, R: Rng + Clone> {
+pub(crate) struct LhsMultiStarter<'a, R: Rng + Clone> {
     xlimits: &'a Array2<f64>,
     rng: R,
 }
 
-impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter for GlobalMultiStarter<'_, R> {
+impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter for LhsMultiStarter<'_, R> {
     fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64> {
         let xlimits = coego::get_active_x(Axis(0), self.xlimits, active);
         let sampling = Lhs::new(&xlimits)
@@ -37,13 +38,16 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter for GlobalMultiSta
     }
 }
 
-impl<'a, R: Rng + Clone> GlobalMultiStarter<'a, R> {
+impl<'a, R: Rng + Clone> LhsMultiStarter<'a, R> {
     #[allow(dead_code)]
     pub fn new(xlimits: &'a Array2<f64>, rng: R) -> Self {
-        GlobalMultiStarter { xlimits, rng }
+        LhsMultiStarter { xlimits, rng }
     }
 }
 
+/// MiddlePickerMultiStarter is a multistart strategy where starting points
+/// are picked in the area in between the training data points where
+/// infill criterion is expected to be high
 pub(crate) struct MiddlePickerMultiStarter<'a, 'b, R: Rng + Clone> {
     xlimits: &'a Array2<f64>,
     xtrain: &'b Array2<f64>,

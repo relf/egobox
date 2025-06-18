@@ -30,14 +30,14 @@ use super::solver_infill_optim::MultiStarter;
 
 /// LocalMultiStarter is a multistart strategy that samples points in the local area
 /// defined by the trust region and the xlimits.
-struct LocalMultiStarter<R: Rng + Clone> {
+struct LocalLhsMultiStarter<R: Rng + Clone> {
     xlimits: Array2<f64>,
     origin: Array1<f64>,
     local_bounds: (f64, f64),
     rng: R,
 }
 
-impl<R: Rng + Clone> LocalMultiStarter<R> {
+impl<R: Rng + Clone> LocalLhsMultiStarter<R> {
     fn new(xlimits: Array2<f64>, origin: Array1<f64>, local_bounds: (f64, f64), rng: R) -> Self {
         Self {
             xlimits,
@@ -48,7 +48,7 @@ impl<R: Rng + Clone> LocalMultiStarter<R> {
     }
 }
 
-impl<R: Rng + Clone> MultiStarter for LocalMultiStarter<R> {
+impl<R: Rng + Clone> MultiStarter for LocalLhsMultiStarter<R> {
     fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64> {
         // Draw n_start initial points (multistart optim) in the local_area
         // local_area = intersection(trust_region, xlimits)
@@ -110,7 +110,7 @@ where
 
         let mut rng = new_state.take_rng().unwrap();
         let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
-        let multistarter = LocalMultiStarter::new(
+        let multistarter = LocalLhsMultiStarter::new(
             self.xlimits.clone(),
             xbest.to_owned(),
             (self.config.trego.d.0, self.config.trego.d.1),
