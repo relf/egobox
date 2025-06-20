@@ -16,8 +16,7 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/relf/egobox/blob/master/doc/Gpx_MaunaLoaCO2.ipynb)
 
-
 ## Solve an analytical MDO problem with a hidden optimum
 
-[![Open In Colab](https://colab.research.google.com/drive/11a6KTF44v2t8BH3jVdOr3O4roS60PwIB?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/11a6KTF44v2t8BH3jVdOr3O4roS60PwIB?usp=sharing)
 
