@@ -2,12 +2,12 @@ use std::marker::PhantomData;
 
 use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
+use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::utils::{find_best_result_index_from, update_data};
 use crate::{find_best_result_index, EgorConfig};
 use crate::{types::*, EgorState};
 use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
 
-use super::solver_computations::GlobalMultiStarter;
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
 
@@ -636,7 +636,9 @@ where
                 .collect::<Vec<_>>();
 
             let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
-            let multistarter = GlobalMultiStarter::new(&self.xlimits, sub_rng);
+            // let multistarter = GlobalMultiStarter::new(&self.xlimits, sub_rng);
+            let xsamples = x_data.to_owned();
+            let multistarter = MiddlePickerMultiStarter::new(&self.xlimits, &xsamples, sub_rng);
 
             let (infill_obj, xk) = self.optimize_infill_criterion(
                 obj_model.as_ref(),

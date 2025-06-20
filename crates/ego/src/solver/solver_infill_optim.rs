@@ -190,8 +190,7 @@ where
             }
             while !success && n_optim <= n_max_optim {
                 let x_start = multistarter.multistart(self.config.n_start, &active);
-
-                let res = (0..self.config.n_start)
+                let res = (0..x_start.nrows())
                     .into_par_iter()
                     .map(|i| {
                         let optim_res = Optimizer::new(
