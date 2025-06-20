@@ -82,16 +82,6 @@ mod tests {
     use ndarray_rand::{rand::SeedableRng, rand_distr::Uniform, RandomExt};
     use rand_xoshiro::Xoshiro256Plus;
 
-    // #[test]
-    // fn test_no_start_points_when_too_close() {
-    //     let x = array![[0.0, 0.0], [0.01, 0.01]];
-    //     let xl = array![0.0, 0.0];
-    //     let xu = array![1.0, 1.0];
-
-    //     let result = start_points(&x, &xl, &xu);
-    //     assert_eq!(result.nrows(), 0); // Aucun point intermédiaire valide
-    // }
-
     #[test]
     fn test_midpoint_between_two_distant_points() {
         let x = array![[0.1, 0.2], [0.9, 0.8]];
