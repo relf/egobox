@@ -443,7 +443,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_xsinx_gbnm_optimizer_egor_builder() {
+    fn test_xsinx_logei_egor_builder() {
         let outdir = "target/test_egor_builder_01";
         let outfile = format!("{outdir}/{DOE_INITIAL_FILE}");
         let _ = std::fs::remove_file(&outfile);
@@ -451,10 +451,9 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|cfg| {
                 cfg.infill_strategy(InfillStrategy::LogEI)
-                    .infill_optimizer(InfillOptimizer::Gbnm)
+                    .infill_optimizer(InfillOptimizer::Slsqp)
                     .max_iters(30)
                     .doe(&initial_doe)
-                    .target(-15.1)
                     .outdir(outdir)
                     .seed(42)
             })
@@ -462,7 +461,7 @@ mod tests {
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.1];
-        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 0.5);
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 1e-1);
         let saved_doe: Array2<f64> = read_npy(&outfile).unwrap();
         assert_abs_diff_eq!(initial_doe, saved_doe.slice(s![..3, ..1]), epsilon = 1e-6);
     }

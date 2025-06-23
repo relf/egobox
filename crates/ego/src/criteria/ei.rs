@@ -1,5 +1,5 @@
 use crate::criteria::InfillCriterion;
-use crate::utils::{norm_cdf, norm_pdf};
+use crate::utils::{d_log_ei_helper, log_ei_helper, norm_cdf, norm_pdf};
 use egobox_moe::MixtureGpSurrogate;
 use ndarray::{Array1, ArrayView};
 
@@ -120,8 +120,24 @@ impl InfillCriterion for LogExpectedImprovement {
         fmin: f64,
         _scale: Option<f64>,
     ) -> f64 {
-        let ei = EI.value(x, obj_model, fmin, _scale);
-        (ei + 100. * f64::EPSILON).ln()
+        let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
+
+        if let Ok(p) = obj_model.predict(&pt) {
+            if let Ok(s) = obj_model.predict_var(&pt) {
+                if s[[0, 0]].abs() < 10000. * f64::EPSILON {
+                    0.0
+                } else {
+                    let pred = p[0];
+                    let sigma = s[[0, 0]].sqrt();
+                    let u = (pred - fmin) / sigma;
+                    log_ei_helper(u) + sigma.ln()
+                }
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        }
     }
 
     /// Computes derivatives of EI infill criterion wrt to x components at given `x` point
@@ -133,10 +149,25 @@ impl InfillCriterion for LogExpectedImprovement {
         fmin: f64,
         _scale: Option<f64>,
     ) -> Array1<f64> {
-        let ei = EI.value(x, obj_model, fmin, _scale);
+        let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
 
-        let grad_ei = EI.grad(x, obj_model, fmin, _scale);
-        grad_ei / (ei + 100. * f64::EPSILON)
+        if let Ok(p) = obj_model.predict(&pt) {
+            if let Ok(s) = obj_model.predict_var(&pt) {
+                if s[[0, 0]].abs() < 10000. * f64::EPSILON {
+                    Array1::zeros(pt.len())
+                } else {
+                    let pred = p[0];
+                    let sigma = s[[0, 0]].sqrt();
+                    let u = (pred - fmin) / sigma;
+                    let du = obj_model.predict_gradients(&pt).unwrap();
+                    d_log_ei_helper(u) * du.row(0).to_owned()
+                }
+            } else {
+                Array1::zeros(pt.len())
+            }
+        } else {
+            Array1::zeros(pt.len())
+        }
     }
 
     fn scaling(
