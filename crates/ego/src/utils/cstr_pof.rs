@@ -66,6 +66,17 @@ pub fn pofs(x: &[f64], cstr_models: &[Box<dyn MixtureGpSurrogate>], cstr_tols: &
     }
 }
 
+pub fn logpofs(x: &[f64], cstr_models: &[Box<dyn MixtureGpSurrogate>], cstr_tols: &[f64]) -> f64 {
+    if cstr_models.is_empty() {
+        1.
+    } else {
+        zip(cstr_models, cstr_tols).fold(1., |acc, (cstr_model, cstr_tol)| {
+            let pof = pof(x, &**cstr_model, *cstr_tol).max(100. * f64::EPSILON);
+            acc + pof.ln()
+        })
+    }
+}
+
 pub fn pofs_grad(
     x: &[f64],
     cstr_models: &[Box<dyn MixtureGpSurrogate>],
