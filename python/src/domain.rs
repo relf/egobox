@@ -52,7 +52,7 @@ pub(crate) fn parse(py: Python, xspecs: PyObject) -> Vec<egobox_ego::XType> {
 fn xtypes_from_floats(floats: Vec<Vec<f64>>) -> Vec<egobox_ego::XType> {
     let xtypes: Vec<egobox_ego::XType> = floats
         .iter()
-        .map(|v| egobox_ego::XType::Cont(v[0], v[1]))
+        .map(|v| egobox_ego::XType::Float(v[0], v[1]))
         .collect();
     xtypes
 }
@@ -60,7 +60,7 @@ fn xtypes_from_floats(floats: Vec<Vec<f64>>) -> Vec<egobox_ego::XType> {
 fn xtypes_from_ndarray(xlimits: PyReadonlyArray2<f64>) -> Vec<egobox_ego::XType> {
     let ary = xlimits.as_array();
     let xtypes = ary.outer_iter().fold(Vec::new(), |mut acc, row| {
-        acc.push(egobox_ego::XType::Cont(row[0], row[1]));
+        acc.push(egobox_ego::XType::Float(row[0], row[1]));
         acc
     });
     xtypes
@@ -70,7 +70,7 @@ fn xtypes_from_xspecs(xspecs: Vec<XSpec>) -> Vec<egobox_ego::XType> {
     let xtypes: Vec<egobox_ego::XType> = xspecs
         .iter()
         .map(|spec| match spec.xtype {
-            XType::Float => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
+            XType::Float => egobox_ego::XType::Float(spec.xlimits[0], spec.xlimits[1]),
             XType::Int => egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32),
             XType::Ord => egobox_ego::XType::Ord(spec.xlimits.clone()),
             XType::Enum => {
