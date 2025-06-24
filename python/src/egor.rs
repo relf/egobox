@@ -11,6 +11,7 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Egor_Tutorial.ipynb) for usage.
 //!
 
+use crate::domain::*;
 use crate::gp_config::*;
 use crate::types::*;
 use egobox_ego::{find_best_result_index, CoegoStatus, InfillObjData};
@@ -315,7 +316,7 @@ impl Egor {
             })
             .collect::<Vec<_>>();
 
-        let xtypes: Vec<egobox_ego::XType> = self.domain(py);
+        let xtypes: Vec<egobox_ego::XType> = parse(py, self.xspecs.clone_ref(py));
 
         let mixintegor = egobox_ego::EgorFactory::optimize(obj)
             .subject_to(fcstrs)
@@ -362,7 +363,7 @@ impl Egor {
         let x_doe = x_doe.as_array();
         let y_doe = y_doe.as_array();
         let doe = concatenate(Axis(1), &[x_doe.view(), y_doe.view()]).unwrap();
-        let xtypes: Vec<egobox_ego::XType> = self.domain(py);
+        let xtypes: Vec<egobox_ego::XType> = parse(py, self.xspecs.clone_ref(py));
 
         let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
             .configure(|config| self.apply_config(config, Some(1), 0, Some(&doe)))
@@ -472,22 +473,6 @@ impl Egor {
         }
     }
 
-    fn domain(&self, py: Python) -> Vec<egobox_ego::XType> {
-        let domain: Domain = self.xspecs.extract(py).expect("Error in xspecs conversion");
-        if domain.is_empty() {
-            panic!("Error: domain argument cannot be empty")
-        }
-        if domain.ndim().is_none() {
-            panic!("Error: domain argument badly formed")
-        }
-
-        match domain {
-            Domain::Xspecs(xspecs) => xtypes_from_xspecs(xspecs),
-            Domain::Xrows(xlimits) => xtypes_from_ndarray(xlimits),
-            Domain::Xlists(floats) => xtypes_from_floats(floats),
-        }
-    }
-
     /// Either use user defined cstr_tol or else use default tolerance for all constraints
     /// n_fcstr is the number of function constraints
     fn cstr_tol(&self, n_fcstr: usize) -> Array1<f64> {
@@ -582,40 +567,4 @@ impl Egor {
         };
         config
     }
-}
-
-fn xtypes_from_floats(floats: Vec<Vec<f64>>) -> Vec<egobox_ego::XType> {
-    let xtypes: Vec<egobox_ego::XType> = floats
-        .iter()
-        .map(|v| egobox_ego::XType::Cont(v[0], v[1]))
-        .collect();
-    xtypes
-}
-
-fn xtypes_from_ndarray(xlimits: PyReadonlyArray2<f64>) -> Vec<egobox_ego::XType> {
-    let ary = xlimits.as_array();
-    let xtypes = ary.outer_iter().fold(Vec::new(), |mut acc, row| {
-        acc.push(egobox_ego::XType::Cont(row[0], row[1]));
-        acc
-    });
-    xtypes
-}
-
-fn xtypes_from_xspecs(xspecs: Vec<XSpec>) -> Vec<egobox_ego::XType> {
-    let xtypes: Vec<egobox_ego::XType> = xspecs
-        .iter()
-        .map(|spec| match spec.xtype {
-            XType::Float => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
-            XType::Int => egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32),
-            XType::Ord => egobox_ego::XType::Ord(spec.xlimits.clone()),
-            XType::Enum => {
-                if spec.tags.is_empty() {
-                    egobox_ego::XType::Enum(spec.xlimits[0] as usize)
-                } else {
-                    egobox_ego::XType::Enum(spec.tags.len())
-                }
-            }
-        })
-        .collect();
-    xtypes
 }
