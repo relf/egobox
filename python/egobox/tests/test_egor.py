@@ -115,7 +115,7 @@ class TestEgor(unittest.TestCase):
     def test_sphere(self):
         dim = 5
         egor = egx.Egor(
-            egx.to_specs([[-5.12, 5.12]] * dim),
+            np.array([[-5.12, 5.12]] * dim),  # test ndarray API
             infill_strategy=egx.InfillStrategy.LOG_EI,
             seed=42,
         )
@@ -125,7 +125,7 @@ class TestEgor(unittest.TestCase):
         np.testing.assert_allclose(0.0, res.x_opt, atol=5e-1)
 
     def test_xsinx(self):
-        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), seed=42)
+        egor = egx.Egor([[0.0, 25.0]], seed=42)  # test list of list api
         res = egor.minimize(xsinx, max_iters=20)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
@@ -145,7 +145,7 @@ class TestEgor(unittest.TestCase):
             os.remove("./test_dir/egor_initial_doe.npy")
         if os.path.exists("./test_dir/egor_doe.npy"):
             os.remove("./test_dir/egor_doe.npy")
-        xlimits = egx.to_specs([[0.0, 25.0]])
+        xlimits = [[0.0, 25.0]]
         doe = egx.lhs(xlimits, 10)
         egor = egx.Egor(xlimits, doe=doe, seed=42, outdir="./test_dir")
         res = egor.minimize(xsinx, max_iters=15)
@@ -169,7 +169,7 @@ class TestEgor(unittest.TestCase):
         max_iters = 30
         n_cstr = 2
         egor = egx.Egor(
-            egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
+            [[0.0, 3.0], [0.0, 4.0]],
             cstr_tol=np.array([1e-3, 1e-3]),
             n_cstr=n_cstr,
             seed=42,
@@ -189,7 +189,7 @@ class TestEgor(unittest.TestCase):
 
     def test_g24_kpls(self):
         egor = egx.Egor(
-            egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
+            [[0.0, 3.0], [0.0, 4.0]],
             n_cstr=2,
             cstr_tol=np.array([5e-3, 5e-3]),
             gp_config=egx.GpConfig(
@@ -210,7 +210,7 @@ class TestEgor(unittest.TestCase):
         max_iters = 40
         n_cstr = 2
         egor = egx.Egor(
-            egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
+            [[0.0, 3.0], [0.0, 4.0]],
             cstr_tol=np.array([1e-3, 1e-3]),
             n_cstr=n_cstr,
             seed=42,
@@ -227,7 +227,7 @@ class TestEgor(unittest.TestCase):
 
     def test_six_humps(self):
         egor = egx.Egor(
-            egx.to_specs([[-3.0, 3.0], [-2.0, 2.0]]),
+            [[-3.0, 3.0], [-2.0, 2.0]],
             infill_strategy=egx.InfillStrategy.WB2,
             seed=42,
         )
@@ -243,7 +243,7 @@ class TestEgor(unittest.TestCase):
         egx.Egor(egx.to_specs([[0.0, 25.0]]), n_doe=10)
 
     def test_egor_service(self):
-        xlimits = egx.to_specs([[0.0, 25.0]])
+        xlimits = [[0.0, 25.0]]
         egor = egx.Egor(xlimits, seed=42)
         x_doe = egx.lhs(xlimits, 3, seed=42)
         y_doe = xsinx(x_doe)
@@ -259,7 +259,7 @@ class TestEgor(unittest.TestCase):
     # the unconstrained minimum located in x=18.9
     def test_egor_with_fcstrs(self):
         fcstrs = [cstr_xsinx]
-        egor = egx.Egor(egx.to_specs([[0.0, 25.0]]), n_doe=5, seed=42)
+        egor = egx.Egor([[0.0, 25.0]], n_doe=5, seed=42)
         res = egor.minimize(xsinx, max_iters=20, fcstrs=fcstrs)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(18, res.x_opt[0], delta=2e-3)
@@ -268,7 +268,7 @@ class TestEgor(unittest.TestCase):
         n_doe = 5
         max_iters = 20
         egor = egx.Egor(
-            egx.to_specs([[0.0, 3.0], [0.0, 4.0]]),
+            [[0.0, 3.0], [0.0, 4.0]],
             seed=42,
             q_optmod=2,
             n_doe=n_doe,
