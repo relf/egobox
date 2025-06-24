@@ -33,6 +33,10 @@ use std::cmp::Ordering;
 ///     xtypes: nx-size list of XSpec(XType(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
 #[gen_stub_pyfunction]
 #[pyfunction]
+// #[deprecated(
+//     since = "0.30.0",
+//     note = "Useless call, list of lists are now automatically converted"
+// )]
 pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_, PyAny>> {
     if xlimits.is_empty() || xlimits[0].is_empty() {
         let err = "Error: xspecs argument cannot be empty";
@@ -170,19 +174,6 @@ pub(crate) struct Egor {
     pub warm_start: bool,
     pub hot_start: Option<u64>,
     pub seed: Option<u64>,
-}
-
-#[gen_stub_pyclass]
-#[pyclass]
-pub(crate) struct OptimResult {
-    #[pyo3(get)]
-    x_opt: Py<PyArray1<f64>>,
-    #[pyo3(get)]
-    y_opt: Py<PyArray1<f64>>,
-    #[pyo3(get)]
-    x_doe: Py<PyArray2<f64>>,
-    #[pyo3(get)]
-    y_doe: Py<PyArray2<f64>>,
 }
 
 #[gen_stub_pymethods]
@@ -332,7 +323,7 @@ impl Egor {
             })
             .collect::<Vec<_>>();
 
-        let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
+        let xtypes: Vec<egobox_ego::XType> = self.domain(py);
 
         let mixintegor = egobox_ego::EgorFactory::optimize(obj)
             .subject_to(fcstrs)
@@ -379,7 +370,7 @@ impl Egor {
         let x_doe = x_doe.as_array();
         let y_doe = y_doe.as_array();
         let doe = concatenate(Axis(1), &[x_doe.view(), y_doe.view()]).unwrap();
-        let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
+        let xtypes: Vec<egobox_ego::XType> = self.domain(py);
 
         let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
             .configure(|config| self.apply_config(config, Some(1), 0, Some(&doe)))
@@ -489,30 +480,20 @@ impl Egor {
         }
     }
 
-    fn xtypes(&self, py: Python) -> Vec<egobox_ego::XType> {
-        let xspecs: Vec<XSpec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
-        if xspecs.is_empty() {
-            panic!("Error: xspecs argument cannot be empty")
+    fn domain(&self, py: Python) -> Vec<egobox_ego::XType> {
+        let domain: Domain = self.xspecs.extract(py).expect("Error in xspecs conversion");
+        if domain.is_empty() {
+            panic!("Error: domain argument cannot be empty")
+        }
+        if domain.ndim().is_none() {
+            panic!("Error: domain argument badly formed")
         }
 
-        let xtypes: Vec<egobox_ego::XType> = xspecs
-            .iter()
-            .map(|spec| match spec.xtype {
-                XType::Float => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
-                XType::Int => {
-                    egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
-                }
-                XType::Ord => egobox_ego::XType::Ord(spec.xlimits.clone()),
-                XType::Enum => {
-                    if spec.tags.is_empty() {
-                        egobox_ego::XType::Enum(spec.xlimits[0] as usize)
-                    } else {
-                        egobox_ego::XType::Enum(spec.tags.len())
-                    }
-                }
-            })
-            .collect();
-        xtypes
+        match domain {
+            Domain::Xspecs(xspecs) => xtypes_from_xspecs(xspecs),
+            Domain::Xrows(xlimits) => xtypes_from_ndarray(xlimits),
+            Domain::Xlists(floats) => xtypes_from_floats(floats),
+        }
     }
 
     /// Either use user defined cstr_tol or else use default tolerance for all constraints
@@ -609,4 +590,40 @@ impl Egor {
         };
         config
     }
+}
+
+fn xtypes_from_floats(floats: Vec<Vec<f64>>) -> Vec<egobox_ego::XType> {
+    let xtypes: Vec<egobox_ego::XType> = floats
+        .iter()
+        .map(|v| egobox_ego::XType::Cont(v[0], v[1]))
+        .collect();
+    xtypes
+}
+
+fn xtypes_from_ndarray(xlimits: PyReadonlyArray2<f64>) -> Vec<egobox_ego::XType> {
+    let ary = xlimits.as_array();
+    let xtypes = ary.outer_iter().fold(Vec::new(), |mut acc, row| {
+        acc.push(egobox_ego::XType::Cont(row[0], row[1]));
+        acc
+    });
+    xtypes
+}
+
+fn xtypes_from_xspecs(xspecs: Vec<XSpec>) -> Vec<egobox_ego::XType> {
+    let xtypes: Vec<egobox_ego::XType> = xspecs
+        .iter()
+        .map(|spec| match spec.xtype {
+            XType::Float => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
+            XType::Int => egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32),
+            XType::Ord => egobox_ego::XType::Ord(spec.xlimits.clone()),
+            XType::Enum => {
+                if spec.tags.is_empty() {
+                    egobox_ego::XType::Enum(spec.xlimits[0] as usize)
+                } else {
+                    egobox_ego::XType::Enum(spec.tags.len())
+                }
+            }
+        })
+        .collect();
+    xtypes
 }

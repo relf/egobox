@@ -1,3 +1,4 @@
+use numpy::{PyArray1, PyArray2, PyReadonlyArray2, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_pymethods};
 
@@ -155,4 +156,44 @@ impl XSpec {
 pub(crate) enum SparseMethod {
     Fitc = 1,
     Vfe = 2,
+}
+
+#[gen_stub_pyclass]
+#[pyclass]
+pub(crate) struct OptimResult {
+    #[pyo3(get)]
+    pub(crate) x_opt: Py<PyArray1<f64>>,
+    #[pyo3(get)]
+    pub(crate) y_opt: Py<PyArray1<f64>>,
+    #[pyo3(get)]
+    pub(crate) x_doe: Py<PyArray2<f64>>,
+    #[pyo3(get)]
+    pub(crate) y_doe: Py<PyArray2<f64>>,
+}
+
+#[derive(FromPyObject)]
+pub(crate) enum Domain<'py> {
+    Xlists(Vec<Vec<f64>>),
+    Xrows(PyReadonlyArray2<'py, f64>),
+    Xspecs(Vec<XSpec>),
+}
+
+impl Domain<'_> {
+    /// Returns true if the domain is empty.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Domain::Xlists(v) => v.is_empty(),
+            Domain::Xrows(arr) => arr.shape()[0] == 0 || arr.shape()[1] == 0,
+            Domain::Xspecs(v) => v.is_empty(),
+        }
+    }
+
+    /// Returns the dimensionality of the domain, if available.
+    pub fn ndim(&self) -> Option<usize> {
+        match self {
+            Domain::Xlists(v) => v.first().map(|row| row.len()),
+            Domain::Xrows(arr) => Some(arr.shape()[1]),
+            Domain::Xspecs(v) => Some(v.len()),
+        }
+    }
 }
