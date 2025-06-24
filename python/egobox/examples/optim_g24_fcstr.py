@@ -6,7 +6,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-xspecs_g24 = egx.to_specs([[0.0, 3.0], [0.0, 4.0]])
+xspecs_g24 = [[0.0, 3.0], [0.0, 4.0]]
 
 
 # Objective
