@@ -23,19 +23,11 @@ use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 use std::cmp::Ordering;
 
-/// Utility function converting `xlimits` float data list specifying bounds of x components
-/// to x specified as a list of XType.Float types [egobox.XType]
-///
-/// # Parameters
-///     xlimits : nx-size list of [lower_bound, upper_bound] where `nx` is the dimension of x
-///
-/// # Returns
-///     xtypes: nx-size list of XSpec(XType(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
 #[gen_stub_pyfunction]
 #[pyfunction]
 // #[deprecated(
 //     since = "0.30.0",
-//     note = "Useless call, list of lists are now automatically converted"
+//     note = "Useless utility method, list of lists are now automatically converted. This method will be removed"
 // )]
 pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_, PyAny>> {
     if xlimits.is_empty() || xlimits[0].is_empty() {
