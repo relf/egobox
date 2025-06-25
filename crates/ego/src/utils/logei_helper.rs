@@ -44,14 +44,20 @@ pub fn log_ei_helper(u: f64) -> f64 {
     }
 }
 
+fn finite_diff_log_ei(u: f64, eps: f64) -> f64 {
+    (log_ei_helper(u + eps) - log_ei_helper(u - eps)) / (2.0 * eps)
+}
+
 pub fn d_log_ei_helper(u: f64) -> f64 {
-    let phi = normal_pdf(u);
-    let big_phi = normal_cdf(u);
+    // XXX: Analytical derivative does not seem to work?!  Pb numerical stability
+    // let phi = normal_pdf(u);
+    // let big_phi = normal_cdf(u);
 
-    let numerator = big_phi + phi - u * phi;
-    let denominator = log_ei_helper(u).exp();
+    // let numerator = big_phi + phi - u * phi;
+    // let denominator = log_ei_helper(u).exp();
 
-    numerator / denominator
+    // numerator / denominator
+    finite_diff_log_ei(u, 1e-6)
 }
 
 #[cfg(test)]
@@ -86,7 +92,9 @@ mod tests {
         write_npy("logei_dfx.npy", &dfx).expect("save dfx");
 
         let gradfx = x.mapv(|x| finite_diff_log_ei(x, 1e-6));
-        write_npy("logei_gradfx.npy", &gradfx).expect("save dfx");
+        write_npy("logei_fdifffx.npy", &gradfx).expect("save dfx");
+
+        assert_abs_diff_eq!(dfx, gradfx, epsilon = 1e-3);
     }
 
     fn finite_diff_log_ei(u: f64, eps: f64) -> f64 {
