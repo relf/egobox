@@ -159,8 +159,9 @@ impl InfillCriterion for LogExpectedImprovement {
                     let pred = p[0];
                     let sigma = s[[0, 0]].sqrt();
                     let u = (pred - fmin) / sigma;
-                    let du = obj_model.predict_gradients(&pt).unwrap();
-                    d_log_ei_helper(u) * du.row(0).to_owned()
+                    let du = obj_model.predict_gradients(&pt).unwrap() / sigma;
+                    let dhelper = d_log_ei_helper(u);
+                    du.row(0).to_owned().mapv(|v| dhelper * v)
                 }
             } else {
                 Array1::zeros(pt.len())
@@ -195,6 +196,7 @@ mod tests {
     use finitediff::FiniteDiff;
     use linfa::Dataset;
     use ndarray::array;
+    use ndarray_npy::write_npy;
     // use ndarray_npy::write_npy;
 
     #[test]
@@ -239,5 +241,50 @@ mod tests {
         // write_npy("ei_cytrue.npy", &cytrue).expect("save cstr");
 
         // println!("thetas = {}", mixi_moe);
+    }
+
+    #[test]
+    fn test_log_ei_gradients() {
+        let xtypes = vec![XType::Float(0., 25.)];
+
+        let mixi = MixintContext::new(&xtypes);
+
+        let surrogate_builder = MoeBuilder::new();
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![0.0, 1.0, 1.5, 0.9, 1.0];
+        let ds = Dataset::new(xt, yt);
+        let mixi_moe = mixi
+            .create_surrogate(&surrogate_builder, &ds)
+            .expect("Mixint surrogate creation");
+
+        let x = Array1::linspace(0., 4., 50);
+        write_npy("logei_x.npy", &x).expect("save x");
+
+        let grad = x.mapv(|v| LOG_EI.grad(&[v], &mixi_moe, 0., None)[0]);
+        write_npy("logei_grad.npy", &grad).expect("save grad log ei");
+
+        let f = |x: &Vec<f64>| -> f64 { LOG_EI.value(x, &mixi_moe, 0., None) };
+        let grad_central = x.mapv(|v| vec![v].central_diff(&f)[0]);
+        write_npy("logei_fdiff.npy", &grad_central).expect("save fdiff log ei");
+        assert_abs_diff_eq!(grad[0], grad_central[0], epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_d_log_ei() {
+        let x = Array1::linspace(-10., 10., 100);
+        write_npy("logei_x.npy", &x).expect("save x");
+
+        let fx = x.mapv(log_ei_helper);
+        write_npy("logei_fx.npy", &fx).expect("save fx");
+
+        let dfx = x.mapv(d_log_ei_helper);
+        write_npy("logei_dfx.npy", &dfx).expect("save dfx");
+
+        let gradfx = x.mapv(|x| finite_diff_log_ei(x, 1e-6));
+        write_npy("logei_gradfx.npy", &gradfx).expect("save dfx");
+    }
+
+    fn finite_diff_log_ei(u: f64, eps: f64) -> f64 {
+        (log_ei_helper(u + eps) - log_ei_helper(u - eps)) / (2.0 * eps)
     }
 }
