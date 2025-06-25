@@ -11,6 +11,7 @@
 //! See the [tutorial notebook](https://github.com/relf/egobox/doc/Egor_Tutorial.ipynb) for usage.
 //!
 
+use crate::domain::*;
 use crate::gp_config::*;
 use crate::types::*;
 use egobox_ego::{find_best_result_index, CoegoStatus, InfillObjData};
@@ -23,16 +24,12 @@ use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 use std::cmp::Ordering;
 
-/// Utility function converting `xlimits` float data list specifying bounds of x components
-/// to x specified as a list of XType.Float types [egobox.XType]
-///
-/// # Parameters
-///     xlimits : nx-size list of [lower_bound, upper_bound] where `nx` is the dimension of x
-///
-/// # Returns
-///     xtypes: nx-size list of XSpec(XType(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
 #[gen_stub_pyfunction]
 #[pyfunction]
+// #[deprecated(
+//     since = "0.30.0",
+//     note = "Useless utility method, list of lists are now automatically converted. This method will be removed"
+// )]
 pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_, PyAny>> {
     if xlimits.is_empty() || xlimits[0].is_empty() {
         let err = "Error: xspecs argument cannot be empty";
@@ -170,19 +167,6 @@ pub(crate) struct Egor {
     pub warm_start: bool,
     pub hot_start: Option<u64>,
     pub seed: Option<u64>,
-}
-
-#[gen_stub_pyclass]
-#[pyclass]
-pub(crate) struct OptimResult {
-    #[pyo3(get)]
-    x_opt: Py<PyArray1<f64>>,
-    #[pyo3(get)]
-    y_opt: Py<PyArray1<f64>>,
-    #[pyo3(get)]
-    x_doe: Py<PyArray2<f64>>,
-    #[pyo3(get)]
-    y_doe: Py<PyArray2<f64>>,
 }
 
 #[gen_stub_pymethods]
@@ -332,7 +316,7 @@ impl Egor {
             })
             .collect::<Vec<_>>();
 
-        let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
+        let xtypes: Vec<egobox_ego::XType> = parse(py, self.xspecs.clone_ref(py));
 
         let mixintegor = egobox_ego::EgorFactory::optimize(obj)
             .subject_to(fcstrs)
@@ -379,7 +363,7 @@ impl Egor {
         let x_doe = x_doe.as_array();
         let y_doe = y_doe.as_array();
         let doe = concatenate(Axis(1), &[x_doe.view(), y_doe.view()]).unwrap();
-        let xtypes: Vec<egobox_ego::XType> = self.xtypes(py);
+        let xtypes: Vec<egobox_ego::XType> = parse(py, self.xspecs.clone_ref(py));
 
         let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
             .configure(|config| self.apply_config(config, Some(1), 0, Some(&doe)))
@@ -487,32 +471,6 @@ impl Egor {
             InfillOptimizer::Slsqp => egobox_ego::InfillOptimizer::Slsqp,
             InfillOptimizer::Gbnm => egobox_ego::InfillOptimizer::Gbnm,
         }
-    }
-
-    fn xtypes(&self, py: Python) -> Vec<egobox_ego::XType> {
-        let xspecs: Vec<XSpec> = self.xspecs.extract(py).expect("Error in xspecs conversion");
-        if xspecs.is_empty() {
-            panic!("Error: xspecs argument cannot be empty")
-        }
-
-        let xtypes: Vec<egobox_ego::XType> = xspecs
-            .iter()
-            .map(|spec| match spec.xtype {
-                XType::Float => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
-                XType::Int => {
-                    egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32)
-                }
-                XType::Ord => egobox_ego::XType::Ord(spec.xlimits.clone()),
-                XType::Enum => {
-                    if spec.tags.is_empty() {
-                        egobox_ego::XType::Enum(spec.xlimits[0] as usize)
-                    } else {
-                        egobox_ego::XType::Enum(spec.tags.len())
-                    }
-                }
-            })
-            .collect();
-        xtypes
     }
 
     /// Either use user defined cstr_tol or else use default tolerance for all constraints

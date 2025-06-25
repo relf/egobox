@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+pub(crate) mod domain;
 mod egor;
 mod gp_config;
 mod gp_mix;

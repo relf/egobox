@@ -253,7 +253,7 @@ mod tests {
     fn test_coego_activity_balanced() {
         let dim = 125;
         let ng = 5;
-        let xtypes = vec![XType::Cont(0., 1.); dim];
+        let xtypes = vec![XType::Float(0., 1.); dim];
         let config = EgorConfig::default()
             .coego(crate::CoegoStatus::Enabled(ng))
             .xtypes(&xtypes);
@@ -270,7 +270,7 @@ mod tests {
     fn test_coego_activity() {
         let dim = 123;
         let ng = 5;
-        let xtypes = vec![XType::Cont(0., 1.); dim];
+        let xtypes = vec![XType::Float(0., 1.); dim];
         let config = EgorConfig::default()
             .coego(crate::CoegoStatus::Enabled(ng))
             .xtypes(&xtypes);

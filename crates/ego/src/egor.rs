@@ -989,7 +989,7 @@ mod tests {
         builder.try_init().ok();
         let max_iters = 10;
         let xtypes = vec![
-            XType::Cont(-5., 5.),
+            XType::Float(-5., 5.),
             XType::Enum(3),
             XType::Enum(2),
             XType::Ord(vec![0., 2., 3.]),
@@ -1026,7 +1026,7 @@ mod tests {
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
 
         let xtypes = vec![
-            XType::Cont(-5., 5.),
+            XType::Float(-5., 5.),
             XType::Enum(3),
             XType::Enum(2),
             XType::Ord(vec![0., 2., 3.]),

@@ -1,4 +1,4 @@
-use crate::types::*;
+use crate::domain;
 use egobox_doe::{LhsKind, SamplingMethod};
 use egobox_ego::gpmix::mixint::MixintContext;
 use numpy::{IntoPyArray, PyArray2};
@@ -39,26 +39,7 @@ pub fn sampling(
     n_samples: usize,
     seed: Option<u64>,
 ) -> Bound<'_, PyArray2<f64>> {
-    let specs: Vec<XSpec> = xspecs.extract(py).expect("Error in xspecs conversion");
-    if specs.is_empty() {
-        panic!("Error: xspecs argument cannot be empty")
-    }
-    let xtypes: Vec<egobox_ego::XType> = specs
-        .iter()
-        .map(|spec| match spec.xtype {
-            XType::Float => egobox_ego::XType::Cont(spec.xlimits[0], spec.xlimits[1]),
-            XType::Int => egobox_ego::XType::Int(spec.xlimits[0] as i32, spec.xlimits[1] as i32),
-            XType::Ord => egobox_ego::XType::Ord(spec.xlimits.clone()),
-            XType::Enum => {
-                if spec.tags.is_empty() {
-                    egobox_ego::XType::Enum(spec.xlimits[0] as usize)
-                } else {
-                    egobox_ego::XType::Enum(spec.tags.len())
-                }
-            }
-        })
-        .collect();
-
+    let xtypes: Vec<egobox_ego::XType> = domain::parse(py, xspecs);
     let mixin = MixintContext::new(&xtypes);
     let doe = match method {
         Sampling::Lhs => Box::new(mixin.create_lhs_sampling(LhsKind::default(), seed))

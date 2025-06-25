@@ -154,7 +154,7 @@ pub struct EgorSolver<SB: SurrogateBuilder, C: CstrFn = Cstr> {
 /// the ith row is the bounds interval [lower, upper] of the ith comonent of `x`.  
 pub fn to_xtypes(xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Vec<XType> {
     let mut xtypes: Vec<XType> = vec![];
-    Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(XType::Cont(limits[0], limits[1])));
+    Zip::from(xlimits.rows()).for_each(|limits| xtypes.push(XType::Float(limits[0], limits[1])));
     xtypes
 }
 

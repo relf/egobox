@@ -112,7 +112,7 @@ mod tests {
 
     #[test]
     fn test_pof_gradients() {
-        let xtypes = vec![XType::Cont(0., 25.)];
+        let xtypes = vec![XType::Float(0., 25.)];
 
         let mixi = MixintContext::new(&xtypes);
 
@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_pofs_grad() {
-        let xtypes = vec![XType::Cont(0., 25.)];
+        let xtypes = vec![XType::Float(0., 25.)];
 
         let mixi = MixintContext::new(&xtypes);
 

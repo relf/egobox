@@ -93,7 +93,7 @@ class TestGpMix(unittest.TestCase):
 
         # LHS training point generation
         n_train = 100
-        x_train = egx.lhs(egx.to_specs(xlimits), n_train)
+        x_train = egx.lhs(xlimits, n_train)
         y_train = griewank(x_train)
         y_train = y_train.reshape((n_train, -1))  # reshape to 2D array
 

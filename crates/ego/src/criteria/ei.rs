@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn test_ei_gradients() {
-        let xtypes = vec![XType::Cont(0., 25.)];
+        let xtypes = vec![XType::Float(0., 25.)];
 
         let mixi = MixintContext::new(&xtypes);
 

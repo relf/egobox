@@ -1,3 +1,4 @@
+use numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_pymethods};
 
@@ -155,4 +156,17 @@ impl XSpec {
 pub(crate) enum SparseMethod {
     Fitc = 1,
     Vfe = 2,
+}
+
+#[gen_stub_pyclass]
+#[pyclass]
+pub(crate) struct OptimResult {
+    #[pyo3(get)]
+    pub(crate) x_opt: Py<PyArray1<f64>>,
+    #[pyo3(get)]
+    pub(crate) y_opt: Py<PyArray1<f64>>,
+    #[pyo3(get)]
+    pub(crate) x_doe: Py<PyArray2<f64>>,
+    #[pyo3(get)]
+    pub(crate) y_doe: Py<PyArray2<f64>>,
 }

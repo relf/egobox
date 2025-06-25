@@ -733,15 +733,3 @@ def sampling(method:Sampling, xspecs:typing.Any, n_samples:builtins.int, seed:ty
        ndarray of shape (n_samples, n_variables)
     """
 
-def to_specs(xlimits:typing.Sequence[typing.Sequence[builtins.float]]) -> typing.Any:
-    r"""
-    Utility function converting `xlimits` float data list specifying bounds of x components
-    to x specified as a list of XType.Float types [egobox.XType]
-    
-    # Parameters
-        xlimits : nx-size list of [lower_bound, upper_bound] where `nx` is the dimension of x
-    
-    # Returns
-        xtypes: nx-size list of XSpec(XType(FLOAT), [lower_bound, upper_bounds]) where `nx` is the dimension of x
-    """
-
