@@ -482,7 +482,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         } else if theta0_dim == w_star.ncols() {
             Array::from_vec(self.theta_tuning().init().to_vec())
         } else {
-            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {theta0_dim}")
         };
 
         // Initial guess for variance
@@ -576,10 +576,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                 *noise_bounds = (lo.log10(), up.log10());
             }
         }
-        debug!(
-            "Optimize with multistart theta = {:?} and bounds = {:?}",
-            theta_inits, bounds
-        );
+        debug!("Optimize with multistart theta = {theta_inits:?} and bounds = {bounds:?}");
         let now = Instant::now();
         let opt_params = (0..theta_inits.nrows())
             .into_par_iter()
@@ -882,17 +879,17 @@ mod tests {
         let test_dir = "target/tests";
         std::fs::create_dir_all(test_dir).ok();
 
-        let file_path = format!("{}/sgp_xt.npy", test_dir);
+        let file_path = format!("{test_dir}/sgp_xt.npy");
         write_npy(file_path, xt).expect("xt saved");
-        let file_path = format!("{}/sgp_yt.npy", test_dir);
+        let file_path = format!("{test_dir}/sgp_yt.npy");
         write_npy(file_path, yt).expect("yt saved");
-        let file_path = format!("{}/sgp_z.npy", test_dir);
+        let file_path = format!("{test_dir}/sgp_z.npy");
         write_npy(file_path, z).expect("z saved");
-        let file_path = format!("{}/sgp_x.npy", test_dir);
+        let file_path = format!("{test_dir}/sgp_x.npy");
         write_npy(file_path, xplot).expect("x saved");
-        let file_path = format!("{}/sgp_vals.npy", test_dir);
+        let file_path = format!("{test_dir}/sgp_vals.npy");
         write_npy(file_path, sgp_vals).expect("sgp vals saved");
-        let file_path = format!("{}/sgp_vars.npy", test_dir);
+        let file_path = format!("{test_dir}/sgp_vars.npy");
         write_npy(file_path, sgp_vars).expect("sgp vars saved");
     }
 

@@ -182,11 +182,11 @@ where
                 let path: &String = self.config.outdir.as_ref().unwrap();
                 let filepath = std::path::Path::new(&path).join(DOE_FILE);
                 if filepath.is_file() {
-                    info!("Reading DOE from {:?}", filepath);
+                    info!("Reading DOE from {filepath:?}");
                     Some(read_npy(filepath)?)
                 } else if std::path::Path::new(&path).join(DOE_INITIAL_FILE).is_file() {
                     let filepath = std::path::Path::new(&path).join(DOE_INITIAL_FILE);
-                    info!("Reading DOE from {:?}", filepath);
+                    info!("Reading DOE from {filepath:?}");
                     Some(read_npy(filepath)?)
                 } else {
                     None
@@ -216,7 +216,7 @@ where
             } else {
                 self.config.n_doe
             };
-            info!("Compute initial LHS with {} points", n_doe);
+            info!("Compute initial LHS with {n_doe} points");
             let sampling = Lhs::new(&self.xlimits)
                 .with_rng(rng.clone())
                 .kind(LhsKind::Maximin);
@@ -240,7 +240,7 @@ where
 
         let activity = if self.config.coego.activated {
             let activity = self.get_random_activity(&mut rng);
-            debug!("Component activity = {:?}", activity);
+            debug!("Component activity = {activity:?}");
             Some(activity)
         } else {
             None
@@ -268,7 +268,7 @@ where
         initial_state.last_best_iter = 0;
 
         initial_state.activity = activity;
-        debug!("Initial State = {:?}", initial_state);
+        debug!("Initial State = {initial_state:?}");
         Ok((initial_state, None))
     }
 
@@ -295,7 +295,7 @@ where
         let res = if self.config.coego.activated {
             let mut rng = res.0.take_rng().unwrap();
             let activity = self.get_random_activity(&mut rng);
-            debug!("Component activity = {:?}", activity);
+            debug!("Component activity = {activity:?}");
             (res.0.rng(rng).activity(activity), res.1)
         } else {
             res

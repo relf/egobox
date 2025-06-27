@@ -103,7 +103,7 @@ mod tests {
         let xu = array![1.0, 1.0];
 
         let result = start_points(&x, &xl, &xu);
-        println!("result={}", result);
+        println!("result={result}");
         assert!(result.nrows() >= 1);
     }
 

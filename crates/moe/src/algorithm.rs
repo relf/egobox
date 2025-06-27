@@ -99,7 +99,7 @@ impl GpMixtureValidParams<f64> {
             NbClusters::Fixed { nb: nb_clusters } => (nb_clusters, self.recombination()),
         };
         if let NbClusters::Auto { max: _ } = self.n_clusters() {
-            debug!("Automatic settings {} {:?}", n_clusters, recomb);
+            debug!("Automatic settings {n_clusters} {recomb:?}");
         }
 
         let training = if recomb == Recombination::Smooth(None) && self.n_clusters().is_multi() {
@@ -182,7 +182,7 @@ impl GpMixtureValidParams<f64> {
             let xtest = test.slice(s![.., ..nx]).to_owned();
             let ytest = test.slice(s![.., nx..]).to_owned().remove_axis(Axis(1));
             let factor = self.optimize_heaviside_factor(&experts, gmx, &xtest, &ytest);
-            info!("Retrain mixture with optimized heaviside factor={}", factor);
+            info!("Retrain mixture with optimized heaviside factor={factor}");
 
             let moe = GpMixtureParams::from(self.clone())
                 .n_clusters(NbClusters::fixed(gmx.n_clusters()))
@@ -243,7 +243,7 @@ impl GpMixtureValidParams<f64> {
             let mut map_error = Vec::new();
             compute_errors!(self, allowed_means, allowed_corrs, dataset, map_error);
             let errs: Vec<f64> = map_error.iter().map(|(_, err)| *err).collect();
-            debug!("Accuracies {:?}", map_error);
+            debug!("Accuracies {map_error:?}");
             let argmin = errs
                 .iter()
                 .enumerate()
@@ -729,7 +729,7 @@ impl GpMixture {
     /// Returns the ouputs as a (n, 1) column vector
     pub fn predict_hard(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array1<f64>> {
         let clustering = self.gmx.predict(x);
-        trace!("Clustering {:?}", clustering);
+        trace!("Clustering {clustering:?}");
         let mut preds = Array1::zeros((x.nrows(),));
         Zip::from(&mut preds)
             .and(x.rows())
@@ -747,7 +747,7 @@ impl GpMixture {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         let clustering = self.gmx.predict(x);
-        trace!("Clustering {:?}", clustering);
+        trace!("Clustering {clustering:?}");
         let mut variances = Array2::zeros((x.nrows(), 1));
         Zip::from(variances.rows_mut())
             .and(x.rows())
@@ -1207,7 +1207,7 @@ mod tests {
             println!(
                 "Test predicted derivatives at {xtest}: drv {drv}, true df {df}, fdiff {fdiff}"
             );
-            println!("preds(x, x+h, x-h)={}", preds);
+            println!("preds(x, x+h, x-h)={preds}");
             assert_abs_diff_eq!(err, 0.0, epsilon = 1e-1);
         }
     }
@@ -1315,7 +1315,7 @@ mod tests {
             .expect("MOE fitted");
         // Values may vary depending on the platforms and linalg backends
         // assert_eq!("Mixture[Hard](Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.03871601282054056], variance=[0.276011431746834], likelihood=454.17113736397033), Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.07903503494417609], variance=[0.0077182164672893756], likelihood=436.39615700140183), Constant_SquaredExponentialGP(mean=ConstantMean, corr=SquaredExponential, theta=[0.050821466014058826], variance=[0.32824998062969973], likelihood=193.19339252734846))", moe.to_string());
-        println!("Display moe: {}", moe);
+        println!("Display moe: {moe}");
     }
 
     fn griewank(x: &Array2<f64>) -> Array1<f64> {
@@ -1419,7 +1419,7 @@ mod tests {
         let x = Array2::random_using((1, 2), Uniform::new(0., 1.), &mut rng);
         let preds_hard = moe_hard.predict(&x).expect("MOE hard prediction");
         let preds_smooth = moe_smooth.predict(&x).expect("MOE smooth prediction");
-        println!("predict hard = {} smooth = {}", preds_hard, preds_smooth);
+        println!("predict hard = {preds_hard} smooth = {preds_smooth}");
         assert_abs_diff_eq!(preds_hard, preds_smooth, epsilon = 1e-5);
 
         // Predict var
@@ -1428,11 +1428,11 @@ mod tests {
         assert_abs_diff_eq!(preds_hard, preds_smooth, epsilon = 1e-5);
 
         // Predict gradients
-        println!("Check pred gradients at x = {}", x);
+        println!("Check pred gradients at x = {x}");
         let preds_smooth = moe_smooth
             .predict_gradients(&x)
             .expect("MOE smooth prediction");
-        println!("smooth gradients = {}", preds_smooth);
+        println!("smooth gradients = {preds_smooth}");
         let preds_hard = moe_hard.predict_gradients(&x).expect("MOE hard prediction");
         assert_abs_diff_eq!(preds_hard, preds_smooth, epsilon = 1e-5);
 

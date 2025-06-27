@@ -155,7 +155,7 @@ where
                 }
 
                 if i == 0 {
-                    info!("{} clustering and training...", model_name);
+                    info!("{model_name} clustering and training...");
                 }
                 let gp = builder
                     .train(xt.view(), yt.view())
@@ -237,9 +237,7 @@ where
                         if likelihood > best_likelihood && model_name == "Objective" {
                             if i > 0 {
                                 log::info!(
-                                    "Partial likelihood optim c={} has improved value={}",
-                                    i,
-                                    likelihood
+                                    "Partial likelihood optim c={i} has improved value={likelihood}"
                                 );
                             };
                             best_likelihood = likelihood;
@@ -254,9 +252,7 @@ where
                             best_theta_inits = Some(inits);
                         } else if model_name == "Objective" {
                             log::debug!(
-                                "Partial likelihood optim c={} has not improved value={}",
-                                i,
-                                likelihood
+                                "Partial likelihood optim c={i} has not improved value={likelihood}"
                             );
                         };
                     } else {
@@ -413,7 +409,7 @@ where
             );
             problem.problem = Some(pb);
 
-            debug!("Try adding {}", x_dat);
+            debug!("Try adding {x_dat}");
             let added_indices = update_data(
                 &mut x_data,
                 &mut y_data,
@@ -450,9 +446,9 @@ where
                     x_dat.row(i)
                 );
                 if added_indices.contains(&i) {
-                    debug!("{}", msg);
+                    debug!("{msg}");
                 } else {
-                    info!("{}", msg)
+                    info!("{msg}")
                 }
             }
             if rejected_count > 0 {
@@ -536,7 +532,7 @@ where
         f64,
         InfillObjData<f64>,
     ) {
-        debug!("Make surrogate with {}", x_data);
+        debug!("Make surrogate with {x_data}");
         let mut x_dat = Array2::zeros((0, x_data.ncols()));
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
         let mut c_dat = Array2::zeros((0, c_data.ncols()));
@@ -553,7 +549,7 @@ where
                 )
             };
 
-            log::debug!("activity: {:?}", activity);
+            log::debug!("activity: {activity:?}");
             let actives = activity.unwrap_or(&self.full_activity()).to_owned();
 
             info!("Train surrogates with {} points...", xt.nrows());
@@ -650,7 +646,7 @@ where
                 &actives,
                 multistarter,
             );
-            debug!("+++++++  xk = {}", xk);
+            debug!("+++++++  xk = {xk}");
 
             match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
                 Ok(yk) => {
@@ -675,7 +671,7 @@ where
                 }
                 Err(err) => {
                     // Error while predict at best point: ignore
-                    info!("Error while getting virtual point: {}", err);
+                    info!("Error while getting virtual point: {err}");
                     break;
                 }
             }

@@ -27,10 +27,7 @@ pub fn cdist<F: Float>(
     let na = xa.ncols();
     let nb = xb.ncols();
     if na != nb {
-        panic!(
-            "cdist: operands should have same nb of columns. Found {} and {}",
-            na, nb
-        );
+        panic!("cdist: operands should have same nb of columns. Found {na} and {nb}");
     }
     let mut res = Array2::zeros((ma, mb));
     for i in 0..ma {

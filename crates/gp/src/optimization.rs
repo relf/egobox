@@ -162,7 +162,7 @@ where
             (fval, params_opt)
         }
         Err((status, x_opt, _)) => {
-            log::warn!("ERROR Cobyla optimizer in GP status={:?}", status);
+            log::warn!("ERROR Cobyla optimizer in GP status={status:?}");
             (f64::INFINITY, arr1(&x_opt))
         }
     }

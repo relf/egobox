@@ -179,7 +179,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                                 // }
                                 debug!("Diff: {}", &pred.to_owned() - actual);
                                 let err = (pred - actual).mapv(|x| x.abs()).sum() / denom;
-                                debug!("Err = {}", err);
+                                debug!("Err = {err}");
                                 err
                             }
                         } else {
@@ -219,7 +219,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
             }
         } else {
             // GMM Clustering with n_clusters fails
-            debug!("GMM Clustering with {} clusters fails", n_clusters);
+            debug!("GMM Clustering with {n_clusters} clusters fails");
             ok = false;
         }
 
@@ -227,11 +227,11 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
         if ok && !s_errors.is_empty() && !h_errors.is_empty() {
             nb_clusters_ok.push(i);
         } else {
-            debug!("Prediction with {} clusters fails", n_clusters);
+            debug!("Prediction with {n_clusters} clusters fails");
         }
 
-        debug!("hard errors : {:?}", h_errors);
-        debug!("soft errors : {:?}", s_errors);
+        debug!("hard errors : {h_errors:?}");
+        debug!("soft errors : {s_errors:?}");
 
         // Stock median errors
         median_err_s.push(median(&s_errors));
@@ -309,10 +309,10 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
         (mean_err_h[nb_clusters_ok[0]], mean_err_s[nb_clusters_ok[0]])
     };
 
-    debug!("Median errors hard: {:?}", median_err_h);
-    debug!("Median errors soft: {:?}", median_err_s);
-    debug!("Mean errors hard: {:?}", mean_err_h);
-    debug!("Mean errors soft: {:?}", mean_err_s);
+    debug!("Median errors hard: {median_err_h:?}");
+    debug!("Median errors soft: {median_err_s:?}");
+    debug!("Mean errors hard: {mean_err_h:?}");
+    debug!("Mean errors soft: {mean_err_s:?}");
 
     for k in nb_clusters_ok {
         if use_median {
@@ -363,8 +363,8 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
         "| Method: Minimum of relative L2"
     };
 
-    debug!("Optimal Number of cluster: {} {}", cluster, method);
-    debug!("Recombination Hard: {}", hardi);
+    debug!("Optimal Number of cluster: {cluster} {method}");
+    debug!("Recombination Hard: {hardi}");
     let recomb = if hardi {
         Recombination::Hard
     } else {

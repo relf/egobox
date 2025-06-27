@@ -120,7 +120,7 @@ where
                 self.config
                     .infill_criterion
                     .scaling(&scaling_points.view(), obj_model, fmin);
-            info!("WB2S scaling factor = {}", scale_ic);
+            info!("WB2S scaling factor = {scale_ic}");
             scale_ic
         } else {
             1.
@@ -137,10 +137,7 @@ where
             Array1::zeros((0,))
         } else {
             let scale_cstr = compute_cstr_scales(&scaling_points.view(), cstr_models);
-            info!(
-                "Surrogated constraints scaling is updated to {}",
-                scale_cstr
-            );
+            info!("Surrogated constraints scaling is updated to {scale_cstr}");
             scale_cstr
         };
 
@@ -152,10 +149,7 @@ where
             Zip::from(&mut scale_fcstr)
                 .and(fcstr_values.columns())
                 .for_each(|sc, vals| *sc = *vals.max().unwrap());
-            info!(
-                "Fonctional constraints scaling is updated to {}",
-                scale_fcstr
-            );
+            info!("Fonctional constraints scaling is updated to {scale_fcstr}");
             scale_fcstr
         };
         (scale_infill_obj, scale_cstr, scale_fcstr, scale_ic)

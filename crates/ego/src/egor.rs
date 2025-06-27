@@ -245,7 +245,7 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
             exec.run()?
         };
 
-        info!("{}", result);
+        info!("{result}");
         let (x_data, y_data, c_data) = result.state().clone().take_data().unwrap();
 
         let res = if !self.solver.config.discrete() {
@@ -528,7 +528,7 @@ mod tests {
     #[serial]
     fn test_xsinx_hot_start_egor() {
         let outdir = "checkpoint_test_dir";
-        let checkpoint_file = format!("{}/{}", outdir, CHECKPOINT_FILE);
+        let checkpoint_file = format!("{outdir}/{CHECKPOINT_FILE}");
         let _ = std::fs::remove_file(&checkpoint_file);
         let n_iter = 1;
         let res = EgorBuilder::optimize(xsinx)
@@ -888,7 +888,7 @@ mod tests {
         if (x.mapv(|v| v.round()).norm_l2() - x.norm_l2()).abs() < 1e-6 {
             (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
         } else {
-            panic!("Error: mixsinx works only on integer, got {:?}", x)
+            panic!("Error: mixsinx works only on integer, got {x:?}")
         }
     }
 
@@ -1008,7 +1008,7 @@ mod tests {
             .min_within_mixint_space(&xtypes)
             .run()
             .unwrap();
-        println!("res={:?}", res);
+        println!("res={res:?}");
         assert_abs_diff_eq!(&array![-15.], &res.y_opt, epsilon = 1.);
     }
 

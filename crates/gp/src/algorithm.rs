@@ -780,7 +780,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         } else if theta0_dim == dim {
             init.to_owned()
         } else {
-            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {}", theta0_dim)
+            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {theta0_dim}")
         };
 
         let xtrain = NormalizedData::new(&x);
@@ -869,10 +869,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                     &theta0.select(Axis(0), &active),
                     &active_bounds,
                 );
-                debug!(
-                    "Optimize with multistart theta = {:?} and bounds = {:?}",
-                    theta_inits, bounds
-                );
+                debug!("Optimize with multistart theta = {theta_inits:?} and bounds = {bounds:?}");
                 let now = Instant::now();
                 let opt_params = (0..theta_inits.nrows())
                     .into_par_iter()
