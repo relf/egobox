@@ -125,18 +125,19 @@ impl InfillCriterion for LogExpectedImprovement {
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
                 if s[[0, 0]].abs() < 10000. * f64::EPSILON {
-                    0.0
+                    f64::MIN
                 } else {
                     let pred = p[0];
                     let sigma = s[[0, 0]].sqrt();
                     let u = (pred - fmin) / sigma;
-                    log_ei_helper(u) + sigma.ln()
+                    let logei = log_ei_helper(u) + sigma.ln();
+                    logei
                 }
             } else {
-                0.0
+                f64::MIN
             }
         } else {
-            0.0
+            f64::MIN
         }
     }
 
@@ -154,20 +155,20 @@ impl InfillCriterion for LogExpectedImprovement {
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
                 if s[[0, 0]].abs() < 10000. * f64::EPSILON {
-                    Array1::zeros(pt.len())
+                    Array1::from_elem(pt.len(), f64::MIN)
                 } else {
                     let pred = p[0];
                     let sigma = s[[0, 0]].sqrt();
                     let u = (pred - fmin) / sigma;
                     let du = obj_model.predict_gradients(&pt).unwrap() / sigma;
                     let dhelper = d_log_ei_helper(u);
-                    du.row(0).to_owned().mapv(|v| dhelper * v)
+                    du.row(0).mapv(|v| dhelper * v)
                 }
             } else {
-                Array1::zeros(pt.len())
+                Array1::from_elem(pt.len(), f64::MIN)
             }
         } else {
-            Array1::zeros(pt.len())
+            Array1::from_elem(pt.len(), f64::MIN)
         }
     }
 
