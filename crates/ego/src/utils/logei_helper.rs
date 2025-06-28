@@ -5,6 +5,7 @@ const INV_SQRT_2: f64 = 0.7071067811865475;
 const SQRT_2PI: f64 = 2.5066282746310002;
 const LOG_2PI_OVER_2: f64 = 0.9189385332046727; // log(2π)/2
 const LOG_PI_OVER_2_ALL_OVER_2: f64 = 0.2257913526447274; // log(π/2)/2
+const INV_SQRT_EPSILON: f64 = 1.0 / 1e-6;
 
 fn normal_pdf(u: f64) -> f64 {
     exp(-0.5 * u * u) / SQRT_2PI
@@ -33,7 +34,7 @@ pub fn log_ei_helper(u: f64) -> f64 {
     } else {
         let log_phi_u = -0.5 * u * u - LOG_2PI_OVER_2;
 
-        let log_term = if u > -1. / f64::sqrt(1e-6) {
+        let log_term = if u > -INV_SQRT_EPSILON {
             let w = log(erfcx(-INV_SQRT_2 * u) * u.abs()) + LOG_PI_OVER_2_ALL_OVER_2;
             log1mexp(w)
         } else {
@@ -43,19 +44,6 @@ pub fn log_ei_helper(u: f64) -> f64 {
         log_phi_u + log_term
     }
 }
-
-fn finite_diff_log_ei(u: f64, eps: f64) -> f64 {
-    (log_ei_helper(u + eps) - log_ei_helper(u - eps)) / (2.0 * eps)
-}
-
-// fn log1mexp(w: f64) -> f64 {
-//     // Stable log(1-exp(w)) for w < 0
-//     if w > -0.6931471805599453 { // -ln(2)
-//         log(-(-w).exp_m1()) // log(-expm1(w)) = log(1-exp(w)) as w < 0
-//     } else {
-//         (1.0 - w.exp()).ln() // numerically stable for w << 0
-//     }
-// }
 
 fn log1mexp_prime(w: f64) -> f64 {
     // derivative wrt w: -e^w / (1 - e^w)
@@ -68,7 +56,7 @@ fn w_and_w_prime(u: f64) -> (f64, f64) {
     let erfcx_prime = 2.0 * z * val_erfcx - 2.0 / std::f64::consts::PI.sqrt();
 
     let w = log(val_erfcx * u.abs()) + LOG_PI_OVER_2_ALL_OVER_2;
-    let w_prime = (erfcx_prime * -INV_SQRT_2 / val_erfcx) + copysign(1.0, u) / u;
+    let w_prime = (erfcx_prime * -INV_SQRT_2 / val_erfcx) + 1.0 / u;
     (w, w_prime)
 }
 
@@ -81,18 +69,17 @@ pub fn d_log_ei_helper(u: f64) -> f64 {
     if u > -1.0 {
         let numerator = normal_cdf(u);
         let denominator = log_ei_helper(u).exp();
-
         numerator / denominator
     } else {
         let d_log_phi_u = -u;
 
-        let d_log_term = if u > -1. / f64::sqrt(1e-6) {
+        let d_log_term = if u > -INV_SQRT_EPSILON {
             log1mexp_w_derivative(u)
         } else {
             -2. / u
         };
 
-        -(d_log_phi_u + d_log_term)
+        d_log_phi_u + d_log_term
     }
 }
 
@@ -134,6 +121,6 @@ mod tests {
     }
 
     fn finite_diff_log_ei(u: f64, eps: f64) -> f64 {
-        (log_ei_helper(u + eps) - log_ei_helper(u - eps)) / (2.0 * eps)
+        (log_ei_helper(u + eps) - log_ei_helper(u - eps)) / (2. * eps)
     }
 }
