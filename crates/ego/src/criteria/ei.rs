@@ -130,8 +130,7 @@ impl InfillCriterion for LogExpectedImprovement {
                     let pred = p[0];
                     let sigma = s[[0, 0]].sqrt();
                     let u = (pred - fmin) / sigma;
-                    let logei = log_ei_helper(u) + sigma.ln();
-                    logei
+                    log_ei_helper(u) + sigma.ln()
                 }
             } else {
                 f64::MIN

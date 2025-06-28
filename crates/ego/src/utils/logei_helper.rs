@@ -1,4 +1,4 @@
-use libm::{copysign, erf, erfc, exp, expm1, log, log1p};
+use libm::{erf, erfc, exp, expm1, log, log1p};
 
 const SQRT_2: f64 = std::f64::consts::SQRT_2;
 const INV_SQRT_2: f64 = 0.7071067811865475;
