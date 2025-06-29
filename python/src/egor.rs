@@ -81,7 +81,11 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///
 ///     infill_strategy (InfillStrategy enum):
 ///         Infill criteria to decide best next promising point.
-///         Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S.
+///         Can be either InfillStrategy.EI, InfillStrategy.WB2, InfillStrategy.WB2S orInfillStrategy.LOG_EI
+///
+///     infill_optimizer (InfillOptimizer enum):
+///         Internal optimizer used to optimize infill criteria.
+///         Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP
 ///
 ///     cstr_infill (bool):
 ///         Activate constrained infill criterion where the product of probability of feasibility of constraints
@@ -108,9 +112,6 @@ pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<'_,
 ///         The value is used as a modulo of iteration number * q_points to trigger true training.
 ///         This is used to decrease the number of training at the expense of surrogate accuracy.    
 ///
-///     infill_optimizer (InfillOptimizer enum):
-///         Internal optimizer used to optimize infill criteria.
-///         Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP
 ///
 ///     trego (bool):
 ///         When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.

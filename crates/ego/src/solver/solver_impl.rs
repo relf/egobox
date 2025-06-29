@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+//use crate::criteria::{InfillCriterion, EI};
 use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
@@ -18,7 +19,8 @@ use env_logger::{Builder, Env};
 use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters};
 use log::{debug, info};
 use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
-
+//use ndarray::{Array, ArrayView2};
+//use ndarray_npy::write_npy;
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
@@ -635,6 +637,43 @@ where
             // let multistarter = GlobalMultiStarter::new(&self.xlimits, sub_rng);
             let xsamples = x_data.to_owned();
             let multistarter = MiddlePickerMultiStarter::new(&self.xlimits, &xsamples, sub_rng);
+
+            // Evaluate infill_obj data on interval [0., 25]
+            // println!("Evaluate infill objective on linspace [0., 25.]");
+            // let x = Array1::linspace(0., 25., 100);
+            // let InfillObjData {
+            //     scale_infill_obj,
+            //     scale_wb2,
+            //     fmin,
+            //     ..
+            // } = infill_data;
+            // let logei = x.mapv(|x| {
+            //     self.eval_infill_obj(&[x], obj_model.as_ref(), fmin, scale_infill_obj, scale_wb2)
+            // });
+            // let logei_25 = self.eval_infill_obj(
+            //     &[25.],
+            //     obj_model.as_ref(),
+            //     fmin,
+            //     scale_infill_obj,
+            //     scale_wb2,
+            // );
+            // let ei = x.mapv(|x| EI.value(&[x], obj_model.as_ref(), fmin, Some(1.0)));
+            // let newlogei = ei.mapv(|x| (-(x.max(1e-6).ln())));
+            // let pred = x.mapv(|x| {
+            //     obj_model
+            //         .as_ref()
+            //         .predict(&ArrayView::from_shape((1, 1), &[x]).unwrap())
+            //         .unwrap()[0]
+            // });
+            // println!("logei(25) = {logei_25}");
+            // println!("logei = {logei}");
+            // println!("ei = {ei}");
+            // println!("pred = {pred}");
+            // write_npy(format!("logei_{}.npy", iter), &logei).expect("save logei");
+            // write_npy(format!("newlogei_{}.npy", iter), &newlogei).expect("save ei");
+            // write_npy(format!("pred_{}.npy", iter), &pred).expect("save ei");
+            // println!("sclale_infill_obj = {scale_infill_obj}");
+            // println!("scale_wb2 = {scale_wb2}");
 
             let (infill_obj, xk) = self.optimize_infill_criterion(
                 obj_model.as_ref(),

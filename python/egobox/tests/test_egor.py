@@ -116,7 +116,7 @@ class TestEgor(unittest.TestCase):
         dim = 5
         egor = egx.Egor(
             np.array([[-5.12, 5.12]] * dim),  # test ndarray API
-            infill_strategy=egx.InfillStrategy.LOG_EI,
+            infill_strategy=egx.InfillStrategy.EI,
             seed=42,
         )
         res = egor.minimize(sphere, max_iters=100)

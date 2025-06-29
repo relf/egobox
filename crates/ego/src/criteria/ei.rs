@@ -1,5 +1,5 @@
 use crate::criteria::InfillCriterion;
-use crate::utils::{norm_cdf, norm_pdf};
+use crate::utils::{d_log_ei_helper, log_ei_helper, norm_cdf, norm_pdf};
 use egobox_moe::MixtureGpSurrogate;
 use ndarray::{Array1, ArrayView};
 
@@ -28,7 +28,7 @@ impl InfillCriterion for ExpectedImprovement {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                if s[[0, 0]].abs() < 10000. * f64::EPSILON {
+                if s[[0, 0]].abs() < f64::EPSILON {
                     0.0
                 } else {
                     let pred = p[0];
@@ -59,7 +59,7 @@ impl InfillCriterion for ExpectedImprovement {
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
                 let sigma = s[[0, 0]].sqrt();
-                if sigma.abs() < 10000. * f64::EPSILON {
+                if sigma.abs() < f64::EPSILON {
                     Array1::zeros(pt.len())
                 } else {
                     let pred = p[0];
@@ -120,8 +120,24 @@ impl InfillCriterion for LogExpectedImprovement {
         fmin: f64,
         _scale: Option<f64>,
     ) -> f64 {
-        let ei = EI.value(x, obj_model, fmin, _scale);
-        (ei + 100. * f64::EPSILON).ln()
+        let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
+
+        if let Ok(p) = obj_model.predict(&pt) {
+            if let Ok(s) = obj_model.predict_var(&pt) {
+                if s[[0, 0]].abs() < f64::EPSILON {
+                    f64::MIN
+                } else {
+                    let pred = p[0];
+                    let sigma = s[[0, 0]].sqrt();
+                    let u = (pred - fmin) / sigma;
+                    log_ei_helper(u) + sigma.ln()
+                }
+            } else {
+                f64::MIN
+            }
+        } else {
+            f64::MIN
+        }
     }
 
     /// Computes derivatives of EI infill criterion wrt to x components at given `x` point
@@ -133,10 +149,26 @@ impl InfillCriterion for LogExpectedImprovement {
         fmin: f64,
         _scale: Option<f64>,
     ) -> Array1<f64> {
-        let ei = EI.value(x, obj_model, fmin, _scale);
+        let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
 
-        let grad_ei = EI.grad(x, obj_model, fmin, _scale);
-        grad_ei / (ei + 100. * f64::EPSILON)
+        if let Ok(p) = obj_model.predict(&pt) {
+            if let Ok(s) = obj_model.predict_var(&pt) {
+                if s[[0, 0]].abs() < f64::EPSILON {
+                    Array1::from_elem(pt.len(), f64::MIN)
+                } else {
+                    let pred = p[0];
+                    let sigma = s[[0, 0]].sqrt();
+                    let u = (pred - fmin) / sigma;
+                    let du = obj_model.predict_gradients(&pt).unwrap() / sigma;
+                    let dhelper = d_log_ei_helper(u);
+                    du.row(0).mapv(|v| dhelper * v)
+                }
+            } else {
+                Array1::from_elem(pt.len(), f64::MIN)
+            }
+        } else {
+            Array1::from_elem(pt.len(), f64::MIN)
+        }
     }
 
     fn scaling(
@@ -164,6 +196,7 @@ mod tests {
     use finitediff::FiniteDiff;
     use linfa::Dataset;
     use ndarray::array;
+    use ndarray_npy::write_npy;
     // use ndarray_npy::write_npy;
 
     #[test]
@@ -208,5 +241,58 @@ mod tests {
         // write_npy("ei_cytrue.npy", &cytrue).expect("save cstr");
 
         // println!("thetas = {}", mixi_moe);
+    }
+
+    #[test]
+    fn test_log_ei_gradients() {
+        let xtypes = vec![XType::Float(0., 25.)];
+
+        let mixi = MixintContext::new(&xtypes);
+
+        let surrogate_builder = MoeBuilder::new();
+        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
+        let yt = array![0.0, 1.0, 1.5, 0.9, 1.0];
+        let ds = Dataset::new(xt, yt);
+        let mixi_moe = mixi
+            .create_surrogate(&surrogate_builder, &ds)
+            .expect("Mixint surrogate creation");
+
+        let x = Array1::linspace(0., 4., 50);
+        write_npy("logei_x.npy", &x).expect("save x");
+
+        let grad = x.mapv(|v| LOG_EI.grad(&[v], &mixi_moe, 0., None)[0]);
+        write_npy("logei_grad.npy", &grad).expect("save grad log ei");
+
+        let f = |x: &Vec<f64>| -> f64 { LOG_EI.value(x, &mixi_moe, 0., None) };
+        let grad_central = x.mapv(|v| vec![v].central_diff(&f)[0]);
+        write_npy("logei_fdiff.npy", &grad_central).expect("save fdiff log ei");
+
+        // check relative error between finite difference and analytical gradient
+        for (i, v) in grad.iter().enumerate() {
+            let rel_error = (v - grad_central[i]).abs() / (v.abs() + 1e-10);
+            assert!(
+                rel_error < 5e-1,
+                "Relative error too high at index {i}: {rel_error}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_d_log_ei() {
+        let x = Array1::linspace(-10., 10., 100);
+        write_npy("logei_x.npy", &x).expect("save x");
+
+        let fx = x.mapv(log_ei_helper);
+        write_npy("logei_fx.npy", &fx).expect("save fx");
+
+        let dfx = x.mapv(d_log_ei_helper);
+        write_npy("logei_dfx.npy", &dfx).expect("save dfx");
+
+        let gradfx = x.mapv(|x| finite_diff_log_ei(x, 1e-6));
+        write_npy("logei_gradfx.npy", &gradfx).expect("save dfx");
+    }
+
+    fn finite_diff_log_ei(u: f64, eps: f64) -> f64 {
+        (log_ei_helper(u + eps) - log_ei_helper(u - eps)) / (2.0 * eps)
     }
 }

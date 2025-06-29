@@ -51,8 +51,12 @@ class Egor:
     
         infill_strategy (InfillStrategy enum):
             Infill criteria to decide best next promising point.
-            Can be either InfillStrategy.EI, InfillStrategy.WB2 or InfillStrategy.WB2S.
-    
+            Can be either InfillStrategy.EI, InfillStrategy.WB2, InfillStrategy.WB2S or InfillStrategy.LOG_EI
+
+        infill_optimizer (InfillOptimizer enum):
+            Internal optimizer used to optimize infill criteria.
+            Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP            
+            
         cstr_infill (bool):
             Activate constrained infill criterion where the product of probability of feasibility of constraints
             used as a factor of the infill criterion specified via infill_strategy
@@ -77,10 +81,6 @@ class Egor:
             The default value is 1 meaning surrogates are properly trained for each q points determination.
             The value is used as a modulo of iteration number * q_points to trigger true training.
             This is used to decrease the number of training at the expense of surrogate accuracy.    
-    
-        infill_optimizer (InfillOptimizer enum):
-            Internal optimizer used to optimize infill criteria.
-            Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP
     
         trego (bool):
             When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
