@@ -407,13 +407,14 @@ mod tests {
     #[serial]
     fn test_gp_config() {
         let initial_doe = array![[0.], [7.], [25.]];
+        const LOWER_BOUND: f64 = 1.5;
         let egor = EgorBuilder::optimize(xsinx)
             .configure(|cfg| {
                 cfg.infill_strategy(InfillStrategy::EI)
                     .configure_gp(|gp| {
                         gp.theta_tuning(egobox_gp::ThetaTuning::Full {
                             init: array![2.0],
-                            bounds: array![(1.0, 20.)],
+                            bounds: array![(LOWER_BOUND, 20.)],
                         })
                         .recombination(egobox_moe::Recombination::Hard)
                         .n_start(7)
@@ -426,11 +427,11 @@ mod tests {
         let res = egor.run().expect("Egor should minimize xsinx");
         // Inspect internal state: theta init should be equal to
         // lower bound of theta interval as with a smaller bound
-        // it would be around 0.8 after first iteration
+        // it would be around 1.28 after first iteration
         dbg!(res.state.clone());
         assert_eq!(
             res.state.theta_inits.unwrap()[0].as_ref().unwrap(),
-            array![[1.0]]
+            array![[LOWER_BOUND]]
         );
         assert_eq!(
             res.state.clusterings.unwrap()[0]

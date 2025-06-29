@@ -34,7 +34,7 @@ pub(crate) fn prepare_multistart<F: Float>(
         .map(|(lo, up)| (lo.log10(), up.log10()))
         .collect();
 
-    // Multistart: user theta0 + 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1., 10.
+    // Multistart: user/default defined theta0 + values on log10 scale
     let mut theta0s = Array2::zeros((n_start + 1, theta0.len()));
     theta0s.row_mut(0).assign(&theta0.mapv(|v| F::log10(v)));
 
@@ -55,7 +55,7 @@ pub(crate) fn prepare_multistart<F: Float>(
                 .for_each(|mut row, limits| row.assign(&arr1(&[limits.0, limits.1])));
             // Use a seed here for reproducibility. Do we need to make it truly random
             // Probably no, as it is just to get init values spread over
-            // [1e-6, 20] for multistart thanks to LHS method.
+            // [lower bound, upper bound] for multistart thanks to LHS method.
 
             let seeds = Lhs::new(&xlimits)
                 .kind(egobox_doe::LhsKind::Maximin)

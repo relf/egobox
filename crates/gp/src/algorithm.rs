@@ -169,7 +169,7 @@ impl<F: Float> Clone for GpInnerParams<F> {
     ))
 )]
 pub struct GaussianProcess<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> {
-    /// Parameter of the autocorrelation model
+    /// Parameter of the autocorrelation model equal to the inverse of length scale
     theta: Array1<F>,
     /// Reduced likelihood value (result from internal optimization)
     /// Maybe used to compare different trained models
@@ -1707,7 +1707,10 @@ mod tests {
             ConstantMean::default(),
             SquaredExponentialCorr::default(),
         )
-        .theta_tuning(ThetaTuning::Fixed(array![0.0437386, 0.00697978]))
+        .theta_tuning(ThetaTuning::Fixed(array![
+            f64::sqrt(2. * 0.0437386),
+            f64::sqrt(2. * 0.00697978)
+        ]))
         .fit(&Dataset::new(xt, yt))
         .expect("GP fitting");
 
