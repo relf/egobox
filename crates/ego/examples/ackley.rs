@@ -1,6 +1,6 @@
-use egobox_ego::{EgorBuilder, InfillStrategy};
+use egobox_ego::{EgorBuilder, InfillOptimizer, InfillStrategy};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
-use ndarray::{array, Array2, ArrayView2, Zip};
+use ndarray::{array, Array, Array2, ArrayView2, Zip};
 
 /// Ackley test function: min f(x)=0 at x=(0, 0, 0)
 fn ackley(x: &ArrayView2<f64>) -> Array2<f64> {
@@ -12,7 +12,10 @@ fn ackley(x: &ArrayView2<f64>) -> Array2<f64> {
 }
 
 fn main() {
-    let xlimits = array![[-32.768, 32.768], [-32.768, 32.768], [-32.768, 32.768]];
+    let ndim = 16;
+    let data = [-32.768, 32.768].repeat(16);
+    let xlimits = Array::from_shape_vec((ndim, 2), data).unwrap();
+
     let res = EgorBuilder::optimize(ackley)
         .configure(|config| {
             config
@@ -21,7 +24,9 @@ fn main() {
                         .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
                 })
                 .infill_strategy(InfillStrategy::WB2S)
-                .max_iters(200)
+                .infill_optimizer(InfillOptimizer::Slsqp)
+                .n_start(50)
+                .max_iters(300)
         })
         .min_within(&xlimits)
         .run()
