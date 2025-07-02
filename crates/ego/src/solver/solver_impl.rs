@@ -170,6 +170,11 @@ where
                             })
                             .collect::<Vec<_>>();
                         builder.set_theta_tunings(&theta_tunings);
+                        if i == 0 && model_name == "Objective" {
+                            info!(
+                                "Objective model hyperparameters optim init >>> {theta_tunings:?}"
+                            );
+                        }
                     }
                 }
 
@@ -206,13 +211,7 @@ where
                         .outer_iter()
                         .map(|init| ThetaTuning::Full {
                             init: init.to_owned(),
-                            bounds: self
-                                .config
-                                .gp
-                                .theta_tuning
-                                .bounds()
-                                .cloned()
-                                .unwrap_or(ThetaTuning::default().bounds().unwrap().to_owned()),
+                            bounds: theta_bounds.to_owned(),
                         })
                         .collect::<Vec<_>>();
                     if self.config.coego.activated {
