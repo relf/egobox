@@ -279,6 +279,7 @@ fn main() -> anyhow::Result<()> {
                     //.kpls_dim(kpls_dim)
                 })
                 .infill_optimizer(InfillOptimizer::Cobyla)
+                .n_start(50)
                 .infill_strategy(InfillStrategy::EI)
                 .cstr_infill(true)
                 //.cstr_strategy(ConstraintStrategy::MeanConstraint)
