@@ -1,10 +1,41 @@
 use egobox_gp::{correlation_models::*, ThetaTuning};
 use egobox_moe::CorrelationSpec;
+use ndarray::Array1;
+
+pub fn theta_bounds(
+    tuning: &ThetaTuning<f64>,
+    dim: usize,
+    spec: CorrelationSpec,
+) -> Array1<(f64, f64)> {
+    if let Some(bounds) = tuning.bounds() {
+        if bounds.len() == 1 {
+            // If bounds is a single value, use it for all dimensions
+
+            let b = if bounds[0] == ThetaTuning::<f64>::DEFAULT_BOUNDS {
+                // Use bounds which depends on dim and kernel instead of constant default
+                special_bounds(dim, spec)
+            } else {
+                // Use given default
+                bounds[0]
+            };
+            Array1::from_elem(dim, b)
+        } else {
+            // If bounds is a vector, use it for each dimension
+            bounds.clone()
+        }
+    } else {
+        // Use bounds which depends on dim and kernel instead of constant default
+        Array1::from_vec(vec![special_bounds(dim, spec); dim])
+    }
+}
 
 /// Theta bounds
 #[allow(dead_code)]
-pub fn theta_bounds(dim: usize, spec: CorrelationSpec) -> (f64, f64) {
-    let (theta_inf, theta_sup) = (0.1f64, 0.5f64);
+fn special_bounds(dim: usize, spec: CorrelationSpec) -> (f64, f64) {
+    let (theta_inf, theta_sup) = (
+        ThetaTuning::<f64>::DEFAULT_BOUNDS.0,
+        ThetaTuning::<f64>::DEFAULT_BOUNDS.1,
+    );
     let (theta_inf, theta_sup) = if spec.contains(CorrelationSpec::SQUAREDEXPONENTIAL) {
         let influence: (f64, f64) = SquaredExponentialCorr::default().theta_influence_factors();
         (theta_inf.min(influence.0), theta_sup.max(influence.1))
@@ -65,7 +96,7 @@ mod tests {
 
                 #[test]
                 fn [<test_theta_bounds_  $corr:snake _ $dim:snake>]() {
-                    let bounds = theta_bounds($dim, CorrelationSpec::[< $corr:upper >]);
+                    let bounds = special_bounds($dim, CorrelationSpec::[< $corr:upper >]);
                     println!("bounds({}) = {:?}", $dim, bounds);
                     assert!(bounds.0 <= bounds.1);
                 }

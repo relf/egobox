@@ -122,7 +122,7 @@ where
         clustering: Option<&Clustering>,
         theta_inits: Option<&Array2<f64>>,
         actives: &Array2<usize>,
-    ) -> (Box<dyn MixtureGpSurrogate>, Option<Array2<f64>>) {
+    ) -> (Box<dyn MixtureGpSurrogate>, Array2<f64>) {
         let mut builder = self.surrogate_builder.clone();
         builder.set_kpls_dim(self.config.gp.kpls_dim);
         builder.set_regression_spec(self.config.gp.regression_spec);
@@ -132,7 +132,26 @@ where
         builder.set_optim_params(self.config.gp.n_start, self.config.gp.max_eval);
         let mut model = None;
         let mut best_likelihood = -f64::INFINITY;
-        let mut best_theta_inits = theta_inits.map(|inits| inits.to_owned());
+
+        let dim = self.config.gp.kpls_dim.unwrap_or(xt.ncols());
+
+        let mut best_theta_inits = if let Some(inits) = theta_inits {
+            inits.to_owned()
+        } else {
+            // otherwise suppose one cluster but will not be used
+            // as number of cluster determination is automated
+            let nb = self.config.gp.n_clusters.n_or_else_one();
+            let mut inits = Array2::zeros((nb, dim));
+            let default_init = self.config.gp.theta_tuning.init();
+            Zip::from(inits.rows_mut()).for_each(|mut r| r.assign(default_init));
+            inits
+        };
+
+        let theta_bounds = crate::utils::theta_bounds(
+            &self.config.gp.theta_tuning,
+            dim,
+            self.config.gp.correlation_spec,
+        );
 
         for (i, active) in actives.outer_iter().enumerate() {
             let gp = if make_clustering {
@@ -141,17 +160,15 @@ where
                     NbClusters::Auto { max: _ } => {
                         log::warn!("Automated clustering not available with CoEGO")
                     }
-                    NbClusters::Fixed { nb } => {
-                        let theta_tunings = Self::set_initial_partial_theta_tuning(
-                            (
-                                nb,
-                                xt.ncols()
-                                    .min(self.config.gp.kpls_dim.unwrap_or(xt.ncols())),
-                            ),
-                            &active.to_vec(),
-                            best_theta_inits,
-                            &self.config.gp.theta_tuning,
-                        );
+                    NbClusters::Fixed { nb: _ } => {
+                        let theta_tunings = best_theta_inits
+                            .outer_iter()
+                            .map(|init| ThetaTuning::Partial {
+                                init: init.to_owned(),
+                                bounds: theta_bounds.to_owned(),
+                                active: Self::strip(&active.to_vec(), init.len()),
+                            })
+                            .collect::<Vec<_>>();
                         builder.set_theta_tunings(&theta_tunings);
                     }
                 }
@@ -162,7 +179,7 @@ where
                 let gp = builder
                     .train(xt.view(), yt.view())
                     .expect("GP training failure");
-                let inits = Array2::from_shape_vec(
+                best_theta_inits = Array2::from_shape_vec(
                     (gp.experts().len(), gp.experts()[0].theta().len()),
                     gp.experts()
                         .iter()
@@ -170,7 +187,6 @@ where
                         .collect(),
                 )
                 .expect("Theta initialization failure");
-                best_theta_inits = Some(inits);
 
                 if i == 0 {
                     info!(
@@ -187,8 +203,6 @@ where
                 let theta_tunings = if optimize_theta {
                     // set hyperparameters optimization
                     let mut inits = best_theta_inits
-                        .clone()
-                        .expect("Theta initialization is provided")
                         .outer_iter()
                         .map(|init| ThetaTuning::Full {
                             init: init.to_owned(),
@@ -211,8 +225,6 @@ where
                 } else {
                     // just use previous hyperparameters
                     let inits = best_theta_inits
-                        .clone()
-                        .unwrap()
                         .outer_iter()
                         .map(|init| ThetaTuning::Fixed(init.to_owned()))
                         .collect::<Vec<_>>();
@@ -243,7 +255,7 @@ where
                                 );
                             };
                             best_likelihood = likelihood;
-                            let inits = Array2::from_shape_vec(
+                            best_theta_inits = Array2::from_shape_vec(
                                 (gp.experts().len(), gp.experts()[0].theta().len()),
                                 gp.experts()
                                     .iter()
@@ -251,14 +263,13 @@ where
                                     .collect(),
                             )
                             .expect("Theta initialization failure");
-                            best_theta_inits = Some(inits);
                         } else if model_name == "Objective" {
                             log::debug!(
                                 "Partial likelihood optim c={i} has not improved value={likelihood}"
                             );
                         };
                     } else {
-                        let inits = Array2::from_shape_vec(
+                        best_theta_inits = Array2::from_shape_vec(
                             (gp.experts().len(), gp.experts()[0].theta().len()),
                             gp.experts()
                                 .iter()
@@ -266,7 +277,6 @@ where
                                 .collect(),
                         )
                         .expect("Theta initialization failure");
-                        best_theta_inits = Some(inits);
                     }
                 } else {
                     log::warn!(
@@ -579,7 +589,7 @@ where
 
             (0..=self.config.n_cstr).for_each(|k| {
                 clusterings[k] = Some(models[k].to_clustering());
-                theta_inits[k] = inits[k].to_owned();
+                theta_inits[k] = Some(inits[k].to_owned());
             });
 
             let (obj_model, cstr_models) = models.split_first().unwrap();
