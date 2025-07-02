@@ -18,14 +18,14 @@ pub fn theta_bounds(
                 // Use given default
                 bounds[0]
             };
-            Array1::from_elem(dim, b)
+            Array1::from_elem(1, b)
         } else {
-            // If bounds is a vector, use it for each dimension
+            // If bounds is a vector, use it as is
             bounds.clone()
         }
     } else {
         // Use bounds which depends on dim and kernel instead of constant default
-        Array1::from_vec(vec![special_bounds(dim, spec); dim])
+        Array1::from_elem(1, special_bounds(dim, spec))
     }
 }
 
@@ -73,12 +73,13 @@ fn special_bounds(dim: usize, spec: CorrelationSpec) -> (f64, f64) {
         let interval = 1.96 * f64::sqrt(2. * (k + 1.) * d);
         let rmin = f64::sqrt(2. * d - interval);
         let rmax = f64::sqrt(2. * d + interval);
-        dbg!("rmin = {}, rmax={}", rmin, rmax);
+        //dbg!("rmin = {}, rmax={}", rmin, rmax);
         let lmin = s * rmin * theta_inf;
         let lmax = s * rmax * theta_sup;
-        dbg!("lmin = {}, lmax={}", lmin, lmax);
+        //dbg!("lmin = {}, lmax={}", lmin, lmax);
         let tlo = 1. / lmax;
         let tup = 1. / lmin;
+        //dbg!("tlo = {}, tup={}", tlo, tup);
         (tlo, tup)
     }
 }
@@ -124,4 +125,7 @@ mod tests {
     test_theta_bounds!(50, Matern52);
     test_theta_bounds!(100, Matern52);
     test_theta_bounds!(200, Matern52);
+
+    // test for MOPTA08 124D
+    test_theta_bounds!(124, SquaredExponential);
 }
