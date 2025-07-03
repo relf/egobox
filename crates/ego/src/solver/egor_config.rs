@@ -152,7 +152,9 @@ impl Default for CoegoConfig {
     }
 }
 
+/// Max number of iterations of EGO algorithm (aka iteration budget)
 pub const EGO_DEFAULT_MAX_ITERS: usize = 20;
+/// Number of restart for optimization of the infill criterion (aka multistart)
 pub const EGO_DEFAULT_N_START: usize = 20;
 
 /// Egor optimizer configuration

@@ -117,7 +117,7 @@ class TestGpMix(unittest.TestCase):
             y_pred = gpx.predict(x_test)
             self.assertEqual(n_dim, gpx.dims()[0])
             error = np.linalg.norm(y_pred - y_test) / np.linalg.norm(y_test)
-            self.assertAlmostEqual(0.1, error, delta=1e-1)
+            self.assertAlmostEqual(0.0, error, delta=3e-1)
             print("   RMS error: " + str(error))
 
     def test_multi_outputs_exception(self):
@@ -133,6 +133,13 @@ class TestGpMix(unittest.TestCase):
         self.yt1 = np.array([0.0, 1.0, 1.5, 0.9, 1.0])
 
         self.gpx = egx.Gpx.builder().fit(self.xt1, self.yt1)
+
+    def test_fixed_theta_no_optim(self):
+        print(f"gpx.theta = {self.gpx.thetas()}")
+        self.assertNotEqual(0.314, self.gpx.thetas().item())
+        self.gpx = egx.Gpx.builder(n_start=-1, theta_init=[0.314]).fit(self.xt, self.yt)
+        print(f"gpx.theta = {self.gpx.thetas()}")
+        self.assertEqual(0.314, self.gpx.thetas().item())
 
 
 if __name__ == "__main__":

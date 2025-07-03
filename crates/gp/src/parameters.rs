@@ -41,7 +41,7 @@ impl<F: Float> Default for ThetaTuning<F> {
 
 impl<F: Float> ThetaTuning<F> {
     pub const DEFAULT_INIT: f64 = 1e-1;
-    pub const DEFAULT_BOUNDS: (f64, f64) = (1e-3, 2e1);
+    pub const DEFAULT_BOUNDS: (f64, f64) = (1e-2, 1e1);
 
     pub fn init(&self) -> &Array1<F> {
         match self {

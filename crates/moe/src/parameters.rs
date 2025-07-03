@@ -38,6 +38,12 @@ impl Default for NbClusters {
 }
 
 impl NbClusters {
+    pub fn n_or_else_one(&self) -> usize {
+        match self {
+            Self::Fixed { nb } => *nb,
+            Self::Auto { max: _ } => 1,
+        }
+    }
     pub fn fixed(nb: usize) -> Self {
         Self::Fixed { nb }
     }

@@ -504,7 +504,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         }
 
         // We prefer optimize variable change log10(theta)
-        // as theta is used as exponent in objective function
+        // as theta is the inverse of a lengthscale in objective function
         let base: f64 = 10.;
         let objfn = |x: &[f64], _gradient: Option<&mut [f64]>, _params: &mut ()| -> f64 {
             for v in x.iter() {

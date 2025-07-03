@@ -1,3 +1,4 @@
+mod bounds;
 mod cstr_pof;
 mod find_result;
 mod hot_start;
@@ -6,6 +7,7 @@ mod misc;
 mod sort_axis;
 mod start_points;
 
+pub use bounds::*;
 pub use cstr_pof::*;
 pub use find_result::*;
 pub use hot_start::*;
