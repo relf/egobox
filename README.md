@@ -13,8 +13,8 @@
 [![linting](https://github.com/relf/egobox/workflows/lint/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Alint)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.04737/status.svg)](https://doi.org/10.21105/joss.04737)
 
-Rust toolbox for Efficient Global Optimization inspired by [the EGO implementation](https://smt.readthedocs.io/en/stable/_src_docs/applications/ego.html)
-in the [SMT](https://github.com/SMTorg/smt) Python library.
+Rust toolbox for Efficient Global Optimization method (arguably the most well-known bayesian optimization algorithm)
+which adresses the gradient-free optimization of expensive objective functions.
 
 The `egobox` package is twofold:
 
