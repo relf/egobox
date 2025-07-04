@@ -1,19 +1,10 @@
-use libm::{erf, erfc, exp, expm1, log, log1p};
+use crate::utils::misc::{norm_cdf, norm_pdf};
+use libm::{erfc, exp, expm1, log, log1p};
 
-const SQRT_2: f64 = std::f64::consts::SQRT_2;
 const INV_SQRT_2: f64 = 0.7071067811865475;
-const SQRT_2PI: f64 = 2.5066282746310002;
 const LOG_2PI_OVER_2: f64 = 0.9189385332046727; // log(2π)/2
 const LOG_PI_OVER_2_ALL_OVER_2: f64 = 0.2257913526447274; // log(π/2)/2
 const INV_SQRT_EPSILON: f64 = 1.0 / 1e-6;
-
-fn normal_pdf(u: f64) -> f64 {
-    exp(-0.5 * u * u) / SQRT_2PI
-}
-
-fn normal_cdf(u: f64) -> f64 {
-    0.5 * (1.0 + erf(u / SQRT_2))
-}
 
 fn erfcx(u: f64) -> f64 {
     exp(u * u) * erfc(u)
@@ -30,7 +21,7 @@ fn log1mexp(x: f64) -> f64 {
 
 pub fn log_ei_helper(u: f64) -> f64 {
     if u > -1.0 {
-        log(normal_pdf(u) + u * normal_cdf(u))
+        log(norm_pdf(u) + u * norm_cdf(u))
     } else {
         let log_phi_u = -0.5 * u * u - LOG_2PI_OVER_2;
 
@@ -67,7 +58,7 @@ fn log1mexp_w_derivative(u: f64) -> f64 {
 
 pub fn d_log_ei_helper(u: f64) -> f64 {
     if u > -1.0 {
-        let numerator = normal_cdf(u);
+        let numerator = norm_cdf(u);
         let denominator = log_ei_helper(u).exp();
         numerator / denominator
     } else {
