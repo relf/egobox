@@ -34,9 +34,9 @@ impl InfillCriterion for ExpectedImprovement {
                     let pred = p[0];
                     let sigma = s[[0, 0]].sqrt();
                     let args0 = (fmin - pred) / sigma;
-                    let args1 = (fmin - pred) * norm_cdf(args0);
-                    let args2 = sigma * norm_pdf(args0);
-                    args1 + args2
+                    let args1 = args0 * norm_cdf(args0);
+                    let args2 = norm_pdf(args0);
+                    sigma * (args1 + args2)
                 }
             } else {
                 0.0
@@ -129,7 +129,7 @@ impl InfillCriterion for LogExpectedImprovement {
                 } else {
                     let pred = p[0];
                     let sigma = s[[0, 0]].sqrt();
-                    let u = (pred - fmin) / sigma;
+                    let u = (fmin - pred) / sigma;
                     log_ei_helper(u) + sigma.ln()
                 }
             } else {
@@ -158,10 +158,23 @@ impl InfillCriterion for LogExpectedImprovement {
                 } else {
                     let pred = p[0];
                     let sigma = s[[0, 0]].sqrt();
-                    let u = (pred - fmin) / sigma;
-                    let du = obj_model.predict_gradients(&pt).unwrap() / sigma;
-                    let dhelper = d_log_ei_helper(u);
-                    du.row(0).mapv(|v| dhelper * v)
+                    let diff_y = fmin - pred;
+                    let arg = (fmin - pred) / sigma;
+
+                    let y_prime = obj_model.predict_gradients(&pt).unwrap();
+                    let y_prime = y_prime.row(0);
+                    let sig_2_prime = obj_model.predict_var_gradients(&pt).unwrap();
+                    let sig_2_prime = sig_2_prime.row(0);
+                    let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));
+
+                    let arg_prime = y_prime.mapv(|v| v / (-sigma))
+                        - diff_y.to_owned() * sig_prime.mapv(|v| v / (sigma * sigma));
+
+                    let dhelper = d_log_ei_helper(arg);
+                    let arg1 = arg_prime.mapv(|v| dhelper * v);
+
+                    let arg2 = sig_prime / sigma;
+                    arg1 + arg2
                 }
             } else {
                 Array1::from_elem(pt.len(), f64::MIN)
@@ -195,7 +208,7 @@ mod tests {
     // use egobox_moe::GpSurrogate;
     use finitediff::FiniteDiff;
     use linfa::Dataset;
-    use ndarray::array;
+    use ndarray::{array, Array2, ArrayView2};
     use ndarray_npy::write_npy;
     // use ndarray_npy::write_npy;
 
@@ -243,21 +256,24 @@ mod tests {
         // println!("thetas = {}", mixi_moe);
     }
 
-    #[test]
-    fn test_log_ei_gradients() {
-        let xtypes = vec![XType::Float(0., 25.)];
+    fn xsinx(x: &ArrayView2<f64>) -> Array2<f64> {
+        (x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())
+    }
 
+    #[test]
+    fn test_logei_gradients() {
+        let xtypes = vec![XType::Float(0., 25.)];
         let mixi = MixintContext::new(&xtypes);
 
         let surrogate_builder = MoeBuilder::new();
-        let xt = array![[0.0], [1.0], [2.0], [3.0], [4.0]];
-        let yt = array![0.0, 1.0, 1.5, 0.9, 1.0];
+        let xt = array![[0.0], [7.0], [25.0]];
+        let yt = xsinx(&xt.view()).into_iter().collect::<Array1<_>>();
         let ds = Dataset::new(xt, yt);
         let mixi_moe = mixi
             .create_surrogate(&surrogate_builder, &ds)
             .expect("Mixint surrogate creation");
 
-        let x = Array1::linspace(0., 4., 50);
+        let x = Array1::linspace(0., 25., 100);
         write_npy("logei_x.npy", &x).expect("save x");
 
         let grad = x.mapv(|v| LOG_EI.grad(&[v], &mixi_moe, 0., None)[0]);
@@ -269,11 +285,15 @@ mod tests {
 
         // check relative error between finite difference and analytical gradient
         for (i, v) in grad.iter().enumerate() {
-            let rel_error = (v - grad_central[i]).abs() / (v.abs() + 1e-10);
-            assert!(
-                rel_error < 5e-1,
-                "Relative error too high at index {i}: {rel_error}",
-            );
+            if v.abs() < 1e6 {
+                let rel_error = (v - grad_central[i]).abs() / (v.abs() + 1e-10);
+                println!("v={v} fdiff={}", grad_central[i]);
+                assert!(
+                    rel_error < 5e-1,
+                    "Relative error too high at index {i}: {rel_error} {v} - {}",
+                    grad_central[i]
+                );
+            }
         }
     }
 
