@@ -2,7 +2,7 @@ use crate::errors::Result;
 use crate::gpmix::mixint::to_discrete_space;
 use crate::{types::*, utils};
 
-use crate::utils::{compute_cstr_scales, pofs, pofs_grad};
+use crate::utils::{compute_cstr_scales, logpofs, logpofs_grad, pofs, pofs_grad};
 use crate::{solver::coego, EgorSolver};
 
 use argmin::core::{CostFunction, Problem};
@@ -323,6 +323,25 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn eval_infill_obj_with_cstrs(
+        &self,
+        x: &[f64],
+        obj_model: &dyn MixtureGpSurrogate,
+        cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        cstr_tols: &Array1<f64>,
+        fmin: f64,
+        scale: f64,
+        scale_ic: f64,
+    ) -> f64 {
+        let infill_obj = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
+        if self.config.infill_criterion.name() == "LogEI" {
+            infill_obj + logpofs(x, cstr_models, &cstr_tols.to_vec())
+        } else {
+            infill_obj * pofs(x, cstr_models, &cstr_tols.to_vec())
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn eval_grad_infill_obj_with_cstrs(
         &self,
         x: &[f64],
@@ -336,16 +355,24 @@ where
         if cstr_models.is_empty() {
             self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic)
         } else {
-            let infill = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
-            let pofs = pofs(x, cstr_models, &cstr_tols.to_vec());
-
             let infill_grad =
-                Array1::from_vec(self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic))
-                    .mapv(|v| v * pofs);
-            let pofs_grad = pofs_grad(x, cstr_models, &cstr_tols.to_vec());
+                Array1::from_vec(self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic));
 
-            let cei_grad = infill_grad.mapv(|v| v * pofs) + pofs_grad.mapv(|v| v * infill);
-            cei_grad.to_vec()
+            if self.config.infill_criterion.name() == "LogEI" {
+                let logcei_grad = infill_grad + logpofs_grad(x, cstr_models, &cstr_tols.to_vec());
+                logcei_grad.to_vec()
+            } else {
+                let infill = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
+                let infill_grad = Array1::from_vec(
+                    self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic),
+                );
+
+                let pofs = pofs(x, cstr_models, &cstr_tols.to_vec());
+                let pofs_grad = pofs_grad(x, cstr_models, &cstr_tols.to_vec());
+
+                let cei_grad = infill_grad * pofs + pofs_grad * infill;
+                cei_grad.to_vec()
+            }
         }
     }
 
