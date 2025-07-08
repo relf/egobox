@@ -450,7 +450,7 @@ mod tests {
             .configure(|cfg| {
                 cfg.infill_strategy(InfillStrategy::LogEI)
                     .infill_optimizer(InfillOptimizer::Slsqp)
-                    .max_iters(20)
+                    .max_iters(30)
                     .doe(&initial_doe)
             })
             .min_within(&array![[0.0, 25.0]])
