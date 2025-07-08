@@ -28,7 +28,7 @@ impl InfillCriterion for ExpectedImprovement {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                if s[[0, 0]].abs() < f64::EPSILON {
+                if s[[0, 0]] < f64::EPSILON {
                     0.0
                 } else {
                     let pred = p[0];
@@ -58,12 +58,12 @@ impl InfillCriterion for ExpectedImprovement {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                let sigma = s[[0, 0]].sqrt();
-                if sigma.abs() < f64::EPSILON {
+                if s[[0, 0]] < f64::EPSILON {
                     Array1::zeros(pt.len())
                 } else {
                     let pred = p[0];
                     let diff_y = fmin - pred;
+                    let sigma = s[[0, 0]].sqrt();
                     let arg = (fmin - pred) / sigma;
                     let y_prime = obj_model.predict_gradients(&pt).unwrap();
                     let y_prime = y_prime.row(0);
@@ -124,7 +124,7 @@ impl InfillCriterion for LogExpectedImprovement {
 
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                if s[[0, 0]].abs() < f64::EPSILON {
+                if s[[0, 0]] < f64::EPSILON {
                     f64::MIN
                 } else {
                     let pred = p[0];
@@ -140,7 +140,7 @@ impl InfillCriterion for LogExpectedImprovement {
         }
     }
 
-    /// Computes derivatives of EI infill criterion wrt to x components at given `x` point
+    /// Computes derivatives of LogEI infill criterion wrt to x components at given `x` point
     /// using the surrogate model `obj_model` and the current minimum of the objective function.
     fn grad(
         &self,
@@ -153,13 +153,13 @@ impl InfillCriterion for LogExpectedImprovement {
 
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                if s[[0, 0]].abs() < f64::EPSILON {
+                if s[[0, 0]] < f64::EPSILON {
                     Array1::from_elem(pt.len(), f64::MIN)
                 } else {
                     let pred = p[0];
-                    let sigma = s[[0, 0]].sqrt();
                     let diff_y = fmin - pred;
-                    let arg = (fmin - pred) / sigma;
+                    let sigma = s[[0, 0]].sqrt();
+                    let arg = diff_y / sigma;
 
                     let y_prime = obj_model.predict_gradients(&pt).unwrap();
                     let y_prime = y_prime.row(0);
