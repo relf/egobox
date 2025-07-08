@@ -10,7 +10,7 @@ fn pof(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> f64 {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     if let Ok(p) = cstr_model.predict(&pt) {
         if let Ok(s) = cstr_model.predict_var(&pt) {
-            if s[[0, 0]].abs() < 10000. * f64::EPSILON {
+            if s[[0, 0]] < f64::EPSILON {
                 0.0
             } else {
                 let pred = p[0];
@@ -32,11 +32,11 @@ fn pof_grad(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> Ar
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     if let Ok(p) = cstr_model.predict(&pt) {
         if let Ok(s) = cstr_model.predict_var(&pt) {
-            let sigma = s[[0, 0]].sqrt();
-            if sigma.abs() < 10000. * f64::EPSILON {
+            if s[[0, 0]] < f64::EPSILON {
                 Array1::zeros(pt.len())
             } else {
                 let pred = p[0];
+                let sigma = s[[0, 0]].sqrt();
                 let arg = (cstr_tol - pred) / sigma;
                 let y_prime = cstr_model.predict_gradients(&pt).unwrap();
                 let y_prime = y_prime.row(0);
@@ -68,11 +68,11 @@ pub fn pofs(x: &[f64], cstr_models: &[Box<dyn MixtureGpSurrogate>], cstr_tols: &
 
 pub fn logpofs(x: &[f64], cstr_models: &[Box<dyn MixtureGpSurrogate>], cstr_tols: &[f64]) -> f64 {
     if cstr_models.is_empty() {
-        1.
+        0.
     } else {
-        zip(cstr_models, cstr_tols).fold(1., |acc, (cstr_model, cstr_tol)| {
-            let pof = pof(x, &**cstr_model, *cstr_tol).max(100. * f64::EPSILON);
-            acc + pof.ln()
+        zip(cstr_models, cstr_tols).fold(0., |acc, (cstr_model, cstr_tol)| {
+            let logpof = (pof(x, &**cstr_model, *cstr_tol).max(f64::EPSILON)).ln();
+            acc + logpof
         })
     }
 }
@@ -107,6 +107,23 @@ pub fn pofs_grad(
     }
 }
 
+pub fn logpof_grad(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> Array1<f64> {
+    let num = pof_grad(x, cstr_model, cstr_tol);
+    let denom = pof(x, cstr_model, cstr_tol).max(f64::EPSILON);
+    num / denom
+}
+
+pub fn logpofs_grad(
+    x: &[f64],
+    cstr_models: &[Box<dyn MixtureGpSurrogate>],
+    cstr_tols: &[f64],
+) -> Array1<f64> {
+    zip(cstr_models, cstr_tols).fold(Array1::zeros(x.len()), |acc, (cstr_model, cstr_tol)| {
+        let logpof_grad = logpof_grad(x, &**cstr_model, *cstr_tol);
+        acc + logpof_grad
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,11 +132,9 @@ mod tests {
         types::*,
     };
     use approx::assert_abs_diff_eq;
-    // use egobox_moe::GpSurrogate;
     use finitediff::FiniteDiff;
     use linfa::Dataset;
     use ndarray::array;
-    // use ndarray_npy::write_npy;
 
     #[test]
     fn test_pof_gradients() {
@@ -142,31 +157,6 @@ mod tests {
         let grad_central = x.central_diff(&f);
 
         assert_abs_diff_eq!(grad[0], grad_central[0], epsilon = 1e-6);
-
-        // for Debugging purposes, we can save the values to npy files
-
-        // let cx = Array1::linspace(0., 25., 100);
-        // write_npy("cei_cx.npy", &cx).expect("save x");
-
-        // let mut cy = Array1::zeros(cx.len());
-        // Zip::from(&mut cy).and(&cx).for_each(|yi, xi| {
-        //     *yi = CEI.value(&[*xi], &mixi_moe, 0., None);
-        // });
-        // write_npy("cei_cy.npy", &cy).expect("save y");
-
-        // let mut cdy = Array1::zeros(cx.len());
-        // Zip::from(&mut cdy).and(&cx).for_each(|yi, xi| {
-        //     *yi = CEI.grad(&[*xi], &mixi_moe, 0., None)[0];
-        // });
-        // println!("CDY = {}", cdy);
-        // write_npy("cei_cdy.npy", &cdy).expect("save dy");
-
-        // let cytrue = mixi_moe
-        //     .predict(&cx.insert_axis(Axis(1)).view())
-        //     .expect("prediction");
-        // write_npy("cei_cytrue.npy", &cytrue).expect("save cstr");
-
-        // println!("thetas = {}", mixi_moe);
     }
 
     #[test]
