@@ -820,6 +820,32 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_egor_g24_basic_egor_builder_logei() {
+        let xlimits = array![[0., 3.], [0., 4.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Xoshiro256Plus::seed_from_u64(0))
+            .sample(3);
+        let res = EgorBuilder::optimize(f_g24)
+            .configure(|config| {
+                config
+                    .n_cstr(2)
+                    .doe(&doe)
+                    .max_iters(10)
+                    .infill_strategy(InfillStrategy::LogEI)
+                    .infill_optimizer(InfillOptimizer::Slsqp)
+                    //.cstr_infill(true)
+                    .cstr_tol(array![2e-3, 1e-3])
+                    .seed(42)
+            })
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure");
+        let expected = array![2.3295, 3.1785];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 3e-2);
+    }
+
+    #[test]
+    #[serial]
     fn test_egor_g24_with_domain_constraints() {
         let xlimits = array![[0., 3.], [0., 4.]];
         let doe = Lhs::new(&xlimits)
