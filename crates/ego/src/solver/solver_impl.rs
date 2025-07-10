@@ -309,8 +309,19 @@ where
         let sampling = Lhs::new(&self.xlimits)
             .with_rng(sub_rng)
             .kind(LhsKind::Maximin);
-        let (scale_infill_obj, scale_cstr, _scale_fcstr, scale_wb2) =
-            self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, fcstrs, fmin);
+        let cstr_tol = self
+            .config
+            .cstr_tol
+            .clone()
+            .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
+        let (scale_infill_obj, scale_cstr, _scale_fcstr, scale_wb2) = self.compute_scaling(
+            &sampling,
+            obj_model.as_ref(),
+            cstr_models,
+            &cstr_tol,
+            fcstrs,
+            fmin,
+        );
         problem.problem = Some(pb);
 
         InfillObjData {
@@ -600,8 +611,14 @@ where
             let sampling = Lhs::new(&self.xlimits)
                 .with_rng(sub_rng)
                 .kind(LhsKind::Maximin);
-            let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) =
-                self.compute_scaling(&sampling, obj_model.as_ref(), cstr_models, cstr_funcs, fmin);
+            let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) = self.compute_scaling(
+                &sampling,
+                obj_model.as_ref(),
+                cstr_models,
+                cstr_tol,
+                cstr_funcs,
+                fmin,
+            );
 
             let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
 

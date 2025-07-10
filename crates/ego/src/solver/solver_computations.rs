@@ -108,6 +108,7 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        cstr_tols: &Array1<f64>,
         fcstrs: &[impl CstrFn],
         fmin: f64,
     ) -> (f64, Array1<f64>, Array1<f64>, f64) {
@@ -126,8 +127,14 @@ where
             1.
         };
 
-        let scale_infill_obj =
-            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, fmin, scale_ic);
+        let scale_infill_obj = self.compute_infill_obj_scale(
+            &scaling_points.view(),
+            obj_model,
+            cstr_models,
+            cstr_tols,
+            fmin,
+            scale_ic,
+        );
         info!(
             "Infill criterion {} scaling is updated to {}",
             self.config.infill_criterion.name(),
@@ -256,6 +263,8 @@ where
         &self,
         x: &ArrayView2<f64>,
         obj_model: &dyn MixtureGpSurrogate,
+        cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        cstr_tols: &Array1<f64>,
         fmin: f64,
         scale_ic: f64,
     ) -> f64 {
@@ -273,6 +282,16 @@ where
                 val.abs()
             };
         });
+        if self.config.cstr_infill {
+            Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
+                if self.config.infill_criterion.name() == "LogEI" {
+                    *c -= logpofs(&x.to_vec(), cstr_models, &cstr_tols.to_vec());
+                } else {
+                    *c *= pofs(&x.to_vec(), cstr_models, &cstr_tols.to_vec());
+                }
+            });
+        }
+
         if inf_count > 0 || nan_count > 0 {
             warn!(
                 "Criterion scale computation warning: ({nan_count} NaN + {inf_count} Inf) / {} points",
