@@ -335,7 +335,7 @@ where
     ) -> f64 {
         let infill_obj = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
         if self.config.infill_criterion.name() == "LogEI" {
-            infill_obj + logpofs(x, cstr_models, &cstr_tols.to_vec())
+            infill_obj - logpofs(x, cstr_models, &cstr_tols.to_vec())
         } else {
             infill_obj * pofs(x, cstr_models, &cstr_tols.to_vec())
         }
@@ -359,7 +359,7 @@ where
                 Array1::from_vec(self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic));
 
             if self.config.infill_criterion.name() == "LogEI" {
-                let logcei_grad = infill_grad + logpofs_grad(x, cstr_models, &cstr_tols.to_vec());
+                let logcei_grad = infill_grad - logpofs_grad(x, cstr_models, &cstr_tols.to_vec());
                 logcei_grad.to_vec()
             } else {
                 let infill = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
