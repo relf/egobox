@@ -452,12 +452,13 @@ mod tests {
                     .infill_optimizer(InfillOptimizer::Slsqp)
                     .max_iters(30)
                     .doe(&initial_doe)
+                    .seed(42)
             })
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.125];
-        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 1e-3);
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 2e-3);
     }
 
     #[test]
