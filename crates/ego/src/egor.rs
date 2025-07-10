@@ -830,7 +830,7 @@ mod tests {
                 config
                     .n_cstr(2)
                     .doe(&doe)
-                    .max_iters(10)
+                    .max_iters(20)
                     .infill_strategy(InfillStrategy::LogEI)
                     .infill_optimizer(InfillOptimizer::Slsqp)
                     //.cstr_infill(true)
