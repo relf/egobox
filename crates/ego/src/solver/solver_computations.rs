@@ -279,7 +279,7 @@ where
                 inf_count += 1;
                 1.0
             } else {
-                val.abs()
+                val
             };
         });
         if self.config.cstr_infill {
@@ -298,7 +298,7 @@ where
                 x.nrows()
             );
         }
-        let scale = *crit_vals.max().unwrap_or(&1.0);
+        let scale = *crit_vals.mapv(|v| v.abs()).max().unwrap_or(&1.0);
         if scale < 100.0 * f64::EPSILON {
             1.0
         } else {
