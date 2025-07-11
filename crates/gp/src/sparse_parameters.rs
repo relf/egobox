@@ -240,8 +240,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
     }
 
     /// Set the max number of internal likelihood evaluations during one optimization
-    /// Given max_eval has to be greater than [crate::GP_MIN_COBYLA_EVAL] otherwise
-    /// max_eval is set to crate::GP_MIN_COBYLA_EVAL.
+    /// Given max_eval has to be greater than [crate::GP_COBYLA_MIN_EVAL] otherwise
+    /// max_eval is set to [crate::GP_COBYLA_MAX_EVAL].
     pub fn max_eval(mut self, max_eval: usize) -> Self {
         self.0.gp_params.max_eval = GP_COBYLA_MIN_EVAL.max(max_eval);
         self

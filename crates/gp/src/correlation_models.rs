@@ -41,7 +41,7 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display + Sy
     ) -> Array2<F>;
 
     /// Returns the theta influence factors for the correlation model.
-    /// See https://hal.science/hal-03812073v2/document
+    /// See <https://hal.science/hal-03812073v2/document>
     fn theta_influence_factors(&self) -> (F, F) {
         (F::one(), F::one())
     }

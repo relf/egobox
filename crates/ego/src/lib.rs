@@ -211,7 +211,9 @@
 //! * Mixed integer approach is implemented using continuous relaxation. See \[[Garrido2018](#Garrido2018)\]
 //! * TREGO algorithm is implemented. See \[[Diouane2023](#Diouane2023)\]
 //! * CoEGO approach is implemented with CCBO setting where expensive evaluations are run after context vector update.
-//!   See \[[Zhan2024](#Zhan024)\] and \[[Pretsch2024](#Pretsch024)\]
+//!   See \[[Zhan2024](#Zhan024)\] and \[[Pretsch2024](#Pretsch2024)\]
+//! * Theta bounds are implemented as in \[[Appriou2023](#Appriou2023)\]
+//! * Logirithm of Expected Improvement is implemented as in \[[Ament2025](#Ament2025)\]
 //!
 //! # References
 //!
@@ -262,10 +264,17 @@
 //! [A cooperative approach to efficient global optimization](https://link.springer.com/article/10.1007/s10898-023-01316-6).
 //! Journal of Global Optimization 88.2 (2024): 327-357
 //!
-//! \[<a id="Pretsch024">Pretsch024</a>\]: Lisa Pretsch et al.
-//! [Bayesian optimization of cooperative components for multi-stage aero-structural compressor blade design]
-//! (https://www.researchgate.net/publication/391492598_Bayesian_optimization_of_cooperative_components_for_multi-stage_aero-structural_compressor_blade_design).
+//! \[<a id="Pretsch2024">Pretsch2024</a>\]: Lisa Pretsch et al.
+//! [Bayesian optimization of cooperative components for multi-stage aero-structural compressor blade design](https://www.researchgate.net/publication/391492598_Bayesian_optimization_of_cooperative_components_for_multi-stage_aero-structural_compressor_blade_design).
 //! Struct Multidisc Optim 68, 84 (2025)
+//!
+//! \[<a id="Appriou2023">Appriou2023</a>\]: Appriou, T., Rullière, D. & Gaudrie, D,
+//! [Combination of optimization-free kriging models for high-dimensional problems](https://doi.org/10.1007/s00180-023-01424-7),
+//! Comput Stat 39, 3049–3071 (2024).
+//!
+//! \[<a id="Ament2025">Ament2025</a>\]: S Ament, S Daulton, D Eriksson, M Balandat, E Bakshy,
+//! [Unexpected improvements to expected improvement for bayesian optimization](https://arxiv.org/pdf/2310.20708),
+//! Advances in Neural Information Processing Systems, 2023
 //!
 //! smtorg. (2018). Surrogate modeling toolbox. In [GitHub repository](https://github.com/SMTOrg/smt)
 //!
