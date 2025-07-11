@@ -2,7 +2,7 @@ use crate::errors::Result;
 use crate::gpmix::mixint::to_discrete_space;
 use crate::{types::*, utils};
 
-use crate::utils::{compute_cstr_scales, pofs, pofs_grad};
+use crate::utils::{compute_cstr_scales, logpofs, logpofs_grad, pofs, pofs_grad};
 use crate::{solver::coego, EgorSolver};
 
 use argmin::core::{CostFunction, Problem};
@@ -108,6 +108,7 @@ where
         sampling: &Lhs<f64, Xoshiro256Plus>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        cstr_tols: &Array1<f64>,
         fcstrs: &[impl CstrFn],
         fmin: f64,
     ) -> (f64, Array1<f64>, Array1<f64>, f64) {
@@ -126,8 +127,14 @@ where
             1.
         };
 
-        let scale_infill_obj =
-            self.compute_infill_obj_scale(&scaling_points.view(), obj_model, fmin, scale_ic);
+        let scale_infill_obj = self.compute_infill_obj_scale(
+            &scaling_points.view(),
+            obj_model,
+            cstr_models,
+            cstr_tols,
+            fmin,
+            scale_ic,
+        );
         info!(
             "Infill criterion {} scaling is updated to {}",
             self.config.infill_criterion.name(),
@@ -256,6 +263,8 @@ where
         &self,
         x: &ArrayView2<f64>,
         obj_model: &dyn MixtureGpSurrogate,
+        cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        cstr_tols: &Array1<f64>,
         fmin: f64,
         scale_ic: f64,
     ) -> f64 {
@@ -270,16 +279,26 @@ where
                 inf_count += 1;
                 1.0
             } else {
-                val.abs()
+                val
             };
         });
+        if self.config.cstr_infill {
+            Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
+                if self.config.infill_criterion.name() == "LogEI" {
+                    *c -= logpofs(&x.to_vec(), cstr_models, &cstr_tols.to_vec());
+                } else {
+                    *c *= pofs(&x.to_vec(), cstr_models, &cstr_tols.to_vec());
+                }
+            });
+        }
+
         if inf_count > 0 || nan_count > 0 {
             warn!(
                 "Criterion scale computation warning: ({nan_count} NaN + {inf_count} Inf) / {} points",
                 x.nrows()
             );
         }
-        let scale = *crit_vals.max().unwrap_or(&1.0);
+        let scale = *crit_vals.mapv(|v| v.abs()).max().unwrap_or(&1.0);
         if scale < 100.0 * f64::EPSILON {
             1.0
         } else {
@@ -323,6 +342,25 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn eval_infill_obj_with_cstrs(
+        &self,
+        x: &[f64],
+        obj_model: &dyn MixtureGpSurrogate,
+        cstr_models: &[Box<dyn MixtureGpSurrogate>],
+        cstr_tols: &Array1<f64>,
+        fmin: f64,
+        scale: f64,
+        scale_ic: f64,
+    ) -> f64 {
+        let infill_obj = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
+        if self.config.infill_criterion.name() == "LogEI" {
+            infill_obj - logpofs(x, cstr_models, &cstr_tols.to_vec())
+        } else {
+            infill_obj * pofs(x, cstr_models, &cstr_tols.to_vec())
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn eval_grad_infill_obj_with_cstrs(
         &self,
         x: &[f64],
@@ -336,16 +374,24 @@ where
         if cstr_models.is_empty() {
             self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic)
         } else {
-            let infill = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
-            let pofs = pofs(x, cstr_models, &cstr_tols.to_vec());
-
             let infill_grad =
-                Array1::from_vec(self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic))
-                    .mapv(|v| v * pofs);
-            let pofs_grad = pofs_grad(x, cstr_models, &cstr_tols.to_vec());
+                Array1::from_vec(self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic));
 
-            let cei_grad = infill_grad.mapv(|v| v * pofs) + pofs_grad.mapv(|v| v * infill);
-            cei_grad.to_vec()
+            if self.config.infill_criterion.name() == "LogEI" {
+                let logcei_grad = infill_grad - logpofs_grad(x, cstr_models, &cstr_tols.to_vec());
+                logcei_grad.to_vec()
+            } else {
+                let infill = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
+                let infill_grad = Array1::from_vec(
+                    self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic),
+                );
+
+                let pofs = pofs(x, cstr_models, &cstr_tols.to_vec());
+                let pofs_grad = pofs_grad(x, cstr_models, &cstr_tols.to_vec());
+
+                let cei_grad = infill_grad * pofs + pofs_grad * infill;
+                cei_grad.to_vec()
+            }
         }
     }
 

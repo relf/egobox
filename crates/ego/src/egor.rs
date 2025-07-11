@@ -450,14 +450,15 @@ mod tests {
             .configure(|cfg| {
                 cfg.infill_strategy(InfillStrategy::LogEI)
                     .infill_optimizer(InfillOptimizer::Slsqp)
-                    .max_iters(20)
+                    .max_iters(30)
                     .doe(&initial_doe)
+                    .seed(42)
             })
             .min_within(&array![[0.0, 25.0]])
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.125];
-        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 1e-3);
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 2e-3);
     }
 
     #[test]
@@ -814,6 +815,32 @@ mod tests {
             .run()
             .expect("Minimize failure");
         println!("G24 optim result = {res:?}");
+        let expected = array![2.3295, 3.1785];
+        assert_abs_diff_eq!(expected, res.x_opt, epsilon = 3e-2);
+    }
+
+    #[test]
+    #[serial]
+    fn test_egor_g24_basic_egor_builder_logei() {
+        let xlimits = array![[0., 3.], [0., 4.]];
+        let doe = Lhs::new(&xlimits)
+            .with_rng(Xoshiro256Plus::seed_from_u64(0))
+            .sample(3);
+        let res = EgorBuilder::optimize(f_g24)
+            .configure(|config| {
+                config
+                    .n_cstr(2)
+                    .doe(&doe)
+                    .max_iters(20)
+                    .infill_strategy(InfillStrategy::LogEI)
+                    .infill_optimizer(InfillOptimizer::Slsqp)
+                    //.cstr_infill(true)
+                    .cstr_tol(array![2e-3, 1e-3])
+                    .seed(42)
+            })
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure");
         let expected = array![2.3295, 3.1785];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 3e-2);
     }

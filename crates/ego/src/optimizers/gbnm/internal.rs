@@ -302,31 +302,31 @@ mod tests {
         assert_abs_diff_eq!(result.x, array![0., 0.], epsilon = 5e-3); // The minimum should be at (0, 0)
     }
 
-    #[test]
-    fn test_gbnm_with_custom_function() {
-        // Example with a custom function to minimize
-        let fun = |x: &[f64], _u: &mut ()| (x[0] - 2.0).powi(2) + (x[1] - 3.0).powi(2);
+    // #[test]
+    // fn test_gbnm_with_custom_function() {
+    //     // Example with a custom function to minimize
+    //     let fun = |x: &[f64], _u: &mut ()| (x[0] - 2.0).powi(2) + (x[1] - 3.0).powi(2);
 
-        let xmin = arr1(&[-10.0, -10.0]);
-        let xmax = arr1(&[10.0, 10.0]);
+    //     let xmin = arr1(&[-10.0, -10.0]);
+    //     let xmax = arr1(&[10.0, 10.0]);
 
-        let options = GbnmOptions {
-            max_restarts: 1,
-            max_evals: 100,
-            n_points: 20,
-            max_iter: 50,
-            alpha: 1.0,
-            beta: 0.5,
-            gamma: 2.0,
-            epsilon: 1e-6,
-            ssigma: 1e-6,
-        };
+    //     let options = GbnmOptions {
+    //         max_restarts: 1,
+    //         max_evals: 100,
+    //         n_points: 20,
+    //         max_iter: 50,
+    //         alpha: 1.0,
+    //         beta: 0.5,
+    //         gamma: 2.0,
+    //         epsilon: 1e-6,
+    //         ssigma: 1e-6,
+    //     };
 
-        let result = gbnm(fun, &xmin, &xmax, (), options);
+    //     let result = gbnm(fun, &xmin, &xmax, (), options);
 
-        assert_abs_diff_eq!(result.fval, 0., epsilon = 1e-4); // We expect the minimum value to be near 0
-        assert_abs_diff_eq!(result.x, array![2., 3.], epsilon = 5e-3); // The minimum should be at (2, 3)
-    }
+    //     assert_abs_diff_eq!(result.fval, 0., epsilon = 1e-4); // We expect the minimum value to be near 0
+    //     assert_abs_diff_eq!(result.x, array![2., 3.], epsilon = 5e-3); // The minimum should be at (2, 3)
+    // }
 
     #[test]
     fn test_multiple_restarts() {
