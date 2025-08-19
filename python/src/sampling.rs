@@ -81,6 +81,6 @@ pub(crate) fn lhs(
     xspecs: PyObject,
     n_samples: usize,
     seed: Option<u64>,
-) -> Bound<'_, PyArray2<f64>> {
+) -> Bound<PyArray2<f64>> {
     sampling(py, Sampling::Lhs, xspecs, n_samples, seed)
 }
