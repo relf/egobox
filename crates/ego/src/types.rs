@@ -51,9 +51,6 @@ pub enum InfillOptimizer {
     Slsqp,
     /// Cobyla optimizer (gradient free)
     Cobyla,
-    /// GBNM optimizer (gradient free but do not handle constraints)
-    /// Use with constrained infill criterion in presence of constraints
-    Gbnm,
 }
 
 /// Strategy to choose several points at each iteration
