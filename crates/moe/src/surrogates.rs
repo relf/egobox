@@ -55,7 +55,7 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     /// Predict output values at n points given as a vector (n,)..
     fn predict(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
-    fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>>;
     /// Save model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str, format: GpFileFormat) -> Result<()>;
@@ -160,7 +160,7 @@ macro_rules! declare_surrogate {
                 fn predict(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
                     Ok(self.0.predict(x)?)
                 }
-                fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
                     Ok(self.0.predict_var(x)?)
                 }
 
@@ -322,7 +322,7 @@ macro_rules! declare_sgp_surrogate {
                 fn predict(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
                     Ok(self.0.predict(x)?)
                 }
-                fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+                fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
                     Ok(self.0.predict_var(x)?)
                 }
 

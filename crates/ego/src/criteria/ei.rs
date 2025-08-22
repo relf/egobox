@@ -28,11 +28,11 @@ impl InfillCriterion for ExpectedImprovement {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                if s[[0, 0]] < f64::EPSILON {
+                if s[0] < f64::EPSILON {
                     0.0
                 } else {
                     let pred = p[0];
-                    let sigma = s[[0, 0]].sqrt();
+                    let sigma = s[0].sqrt();
                     let args0 = (fmin - pred) / sigma;
                     let args1 = args0 * norm_cdf(args0);
                     let args2 = norm_pdf(args0);
@@ -58,12 +58,12 @@ impl InfillCriterion for ExpectedImprovement {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                if s[[0, 0]] < f64::EPSILON {
+                if s[0] < f64::EPSILON {
                     Array1::zeros(pt.len())
                 } else {
                     let pred = p[0];
                     let diff_y = fmin - pred;
-                    let sigma = s[[0, 0]].sqrt();
+                    let sigma = s[0].sqrt();
                     let arg = (fmin - pred) / sigma;
                     let y_prime = obj_model.predict_gradients(&pt).unwrap();
                     let y_prime = y_prime.row(0);
@@ -124,11 +124,11 @@ impl InfillCriterion for LogExpectedImprovement {
 
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                if s[[0, 0]] < f64::EPSILON {
+                if s[0] < f64::EPSILON {
                     f64::MIN
                 } else {
                     let pred = p[0];
-                    let sigma = s[[0, 0]].sqrt();
+                    let sigma = s[0].sqrt();
                     let u = (fmin - pred) / sigma;
                     log_ei_helper(u) + sigma.ln()
                 }
@@ -153,12 +153,12 @@ impl InfillCriterion for LogExpectedImprovement {
 
         if let Ok(p) = obj_model.predict(&pt) {
             if let Ok(s) = obj_model.predict_var(&pt) {
-                if s[[0, 0]] < f64::EPSILON {
+                if s[0] < f64::EPSILON {
                     Array1::from_elem(pt.len(), f64::MIN)
                 } else {
                     let pred = p[0];
                     let diff_y = fmin - pred;
-                    let sigma = s[[0, 0]].sqrt();
+                    let sigma = s[0].sqrt();
                     let arg = diff_y / sigma;
 
                     let y_prime = obj_model.predict_gradients(&pt).unwrap();

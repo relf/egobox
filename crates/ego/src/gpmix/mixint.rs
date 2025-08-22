@@ -600,7 +600,7 @@ impl GpSurrogate for MixintGpMixture {
         self.moe.predict(&xcast)
     }
 
-    fn predict_var(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {
+    fn predict_var(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array1<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)
         } else {
@@ -690,13 +690,13 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array1<f64>> for Mix
 }
 
 struct MoeVariancePredictor<'a>(&'a GpMixture);
-impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array1<f64>>
     for MoeVariancePredictor<'_>
 {
-    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array1<f64>) {
         assert_eq!(
             x.nrows(),
-            y.nrows(),
+            y.len(),
             "The number of data points must match the number of output targets."
         );
 
@@ -707,8 +707,8 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
         *y = values;
     }
 
-    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.0.dims().1))
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<f64> {
+        Array1::zeros(x.nrows())
     }
 }
 
@@ -919,7 +919,7 @@ mod tests {
         );
         println!("{yvar:?}");
         assert_abs_diff_eq!(
-            array![[0.], [0.2852695228568877], [0.], [0.], [0.]],
+            array![0., 0.2852695228568877, 0., 0., 0.],
             yvar,
             epsilon = 1e-3
         );

@@ -485,7 +485,7 @@ impl GpSurrogate for GpMixture {
         }
     }
 
-    fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
+    fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
         match self.recombination {
             Recombination::Hard => self.predict_var_hard(x),
             Recombination::Smooth(_) => self.predict_var_smooth(x),
@@ -611,17 +611,17 @@ impl GpMixture {
     pub fn predict_var_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Array2<f64>> {
+    ) -> Result<Array1<f64>> {
         let probas = self.gmx.predict_probas(x);
-        let preds: Array2<f64> = self
+        let preds: Array1<f64> = self
             .experts
             .iter()
             .enumerate()
             .map(|(i, gp)| {
-                let p = probas.column(i).to_owned().insert_axis(Axis(1));
-                gp.predict_var(&x.view()).unwrap() * &p * &p
+                let p = probas.column(i);
+                gp.predict_var(&x.view()).unwrap() * p * p
             })
-            .fold(Array2::zeros((x.nrows(), 1)), |acc, pred| acc + pred);
+            .fold(Array1::zeros(x.nrows()), |acc, pred| acc + pred);
         Ok(preds)
     }
 
@@ -695,7 +695,7 @@ impl GpMixture {
                 let preds: Array1<f64> = self
                     .experts
                     .iter()
-                    .map(|gp| gp.predict_var(&xii).unwrap()[[0, 0]])
+                    .map(|gp| gp.predict_var(&xii).unwrap()[0])
                     .collect();
                 let drvs: Vec<Array1<f64>> = self
                     .experts
@@ -741,24 +741,21 @@ impl GpMixture {
     /// Predict variance at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// The expert of the cluster is used to predict variance value.
-    /// Returns the variances as a (n, 1) column vector
+    /// Returns the variances as a (n,) vector
     pub fn predict_var_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Result<Array2<f64>> {
+    ) -> Result<Array1<f64>> {
         let clustering = self.gmx.predict(x);
         trace!("Clustering {clustering:?}");
-        let mut variances = Array2::zeros((x.nrows(), 1));
-        Zip::from(variances.rows_mut())
+        let mut variances = Array1::zeros(x.nrows());
+        Zip::from(&mut variances)
             .and(x.rows())
             .and(&clustering)
-            .for_each(|mut y, x, &c| {
-                y.assign(
-                    &self.experts[c]
-                        .predict_var(&x.insert_axis(Axis(0)))
-                        .unwrap()
-                        .row(0),
-                );
+            .for_each(|y, x, &c| {
+                *y = self.experts[c]
+                    .predict_var(&x.insert_axis(Axis(0)))
+                    .unwrap()[0];
             });
         Ok(variances)
     }
@@ -822,7 +819,7 @@ impl GpMixture {
         <GpMixture as GpSurrogate>::predict(self, &x.view())
     }
 
-    pub fn predict_var(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array2<f64>> {
+    pub fn predict_var(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array1<f64>> {
         <GpMixture as GpSurrogate>::predict_var(self, &x.view())
     }
 
@@ -916,13 +913,13 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array1<f64>> for GpM
 /// Adaptator to implement `linfa::Predict` for variance prediction
 #[allow(dead_code)]
 pub struct MoeVariancePredictor<'a>(&'a GpMixture);
-impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
+impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array1<f64>>
     for MoeVariancePredictor<'_>
 {
-    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<f64>) {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array1<f64>) {
         assert_eq!(
             x.nrows(),
-            y.nrows(),
+            y.len(),
             "The number of data points must match the number of output targets."
         );
 
@@ -930,8 +927,8 @@ impl<D: Data<Elem = f64>> PredictInplace<ArrayBase<D, Ix2>, Array2<f64>>
         *y = values;
     }
 
-    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<f64> {
-        Array2::zeros((x.nrows(), self.0.dims().1))
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<f64> {
+        Array1::zeros(x.nrows())
     }
 }
 
@@ -1270,8 +1267,8 @@ mod tests {
             let y_pred = moe.predict_var(&x).unwrap();
             let y_deriv = moe.predict_var_gradients(&x).unwrap();
 
-            let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
-            let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+            let diff_g = (y_pred[1] - y_pred[2]) / (2. * e);
+            let diff_d = (y_pred[3] - y_pred[4]) / (2. * e);
 
             assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
             assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);

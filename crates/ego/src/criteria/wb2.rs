@@ -175,12 +175,7 @@ mod tests {
         let fdiff2 = (bgp.predict_var(&xtest21.view()).unwrap()
             - bgp.predict_var(&xtest22.view()).unwrap())
             / (2. * h);
-        println!(
-            "gp var fdiff({}) = [[{}, {}]]",
-            xtest,
-            fdiff1[[0, 0]],
-            fdiff2[[0, 0]]
-        );
+        println!("gp var fdiff({}) = [[{}, {}]]", xtest, fdiff1[0], fdiff2[0]);
         println!(
             "GP predict variances derivatives({}) = {}",
             xtest,
