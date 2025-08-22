@@ -316,7 +316,7 @@ impl SparseGpx {
     ///         input values
     ///
     /// Returns
-    ///     the output values at nsamples x points (array[nsamples])
+    ///     the output values at nsamples x points (array[nsamples,])
     ///
     fn predict<'py>(&self, py: Python<'py>, x: PyReadonlyArray2<f64>) -> Bound<'py, PyArray1<f64>> {
         self.0.predict(&x.as_array()).unwrap().into_pyarray(py)
@@ -329,7 +329,7 @@ impl SparseGpx {
     ///         input values
     ///
     /// # Returns
-    ///     the variances of the output values at nsamples input points (array[nsamples, 1])
+    ///     the variances of the output values at nsamples input points (array[nsamples,])
     ///
     fn predict_var<'py>(
         &self,

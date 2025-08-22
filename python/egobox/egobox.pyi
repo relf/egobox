@@ -51,12 +51,12 @@ class Egor:
     
         infill_strategy (InfillStrategy enum):
             Infill criteria to decide best next promising point.
-            Can be either InfillStrategy.EI, InfillStrategy.WB2, InfillStrategy.WB2S or InfillStrategy.LOG_EI
-
+            Can be either InfillStrategy.EI, InfillStrategy.WB2, InfillStrategy.WB2S orInfillStrategy.LOG_EI
+    
         infill_optimizer (InfillOptimizer enum):
             Internal optimizer used to optimize infill criteria.
-            Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP            
-            
+            Can be either InfillOptimizer.COBYLA or InfillOptimizer.SLSQP
+    
         cstr_infill (bool):
             Activate constrained infill criterion where the product of probability of feasibility of constraints
             used as a factor of the infill criterion specified via infill_strategy
@@ -81,6 +81,7 @@ class Egor:
             The default value is 1 meaning surrogates are properly trained for each q points determination.
             The value is used as a modulo of iteration number * q_points to trigger true training.
             This is used to decrease the number of training at the expense of surrogate accuracy.    
+    
     
         trego (bool):
             When true, TREGO algorithm is used, otherwise classic EGO algorithm is used.
@@ -252,6 +253,7 @@ class GpConfig:
     r"""
     (int >= 0)
       Number of internal GP hyperpameters optimization restart (multistart)
+      When is negative optimization is disabled and theta init value is used
     """
     max_eval: builtins.int
     r"""
@@ -373,7 +375,7 @@ class Gpx:
                 input values
         
         Returns
-            the output values at nsamples x points (array[nsamples, 1])
+            the output values at nsamples x points (array[nsamples,])
         """
     def predict_var(self, x:numpy.typing.NDArray[numpy.float64]) -> numpy.typing.NDArray[numpy.float64]:
         r"""
@@ -384,7 +386,7 @@ class Gpx:
                 input values
         
         # Returns
-            the variances of the output values at nsamples input points (array[nsamples, 1])
+            the variances of the output values at nsamples input points (array[nsamples,])
         """
     def predict_gradients(self, x:numpy.typing.NDArray[numpy.float64]) -> numpy.typing.NDArray[numpy.float64]:
         r"""
@@ -568,7 +570,7 @@ class SparseGpx:
                 input values
         
         Returns
-            the output values at nsamples x points (array[nsamples])
+            the output values at nsamples x points (array[nsamples,])
         """
     def predict_var(self, x:numpy.typing.NDArray[numpy.float64]) -> numpy.typing.NDArray[numpy.float64]:
         r"""
@@ -579,7 +581,7 @@ class SparseGpx:
                 input values
         
         # Returns
-            the variances of the output values at nsamples input points (array[nsamples, 1])
+            the variances of the output values at nsamples input points (array[nsamples,])
         """
     def predict_gradients(self, x:numpy.typing.NDArray[numpy.float64]) -> numpy.typing.NDArray[numpy.float64]:
         r"""
@@ -660,7 +662,6 @@ class ConstraintStrategy(Enum):
 class InfillOptimizer(Enum):
     COBYLA = ...
     SLSQP = ...
-    GBNM = ...
 
 class InfillStrategy(Enum):
     EI = ...
@@ -732,4 +733,6 @@ def sampling(method:Sampling, xspecs:typing.Any, n_samples:builtins.int, seed:ty
     # Returns
        ndarray of shape (n_samples, n_variables)
     """
+
+def to_specs(xlimits:typing.Sequence[typing.Sequence[builtins.float]]) -> typing.Any: ...
 
