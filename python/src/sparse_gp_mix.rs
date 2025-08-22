@@ -335,7 +335,7 @@ impl SparseGpx {
         &self,
         py: Python<'py>,
         x: PyReadonlyArray2<f64>,
-    ) -> Bound<'py, PyArray2<f64>> {
+    ) -> Bound<'py, PyArray1<f64>> {
         self.0
             .predict_var(&x.as_array().to_owned())
             .unwrap()
