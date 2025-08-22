@@ -35,12 +35,11 @@ use std::io::Write;
 ///
 /// Each level of an enumerate gives a new continuous dimension in [0, 1].
 /// Each integer dimensions are relaxed continuously.
-#[allow(deprecated)]
 pub fn as_continuous_limits<F: Float>(xtypes: &[XType]) -> Array2<F> {
     let mut xlimits: Vec<F> = vec![];
     let mut dim = 0;
     xtypes.iter().for_each(|xtype| match xtype {
-        XType::Float(lower, upper) | XType::Cont(lower, upper) => {
+        XType::Float(lower, upper) => {
             dim += 1;
             xlimits.extend([F::cast(*lower), F::cast(*upper)]);
         }
@@ -75,7 +74,6 @@ pub fn as_continuous_limits<F: Float>(xtypes: &[XType]) -> Array2<F> {
 /// the input x may contain the mask [..., 0, 0, 1, ...] which will be contracted in [..., 2, ...]
 /// meaning the "green" value.
 /// This function is the opposite of unfold_with_enum_mask().
-#[allow(deprecated)]
 pub(crate) fn fold_with_enum_index<F: Float>(
     xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -83,7 +81,7 @@ pub(crate) fn fold_with_enum_index<F: Float>(
     let mut xfold = Array::zeros((x.nrows(), xtypes.len()));
     let mut unfold_index = 0;
     Zip::indexed(xfold.columns_mut()).for_each(|j, mut col| match &xtypes[j] {
-        XType::Float(_, _) | XType::Cont(_, _) | XType::Int(_, _) | XType::Ord(_) => {
+        XType::Float(_, _) | XType::Int(_, _) | XType::Ord(_) => {
             col.assign(&x.column(unfold_index));
             unfold_index += 1;
         }
@@ -115,7 +113,6 @@ fn compute_continuous_dim(xtypes: &[XType]) -> usize {
 /// For instance, if an input dimension is typed ["blue", "red", "green"] a sample/row of
 /// the input x may contain [..., 2, ...] which will be expanded in [..., 0, 0, 1, ...].
 /// This function is the opposite of fold_with_enum_index().
-#[allow(deprecated)]
 pub(crate) fn unfold_with_enum_mask(
     xtypes: &[XType],
     x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -123,7 +120,7 @@ pub(crate) fn unfold_with_enum_mask(
     let mut xunfold = Array::zeros((x.nrows(), compute_continuous_dim(xtypes)));
     let mut unfold_index = 0;
     xtypes.iter().enumerate().for_each(|(i, s)| match s {
-        XType::Float(_, _) | XType::Cont(_, _) | XType::Int(_, _) | XType::Ord(_) => {
+        XType::Float(_, _) | XType::Int(_, _) | XType::Ord(_) => {
             xunfold
                 .column_mut(unfold_index)
                 .assign(&x.column(unfold_index));
@@ -167,14 +164,13 @@ fn take_closest<F: Float>(v: &[F], val: F) -> F {
 /// Project continuously relaxed values to their closer assessable values.
 ///
 /// See cast_to_discrete_values
-#[allow(deprecated)]
 fn cast_to_discrete_values_mut<F: Float>(
     xtypes: &[XType],
     x: &mut ArrayBase<impl DataMut<Elem = F>, Ix2>,
 ) {
     let mut xcol = 0;
     xtypes.iter().for_each(|s| match s {
-        XType::Float(_, _) | XType::Cont(_, _) => xcol += 1,
+        XType::Float(_, _) => xcol += 1,
         XType::Int(_, _) => {
             let xround = x.column(xcol).mapv(|v| v.round()).to_owned();
             x.column_mut(xcol).assign(&xround);

@@ -1,4 +1,3 @@
-#![allow(deprecated)]
 use crate::gpmix::spec::*;
 use crate::{errors::Result, EgorState};
 use argmin::core::CostFunction;
@@ -127,9 +126,6 @@ impl<O: GroupFunc, C: CstrFn> DomainConstraints<C> for ObjFunc<O, C> {
 /// with its domain definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum XType {
-    /// Continuous variable in [lower bound, upper bound]
-    #[deprecated(note = "Use `Xtype::Float` instead", since = "0.30.0")]
-    Cont(f64, f64),
     /// Continuous variable in [lower bound, upper bound]
     Float(f64, f64),
     /// Integer variable in lower bound .. upper bound

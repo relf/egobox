@@ -109,15 +109,6 @@
 //!
 //! You can also provide your initial doe though the `egor.doe(your_doe)` method.
 //!
-//! * As the dimension increase the gaussian process surrogate building may take longer or even fail
-//!   in this case you can specify a PLS dimension reduction \[[Bartoli2019](#Bartoli2019)\].
-//!   Gaussian process will be built using the `ndim` (usually 3 or 4) main components in the PLS projected space.
-//!
-//! ```no_run
-//! # let egor_config = egobox_ego::EgorConfig::default();
-//!     egor_config.kpls_dim(3);
-//! ```
-//!
 //! * Specifications of constraints (expected to be negative at the end of the optimization)
 //!   In this example below we specify that 2 constraints will be computed with the objective values meaning
 //!   the objective function is expected to return an array '\[nsamples, 1 obj value + 2 const values\]'.
@@ -161,11 +152,27 @@
 //!   approximation (quality tested through cross validation).
 //!
 //! ```no_run
-//! # use egobox_ego::{EgorConfig, RegressionSpec, CorrelationSpec};
+//! # use egobox_ego::EgorConfig;
+//! # use egobox_ego::{GpConfig, RegressionSpec, CorrelationSpec};
 //! # let egor_config = EgorConfig::default();
-//!     egor_config.regression_spec(RegressionSpec::CONSTANT | RegressionSpec::LINEAR)
-//!                .correlation_spec(CorrelationSpec::MATERN32 | CorrelationSpec::MATERN52);
+//!     egor_config.configure_gp(|gp_conf| {
+//!         gp_conf.regression_spec(RegressionSpec::CONSTANT | RegressionSpec::LINEAR)
+//!                .correlation_spec(CorrelationSpec::MATERN32 | CorrelationSpec::MATERN52)
+//!     });
 //! ```
+//! * As the dimension increase the gaussian process surrogate building may take longer or even fail
+//!   in this case you can specify a PLS dimension reduction \[[Bartoli2019](#Bartoli2019)\].
+//!   Gaussian process will be built using the `ndim` (usually 3 or 4) main components in the PLS projected space.
+//!
+//! ```no_run
+//! # use egobox_ego::EgorConfig;
+//! # use egobox_ego::GpConfig;
+//! # let egor_config = EgorConfig::default();
+//!     egor_config.configure_gp(|gp_conf| {
+//!         gp_conf.kpls(3)
+//!     });
+//! ```
+//!
 //! In the above example all GP with combinations of regression and correlation will be tested and the best combination for
 //! each modeled function will be retained. You can also simply specify `RegressionSpec::ALL` and `CorrelationSpec::ALL` to
 //! test all available combinations but remember that the more you test the slower it runs.
