@@ -341,60 +341,6 @@ impl EgorConfig {
         self
     }
 
-    /// Sets the allowed regression models used in gaussian processes.
-    #[deprecated(
-        since = "0.29.1",
-        note = "please use `gp_configure(gp_config)` instead"
-    )]
-    pub fn regression_spec(mut self, regression_spec: RegressionSpec) -> Self {
-        self.gp.regression_spec = regression_spec;
-        self
-    }
-
-    /// Sets the allowed correlation models used in gaussian processes.
-    #[deprecated(
-        since = "0.29.1",
-        note = "please use `gp_configure(gp_config)` instead"
-    )]
-    pub fn correlation_spec(mut self, correlation_spec: CorrelationSpec) -> Self {
-        self.gp.correlation_spec = correlation_spec;
-        self
-    }
-
-    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
-    ///
-    /// This is used to address high-dimensional problems typically when `nx` > 9 wher `nx` is the dimension of `x`.
-    #[deprecated(
-        since = "0.29.1",
-        note = "please use `gp_configure(gp_config)` instead"
-    )]
-    pub fn kpls_dim(mut self, kpls_dim: usize) -> Self {
-        self.gp.kpls_dim = Some(kpls_dim);
-        self
-    }
-
-    /// Removes any PLS dimension reduction usage
-    #[deprecated(
-        since = "0.29.1",
-        note = "please use `gp_configure(gp_config)` instead"
-    )]
-    pub fn no_kpls(mut self) -> Self {
-        self.gp.kpls_dim = None;
-        self
-    }
-
-    /// Sets the number of clusters used by the mixture of surrogate experts.
-    ///
-    /// When set to Auto, the number of clusters is determined automatically
-    #[deprecated(
-        since = "0.29.1",
-        note = "please use `gp_configure(gp_config)` instead"
-    )]
-    pub fn n_clusters(mut self, n_clusters: NbClusters) -> Self {
-        self.gp.n_clusters = n_clusters;
-        self
-    }
-
     /// Sets a known target minimum to be used as a stopping criterion.
     pub fn target(mut self, target: f64) -> Self {
         self.target = target;
