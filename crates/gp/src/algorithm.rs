@@ -259,14 +259,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     }
 
     /// Predict variance values at n given `x` points of nx components specified as a (n, nx) matrix.
-    /// Returns n variance values as (n, 1) column vector.
-    pub fn predict_var(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array2<F>> {
+    /// Returns n variance values as (n,) column vector.
+    pub fn predict_var(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array1<F>> {
         let (rt, u, _) = self._compute_rt_u(x);
 
-        let mut b = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
+        let mut mse = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
             + u.mapv(|v: F| v * v).sum_axis(Axis(0));
-        b.mapv_inplace(|v| self.inner_params.sigma2 * v);
-        let mse = b.into_shape((x.nrows(), 1)).unwrap();
+        mse.mapv_inplace(|v| self.inner_params.sigma2 * v);
 
         // Mean Squared Error might be slightly negative depending on
         // machine precision: set to zero in that case
@@ -706,7 +705,7 @@ where
     Mean: RegressionModel<F>,
     Corr: CorrelationModel<F>;
 
-impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array2<F>>
+impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array1<F>>
     for GpVariancePredictor<'_, F, Mean, Corr>
 where
     F: Float,
@@ -714,10 +713,10 @@ where
     Mean: RegressionModel<F>,
     Corr: CorrelationModel<F>,
 {
-    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array2<F>) {
+    fn predict_inplace(&self, x: &ArrayBase<D, Ix2>, y: &mut Array1<F>) {
         assert_eq!(
             x.nrows(),
-            y.nrows(),
+            y.len(),
             "The number of data points must match the number of output targets."
         );
 
@@ -725,8 +724,8 @@ where
         *y = values;
     }
 
-    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array2<F> {
-        Array2::zeros((x.nrows(), self.0.dims().1))
+    fn default_target(&self, x: &ArrayBase<D, Ix2>) -> Array1<F> {
+        Array1::zeros(x.nrows())
     }
 }
 
@@ -1211,7 +1210,7 @@ mod tests {
                     let yvars = gp
                         .predict_var(&arr2(&[[1.0], [3.5]]))
                         .expect("prediction error");
-                    let expected_vars = arr2(&[[0.], [0.1]]);
+                    let expected_vars = arr1(&[0., 0.1]);
                     assert_abs_diff_eq!(expected_vars, yvars, epsilon = 0.5);
 
                     let gpr_vars = gp.predict_var(&xplot).unwrap();
@@ -1384,7 +1383,7 @@ mod tests {
         assert_abs_diff_eq!(err, 0., epsilon = 4e-1);
 
         let var = GpVariancePredictor(&gp).predict(&xt);
-        assert_abs_diff_eq!(var, Array2::zeros((nt, 1)), epsilon = 2e-1);
+        assert_abs_diff_eq!(var, Array1::zeros(nt), epsilon = 2e-1);
     }
 
     fn sphere(x: &Array2<f64>) -> Array1<f64> {
@@ -1515,8 +1514,8 @@ mod tests {
                         let y_deriv = gp.predict_var_gradients(&x);
                         println!("variance deriv at [{},{}] = {}", xa, xb, y_deriv);
 
-                        let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
-                        let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+                        let diff_g = (y_pred[1] - y_pred[2]) / (2. * e);
+                        let diff_d = (y_pred[3] - y_pred[4]) / (2. * e);
 
                         assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
                         assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
@@ -1572,14 +1571,14 @@ mod tests {
             let y_deriv = gp.predict_var_gradients(&x);
             println!("variance deriv at [{xa},{xb}] = {y_deriv}");
 
-            let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
-            let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+            let diff_g = (y_pred[1] - y_pred[2]) / (2. * e);
+            let diff_d = (y_pred[3] - y_pred[4]) / (2. * e);
 
-            if y_pred[[0, 0]].abs() > 1e-1 && y_pred[[0, 0]].abs() > 1e-1 {
+            if y_pred[0].abs() > 1e-1 && y_pred[0].abs() > 1e-1 {
                 // do not test with fdiff when variance or deriv is too small
                 assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
             }
-            if y_pred[[0, 0]].abs() > 1e-1 && y_pred[[0, 0]].abs() > 1e-1 {
+            if y_pred[0].abs() > 1e-1 && y_pred[0].abs() > 1e-1 {
                 // do not test with fdiff when variance or deriv  is too small
                 assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
             }
@@ -1726,8 +1725,8 @@ mod tests {
         ];
         let y_pred = gp.predict_var(&x).unwrap();
         let y_deriv = gp.predict_var_gradients(&array![[xa, xb]]);
-        let diff_g = (y_pred[[1, 0]] - y_pred[[2, 0]]) / (2. * e);
-        let diff_d = (y_pred[[3, 0]] - y_pred[[4, 0]]) / (2. * e);
+        let diff_g = (y_pred[1] - y_pred[2]) / (2. * e);
+        let diff_d = (y_pred[3] - y_pred[4]) / (2. * e);
 
         assert_abs_diff_eq!(y_deriv[[0, 0]], diff_g, epsilon = 1e-5);
         assert_abs_diff_eq!(y_deriv[[0, 1]], diff_d, epsilon = 1e-5);

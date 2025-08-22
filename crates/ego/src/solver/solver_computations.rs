@@ -196,7 +196,7 @@ where
         active: &[usize],
     ) -> f64 {
         let x = Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
-        let sigma = cstr_model.predict_var(&x.view()).unwrap()[[0, 0]].sqrt();
+        let sigma = cstr_model.predict_var(&x.view()).unwrap()[0].sqrt();
         let cstr_val = cstr_model.predict(&x.view()).unwrap()[0];
 
         if let Some(grad) = gradient {
@@ -242,7 +242,7 @@ where
         } else {
             let x = &xk.view().insert_axis(Axis(0));
             let pred = obj_model.predict(x)?[0];
-            let var = obj_model.predict_var(x)?[[0, 0]];
+            let var = obj_model.predict_var(x)?[0];
             let conf = match self.config.q_ei {
                 QEiStrategy::KrigingBeliever => 0.,
                 QEiStrategy::KrigingBelieverLowerBound => -3.,

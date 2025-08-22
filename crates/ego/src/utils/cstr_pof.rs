@@ -10,11 +10,11 @@ fn pof(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> f64 {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     if let Ok(p) = cstr_model.predict(&pt) {
         if let Ok(s) = cstr_model.predict_var(&pt) {
-            if s[[0, 0]] < f64::EPSILON {
+            if s[0] < f64::EPSILON {
                 0.0
             } else {
                 let pred = p[0];
-                let sigma = s[[0, 0]].sqrt();
+                let sigma = s[0].sqrt();
                 let args0 = (cstr_tol - pred) / sigma;
                 norm_cdf(args0)
             }
@@ -32,11 +32,11 @@ fn pof_grad(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> Ar
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
     if let Ok(p) = cstr_model.predict(&pt) {
         if let Ok(s) = cstr_model.predict_var(&pt) {
-            if s[[0, 0]] < f64::EPSILON {
+            if s[0] < f64::EPSILON {
                 Array1::zeros(pt.len())
             } else {
                 let pred = p[0];
-                let sigma = s[[0, 0]].sqrt();
+                let sigma = s[0].sqrt();
                 let arg = (cstr_tol - pred) / sigma;
                 let y_prime = cstr_model.predict_gradients(&pt).unwrap();
                 let y_prime = y_prime.row(0);

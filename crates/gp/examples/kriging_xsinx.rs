@@ -28,6 +28,11 @@ fn main() {
     println!("Compute prediction errors (x, err(x))");
     println!(
         "{}",
-        concatenate![Axis(1), xtest, (ypred - ytest).insert_axis(Axis(1)), ysigma]
+        concatenate![
+            Axis(1),
+            xtest,
+            (ypred - ytest).insert_axis(Axis(1)),
+            ysigma.insert_axis(Axis(1))
+        ]
     );
 }
