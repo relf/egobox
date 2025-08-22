@@ -71,6 +71,20 @@ impl GpConfig {
         self
     }
 
+    /// Sets the number of components to be used specifiying PLS projection is used (a.k.a KPLS method).
+    ///
+    /// This is used to address high-dimensional problems typically when `nx` > 9 wher `nx` is the dimension of `x`.
+    pub fn kpls(mut self, kpls_dim: usize) -> Self {
+        self.kpls_dim = Some(kpls_dim);
+        self
+    }
+
+    /// Removes any PLS dimension reduction usage
+    pub fn no_kpls(mut self) -> Self {
+        self.kpls_dim = None;
+        self
+    }
+
     /// Sets the number of clusters used by the mixture of surrogate experts.
     pub fn n_clusters(mut self, n_clusters: NbClusters) -> Self {
         self.n_clusters = n_clusters;

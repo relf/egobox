@@ -17,10 +17,12 @@
 //!
 //! let egor = EgorServiceBuilder::optimize()
 //!             .configure(|conf| {
-//!                 conf.regression_spec(RegressionSpec::ALL)
-//!                     .correlation_spec(CorrelationSpec::ALL)
-//!                     .infill_strategy(InfillStrategy::EI)
-//!                     .seed(42)
+//!                conf.configure_gp(|gp_conf| {
+//!                  gp_conf.regression_spec(RegressionSpec::ALL)
+//!                         .correlation_spec(CorrelationSpec::ALL)
+//!                })
+//!                .infill_strategy(InfillStrategy::EI)
+//!                .seed(42)
 //!             })
 //!             .min_within(&array![[0., 25.]]);
 //!
