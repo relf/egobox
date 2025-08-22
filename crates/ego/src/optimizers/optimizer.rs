@@ -1,4 +1,3 @@
-use crate::optimizers::gbnm;
 use crate::InfillObjData;
 use ndarray::{arr1, Array1, Array2, ArrayView1};
 
@@ -14,7 +13,6 @@ use nlopt::ObjFn;
 pub enum Algorithm {
     Cobyla,
     Slsqp,
-    Gbnm,
 }
 
 pub const INFILL_MAX_EVAL_DEFAULT: usize = 2000;
@@ -217,31 +215,6 @@ impl<'a> Optimizer<'a> {
                         Ok((_, x_opt, y_opt)) => (y_opt, arr1(&x_opt)),
                         Err((_, x_opt, _)) => (f64::INFINITY, arr1(&x_opt)),
                     }
-                }
-            }
-            Algorithm::Gbnm => {
-                let bounds: Vec<_> = self
-                    .bounds
-                    .outer_iter()
-                    .map(|row| (row[0], row[1]))
-                    .collect();
-                let res = gbnm::minimize(
-                    self.fun,
-                    &bounds,
-                    &mut self.user_data.clone(),
-                    gbnm::Options {
-                        max_evals: self.max_eval,
-                        ..gbnm::Options::default()
-                    },
-                );
-                let xinit = self.xinit.clone().unwrap().to_vec();
-
-                match res {
-                    Ok(gbnm::Result {
-                        x: x_opt,
-                        fval: y_opt,
-                    }) => (y_opt, arr1(&x_opt)),
-                    Err(_) => (f64::INFINITY, arr1(&xinit)),
                 }
             }
         };

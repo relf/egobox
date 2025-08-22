@@ -183,7 +183,6 @@ where
             let algorithm = match self.config.infill_optimizer {
                 InfillOptimizer::Slsqp => crate::optimizers::Algorithm::Slsqp,
                 InfillOptimizer::Cobyla => crate::optimizers::Algorithm::Cobyla,
-                InfillOptimizer::Gbnm => crate::optimizers::Algorithm::Gbnm,
             };
 
             if i == 0 {
