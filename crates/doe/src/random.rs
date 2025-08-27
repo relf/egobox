@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use crate::SamplingMethod;
 use linfa::Float;
 use ndarray::{Array, Array2, ArrayBase, Data, Ix2};
-use ndarray_rand::{rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt};
+use ndarray_rand::{RandomExt, rand::Rng, rand::SeedableRng, rand_distr::Uniform};
 use rand_xoshiro::Xoshiro256Plus;
 
 #[cfg(feature = "serializable")]

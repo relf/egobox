@@ -111,16 +111,16 @@ use crate::types::*;
 
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use log::{debug, info};
-use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip};
+use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip, concatenate, s};
 use ndarray_npy::{read_npy, write_npy};
 
 use argmin::core::{
-    CostFunction, Problem, Solver, State, TerminationReason, TerminationStatus, KV,
+    CostFunction, KV, Problem, Solver, State, TerminationReason, TerminationStatus,
 };
 
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::marker::PhantomData;
 use std::time::Instant;
 

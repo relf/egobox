@@ -3,12 +3,12 @@
 // smoothness of the mixture smooth recombination
 #![allow(dead_code)]
 use crate::Result;
+use linfa::{Float, traits::*};
 #[cfg(feature = "blas")]
 use linfa::{dataset::WithLapack, dataset::WithoutLapack};
-use linfa::{traits::*, Float};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, triangular::*};
-use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix1, Ix2, Ix3, Zip};
+use ndarray::{Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix1, Ix2, Ix3, Zip, s};
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, triangular::*};
 use ndarray_stats::QuantileExt;
@@ -141,10 +141,9 @@ impl<F: Float> GaussianMixture<F> {
             .insert_axis(Axis(1));
         let uprime = -(deriv.to_owned() * &u.to_owned());
         let v2 = v * v;
-        let prob_deriv = (uprime.mapv(|up| up * v)
+        (uprime.mapv(|up| up * v)
             - u.to_owned() * vprime.broadcast((u.nrows(), vprime.len())).unwrap())
-        .mapv(|w| w / v2);
-        prob_deriv
+        .mapv(|w| w / v2)
     }
 
     /// Compute the derivatives of the probability of a set of x points given as a (m, nx) vector
@@ -321,7 +320,7 @@ mod tests {
     use super::*;
 
     use approx::assert_abs_diff_eq;
-    use ndarray::{array, Array, Array2};
+    use ndarray::{Array, Array2, array};
 
     #[test]
     fn test_gmx() {

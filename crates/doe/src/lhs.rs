@@ -1,9 +1,9 @@
-use crate::utils::{cdist, pdist};
 use crate::SamplingMethod;
+use crate::utils::{cdist, pdist};
 use linfa::Float;
-use ndarray::{s, Array, Array2, ArrayBase, Axis, Data, Ix2, ShapeBuilder};
+use ndarray::{Array, Array2, ArrayBase, Axis, Data, Ix2, ShapeBuilder, s};
 use ndarray_rand::{
-    rand::seq::SliceRandom, rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt,
+    RandomExt, rand::Rng, rand::SeedableRng, rand::seq::SliceRandom, rand_distr::Uniform,
 };
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;
@@ -152,7 +152,7 @@ impl<F: Float, R: Rng> Lhs<F, R> {
                 let k = lphip.argmin().unwrap();
                 let phip_try = lphip[k];
                 // Threshold of acceptance
-                if phip_try - phip <= t * F::cast(rng.gen::<f64>()) {
+                if phip_try - phip <= t * F::cast(rng.r#gen::<f64>()) {
                     phip = phip_try;
                     n_acpt += 1.;
                     lhs_own = l_x.swap_remove(k);

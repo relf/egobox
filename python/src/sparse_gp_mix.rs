@@ -15,9 +15,9 @@ use crate::types::*;
 use egobox_moe::{
     Clustered, GpMixture, GpSurrogate, GpType, Inducings, MixtureGpSurrogate, ThetaTuning,
 };
-use linfa::{traits::Fit, Dataset};
+use linfa::{Dataset, traits::Fit};
 use log::error;
-use ndarray::{array, Array1, Array2, Axis, Ix1, Ix2, Zip};
+use ndarray::{Array1, Array2, Axis, Ix1, Ix2, Zip, array};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;

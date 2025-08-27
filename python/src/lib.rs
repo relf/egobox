@@ -29,7 +29,6 @@ fn egobox(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     builder.try_init().ok();
 
     // utils
-    m.add_function(wrap_pyfunction!(to_specs, m)?)?;
     m.add_function(wrap_pyfunction!(lhs, m)?)?;
     m.add_function(wrap_pyfunction!(sampling::sampling, m)?)?;
 

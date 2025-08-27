@@ -1,4 +1,4 @@
-use ndarray::{stack, Array1, Array2, Axis};
+use ndarray::{Array1, Array2, Axis, stack};
 use std::cmp::Ordering;
 
 pub fn start_points(x: &Array2<f64>, xl: &Array1<f64>, xu: &Array1<f64>) -> Array2<f64> {
@@ -79,7 +79,7 @@ pub fn start_points(x: &Array2<f64>, xl: &Array1<f64>, xu: &Array1<f64>) -> Arra
 mod tests {
     use super::*;
     use ndarray::array;
-    use ndarray_rand::{rand::SeedableRng, rand_distr::Uniform, RandomExt};
+    use ndarray_rand::{RandomExt, rand::SeedableRng, rand_distr::Uniform};
     use rand_xoshiro::Xoshiro256Plus;
 
     #[test]

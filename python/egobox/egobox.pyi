@@ -734,5 +734,4 @@ def sampling(method:Sampling, xspecs:typing.Any, n_samples:builtins.int, seed:ty
        ndarray of shape (n_samples, n_variables)
     """
 
-def to_specs(xlimits:typing.Sequence[typing.Sequence[builtins.float]]) -> typing.Any: ...
 

@@ -1,6 +1,6 @@
 use crate::SamplingMethod;
 use linfa::Float;
-use ndarray::{s, Array, Array1, Array2, ArrayBase, Data, Ix2};
+use ndarray::{Array, Array1, Array2, ArrayBase, Data, Ix2, s};
 use ndarray_stats::QuantileExt;
 
 #[cfg(feature = "serializable")]

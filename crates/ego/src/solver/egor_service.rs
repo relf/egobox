@@ -44,7 +44,7 @@
 use std::marker::PhantomData;
 
 use crate::gpmix::mixint::*;
-use crate::{to_xtypes, types::*, EgorConfig, EgorSolver};
+use crate::{EgorConfig, EgorSolver, to_xtypes, types::*};
 
 use egobox_moe::GpMixtureParams;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
@@ -142,7 +142,7 @@ mod tests {
     use super::*;
     use crate::gpmix::spec::*;
     use approx::assert_abs_diff_eq;
-    use ndarray::{array, concatenate, ArrayView2, Axis};
+    use ndarray::{ArrayView2, Axis, array, concatenate};
 
     use ndarray_stats::QuantileExt;
 

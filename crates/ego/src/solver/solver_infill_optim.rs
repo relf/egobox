@@ -193,19 +193,12 @@ where
                 let res = (0..x_start.nrows())
                     .into_par_iter()
                     .map(|i| {
-                        let optim_res = Optimizer::new(
-                            algorithm,
-                            &obj,
-                            &cstr_refs,
-                            &infill_data,
-                            &xlimits_active,
-                        )
-                        .xinit(&x_start.row(i))
-                        .max_eval((10 * x_start.len()).min(INFILL_MAX_EVAL_DEFAULT))
-                        .ftol_rel(1e-4)
-                        .ftol_abs(1e-4)
-                        .minimize();
-                        optim_res
+                        Optimizer::new(algorithm, &obj, &cstr_refs, &infill_data, &xlimits_active)
+                            .xinit(&x_start.row(i))
+                            .max_eval((10 * x_start.len()).min(INFILL_MAX_EVAL_DEFAULT))
+                            .ftol_rel(1e-4)
+                            .ftol_abs(1e-4)
+                            .minimize()
                     })
                     .reduce(
                         || (f64::INFINITY, Array::ones((xlimits_active.nrows(),))),
@@ -232,9 +225,9 @@ where
                         if is_better || i == 0 {
                             if i > 0 {
                                 info!(
-                                        "Partial infill criterion optim c={} has better result={} at x={}",
-                                        i, best.0, xopt_coop
-                                    );
+                                    "Partial infill criterion optim c={} has better result={} at x={}",
+                                    i, best.0, xopt_coop
+                                );
                             }
                             best_point = (res.0, xopt_coop);
                             current_best_point = best;

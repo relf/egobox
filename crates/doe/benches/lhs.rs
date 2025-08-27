@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use egobox_doe::{Lhs, SamplingMethod};
 use ndarray::aview1;
 use ndarray_rand::rand::SeedableRng;

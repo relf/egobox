@@ -99,22 +99,22 @@
 //! println!("G24 min result = {:?}", res);
 //! ```
 //!
-use crate::errors::Result;
-use crate::gpmix::mixint::*;
-use crate::types::*;
 use crate::EgorConfig;
 use crate::EgorState;
 use crate::HotStartMode;
-use crate::{to_xtypes, EgorSolver};
-use crate::{CheckpointingFrequency, HotStartCheckpoint, CHECKPOINT_FILE};
+use crate::errors::Result;
+use crate::gpmix::mixint::*;
+use crate::types::*;
+use crate::{CHECKPOINT_FILE, CheckpointingFrequency, HotStartCheckpoint};
+use crate::{EgorSolver, to_xtypes};
 
 use argmin::core::observers::ObserverMode;
 
 use egobox_moe::GpMixtureParams;
 use log::info;
-use ndarray::{concatenate, Array2, ArrayBase, Axis, Data, Ix2};
+use ndarray::{Array2, ArrayBase, Axis, Data, Ix2, concatenate};
 
-use argmin::core::{observers::Observe, Error, Executor, State, KV};
+use argmin::core::{Error, Executor, KV, State, observers::Observe};
 use serde::de::DeserializeOwned;
 
 use ndarray_npy::write_npy;
@@ -355,7 +355,7 @@ mod tests {
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
     use egobox_moe::NbClusters;
-    use ndarray::{array, s, Array1, Array2, ArrayView2, Ix1, Zip};
+    use ndarray::{Array1, Array2, ArrayView2, Ix1, Zip, array, s};
     use ndarray_rand::rand::SeedableRng;
     use rand_xoshiro::Xoshiro256Plus;
 
@@ -364,7 +364,7 @@ mod tests {
     use serial_test::serial;
     use std::time::Instant;
 
-    use crate::{gpmix::spec::*, CoegoStatus, DOE_FILE, DOE_INITIAL_FILE};
+    use crate::{CoegoStatus, DOE_FILE, DOE_INITIAL_FILE, gpmix::spec::*};
 
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;

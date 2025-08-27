@@ -4,9 +4,9 @@ use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::utils::{find_best_result_index_from, update_data};
-use crate::{find_best_result_index, EgorConfig};
-use crate::{types::*, EgorState};
-use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
+use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
+use crate::{EgorConfig, find_best_result_index};
+use crate::{EgorState, types::*};
 
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
@@ -17,7 +17,7 @@ use env_logger::{Builder, Env};
 
 use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters};
 use log::{debug, info};
-use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip, concatenate, s};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
@@ -232,10 +232,9 @@ where
 
                 builder.set_theta_tunings(&theta_tunings);
 
-                let gp = builder
+                builder
                     .train_on_clusters(xt.view(), yt.view(), clustering)
-                    .expect("GP training failure");
-                gp
+                    .expect("GP training failure")
             };
 
             // CoEGO only in mono cluster, update theta if better likelihood
@@ -276,7 +275,8 @@ where
                     }
                 } else {
                     log::warn!(
-                            "CoEGO theta update wrt likelihood not implemented in multi-cluster setting");
+                        "CoEGO theta update wrt likelihood not implemented in multi-cluster setting"
+                    );
                 }
             };
             model = Some(gp)
@@ -304,7 +304,7 @@ where
         let fcstrs = pb.fn_constraints();
 
         let mut rng = state.take_rng().unwrap();
-        let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+        let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
         *state = state.clone().rng(rng.clone());
         let sampling = Lhs::new(&self.xlimits)
             .with_rng(sub_rng)
@@ -607,7 +607,7 @@ where
             let xbest = x_data.row(best_index).to_owned();
             let cbest = c_data.row(best_index).to_owned();
 
-            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
             let sampling = Lhs::new(&self.xlimits)
                 .with_rng(sub_rng)
                 .kind(LhsKind::Maximin);
@@ -656,7 +656,7 @@ where
                 })
                 .collect::<Vec<_>>();
 
-            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
             // let multistarter = GlobalMultiStarter::new(&self.xlimits, sub_rng);
             let xsamples = x_data.to_owned();
             let multistarter = MiddlePickerMultiStarter::new(&self.xlimits, &xsamples, sub_rng);

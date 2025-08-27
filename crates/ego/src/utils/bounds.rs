@@ -1,4 +1,4 @@
-use egobox_gp::{correlation_models::*, ThetaTuning};
+use egobox_gp::{ThetaTuning, correlation_models::*};
 use egobox_moe::CorrelationSpec;
 use ndarray::Array1;
 
@@ -92,7 +92,7 @@ mod tests {
 
     #[allow(unused_macros)]
     macro_rules! test_theta_bounds {
-        ($dim:expr, $corr:ident ) => {
+        ($dim:expr_2021, $corr:ident ) => {
             paste! {
 
                 #[test]

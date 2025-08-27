@@ -1,7 +1,7 @@
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{GpMixture, NbClusters, Recombination};
 use linfa::prelude::{Dataset, Fit};
-use ndarray::{arr2, Array, Array2, Axis, Zip};
+use ndarray::{Array, Array2, Axis, Zip, arr2};
 use std::error::Error;
 
 fn f3parts(x: &Array2<f64>) -> Array2<f64> {

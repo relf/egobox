@@ -1,6 +1,6 @@
-pub use argmin::core::checkpointing::{Checkpoint, CheckpointingFrequency};
 use argmin::core::Error;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+pub use argmin::core::checkpointing::{Checkpoint, CheckpointingFrequency};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;

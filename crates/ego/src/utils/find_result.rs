@@ -1,4 +1,4 @@
-use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip, concatenate};
 use ndarray_stats::QuantileExt;
 
 use crate::utils::sort_axis::*;
@@ -10,7 +10,7 @@ fn cstr_sum<F: Float>(y: &ArrayBase<impl Data<Elem = F>, Ix1>, cstr_tol: &Array1
     y.slice(s![1..])
         .iter()
         .enumerate()
-        .filter(|(i, &c)| c > cstr_tol[*i])
+        .filter(|&(ref i, &c)| c > cstr_tol[*i])
         .fold(F::zero(), |acc, (i, &c)| acc + (c - cstr_tol[i]).abs())
 }
 
@@ -134,8 +134,7 @@ pub fn find_best_result_index<F: Float>(
         }
     } else {
         // unconstrained optimization
-        let y_best = y_data.column(0).argmin().unwrap();
-        y_best
+        y_data.column(0).argmin().unwrap()
     }
 }
 

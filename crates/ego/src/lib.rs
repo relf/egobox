@@ -300,8 +300,8 @@ pub use crate::gpmix::spec::{CorrelationSpec, RegressionSpec};
 pub use crate::solver::*;
 pub use crate::types::*;
 pub use crate::utils::{
-    find_best_result_index, Checkpoint, CheckpointingFrequency, HotStartCheckpoint, HotStartMode,
-    CHECKPOINT_FILE,
+    CHECKPOINT_FILE, Checkpoint, CheckpointingFrequency, HotStartCheckpoint, HotStartMode,
+    find_best_result_index,
 };
 
 mod optimizers;

@@ -1,9 +1,9 @@
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
-use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
+use crate::optimization::{CobylaParams, optimize_params, prepare_multistart};
 use crate::parameters::{GpParams, GpValidParams};
-use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedData};
-use crate::{correlation_models::*, ThetaTuning};
+use crate::utils::{DistanceMatrix, NormalizedData, pairwise_differences};
+use crate::{ThetaTuning, correlation_models::*};
 
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
@@ -18,8 +18,8 @@ use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
 use ndarray::{Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 
-use ndarray_rand::rand_distr::Normal;
 use ndarray_rand::RandomExt;
+use ndarray_rand::rand_distr::Normal;
 use ndarray_stats::QuantileExt;
 
 use log::debug;
@@ -742,15 +742,15 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         let x = dataset.records();
         let y = dataset.targets().to_owned().insert_axis(Axis(1));
 
-        if let Some(d) = self.kpls_dim() {
-            if *d > x.ncols() {
-                return Err(GpError::InvalidValueError(format!(
-                    "Dimension reduction {} should be smaller than actual \
+        if let Some(d) = self.kpls_dim()
+            && *d > x.ncols()
+        {
+            return Err(GpError::InvalidValueError(format!(
+                "Dimension reduction {} should be smaller than actual \
                     training input dimensions {}",
-                    d,
-                    x.ncols()
-                )));
-            };
+                d,
+                x.ncols()
+            )));
         }
 
         let dim = if let Some(n_components) = self.kpls_dim() {
@@ -779,7 +779,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         } else if theta0_dim == dim {
             init.to_owned()
         } else {
-            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {theta0_dim}")
+            panic!(
+                "Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {theta0_dim}"
+            )
         };
 
         let xtrain = NormalizedData::new(&x);
@@ -873,7 +875,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 let opt_params = (0..theta_inits.nrows())
                     .into_par_iter()
                     .map(|i| {
-                        let opt_res = optimize_params(
+                        optimize_params(
                             objfn,
                             &theta_inits.row(i).to_owned(),
                             &bounds,
@@ -882,9 +884,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                                     .clamp(GP_COBYLA_MIN_EVAL, self.max_eval()),
                                 ..CobylaParams::default()
                             },
-                        );
-
-                        opt_res
+                        )
                     })
                     .reduce(
                         || (f64::INFINITY, Array::ones((theta_inits.ncols(),))),
@@ -1149,13 +1149,13 @@ mod tests {
     use linfa::prelude::Predict;
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::Norm;
-    use ndarray::{arr1, arr2, array, Array, Zip};
+    use ndarray::{Array, Zip, arr1, arr2, array};
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
     use ndarray_npy::write_npy;
+    use ndarray_rand::RandomExt;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
-    use ndarray_rand::RandomExt;
     use ndarray_stats::DeviationExt;
     use paste::paste;
     use rand_xoshiro::Xoshiro256Plus;
@@ -1403,7 +1403,7 @@ mod tests {
     }
 
     macro_rules! test_gp_derivatives {
-        ($regr:ident, $corr:ident, $func:ident, $limit:expr, $nt:expr) => {
+        ($regr:ident, $corr:ident, $func:ident, $limit:expr_2021, $nt:expr_2021) => {
             paste! {
 
                 #[test]
@@ -1474,7 +1474,7 @@ mod tests {
 
     #[allow(unused_macros)]
     macro_rules! test_gp_variance_derivatives {
-        ($regr:ident, $corr:ident, $func:ident, $limit:expr, $nt:expr) => {
+        ($regr:ident, $corr:ident, $func:ident, $limit:expr_2021, $nt:expr_2021) => {
             paste! {
 
                 #[test]

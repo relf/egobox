@@ -1,5 +1,5 @@
 use crate::gpmix::spec::*;
-use crate::{errors::Result, EgorState};
+use crate::{EgorState, errors::Result};
 use argmin::core::CostFunction;
 use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters, Recombination, ThetaTuning};
 use linfa::Float;

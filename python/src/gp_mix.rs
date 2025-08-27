@@ -18,9 +18,9 @@ use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{Clustered, MixtureGpSurrogate, NbClusters, ThetaTuning};
 #[allow(unused_imports)] // Avoid linting problem
 use egobox_moe::{GpMixture, GpSurrogate, GpSurrogateExt};
-use linfa::{traits::Fit, Dataset};
+use linfa::{Dataset, traits::Fit};
 use log::error;
-use ndarray::{array, Array1, Array2, Axis, Ix1, Ix2, Zip};
+use ndarray::{Array1, Array2, Axis, Ix1, Ix2, Zip, array};
 use ndarray_rand::rand::SeedableRng;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray2, PyReadonlyArrayDyn};
 use pyo3::prelude::*;

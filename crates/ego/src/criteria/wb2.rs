@@ -1,4 +1,4 @@
-use crate::criteria::{ei::EI, InfillCriterion};
+use crate::criteria::{InfillCriterion, ei::EI};
 
 use egobox_moe::MixtureGpSurrogate;
 use ndarray::{Array1, ArrayView, ArrayView2, Axis};
@@ -12,11 +12,7 @@ pub struct WB2Criterion(pub Option<f64>);
 #[typetag::serde]
 impl InfillCriterion for WB2Criterion {
     fn name(&self) -> &'static str {
-        if let Some(1.) = self.0 {
-            "WB2"
-        } else {
-            "WB2S"
-        }
+        if let Some(1.) = self.0 { "WB2" } else { "WB2S" }
     }
 
     /// Compute WB2S infill criterion at given `x` point using the surrogate model `obj_model`
@@ -72,8 +68,7 @@ pub(crate) fn compute_wb2s_scale(
     let ratio = 100.; // TODO: make it a parameter
     let ei_x = x.map_axis(Axis(1), |xi| {
         let xi = xi.as_standard_layout();
-        let ei = EI.value(xi.as_slice().unwrap(), obj_model, fmin, None);
-        ei
+        EI.value(xi.as_slice().unwrap(), obj_model, fmin, None)
     });
     let i_max = ei_x.argmax().unwrap();
     let pred_max = obj_model
@@ -98,7 +93,7 @@ mod tests {
     use egobox_doe::SamplingMethod;
     use egobox_moe::*;
     use linfa::prelude::*;
-    use ndarray::{array, Array2};
+    use ndarray::{Array2, array};
 
     fn sphere(x: &Array2<f64>) -> Array2<f64> {
         let s = (x * x).sum_axis(Axis(1));

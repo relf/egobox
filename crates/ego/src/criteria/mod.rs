@@ -2,8 +2,8 @@
 mod ei;
 mod wb2;
 
-pub use ei::{ExpectedImprovement, LogExpectedImprovement, EI, LOG_EI};
-pub use wb2::{WB2Criterion, WB2, WB2S};
+pub use ei::{EI, ExpectedImprovement, LOG_EI, LogExpectedImprovement};
+pub use wb2::{WB2, WB2Criterion, WB2S};
 
 use dyn_clonable::*;
 use egobox_moe::MixtureGpSurrogate;

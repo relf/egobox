@@ -1,8 +1,8 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::*;
-use ndarray::{array, Array1, Array2, Axis, Zip};
+use ndarray::{Array1, Array2, Axis, Zip, array};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 

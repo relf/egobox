@@ -1,13 +1,13 @@
 use linfa::dataset::Dataset;
 use linfa::{
-    traits::{Fit, Predict, PredictInplace},
     Float, ParamGuard,
+    traits::{Fit, Predict, PredictInplace},
 };
 use ndarray::{Array1, Array2, ArrayBase, Ix2, OwnedRepr};
 
 use crate::{
-    correlation_models, mean_models, GaussianProcess, GpError, GpParams, SgpParams,
-    SparseGaussianProcess,
+    GaussianProcess, GpError, GpParams, SgpParams, SparseGaussianProcess, correlation_models,
+    mean_models,
 };
 
 /// A trait for cross validation score
@@ -80,10 +80,10 @@ mod test {
     use crate::{Inducings, SparseKriging};
     use approx::assert_abs_diff_eq;
     use egobox_doe::{Lhs, SamplingMethod};
-    use ndarray::{array, Array, Array1, Axis, Data, Ix2, Zip};
+    use ndarray::{Array, Array1, Axis, Data, Ix2, Zip, array};
+    use ndarray_rand::RandomExt;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::{Normal, Uniform};
-    use ndarray_rand::RandomExt;
     use rand_xoshiro::Xoshiro256Plus;
 
     fn griewank(x: &Array2<f64>) -> Array1<f64> {

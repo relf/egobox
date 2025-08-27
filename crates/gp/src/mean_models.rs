@@ -8,7 +8,7 @@
 //! * quadratic
 
 use linfa::Float;
-use ndarray::{concatenate, s, Array2, ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray::{Array2, ArrayBase, Axis, Data, Ix1, Ix2, concatenate, s};
 use paste::paste;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};

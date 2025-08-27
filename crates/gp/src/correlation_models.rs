@@ -540,7 +540,7 @@ mod tests {
     }
 
     macro_rules! test_correlation {
-        ($corr:ident, $kpls:expr) => {
+        ($corr:ident, $kpls:expr_2021) => {
             paste! {
                 #[test]
                 fn [<test_corr_ $corr:lower _kpls_ $kpls _derivatives>]() {

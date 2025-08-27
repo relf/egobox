@@ -4,11 +4,11 @@ use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::parameters::{GpMixtureParams, GpMixtureValidParams};
 use crate::types::*;
-use crate::{expertise_macros::*, GpType};
-use crate::{surrogates::*, NbClusters};
+use crate::{GpType, expertise_macros::*};
+use crate::{NbClusters, surrogates::*};
 
 use egobox_gp::metrics::CrossValScore;
-use egobox_gp::{correlation_models::*, mean_models::*, GaussianProcess, SparseGaussianProcess};
+use egobox_gp::{GaussianProcess, SparseGaussianProcess, correlation_models::*, mean_models::*};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict, PredictInplace};
 use linfa::{Dataset, DatasetBase, Float, ParamGuard};
@@ -21,7 +21,7 @@ use std::ops::Sub;
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::norm::*;
 use ndarray::{
-    concatenate, s, Array1, Array2, Array3, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip,
+    Array1, Array2, Array3, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip, concatenate, s,
 };
 
 #[cfg(feature = "blas")]
@@ -189,7 +189,7 @@ impl GpMixtureValidParams<f64> {
                 .recombination(Recombination::Smooth(Some(factor)))
                 .check()?
                 .train(xt, yt)?; // needs to train the gaussian mixture on all data (xt, yt) as it was
-                                 // previously trained on data excluding test data (see train method)
+            // previously trained on data excluding test data (see train method)
             Ok(moe)
         } else {
             Ok(GpMixture {
@@ -283,7 +283,10 @@ impl GpMixtureValidParams<f64> {
                         "Quadratic_Matern32" => Ok(make_surrogate_params!(Quadratic, Matern32)),
                         "Quadratic_Matern52" => Ok(make_surrogate_params!(Quadratic, Matern52)),
                         _ => {
-                            return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0)))
+                            return Err(MoeError::ExpertError(format!(
+                                "Unknown expert {}",
+                                best.0
+                            )));
                         }
                     };
                 let mut expert_params = best_expert_params?;
@@ -316,11 +319,14 @@ impl GpMixtureValidParams<f64> {
                         "Constant_Matern32" => Ok(make_sgp_surrogate_params!(Matern32, inducings)),
                         "Constant_Matern52" => Ok(make_sgp_surrogate_params!(Matern52, inducings)),
                         _ => {
-                            return Err(MoeError::ExpertError(format!("Unknown expert {}", best.0)))
+                            return Err(MoeError::ExpertError(format!(
+                                "Unknown expert {}",
+                                best.0
+                            )));
                         }
                     };
                 let mut expert_params = best_expert_params?;
-                let seed = self.rng().gen();
+                let seed = self.rng().r#gen();
                 debug!("Theta tuning = {:?}", self.theta_tunings());
                 expert_params.sparse_method(*sparse_method);
                 expert_params.seed(seed);
@@ -938,11 +944,11 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use argmin_testfunctions::rosenbrock;
     use egobox_doe::{Lhs, SamplingMethod};
-    use ndarray::{array, Array, Array2, Zip};
+    use ndarray::{Array, Array2, Zip, array};
     use ndarray_npy::write_npy;
+    use ndarray_rand::RandomExt;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
-    use ndarray_rand::RandomExt;
     use rand_xoshiro::Xoshiro256Plus;
 
     fn f_test_1d(x: &Array2<f64>) -> Array1<f64> {
