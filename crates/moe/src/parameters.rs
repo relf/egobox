@@ -2,13 +2,13 @@ use crate::errors::{MoeError, Result};
 use crate::gaussian_mixture::GaussianMixture;
 use crate::types::*;
 
-use egobox_gp::GP_COBYLA_MAX_EVAL;
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
     AbsoluteExponentialCorr, Matern32Corr, Matern52Corr, SquaredExponentialCorr,
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
+use egobox_gp::GP_COBYLA_MAX_EVAL;
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -60,18 +60,18 @@ impl NbClusters {
         matches!(self, Self::Auto { max: _ })
     }
     pub fn is_mono(&self) -> bool {
-        if let Self::Fixed { nb } = self {
-            if *nb == 1 {
-                return true;
-            }
+        if let Self::Fixed { nb } = self
+            && *nb == 1
+        {
+            return true;
         }
         false
     }
     pub fn is_multi(&self) -> bool {
-        if let Self::Fixed { nb } = self {
-            if *nb > 1 {
-                return true;
-            }
+        if let Self::Fixed { nb } = self
+            && *nb > 1
+        {
+            return true;
         }
         false
     }
@@ -322,23 +322,23 @@ impl<F: Float> ParamGuard for GpMixtureParams<F> {
     type Error = MoeError;
 
     fn check_ref(&self) -> Result<&Self::Checked> {
-        if let Some(d) = self.0.kpls_dim {
-            if d == 0 {
-                return Err(MoeError::InvalidValueError(
-                    "`kpls_dim` canot be 0!".to_string(),
-                ));
-            }
+        if let Some(d) = self.0.kpls_dim
+            && d == 0
+        {
+            return Err(MoeError::InvalidValueError(
+                "`kpls_dim` canot be 0!".to_string(),
+            ));
         }
 
         if self.0.n_clusters.is_multi() && self.0.theta_tunings.len() == 1 {
-        } else if let NbClusters::Fixed { nb } = self.0.n_clusters {
-            if nb != self.0.theta_tunings.len() {
-                panic!(
+        } else if let NbClusters::Fixed { nb } = self.0.n_clusters
+            && nb != self.0.theta_tunings.len()
+        {
+            panic!(
                     "Number of clusters (={}) and theta init size (={}) not compatible, should be equal",
                     nb,
                     self.0.theta_tunings.len()
                 );
-            }
         }
         Ok(&self.0)
     }

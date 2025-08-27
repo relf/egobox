@@ -1,5 +1,5 @@
 /// Implementation of `argmin::IterState` for Egor optimizer
-use crate::{InfillObjData, utils::find_best_result_index};
+use crate::{utils::find_best_result_index, InfillObjData};
 use egobox_moe::Clustering;
 
 use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationStatus};
@@ -435,10 +435,10 @@ where
             self.best_cost = Some(cost);
 
             if best_index > self.doe_size {
-                if let Some(prev_best_index) = self.prev_best_index {
-                    if best_index != prev_best_index {
-                        self.last_best_iter = self.iter + 1;
-                    }
+                if let Some(prev_best_index) = self.prev_best_index
+                    && best_index != prev_best_index
+                {
+                    self.last_best_iter = self.iter + 1;
                 }
             } else {
                 // best point in doe => self.last_best_iter remains 0

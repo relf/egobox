@@ -4,9 +4,9 @@ use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::utils::{find_best_result_index_from, update_data};
-use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
-use crate::{EgorConfig, find_best_result_index};
-use crate::{EgorState, types::*};
+use crate::{find_best_result_index, EgorConfig};
+use crate::{types::*, EgorState};
+use crate::{EgorSolver, DEFAULT_CSTR_TOL, MAX_POINT_ADDITION_RETRY};
 
 use argmin::argmin_error_closure;
 use argmin::core::{CostFunction, Problem, State};
@@ -17,7 +17,7 @@ use env_logger::{Builder, Env};
 
 use egobox_moe::{Clustering, MixtureGpSurrogate, NbClusters};
 use log::{debug, info};
-use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip, concatenate, s};
+use ndarray::{concatenate, s, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_rand::rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
@@ -232,10 +232,9 @@ where
 
                 builder.set_theta_tunings(&theta_tunings);
 
-                let gp = builder
+                builder
                     .train_on_clusters(xt.view(), yt.view(), clustering)
-                    .expect("GP training failure");
-                gp
+                    .expect("GP training failure")
             };
 
             // CoEGO only in mono cluster, update theta if better likelihood

@@ -1,16 +1,16 @@
-use crate::ThetaTuning;
 use crate::errors::{GpError, Result};
-use crate::optimization::{CobylaParams, optimize_params, prepare_multistart};
+use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
 use crate::sparse_parameters::{Inducings, ParamTuning, SgpParams, SgpValidParams, SparseMethod};
-use crate::{GpSamplingMethod, correlation_models::*, sample, utils::pairwise_differences};
+use crate::ThetaTuning;
+use crate::{correlation_models::*, sample, utils::pairwise_differences, GpSamplingMethod};
 use finitediff::FiniteDiff;
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
-use ndarray::{Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip, s};
+use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_einsum_beta::*;
-use ndarray_rand::rand::SeedableRng;
 use ndarray_rand::rand::seq::SliceRandom;
+use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
 use log::debug;
@@ -419,15 +419,15 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         let x = dataset.records();
         let y = dataset.targets().to_owned().insert_axis(Axis(1));
 
-        if let Some(d) = self.kpls_dim() {
-            if *d > x.ncols() {
-                return Err(GpError::InvalidValueError(format!(
-                    "Dimension reduction {} should be smaller than actual \
+        if let Some(d) = self.kpls_dim()
+            && *d > x.ncols()
+        {
+            return Err(GpError::InvalidValueError(format!(
+                "Dimension reduction {} should be smaller than actual \
                     training input dimensions {}",
-                    d,
-                    x.ncols()
-                )));
-            };
+                d,
+                x.ncols()
+            )));
         }
 
         let xtrain = x;
@@ -585,7 +585,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         let opt_params = (0..theta_inits.nrows())
             .into_par_iter()
             .map(|i| {
-                let opt_res = optimize_params(
+                optimize_params(
                     objfn,
                     &theta_inits.row(i).to_owned(),
                     &bounds,
@@ -594,9 +594,7 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                             .clamp(crate::GP_COBYLA_MIN_EVAL, self.max_eval()),
                         ..CobylaParams::default()
                     },
-                );
-
-                opt_res
+                )
             })
             .reduce(
                 || (f64::INFINITY, Array::ones((theta_inits.ncols(),))),
@@ -846,12 +844,12 @@ mod tests {
     use super::*;
 
     use approx::assert_abs_diff_eq;
-    use ndarray::{Array, array, concatenate};
+    use ndarray::{array, concatenate, Array};
     // use ndarray_npy::{read_npy, write_npy};
     use ndarray_npy::write_npy;
-    use ndarray_rand::RandomExt;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::{Normal, Uniform};
+    use ndarray_rand::RandomExt;
     use rand_xoshiro::Xoshiro256Plus;
 
     const PI: f64 = std::f64::consts::PI;

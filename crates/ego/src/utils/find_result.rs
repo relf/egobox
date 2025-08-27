@@ -1,4 +1,4 @@
-use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip, concatenate};
+use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 use ndarray_stats::QuantileExt;
 
 use crate::utils::sort_axis::*;
@@ -134,8 +134,7 @@ pub fn find_best_result_index<F: Float>(
         }
     } else {
         // unconstrained optimization
-        let y_best = y_data.column(0).argmin().unwrap();
-        y_best
+        y_data.column(0).argmin().unwrap()
     }
 }
 
