@@ -1,4 +1,4 @@
-use egobox_gp::{correlation_models::*, ThetaTuning};
+use egobox_gp::{ThetaTuning, correlation_models::*};
 use egobox_moe::CorrelationSpec;
 use ndarray::Array1;
 

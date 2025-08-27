@@ -1,7 +1,7 @@
 use crate::types::XType;
 use egobox_moe::MixtureGpSurrogate;
 use libm::erfc;
-use ndarray::{concatenate, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip, concatenate};
 use ndarray_stats::{DeviationExt, QuantileExt};
 use rayon::prelude::*;
 const SQRT_2PI: f64 = 2.5066282746310007;

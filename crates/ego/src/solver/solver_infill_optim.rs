@@ -232,9 +232,9 @@ where
                         if is_better || i == 0 {
                             if i > 0 {
                                 info!(
-                                        "Partial infill criterion optim c={} has better result={} at x={}",
-                                        i, best.0, xopt_coop
-                                    );
+                                    "Partial infill criterion optim c={} has better result={} at x={}",
+                                    i, best.0, xopt_coop
+                                );
                             }
                             best_point = (res.0, xopt_coop);
                             current_best_point = best;

@@ -129,7 +129,7 @@ where
     ObjF: Fn(&[f64], Option<&mut [f64]>, &mut ()) -> f64,
     F: Float,
 {
-    use cobyla::{minimize, Func, StopTols};
+    use cobyla::{Func, StopTols, minimize};
 
     let cons: Vec<&dyn Func<()>> = vec![];
     let param0 = param0.map(|v| into_f64(v)).into_raw_vec();

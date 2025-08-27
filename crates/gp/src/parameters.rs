@@ -4,7 +4,7 @@ use crate::mean_models::RegressionModel;
 use crate::{GP_COBYLA_MAX_EVAL, GP_COBYLA_MIN_EVAL, GP_OPTIM_N_START};
 use linfa::{Float, ParamGuard};
 
-use ndarray::{array, Array1};
+use ndarray::{Array1, array};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 

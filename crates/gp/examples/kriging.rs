@@ -1,6 +1,6 @@
 use egobox_gp::Kriging;
 use linfa::prelude::*;
-use ndarray::{arr1, arr2, Array, Axis};
+use ndarray::{Array, Axis, arr1, arr2};
 
 fn main() {
     let xtrain = arr2(&[[0.0], [1.0], [2.0], [3.0], [4.0]]);

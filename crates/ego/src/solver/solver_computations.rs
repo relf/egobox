@@ -3,7 +3,7 @@ use crate::gpmix::mixint::to_discrete_space;
 use crate::{types::*, utils};
 
 use crate::utils::{compute_cstr_scales, logpofs, logpofs_grad, pofs, pofs_grad};
-use crate::{solver::coego, EgorSolver};
+use crate::{EgorSolver, solver::coego};
 
 use argmin::core::{CostFunction, Problem};
 
@@ -11,7 +11,7 @@ use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::MixtureGpSurrogate;
 
 use log::{debug, info, warn};
-use ndarray::{s, stack, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip, s, stack};
 use ndarray_rand::rand::seq::SliceRandom;
 
 use ndarray_rand::rand::Rng;

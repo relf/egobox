@@ -1,5 +1,5 @@
 /// Implementation of `argmin::IterState` for Egor optimizer
-use crate::{utils::find_best_result_index, InfillObjData};
+use crate::{InfillObjData, utils::find_best_result_index};
 use egobox_moe::Clustering;
 
 use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationStatus};

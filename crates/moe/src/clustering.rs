@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 use crate::parameters::GpMixtureParams;
-use crate::{types::*, NbClusters};
+use crate::{NbClusters, types::*};
 use log::debug; // , info};
 
+use linfa::Float;
 use linfa::dataset::{Dataset, DatasetView};
 use linfa::traits::{Fit, Predict};
-use linfa::Float;
 use linfa_clustering::GaussianMixtureModel;
-use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip, concatenate};
 use ndarray_rand::rand::Rng;
 // use std::ops::Sub;
 
@@ -147,74 +147,84 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                         .kpls_dim(kpls_dim)
                         .gmm(gmm.clone())
                         .fit(&train)
-                    { Ok(mixture) => {
-                        let xytrain = concatenate(
-                            Axis(1),
-                            &[
-                                train.records().view(),
-                                train.targets.view().insert_axis(Axis(1)),
-                            ],
-                        )
-                        .unwrap();
-                        let data_clustering = gmm.predict(&xytrain);
-                        let clusters = sort_by_cluster(n_clusters, &xytrain, &data_clustering);
-                        for cluster in clusters.iter().take(i + 1) {
-                            // If there is at least 3 points
-                            ok = ok && cluster.len() > 3
-                        }
-                        let actual = valid.targets();
-                        let mixture = mixture.set_recombination(Recombination::Hard);
-                        let h_error = match mixture.predict(valid.records()) { Ok(pred) => {
-                            if pred.iter().any(|v| f64::is_infinite(*v)) {
-                                1.0 // max bad value
-                            } else if pred.iter().any(|v| f64::is_nan(*v)) {
-                                ok = false; // something wrong => early exit
-                                1.0
-                            } else {
-                                let denom = actual.mapv(|x| x.abs()).sum();
-                                // if denom > 100. * f64::EPSILON {
-                                //     (pred - actual).mapv(|x| x * x).sum().sqrt() / denom
-                                // } else {
-                                //     (pred - actual).mapv(|x| x * x).sum().sqrt()
-                                // }
-                                debug!("Diff: {}", &pred.to_owned() - actual);
-                                let err = (pred - actual).mapv(|x| x.abs()).sum() / denom;
-                                debug!("Err = {err}");
-                                err
+                    {
+                        Ok(mixture) => {
+                            let xytrain = concatenate(
+                                Axis(1),
+                                &[
+                                    train.records().view(),
+                                    train.targets.view().insert_axis(Axis(1)),
+                                ],
+                            )
+                            .unwrap();
+                            let data_clustering = gmm.predict(&xytrain);
+                            let clusters = sort_by_cluster(n_clusters, &xytrain, &data_clustering);
+                            for cluster in clusters.iter().take(i + 1) {
+                                // If there is at least 3 points
+                                ok = ok && cluster.len() > 3
                             }
-                        } _ => {
-                            ok = false;
-                            1.0
-                        }};
-                        h_errors.push(h_error);
+                            let actual = valid.targets();
+                            let mixture = mixture.set_recombination(Recombination::Hard);
+                            let h_error = match mixture.predict(valid.records()) {
+                                Ok(pred) => {
+                                    if pred.iter().any(|v| f64::is_infinite(*v)) {
+                                        1.0 // max bad value
+                                    } else if pred.iter().any(|v| f64::is_nan(*v)) {
+                                        ok = false; // something wrong => early exit
+                                        1.0
+                                    } else {
+                                        let denom = actual.mapv(|x| x.abs()).sum();
+                                        // if denom > 100. * f64::EPSILON {
+                                        //     (pred - actual).mapv(|x| x * x).sum().sqrt() / denom
+                                        // } else {
+                                        //     (pred - actual).mapv(|x| x * x).sum().sqrt()
+                                        // }
+                                        debug!("Diff: {}", &pred.to_owned() - actual);
+                                        let err = (pred - actual).mapv(|x| x.abs()).sum() / denom;
+                                        debug!("Err = {err}");
+                                        err
+                                    }
+                                }
+                                _ => {
+                                    ok = false;
+                                    1.0
+                                }
+                            };
+                            h_errors.push(h_error);
 
-                        // Try only default soft(1.0), not soft(None) which can take too much time
-                        let mixture = mixture.set_recombination(Recombination::Smooth(Some(1.)));
-                        let s_error = match mixture.predict(valid.records()) { Ok(pred) => {
-                            if pred.iter().any(|v| f64::is_infinite(*v)) {
-                                1.0 // max bad value
-                            } else if pred.iter().any(|v| f64::is_nan(*v)) {
-                                ok = false; // something wrong => early exit
-                                1.0
-                            } else {
-                                // let denom = actual.mapv(|x| x * x).sum().sqrt();
-                                // if denom > 100. * f64::EPSILON {
-                                //     (pred - actual).mapv(|x| x * x).sum().sqrt() / denom
-                                // } else {
-                                //     (pred - actual).mapv(|x| x * x).sum().sqrt()
-                                // }
-                                (pred - actual).mapv(|x| x.abs()).sum()
-                            }
-                        } _ => {
+                            // Try only default soft(1.0), not soft(None) which can take too much time
+                            let mixture =
+                                mixture.set_recombination(Recombination::Smooth(Some(1.)));
+                            let s_error = match mixture.predict(valid.records()) {
+                                Ok(pred) => {
+                                    if pred.iter().any(|v| f64::is_infinite(*v)) {
+                                        1.0 // max bad value
+                                    } else if pred.iter().any(|v| f64::is_nan(*v)) {
+                                        ok = false; // something wrong => early exit
+                                        1.0
+                                    } else {
+                                        // let denom = actual.mapv(|x| x * x).sum().sqrt();
+                                        // if denom > 100. * f64::EPSILON {
+                                        //     (pred - actual).mapv(|x| x * x).sum().sqrt() / denom
+                                        // } else {
+                                        //     (pred - actual).mapv(|x| x * x).sum().sqrt()
+                                        // }
+                                        (pred - actual).mapv(|x| x.abs()).sum()
+                                    }
+                                }
+                                _ => {
+                                    ok = false;
+                                    1.0
+                                }
+                            };
+                            s_errors.push(s_error);
+                        }
+                        _ => {
                             ok = false;
-                            1.0
-                        }};
-                        s_errors.push(s_error);
-                    } _ => {
-                        ok = false;
-                        s_errors.push(1.0);
-                        h_errors.push(1.0);
-                    }}
+                            s_errors.push(1.0);
+                            h_errors.push(1.0);
+                        }
+                    }
                 }
             }
         } else {
@@ -293,7 +303,9 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
     if nb_clusters_ok.is_empty() {
         // Selection fails even with one cluster
         // possibly because some predicitions give inf or nan values
-        debug!("Selection of best number of clusters fails. Default to 1 cluster with Smooth(None) recombination");
+        debug!(
+            "Selection of best number of clusters fails. Default to 1 cluster with Smooth(None) recombination"
+        );
         return (1, Recombination::Smooth(None));
     }
 
@@ -381,7 +393,7 @@ mod tests {
     use egobox_doe::{FullFactorial, Lhs, SamplingMethod};
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
-    use ndarray::{array, Array1, Array2, Axis, Zip};
+    use ndarray::{Array1, Array2, Axis, Zip, array};
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
     //use ndarray_npy::write_npy;

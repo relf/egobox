@@ -3,7 +3,7 @@ use egobox_doe::Lhs;
 use egobox_doe::SamplingMethod;
 use egobox_ego::CoegoStatus;
 use egobox_ego::EgorBuilder;
-use ndarray::{array, Array2, ArrayView2, Zip};
+use ndarray::{Array2, ArrayView2, Zip, array};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 

@@ -1,11 +1,11 @@
+use crate::EgorSolver;
 use crate::errors::Result;
 use crate::types::*;
 use crate::utils::find_best_result_index_from;
-use crate::EgorSolver;
 
 use egobox_gp::ThetaTuning;
 use egobox_moe::MixtureGpSurrogate;
-use ndarray::{s, Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, RemoveAxis};
+use ndarray::{Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, RemoveAxis, s};
 use rand_xoshiro::Xoshiro256Plus;
 use serde::de::DeserializeOwned;
 

@@ -1,9 +1,9 @@
 use crate::errors::{GpError, Result};
 use crate::mean_models::*;
-use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
+use crate::optimization::{CobylaParams, optimize_params, prepare_multistart};
 use crate::parameters::{GpParams, GpValidParams};
-use crate::utils::{pairwise_differences, DistanceMatrix, NormalizedData};
-use crate::{correlation_models::*, ThetaTuning};
+use crate::utils::{DistanceMatrix, NormalizedData, pairwise_differences};
+use crate::{ThetaTuning, correlation_models::*};
 
 use linfa::dataset::{WithLapack, WithoutLapack};
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
@@ -18,8 +18,8 @@ use ndarray_linalg::{cholesky::*, eigh::*, qr::*, svd::*, triangular::*};
 use linfa_pls::PlsRegression;
 use ndarray::{Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
 
-use ndarray_rand::rand_distr::Normal;
 use ndarray_rand::RandomExt;
+use ndarray_rand::rand_distr::Normal;
 use ndarray_stats::QuantileExt;
 
 use log::debug;
@@ -779,7 +779,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
         } else if theta0_dim == dim {
             init.to_owned()
         } else {
-            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {theta0_dim}")
+            panic!(
+                "Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {theta0_dim}"
+            )
         };
 
         let xtrain = NormalizedData::new(&x);
@@ -1149,13 +1151,13 @@ mod tests {
     use linfa::prelude::Predict;
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::Norm;
-    use ndarray::{arr1, arr2, array, Array, Zip};
+    use ndarray::{Array, Zip, arr1, arr2, array};
     #[cfg(feature = "blas")]
     use ndarray_linalg::Norm;
     use ndarray_npy::write_npy;
+    use ndarray_rand::RandomExt;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::Uniform;
-    use ndarray_rand::RandomExt;
     use ndarray_stats::DeviationExt;
     use paste::paste;
     use rand_xoshiro::Xoshiro256Plus;

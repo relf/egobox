@@ -1,7 +1,7 @@
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_moe::{GpMixture, NbClusters, Recombination};
-use linfa::{traits::Fit, Dataset};
-use ndarray::{arr2, Array2, Axis};
+use linfa::{Dataset, traits::Fit};
+use ndarray::{Array2, Axis, arr2};
 use std::error::Error;
 
 fn norm1(x: &Array2<f64>) -> Array2<f64> {

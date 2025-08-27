@@ -2,8 +2,8 @@ use crate::errors::Result;
 #[cfg(feature = "persistent")]
 use crate::types::GpFileFormat;
 use egobox_gp::{
-    correlation_models::*, mean_models::*, GaussianProcess, GpParams, SgpParams,
-    SparseGaussianProcess, SparseMethod, ThetaTuning,
+    GaussianProcess, GpParams, SgpParams, SparseGaussianProcess, SparseMethod, ThetaTuning,
+    correlation_models::*, mean_models::*,
 };
 use linfa::prelude::{Dataset, Fit};
 use ndarray::{Array1, Array2, ArrayView2, Axis};

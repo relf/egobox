@@ -1,9 +1,9 @@
-use crate::utils::{cdist, pdist};
 use crate::SamplingMethod;
+use crate::utils::{cdist, pdist};
 use linfa::Float;
-use ndarray::{s, Array, Array2, ArrayBase, Axis, Data, Ix2, ShapeBuilder};
+use ndarray::{Array, Array2, ArrayBase, Axis, Data, Ix2, ShapeBuilder, s};
 use ndarray_rand::{
-    rand::seq::SliceRandom, rand::Rng, rand::SeedableRng, rand_distr::Uniform, RandomExt,
+    RandomExt, rand::Rng, rand::SeedableRng, rand::seq::SliceRandom, rand_distr::Uniform,
 };
 use ndarray_stats::QuantileExt;
 use rand_xoshiro::Xoshiro256Plus;

@@ -1,5 +1,5 @@
 use egobox_ego::EgorBuilder;
-use ndarray::{array, Array2, ArrayView2, Zip};
+use ndarray::{Array2, ArrayView2, Zip, array};
 
 /// Rosenbrock test function: min f(x)=0 at x=(1, 1)
 fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {

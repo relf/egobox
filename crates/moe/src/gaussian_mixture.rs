@@ -3,12 +3,12 @@
 // smoothness of the mixture smooth recombination
 #![allow(dead_code)]
 use crate::Result;
+use linfa::{Float, traits::*};
 #[cfg(feature = "blas")]
 use linfa::{dataset::WithLapack, dataset::WithoutLapack};
-use linfa::{traits::*, Float};
 #[cfg(not(feature = "blas"))]
 use linfa_linalg::{cholesky::*, triangular::*};
-use ndarray::{s, Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix1, Ix2, Ix3, Zip};
+use ndarray::{Array, Array1, Array2, Array3, ArrayBase, Axis, Data, Ix1, Ix2, Ix3, Zip, s};
 #[cfg(feature = "blas")]
 use ndarray_linalg::{cholesky::*, triangular::*};
 use ndarray_stats::QuantileExt;
@@ -321,7 +321,7 @@ mod tests {
     use super::*;
 
     use approx::assert_abs_diff_eq;
-    use ndarray::{array, Array, Array2};
+    use ndarray::{Array, Array2, array};
 
     #[test]
     fn test_gmx() {

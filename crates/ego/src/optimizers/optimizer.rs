@@ -1,5 +1,5 @@
 use crate::InfillObjData;
-use ndarray::{arr1, Array1, Array2, ArrayView1};
+use ndarray::{Array1, Array2, ArrayView1, arr1};
 
 #[cfg(not(feature = "nlopt"))]
 use crate::types::ObjFn;

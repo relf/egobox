@@ -1,6 +1,6 @@
 use egobox_gp::Kriging;
 use linfa::prelude::*;
-use ndarray::{arr2, concatenate, Array, Array1, Array2, Axis};
+use ndarray::{Array, Array1, Array2, Axis, arr2, concatenate};
 
 fn xsinx(x: &Array2<f64>) -> Array1<f64> {
     ((x - 3.5) * ((x - 3.5) / std::f64::consts::PI).mapv(|v| v.sin())).remove_axis(Axis(1))

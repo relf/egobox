@@ -1,11 +1,11 @@
-use crate::types::DomainConstraints;
-use crate::utils::find_best_result_index_from;
-use crate::utils::update_data;
 use crate::CstrFn;
 use crate::EgorSolver;
 use crate::EgorState;
 use crate::InfillObjData;
 use crate::SurrogateBuilder;
+use crate::types::DomainConstraints;
+use crate::utils::find_best_result_index_from;
+use crate::utils::update_data;
 
 use argmin::core::CostFunction;
 use argmin::core::Problem;
@@ -16,8 +16,8 @@ use egobox_moe::MixtureGpSurrogate;
 
 use log::debug;
 use log::info;
-use ndarray::aview1;
 use ndarray::Zip;
+use ndarray::aview1;
 use ndarray::{Array1, Array2, Axis};
 
 use ndarray_rand::rand::Rng;

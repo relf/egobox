@@ -3,8 +3,8 @@ use egobox_ego::{
     CoegoStatus, EgorBuilder, GroupFunc, HotStartMode, InfillOptimizer, InfillStrategy, QEiStrategy,
 };
 use egobox_moe::{CorrelationSpec, NbClusters, RegressionSpec};
-use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
-use std::fs::{remove_file, File};
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2, s};
+use std::fs::{File, remove_file};
 use std::io::prelude::*;
 use std::io::{BufRead, BufReader};
 use std::iter::zip;

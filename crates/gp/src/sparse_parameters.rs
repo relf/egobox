@@ -2,9 +2,9 @@ use crate::correlation_models::CorrelationModel;
 use crate::errors::{GpError, Result};
 use crate::mean_models::ConstantMean;
 use crate::parameters::GpValidParams;
-use crate::{ThetaTuning, GP_COBYLA_MIN_EVAL};
+use crate::{GP_COBYLA_MIN_EVAL, ThetaTuning};
 use linfa::{Float, ParamGuard};
-use ndarray::{array, Array1, Array2};
+use ndarray::{Array1, Array2, array};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 

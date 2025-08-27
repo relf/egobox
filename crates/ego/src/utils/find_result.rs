@@ -1,4 +1,4 @@
-use ndarray::{concatenate, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip, concatenate};
 use ndarray_stats::QuantileExt;
 
 use crate::utils::sort_axis::*;

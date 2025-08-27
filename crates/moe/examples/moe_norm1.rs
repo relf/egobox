@@ -1,8 +1,8 @@
 use csv::ReaderBuilder;
 use egobox_doe::{FullFactorial, SamplingMethod};
 use egobox_moe::{GpMixture, NbClusters};
-use linfa::{traits::Fit, Dataset};
-use ndarray::{arr2, s, Array2, Axis};
+use linfa::{Dataset, traits::Fit};
+use ndarray::{Array2, Axis, arr2, s};
 use ndarray_csv::Array2Reader;
 use ndarray_npy::write_npy;
 use std::error::Error;

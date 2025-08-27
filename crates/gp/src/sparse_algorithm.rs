@@ -1,16 +1,16 @@
-use crate::errors::{GpError, Result};
-use crate::optimization::{optimize_params, prepare_multistart, CobylaParams};
-use crate::sparse_parameters::{Inducings, ParamTuning, SgpParams, SgpValidParams, SparseMethod};
 use crate::ThetaTuning;
-use crate::{correlation_models::*, sample, utils::pairwise_differences, GpSamplingMethod};
+use crate::errors::{GpError, Result};
+use crate::optimization::{CobylaParams, optimize_params, prepare_multistart};
+use crate::sparse_parameters::{Inducings, ParamTuning, SgpParams, SgpValidParams, SparseMethod};
+use crate::{GpSamplingMethod, correlation_models::*, sample, utils::pairwise_differences};
 use finitediff::FiniteDiff;
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
-use ndarray::{s, Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip};
+use ndarray::{Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip, s};
 use ndarray_einsum_beta::*;
-use ndarray_rand::rand::seq::SliceRandom;
 use ndarray_rand::rand::SeedableRng;
+use ndarray_rand::rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256Plus;
 
 use log::debug;
@@ -469,7 +469,9 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
                 active: _,
                 bounds,
             } => {
-                log::warn!("Partial hyperparameter optimization not implemented in SparseGp, full optimization used");
+                log::warn!(
+                    "Partial hyperparameter optimization not implemented in SparseGp, full optimization used"
+                );
                 (init.clone(), bounds.clone())
             }
             ThetaTuning::Fixed(init) => (init.clone(), init.iter().map(|v| (*v, *v)).collect()),
@@ -482,7 +484,9 @@ impl<F: Float, Corr: CorrelationModel<F>, D: Data<Elem = F> + Sync>
         } else if theta0_dim == w_star.ncols() {
             Array::from_vec(self.theta_tuning().init().to_vec())
         } else {
-            panic!("Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {theta0_dim}")
+            panic!(
+                "Initial guess for theta should be either 1-dim or dim of xtrain (w_star.ncols()), got {theta0_dim}"
+            )
         };
 
         // Initial guess for variance
@@ -842,12 +846,12 @@ mod tests {
     use super::*;
 
     use approx::assert_abs_diff_eq;
-    use ndarray::{array, concatenate, Array};
+    use ndarray::{Array, array, concatenate};
     // use ndarray_npy::{read_npy, write_npy};
     use ndarray_npy::write_npy;
+    use ndarray_rand::RandomExt;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::{Normal, Uniform};
-    use ndarray_rand::RandomExt;
     use rand_xoshiro::Xoshiro256Plus;
 
     const PI: f64 = std::f64::consts::PI;

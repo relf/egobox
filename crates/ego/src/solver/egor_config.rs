@@ -1,7 +1,7 @@
 //! Egor optimizer configuration.
+use crate::HotStartMode;
 use crate::criteria::*;
 use crate::types::*;
-use crate::HotStartMode;
 use egobox_gp::ThetaTuning;
 use egobox_moe::NbClusters;
 use egobox_moe::Recombination;

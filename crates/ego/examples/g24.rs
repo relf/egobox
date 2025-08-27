@@ -1,6 +1,6 @@
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_ego::{Cstr, EgorServiceFactory};
-use ndarray::{array, concatenate, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Zip};
+use ndarray::{Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Zip, array, concatenate};
 
 // Objective
 fn g24(x: &ArrayBase<impl Data<Elem = f64>, Ix1>) -> f64 {

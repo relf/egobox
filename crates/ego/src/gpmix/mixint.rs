@@ -6,8 +6,8 @@
 use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
-use egobox_gp::metrics::CrossValScore;
 use egobox_gp::ThetaTuning;
+use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{
     Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
     GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, Recombination, RegressionSpec,
@@ -15,7 +15,7 @@ use egobox_moe::{
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
 use ndarray::{
-    s, Array, Array1, Array2, ArrayBase, ArrayView1, ArrayView2, Axis, Data, DataMut, Ix1, Ix2, Zip,
+    Array, Array1, Array2, ArrayBase, ArrayView1, ArrayView2, Axis, Data, DataMut, Ix1, Ix2, Zip, s,
 };
 use ndarray_rand::rand::SeedableRng;
 use ndarray_stats::QuantileExt;

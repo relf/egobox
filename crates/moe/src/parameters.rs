@@ -2,13 +2,13 @@ use crate::errors::{MoeError, Result};
 use crate::gaussian_mixture::GaussianMixture;
 use crate::types::*;
 
+use egobox_gp::GP_COBYLA_MAX_EVAL;
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
     AbsoluteExponentialCorr, Matern32Corr, Matern52Corr, SquaredExponentialCorr,
 };
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
-use egobox_gp::GP_COBYLA_MAX_EVAL;
 use linfa::{Float, ParamGuard};
 use linfa_clustering::GaussianMixtureModel;
 use ndarray::{Array1, Array2, Array3};
@@ -333,8 +333,11 @@ impl<F: Float> ParamGuard for GpMixtureParams<F> {
         if self.0.n_clusters.is_multi() && self.0.theta_tunings.len() == 1 {
         } else if let NbClusters::Fixed { nb } = self.0.n_clusters {
             if nb != self.0.theta_tunings.len() {
-                panic!("Number of clusters (={}) and theta init size (={}) not compatible, should be equal", 
-            nb, self.0.theta_tunings.len());
+                panic!(
+                    "Number of clusters (={}) and theta init size (={}) not compatible, should be equal",
+                    nb,
+                    self.0.theta_tunings.len()
+                );
             }
         }
         Ok(&self.0)

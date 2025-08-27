@@ -14,10 +14,10 @@
 use crate::domain::*;
 use crate::gp_config::*;
 use crate::types::*;
-use egobox_ego::{find_best_result_index, CoegoStatus, InfillObjData};
+use egobox_ego::{CoegoStatus, InfillObjData, find_best_result_index};
 use egobox_gp::ThetaTuning;
 use egobox_moe::NbClusters;
-use ndarray::{array, concatenate, Array1, Array2, ArrayView2, Axis};
+use ndarray::{Array1, Array2, ArrayView2, Axis, array, concatenate};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;

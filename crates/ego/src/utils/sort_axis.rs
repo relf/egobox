@@ -22,11 +22,7 @@ impl Permutation {
     #[allow(dead_code)]
     pub fn from_indices(v: Vec<usize>) -> Result<Self, ()> {
         let perm = Permutation { indices: v };
-        if perm.correct() {
-            Ok(perm)
-        } else {
-            Err(())
-        }
+        if perm.correct() { Ok(perm) } else { Err(()) }
     }
 
     fn correct(&self) -> bool {

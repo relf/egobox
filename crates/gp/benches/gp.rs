@@ -1,10 +1,10 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use egobox_doe::{Lhs, SamplingMethod};
+use egobox_gp::GaussianProcess;
 use egobox_gp::correlation_models::SquaredExponentialCorr;
 use egobox_gp::mean_models::ConstantMean;
-use egobox_gp::GaussianProcess;
 use linfa::prelude::{Dataset, Fit};
-use ndarray::{array, Array1, Zip};
+use ndarray::{Array1, Zip, array};
 use ndarray_npy::{read_npy, write_npy};
 use ndarray_rand::rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;

@@ -8,51 +8,51 @@ use ndarray::{Array1, ArrayView};
 /// a constraint function wrt the tolerance (ie cstr <= cstr_tol)
 fn pof(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> f64 {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-    match cstr_model.predict(&pt) { Ok(p) => {
-        match cstr_model.predict_var(&pt) { Ok(s) => {
-            if s[0] < f64::EPSILON {
-                0.0
-            } else {
-                let pred = p[0];
-                let sigma = s[0].sqrt();
-                let args0 = (cstr_tol - pred) / sigma;
-                norm_cdf(args0)
+    match cstr_model.predict(&pt) {
+        Ok(p) => match cstr_model.predict_var(&pt) {
+            Ok(s) => {
+                if s[0] < f64::EPSILON {
+                    0.0
+                } else {
+                    let pred = p[0];
+                    let sigma = s[0].sqrt();
+                    let args0 = (cstr_tol - pred) / sigma;
+                    norm_cdf(args0)
+                }
             }
-        } _ => {
-            0.0
-        }}
-    } _ => {
-        0.0
-    }}
+            _ => 0.0,
+        },
+        _ => 0.0,
+    }
 }
 
 /// Computes the derivative of the probability of feasibility of the given
 /// constraint surrogate model.
 fn pof_grad(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> Array1<f64> {
     let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-    match cstr_model.predict(&pt) { Ok(p) => {
-        match cstr_model.predict_var(&pt) { Ok(s) => {
-            if s[0] < f64::EPSILON {
-                Array1::zeros(pt.len())
-            } else {
-                let pred = p[0];
-                let sigma = s[0].sqrt();
-                let arg = (cstr_tol - pred) / sigma;
-                let y_prime = cstr_model.predict_gradients(&pt).unwrap();
-                let y_prime = y_prime.row(0);
-                let sig_2_prime = cstr_model.predict_var_gradients(&pt).unwrap();
-                let sig_2_prime = sig_2_prime.row(0);
-                let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));
-                let arg_prime =
-                    y_prime.mapv(|v| v / (-sigma)) + sig_prime.mapv(|v| v * pred / (sigma * sigma));
-                norm_pdf(arg) * arg_prime.to_owned()
+    match cstr_model.predict(&pt) {
+        Ok(p) => match cstr_model.predict_var(&pt) {
+            Ok(s) => {
+                if s[0] < f64::EPSILON {
+                    Array1::zeros(pt.len())
+                } else {
+                    let pred = p[0];
+                    let sigma = s[0].sqrt();
+                    let arg = (cstr_tol - pred) / sigma;
+                    let y_prime = cstr_model.predict_gradients(&pt).unwrap();
+                    let y_prime = y_prime.row(0);
+                    let sig_2_prime = cstr_model.predict_var_gradients(&pt).unwrap();
+                    let sig_2_prime = sig_2_prime.row(0);
+                    let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));
+                    let arg_prime = y_prime.mapv(|v| v / (-sigma))
+                        + sig_prime.mapv(|v| v * pred / (sigma * sigma));
+                    norm_pdf(arg) * arg_prime.to_owned()
+                }
             }
-        } _ => {
-            Array1::zeros(pt.len())
-        }}
-    } _ => {
-        Array1::zeros(pt.len())
-    }}
+            _ => Array1::zeros(pt.len()),
+        },
+        _ => Array1::zeros(pt.len()),
+    }
 }
 
 pub fn pofs(x: &[f64], cstr_models: &[Box<dyn MixtureGpSurrogate>], cstr_tols: &[f64]) -> f64 {
