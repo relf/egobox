@@ -24,7 +24,7 @@ jobs:
           - windows-latest
           - macos-latest
         include:
-          - toolchain: 1.81.0  # test MSRV
+          - toolchain: 1.85.0  # test MSRV
             os: ubuntu-latest
 
     steps:
