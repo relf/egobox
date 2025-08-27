@@ -320,7 +320,7 @@ impl GpMixtureValidParams<f64> {
                         }
                     };
                 let mut expert_params = best_expert_params?;
-                let seed = self.rng().gen();
+                let seed = self.rng().r#gen();
                 debug!("Theta tuning = {:?}", self.theta_tunings());
                 expert_params.sparse_method(*sparse_method);
                 expert_params.seed(seed);

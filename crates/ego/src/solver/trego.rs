@@ -109,7 +109,7 @@ where
         let actives = activity.unwrap_or(self.full_activity()).to_owned();
 
         let mut rng = new_state.take_rng().unwrap();
-        let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+        let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
         let multistarter = LocalLhsMultiStarter::new(
             self.xlimits.clone(),
             xbest.to_owned(),

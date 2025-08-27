@@ -26,8 +26,8 @@ impl InfillCriterion for ExpectedImprovement {
         _scale: Option<f64>,
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-        if let Ok(p) = obj_model.predict(&pt) {
-            if let Ok(s) = obj_model.predict_var(&pt) {
+        match obj_model.predict(&pt) { Ok(p) => {
+            match obj_model.predict_var(&pt) { Ok(s) => {
                 if s[0] < f64::EPSILON {
                     0.0
                 } else {
@@ -38,12 +38,12 @@ impl InfillCriterion for ExpectedImprovement {
                     let args2 = norm_pdf(args0);
                     sigma * (args1 + args2)
                 }
-            } else {
+            } _ => {
                 0.0
-            }
-        } else {
+            }}
+        } _ => {
             0.0
-        }
+        }}
     }
 
     /// Computes derivatives of EI infill criterion wrt to x components at given `x` point
@@ -56,8 +56,8 @@ impl InfillCriterion for ExpectedImprovement {
         _scale: Option<f64>,
     ) -> Array1<f64> {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-        if let Ok(p) = obj_model.predict(&pt) {
-            if let Ok(s) = obj_model.predict_var(&pt) {
+        match obj_model.predict(&pt) { Ok(p) => {
+            match obj_model.predict_var(&pt) { Ok(s) => {
                 if s[0] < f64::EPSILON {
                     Array1::zeros(pt.len())
                 } else {
@@ -81,12 +81,12 @@ impl InfillCriterion for ExpectedImprovement {
                     let arg4 = factor * arg_prime;
                     arg1 + arg2 + arg3 + arg4
                 }
-            } else {
+            } _ => {
                 Array1::zeros(pt.len())
-            }
-        } else {
+            }}
+        } _ => {
             Array1::zeros(pt.len())
-        }
+        }}
     }
 
     fn scaling(
@@ -122,8 +122,8 @@ impl InfillCriterion for LogExpectedImprovement {
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
 
-        if let Ok(p) = obj_model.predict(&pt) {
-            if let Ok(s) = obj_model.predict_var(&pt) {
+        match obj_model.predict(&pt) { Ok(p) => {
+            match obj_model.predict_var(&pt) { Ok(s) => {
                 if s[0] < f64::EPSILON {
                     f64::MIN
                 } else {
@@ -132,12 +132,12 @@ impl InfillCriterion for LogExpectedImprovement {
                     let u = (fmin - pred) / sigma;
                     log_ei_helper(u) + sigma.ln()
                 }
-            } else {
+            } _ => {
                 f64::MIN
-            }
-        } else {
+            }}
+        } _ => {
             f64::MIN
-        }
+        }}
     }
 
     /// Computes derivatives of LogEI infill criterion wrt to x components at given `x` point
@@ -151,8 +151,8 @@ impl InfillCriterion for LogExpectedImprovement {
     ) -> Array1<f64> {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
 
-        if let Ok(p) = obj_model.predict(&pt) {
-            if let Ok(s) = obj_model.predict_var(&pt) {
+        match obj_model.predict(&pt) { Ok(p) => {
+            match obj_model.predict_var(&pt) { Ok(s) => {
                 if s[0] < f64::EPSILON {
                     Array1::from_elem(pt.len(), f64::MIN)
                 } else {
@@ -176,12 +176,12 @@ impl InfillCriterion for LogExpectedImprovement {
                     let arg2 = sig_prime / sigma;
                     arg1 + arg2
                 }
-            } else {
+            } _ => {
                 Array1::from_elem(pt.len(), f64::MIN)
-            }
-        } else {
+            }}
+        } _ => {
             Array1::from_elem(pt.len(), f64::MIN)
-        }
+        }}
     }
 
     fn scaling(

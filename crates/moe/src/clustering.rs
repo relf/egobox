@@ -140,14 +140,14 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
 
                 for (train, valid) in dataset.fold(5).into_iter() {
                     debug!("X: {}", Array1::from_iter(valid.records().iter().cloned()));
-                    if let Ok(mixture) = GpMixtureParams::default()
+                    match GpMixtureParams::default()
                         .n_clusters(NbClusters::fixed(n_clusters))
                         .regression_spec(regression_spec)
                         .correlation_spec(correlation_spec)
                         .kpls_dim(kpls_dim)
                         .gmm(gmm.clone())
                         .fit(&train)
-                    {
+                    { Ok(mixture) => {
                         let xytrain = concatenate(
                             Axis(1),
                             &[
@@ -164,7 +164,7 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                         }
                         let actual = valid.targets();
                         let mixture = mixture.set_recombination(Recombination::Hard);
-                        let h_error = if let Ok(pred) = mixture.predict(valid.records()) {
+                        let h_error = match mixture.predict(valid.records()) { Ok(pred) => {
                             if pred.iter().any(|v| f64::is_infinite(*v)) {
                                 1.0 // max bad value
                             } else if pred.iter().any(|v| f64::is_nan(*v)) {
@@ -182,15 +182,15 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                                 debug!("Err = {err}");
                                 err
                             }
-                        } else {
+                        } _ => {
                             ok = false;
                             1.0
-                        };
+                        }};
                         h_errors.push(h_error);
 
                         // Try only default soft(1.0), not soft(None) which can take too much time
                         let mixture = mixture.set_recombination(Recombination::Smooth(Some(1.)));
-                        let s_error = if let Ok(pred) = mixture.predict(valid.records()) {
+                        let s_error = match mixture.predict(valid.records()) { Ok(pred) => {
                             if pred.iter().any(|v| f64::is_infinite(*v)) {
                                 1.0 // max bad value
                             } else if pred.iter().any(|v| f64::is_nan(*v)) {
@@ -205,16 +205,16 @@ pub fn find_best_number_of_clusters<R: Rng + Clone>(
                                 // }
                                 (pred - actual).mapv(|x| x.abs()).sum()
                             }
-                        } else {
+                        } _ => {
                             ok = false;
                             1.0
-                        };
+                        }};
                         s_errors.push(s_error);
-                    } else {
+                    } _ => {
                         ok = false;
                         s_errors.push(1.0);
                         h_errors.push(1.0);
-                    }
+                    }}
                 }
             }
         } else {

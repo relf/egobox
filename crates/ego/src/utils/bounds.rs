@@ -92,7 +92,7 @@ mod tests {
 
     #[allow(unused_macros)]
     macro_rules! test_theta_bounds {
-        ($dim:expr, $corr:ident ) => {
+        ($dim:expr_2021, $corr:ident ) => {
             paste! {
 
                 #[test]

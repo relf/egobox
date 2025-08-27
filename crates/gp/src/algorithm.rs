@@ -1403,7 +1403,7 @@ mod tests {
     }
 
     macro_rules! test_gp_derivatives {
-        ($regr:ident, $corr:ident, $func:ident, $limit:expr, $nt:expr) => {
+        ($regr:ident, $corr:ident, $func:ident, $limit:expr_2021, $nt:expr_2021) => {
             paste! {
 
                 #[test]
@@ -1474,7 +1474,7 @@ mod tests {
 
     #[allow(unused_macros)]
     macro_rules! test_gp_variance_derivatives {
-        ($regr:ident, $corr:ident, $func:ident, $limit:expr, $nt:expr) => {
+        ($regr:ident, $corr:ident, $func:ident, $limit:expr_2021, $nt:expr_2021) => {
             paste! {
 
                 #[test]

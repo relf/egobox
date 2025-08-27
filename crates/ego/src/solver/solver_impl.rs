@@ -304,7 +304,7 @@ where
         let fcstrs = pb.fn_constraints();
 
         let mut rng = state.take_rng().unwrap();
-        let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+        let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
         *state = state.clone().rng(rng.clone());
         let sampling = Lhs::new(&self.xlimits)
             .with_rng(sub_rng)
@@ -607,7 +607,7 @@ where
             let xbest = x_data.row(best_index).to_owned();
             let cbest = c_data.row(best_index).to_owned();
 
-            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
             let sampling = Lhs::new(&self.xlimits)
                 .with_rng(sub_rng)
                 .kind(LhsKind::Maximin);
@@ -656,7 +656,7 @@ where
                 })
                 .collect::<Vec<_>>();
 
-            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.gen());
+            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
             // let multistarter = GlobalMultiStarter::new(&self.xlimits, sub_rng);
             let xsamples = x_data.to_owned();
             let multistarter = MiddlePickerMultiStarter::new(&self.xlimits, &xsamples, sub_rng);

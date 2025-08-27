@@ -10,7 +10,7 @@ fn cstr_sum<F: Float>(y: &ArrayBase<impl Data<Elem = F>, Ix1>, cstr_tol: &Array1
     y.slice(s![1..])
         .iter()
         .enumerate()
-        .filter(|(i, &c)| c > cstr_tol[*i])
+        .filter(|&(ref i, &c)| c > cstr_tol[*i])
         .fold(F::zero(), |acc, (i, &c)| acc + (c - cstr_tol[i]).abs())
 }
 
