@@ -19,9 +19,8 @@ use egobox_gp::ThetaTuning;
 use egobox_moe::NbClusters;
 use ndarray::{Array1, Array2, ArrayView2, Axis, array, concatenate};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
-use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use std::cmp::Ordering;
 
 /// Optimizer constructor
