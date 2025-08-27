@@ -1,9 +1,6 @@
 use crate::types::{XSpec, XType};
-//use ndarray::{array, concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{PyReadonlyArray2, PyUntypedArrayMethods};
 use pyo3::prelude::*;
-
-//use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
 #[derive(FromPyObject)]
 pub(crate) enum Domain<'py> {
@@ -50,24 +47,22 @@ pub(crate) fn parse(py: Python, xspecs: PyObject) -> Vec<egobox_ego::XType> {
 }
 
 fn xtypes_from_floats(floats: Vec<Vec<f64>>) -> Vec<egobox_ego::XType> {
-    let xtypes: Vec<egobox_ego::XType> = floats
+    floats
         .iter()
         .map(|v| egobox_ego::XType::Float(v[0], v[1]))
-        .collect();
-    xtypes
+        .collect()
 }
 
 fn xtypes_from_ndarray(xlimits: PyReadonlyArray2<f64>) -> Vec<egobox_ego::XType> {
     let ary = xlimits.as_array();
-    let xtypes = ary.outer_iter().fold(Vec::new(), |mut acc, row| {
+    ary.outer_iter().fold(Vec::new(), |mut acc, row| {
         acc.push(egobox_ego::XType::Float(row[0], row[1]));
         acc
-    });
-    xtypes
+    })
 }
 
 fn xtypes_from_xspecs(xspecs: Vec<XSpec>) -> Vec<egobox_ego::XType> {
-    let xtypes: Vec<egobox_ego::XType> = xspecs
+    xspecs
         .iter()
         .map(|spec| match spec.xtype {
             XType::Float => egobox_ego::XType::Float(spec.xlimits[0], spec.xlimits[1]),
@@ -81,6 +76,5 @@ fn xtypes_from_xspecs(xspecs: Vec<XSpec>) -> Vec<egobox_ego::XType> {
                 }
             }
         })
-        .collect();
-    xtypes
+        .collect()
 }

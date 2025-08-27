@@ -14,10 +14,10 @@
 use crate::domain::*;
 use crate::gp_config::*;
 use crate::types::*;
-use egobox_ego::{CoegoStatus, InfillObjData, find_best_result_index};
+use egobox_ego::{find_best_result_index, CoegoStatus, InfillObjData};
 use egobox_gp::ThetaTuning;
 use egobox_moe::NbClusters;
-use ndarray::{Array1, Array2, ArrayView2, Axis, array, concatenate};
+use ndarray::{array, concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -300,7 +300,7 @@ impl Egor {
         let fcstrs = fcstrs
             .iter()
             .map(|cstr| {
-                let cstr = |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| -> f64 {
+                |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| -> f64 {
                     Python::with_gil(|py| {
                         if let Some(g) = g {
                             let args = (Array1::from(x.to_vec()).into_pyarray(py), true);
@@ -309,11 +309,9 @@ impl Egor {
                             g.copy_from_slice(grad.as_slice().unwrap())
                         }
                         let args = (Array1::from(x.to_vec()).into_pyarray(py), false);
-                        let res = cstr.bind(py).call1(args).unwrap().extract().unwrap();
-                        res
+                        cstr.bind(py).call1(args).unwrap().extract().unwrap()
                     })
-                };
-                cstr
+                }
             })
             .collect::<Vec<_>>();
 
