@@ -14,33 +14,15 @@
 use crate::domain::*;
 use crate::gp_config::*;
 use crate::types::*;
-use egobox_ego::{CoegoStatus, InfillObjData, find_best_result_index};
+use egobox_ego::{find_best_result_index, CoegoStatus, InfillObjData};
 use egobox_gp::ThetaTuning;
 use egobox_moe::NbClusters;
-use ndarray::{Array1, Array2, ArrayView2, Axis, array, concatenate};
+use ndarray::{array, concatenate, Array1, Array2, ArrayView2, Axis};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 use std::cmp::Ordering;
-
-#[gen_stub_pyfunction]
-#[pyfunction]
-// #[deprecated(
-//     since = "0.30.0",
-//     note = "Useless utility method, list of lists are now automatically converted. This method will be removed"
-// )]
-pub(crate) fn to_specs(py: Python, xlimits: Vec<Vec<f64>>) -> PyResult<Bound<PyAny>> {
-    if xlimits.is_empty() || xlimits[0].is_empty() {
-        let err = "Error: xspecs argument cannot be empty";
-        return Err(PyValueError::new_err(err.to_string()));
-    }
-    xlimits
-        .iter()
-        .map(|xlimit| XSpec::new(XType::Float, xlimit.clone(), vec![]))
-        .collect::<Vec<XSpec>>()
-        .into_pyobject(py)
-}
 
 /// Optimizer constructor
 ///     xspecs (list(XSpec)) where XSpec(xtype=FLOAT|INT|ORD|ENUM, xlimits=[<f(xtype)>] or tags=[strings]):
