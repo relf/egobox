@@ -145,10 +145,12 @@ pub fn find_best_result_index<F: Float>(
 /// meaning the given point do not violate any constraint
 pub fn is_feasible<F: Float>(
     y: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    c: &ArrayBase<impl Data<Elem = F>, Ix1>,
     cstr_tol: &Array1<F>,
 ) -> bool {
-    if y.len() > 1 {
-        let sum_c = cstr_sum(y, cstr_tol);
+    let y_c = concatenate![Axis(0), y.to_owned(), c.to_owned()];
+    if y_c.len() > 1 {
+        let sum_c = cstr_sum(&y_c, cstr_tol);
         sum_c == F::zero()
     } else {
         true

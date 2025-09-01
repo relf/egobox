@@ -104,7 +104,7 @@
 //! println!("G24 min result = {:?}", res.state);
 //! ```
 //!
-use crate::utils::find_best_result_index;
+use crate::utils::{find_best_result_index, is_feasible};
 use crate::{EgoError, EgorConfig, EgorState, MAX_POINT_ADDITION_RETRY};
 
 use crate::types::*;
@@ -266,6 +266,11 @@ where
         initial_state.best_index = Some(best_index);
         initial_state.prev_best_index = Some(best_index);
         initial_state.last_best_iter = 0;
+        initial_state.feasibility = is_feasible(
+            &y_data.row(best_index),
+            &c_data.row(best_index),
+            &initial_state.cstr_tol,
+        );
 
         initial_state.activity = activity;
         debug!("Initial State = {initial_state:?}");

@@ -4,7 +4,7 @@ use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::solver::solver_infill_optim::InfillOptProblem;
-use crate::utils::{find_best_result_index_from, update_data};
+use crate::utils::{find_best_result_index_from, is_feasible, update_data};
 use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
 use crate::{EgorConfig, find_best_result_index};
 use crate::{EgorState, types::*};
@@ -75,6 +75,9 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         // TODO: Coego not implemented
         let activity = None;
 
+        let best_index = find_best_result_index(y_data, &c_data, &cstr_tol);
+        let feasibility = is_feasible(&y_data.row(best_index), &c_data.row(best_index), &cstr_tol);
+
         let (x_dat, _, _, _, _) = self.select_next_points(
             true,
             0,
@@ -86,8 +89,9 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             y_data,
             &c_data,
             &cstr_tol,
-            find_best_result_index(y_data, &c_data, &cstr_tol),
+            best_index,
             &fcstrs,
+            feasibility,
             &mut rng,
         );
         x_dat
@@ -331,6 +335,7 @@ where
             scale_infill_obj,
             scale_cstr: Some(scale_cstr.to_owned()),
             scale_wb2,
+            feasibility: state.feasibility,
         }
     }
 
@@ -425,6 +430,7 @@ where
                 &state.cstr_tol,
                 state.best_index.unwrap(),
                 fcstrs,
+                state.feasibility,
                 &mut rng,
             );
             problem.problem = Some(pb);
@@ -522,6 +528,12 @@ where
         new_state.prev_best_index = state.best_index;
         new_state.best_index = Some(best_index);
         new_state = new_state.data((x_data.clone(), y_data.clone(), c_data.clone()));
+        new_state.feasibility = state.feasibility
+            || is_feasible(
+                &y_data.row(best_index),
+                &c_data.row(best_index),
+                &new_state.cstr_tol,
+            );
         Ok(new_state)
     }
 
@@ -544,6 +556,7 @@ where
         cstr_tol: &Array1<f64>,
         best_index: usize,
         cstr_funcs: &[impl CstrFn],
+        feasibility: bool,
         rng: &mut Xoshiro256Plus,
     ) -> (
         Array2<f64>,
@@ -557,7 +570,10 @@ where
         let mut y_dat = Array2::zeros((0, y_data.ncols()));
         let mut c_dat = Array2::zeros((0, c_data.ncols()));
         let mut infill_val = f64::INFINITY;
-        let mut infill_data = Default::default();
+        let mut infill_data = InfillObjData {
+            feasibility,
+            ..Default::default()
+        };
 
         for i in 0..self.config.q_points {
             let (xt, yt) = if i == 0 {
@@ -629,6 +645,7 @@ where
                 scale_infill_obj,
                 scale_cstr: Some(all_scale_cstr.to_owned()),
                 scale_wb2,
+                feasibility,
             };
 
             let cstr_funcs = cstr_funcs

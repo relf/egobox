@@ -79,6 +79,7 @@ where
                     scale_wb2,
                     xbest: xcoop,
                     fmin,
+                    feasibility,
                     ..
                 } = params;
                 let mut xcoop = xcoop.clone();
@@ -91,6 +92,7 @@ where
 
                 if let Some(grad) = gradient {
                     let g_infill_obj = if self.config.cstr_infill {
+                        // Use constrained infill criterion
                         self.eval_grad_infill_obj_with_cstrs(
                             &xcoop,
                             obj_model,
@@ -99,6 +101,7 @@ where
                             *fmin,
                             *scale_infill_obj,
                             *scale_wb2,
+                            *feasibility,
                         )
                     } else {
                         self.eval_grad_infill_obj(
@@ -118,6 +121,7 @@ where
                     grad[..].copy_from_slice(&g_infill_obj);
                 }
                 if self.config.cstr_infill {
+                    // Use constrained infill criterion
                     self.eval_infill_obj_with_cstrs(
                         &xcoop,
                         obj_model,
@@ -126,6 +130,7 @@ where
                         *fmin,
                         *scale_infill_obj,
                         *scale_wb2,
+                        *feasibility,
                     )
                 } else {
                     self.eval_infill_obj(&xcoop, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
@@ -133,6 +138,9 @@ where
             };
 
             let cstrs: Vec<_> = if self.config.cstr_infill {
+                // When constrained infill criterion is used
+                // internal infill criterion optimizer does not
+                // handle constraints metamodelized constraints
                 vec![]
             } else {
                 (0..self.config.n_cstr)

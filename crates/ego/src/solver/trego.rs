@@ -6,6 +6,7 @@ use crate::SurrogateBuilder;
 use crate::solver::solver_infill_optim::InfillOptProblem;
 use crate::types::DomainConstraints;
 use crate::utils::find_best_result_index_from;
+use crate::utils::is_feasible;
 use crate::utils::update_data;
 
 use argmin::core::CostFunction;
@@ -185,6 +186,13 @@ where
             &c_data,
             &new_state.cstr_tol,
         );
+        new_state.feasibility = state.feasibility
+            || is_feasible(
+                &y_data.row(new_best_index),
+                &c_data.row(new_best_index),
+                &new_state.cstr_tol,
+            );
+
         new_state = new_state.data((x_data, y_data, c_data)).rng(rng);
         new_state.prev_best_index = new_state.best_index;
         new_state.best_index = Some(new_best_index);
