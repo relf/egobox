@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
+use crate::solver::solver_infill_optim::InfillOptProblem;
 use crate::utils::{find_best_result_index_from, update_data};
 use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
 use crate::{EgorConfig, find_best_result_index};
@@ -661,15 +662,19 @@ where
             let xsamples = x_data.to_owned();
             let multistarter = MiddlePickerMultiStarter::new(&self.xlimits, &xsamples, sub_rng);
 
-            let (infill_obj, xk) = self.optimize_infill_criterion(
-                obj_model.as_ref(),
+            let infill_optpb = InfillOptProblem {
+                obj_model: obj_model.as_ref(),
                 cstr_models,
-                &cstr_funcs,
-                cstr_tol,
-                &infill_data,
-                (fmin, xbest, ybest, cbest),
-                &actives,
+                cstr_funcs: &cstr_funcs,
+                cstr_tols: cstr_tol,
+                infill_data: &infill_data,
+                actives: &actives,
+            };
+
+            let (infill_obj, xk) = self.optimize_infill_criterion(
+                infill_optpb,
                 multistarter,
+                (fmin, xbest, ybest, cbest),
             );
             debug!("+++++++  xk = {xk}");
 

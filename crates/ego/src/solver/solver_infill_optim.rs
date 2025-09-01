@@ -24,6 +24,15 @@ pub(crate) trait MultiStarter {
     fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64>;
 }
 
+pub(crate) struct InfillOptProblem<'a, CstrFn> {
+    pub obj_model: &'a dyn MixtureGpSurrogate,
+    pub cstr_models: &'a [Box<dyn MixtureGpSurrogate>],
+    pub cstr_funcs: &'a [CstrFn],
+    pub cstr_tols: &'a Array1<f64>,
+    pub infill_data: &'a InfillObjData<f64>,
+    pub actives: &'a Array2<usize>,
+}
+
 impl<SB, C> EgorSolver<SB, C>
 where
     SB: SurrogateBuilder + DeserializeOwned,
@@ -33,21 +42,24 @@ where
     /// The optimized value of the criterion is returned together with the
     /// optimum location
     /// Returns (infill_obj, x_opt)
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn optimize_infill_criterion<MS>(
         &self,
-        obj_model: &dyn MixtureGpSurrogate,
-        cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        cstr_funcs: &[impl CstrFn],
-        cstr_tols: &Array1<f64>,
-        infill_data: &InfillObjData<f64>,
-        current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
-        actives: &Array2<usize>,
+        infill_optpb: InfillOptProblem<impl CstrFn>,
         mut multistarter: MS,
+        current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
     ) -> (f64, Array1<f64>)
     where
         MS: MultiStarter,
     {
+        let InfillOptProblem {
+            obj_model,
+            cstr_models,
+            cstr_funcs,
+            cstr_tols,
+            infill_data,
+            actives,
+        } = infill_optpb;
+
         let mut infill_data = infill_data.clone();
 
         let mut best_point = (current_best.0, current_best.1.to_owned());
@@ -79,7 +91,6 @@ where
                 }
 
                 if let Some(grad) = gradient {
-                    // TODO: manage logarithm of other criterion generically like for constrained criterion
                     let g_infill_obj = if self.config.cstr_infill {
                         self.eval_grad_infill_obj_with_cstrs(
                             &xcoop,

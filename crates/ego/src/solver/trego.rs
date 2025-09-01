@@ -3,6 +3,7 @@ use crate::EgorSolver;
 use crate::EgorState;
 use crate::InfillObjData;
 use crate::SurrogateBuilder;
+use crate::solver::solver_infill_optim::InfillOptProblem;
 use crate::types::DomainConstraints;
 use crate::utils::find_best_result_index_from;
 use crate::utils::update_data;
@@ -117,15 +118,19 @@ where
             sub_rng,
         );
 
-        let (infill_obj, x_opt) = self.optimize_infill_criterion(
-            obj_model.as_ref(),
+        let infill_optpb = InfillOptProblem {
+            obj_model: obj_model.as_ref(),
             cstr_models,
-            fcstrs,
-            &cstr_tols,
+            cstr_funcs: fcstrs,
+            cstr_tols: &cstr_tols,
             infill_data,
-            (fmin, xbest.to_owned(), ybest, cbest),
-            &actives,
+            actives: &actives,
+        };
+
+        let (infill_obj, x_opt) = self.optimize_infill_criterion(
+            infill_optpb,
             multistarter,
+            (fmin, xbest.to_owned(), ybest, cbest),
         );
 
         problem.problem = Some(pb);
