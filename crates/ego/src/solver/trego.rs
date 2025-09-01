@@ -98,7 +98,6 @@ where
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let cstr_tols = new_state.cstr_tol.clone();
 
-        let fmin = y_data[[best_index, 0]];
         let ybest = y_data.row(best_index).to_owned();
         let xbest = x_data.row(best_index).to_owned();
         let cbest = c_data.row(best_index).to_owned();
@@ -130,7 +129,7 @@ where
         let (infill_obj, x_opt) = self.optimize_infill_criterion(
             infill_optpb,
             multistarter,
-            (fmin, xbest.to_owned(), ybest, cbest),
+            (xbest.to_owned(), ybest, cbest),
         );
 
         problem.problem = Some(pb);

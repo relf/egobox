@@ -142,33 +142,43 @@ where
     #[allow(clippy::type_complexity)]
     pub(crate) fn is_objective_improved(
         &self,
-        current_best: &(f64, Array1<f64>, Array1<f64>, Array1<f64>),
+        current_best: &(Array1<f64>, Array1<f64>, Array1<f64>),
         xcoop: &Array1<f64>,
         obj_model: &dyn MixtureGpSurrogate,
         cstr_models: &[Box<dyn MixtureGpSurrogate>],
         cstr_tols: &Array1<f64>,
         cstr_funcs: &[&(dyn ObjFn<InfillObjData<f64>> + Sync)],
-    ) -> (bool, (f64, Array1<f64>, Array1<f64>, Array1<f64>)) {
-        let mut y_data = Array2::zeros((2, 1 + self.config.n_cstr));
+    ) -> (bool, (Array1<f64>, Array1<f64>, Array1<f64>)) {
         // Assign metamodelized objective (1) and constraints (n_cstr) values
-        y_data.slice_mut(s![0, ..]).assign(&current_best.2);
+        let mut y_data = Array2::zeros((2, 1 + self.config.n_cstr));
+
+        //  Assign first row with current
+        y_data.slice_mut(s![0, ..]).assign(&current_best.1);
+        //  Assign second row with challenger
         y_data
             .slice_mut(s![1, ..])
             .assign(&self.predict_point(xcoop, obj_model, cstr_models).unwrap());
+
         // Assign function constraints values
         let mut c_data = Array2::zeros((2, cstr_funcs.len()));
-        c_data.slice_mut(s![0, ..]).assign(&current_best.3);
+
+        //  Assign first row with current
+        c_data.slice_mut(s![0, ..]).assign(&current_best.2);
+        //  Assign second row with challenger
         let evals = self.eval_fcstrs(cstr_funcs, &xcoop.to_owned().insert_axis(Axis(0)));
         if !cstr_funcs.is_empty() {
             c_data.slice_mut(s![1, ..]).assign(&evals.row(0));
         }
+
+        // Find the best of two (row0 vs row1)
         let best_index = find_best_result_index_from(0, 1, &y_data, &c_data, cstr_tols);
 
         let best = if best_index == 0 {
+            // current is still the best
             current_best.clone()
         } else {
+            // new best
             (
-                y_data[[best_index, 0]],
                 xcoop.to_owned(),
                 y_data.row(1).to_owned(),
                 c_data.row(1).to_owned(),

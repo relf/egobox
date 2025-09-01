@@ -46,7 +46,7 @@ where
         &self,
         infill_optpb: InfillOptProblem<impl CstrFn>,
         mut multistarter: MS,
-        current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
+        current_best: (Array1<f64>, Array1<f64>, Array1<f64>),
     ) -> (f64, Array1<f64>)
     where
         MS: MultiStarter,
@@ -59,10 +59,9 @@ where
             infill_data,
             actives,
         } = infill_optpb;
-
         let mut infill_data = infill_data.clone();
 
-        let mut best_point = (current_best.0, current_best.1.to_owned());
+        let mut best_point = (current_best.1[0], current_best.0.to_owned());
         let mut current_best_point = current_best.to_owned();
 
         for (i, active) in actives.outer_iter().enumerate() {
@@ -219,7 +218,7 @@ where
                 if res.0.is_nan() || res.0.is_infinite() {
                     success = false;
                 } else {
-                    let mut xopt_coop = current_best_point.1.to_vec();
+                    let mut xopt_coop = current_best_point.0.to_vec();
                     coego::set_active_x(&mut xopt_coop, &active, &res.1.to_vec());
                     infill_data.xbest = xopt_coop.clone();
                     let xopt_coop = Array1::from(xopt_coop);
@@ -246,7 +245,7 @@ where
                     } else {
                         best_point = (res.0, xopt_coop.to_owned());
                         current_best_point =
-                            (res.0, xopt_coop, current_best_point.2, current_best_point.3);
+                            (xopt_coop, current_best_point.1, current_best_point.2);
                     }
                     success = true;
                 }

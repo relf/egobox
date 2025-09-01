@@ -671,11 +671,8 @@ where
                 actives: &actives,
             };
 
-            let (infill_obj, xk) = self.optimize_infill_criterion(
-                infill_optpb,
-                multistarter,
-                (fmin, xbest, ybest, cbest),
-            );
+            let (infill_obj, xk) =
+                self.optimize_infill_criterion(infill_optpb, multistarter, (xbest, ybest, cbest));
             debug!("+++++++  xk = {xk}");
 
             match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
