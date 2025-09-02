@@ -3,8 +3,10 @@ use crate::EgorSolver;
 use crate::EgorState;
 use crate::InfillObjData;
 use crate::SurrogateBuilder;
+use crate::solver::solver_infill_optim::InfillOptProblem;
 use crate::types::DomainConstraints;
 use crate::utils::find_best_result_index_from;
+use crate::utils::is_feasible;
 use crate::utils::update_data;
 
 use argmin::core::CostFunction;
@@ -97,7 +99,6 @@ where
         let (obj_model, cstr_models) = models.split_first().unwrap();
         let cstr_tols = new_state.cstr_tol.clone();
 
-        let fmin = y_data[[best_index, 0]];
         let ybest = y_data.row(best_index).to_owned();
         let xbest = x_data.row(best_index).to_owned();
         let cbest = c_data.row(best_index).to_owned();
@@ -117,15 +118,19 @@ where
             sub_rng,
         );
 
-        let (infill_obj, x_opt) = self.optimize_infill_criterion(
-            obj_model.as_ref(),
+        let infill_optpb = InfillOptProblem {
+            obj_model: obj_model.as_ref(),
             cstr_models,
-            fcstrs,
-            &cstr_tols,
+            cstr_funcs: fcstrs,
+            cstr_tols: &cstr_tols,
             infill_data,
-            (fmin, xbest.to_owned(), ybest, cbest),
-            &actives,
+            actives: &actives,
+        };
+
+        let (infill_obj, x_opt) = self.optimize_infill_criterion(
+            infill_optpb,
             multistarter,
+            (xbest.to_owned(), ybest, cbest),
         );
 
         problem.problem = Some(pb);
@@ -181,6 +186,13 @@ where
             &c_data,
             &new_state.cstr_tol,
         );
+        new_state.feasibility = state.feasibility
+            || is_feasible(
+                &y_data.row(new_best_index),
+                &c_data.row(new_best_index),
+                &new_state.cstr_tol,
+            );
+
         new_state = new_state.data((x_data, y_data, c_data)).rng(rng);
         new_state.prev_best_index = new_state.best_index;
         new_state.best_index = Some(new_best_index);

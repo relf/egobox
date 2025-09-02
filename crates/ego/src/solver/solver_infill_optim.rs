@@ -24,6 +24,15 @@ pub(crate) trait MultiStarter {
     fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64>;
 }
 
+pub(crate) struct InfillOptProblem<'a, CstrFn> {
+    pub obj_model: &'a dyn MixtureGpSurrogate,
+    pub cstr_models: &'a [Box<dyn MixtureGpSurrogate>],
+    pub cstr_funcs: &'a [CstrFn],
+    pub cstr_tols: &'a Array1<f64>,
+    pub infill_data: &'a InfillObjData<f64>,
+    pub actives: &'a Array2<usize>,
+}
+
 impl<SB, C> EgorSolver<SB, C>
 where
     SB: SurrogateBuilder + DeserializeOwned,
@@ -33,24 +42,26 @@ where
     /// The optimized value of the criterion is returned together with the
     /// optimum location
     /// Returns (infill_obj, x_opt)
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn optimize_infill_criterion<MS>(
         &self,
-        obj_model: &dyn MixtureGpSurrogate,
-        cstr_models: &[Box<dyn MixtureGpSurrogate>],
-        cstr_funcs: &[impl CstrFn],
-        cstr_tols: &Array1<f64>,
-        infill_data: &InfillObjData<f64>,
-        current_best: (f64, Array1<f64>, Array1<f64>, Array1<f64>),
-        actives: &Array2<usize>,
+        infill_optpb: InfillOptProblem<impl CstrFn>,
         mut multistarter: MS,
+        current_best: (Array1<f64>, Array1<f64>, Array1<f64>),
     ) -> (f64, Array1<f64>)
     where
         MS: MultiStarter,
     {
+        let InfillOptProblem {
+            obj_model,
+            cstr_models,
+            cstr_funcs,
+            cstr_tols,
+            infill_data,
+            actives,
+        } = infill_optpb;
         let mut infill_data = infill_data.clone();
 
-        let mut best_point = (current_best.0, current_best.1.to_owned());
+        let mut best_point = (current_best.1[0], current_best.0.to_owned());
         let mut current_best_point = current_best.to_owned();
 
         for (i, active) in actives.outer_iter().enumerate() {
@@ -68,6 +79,7 @@ where
                     scale_wb2,
                     xbest: xcoop,
                     fmin,
+                    feasibility,
                     ..
                 } = params;
                 let mut xcoop = xcoop.clone();
@@ -79,8 +91,8 @@ where
                 }
 
                 if let Some(grad) = gradient {
-                    // TODO: manage logarithm of other criterion generically like for constrained criterion
                     let g_infill_obj = if self.config.cstr_infill {
+                        // Use constrained infill criterion
                         self.eval_grad_infill_obj_with_cstrs(
                             &xcoop,
                             obj_model,
@@ -89,6 +101,7 @@ where
                             *fmin,
                             *scale_infill_obj,
                             *scale_wb2,
+                            *feasibility,
                         )
                     } else {
                         self.eval_grad_infill_obj(
@@ -108,6 +121,7 @@ where
                     grad[..].copy_from_slice(&g_infill_obj);
                 }
                 if self.config.cstr_infill {
+                    // Use constrained infill criterion
                     self.eval_infill_obj_with_cstrs(
                         &xcoop,
                         obj_model,
@@ -116,6 +130,7 @@ where
                         *fmin,
                         *scale_infill_obj,
                         *scale_wb2,
+                        *feasibility,
                     )
                 } else {
                     self.eval_infill_obj(&xcoop, obj_model, *fmin, *scale_infill_obj, *scale_wb2)
@@ -123,6 +138,9 @@ where
             };
 
             let cstrs: Vec<_> = if self.config.cstr_infill {
+                // When constrained infill criterion is used
+                // internal infill criterion optimizer does not
+                // handle constraints metamodelized constraints
                 vec![]
             } else {
                 (0..self.config.n_cstr)
@@ -208,7 +226,7 @@ where
                 if res.0.is_nan() || res.0.is_infinite() {
                     success = false;
                 } else {
-                    let mut xopt_coop = current_best_point.1.to_vec();
+                    let mut xopt_coop = current_best_point.0.to_vec();
                     coego::set_active_x(&mut xopt_coop, &active, &res.1.to_vec());
                     infill_data.xbest = xopt_coop.clone();
                     let xopt_coop = Array1::from(xopt_coop);
@@ -235,7 +253,7 @@ where
                     } else {
                         best_point = (res.0, xopt_coop.to_owned());
                         current_best_point =
-                            (res.0, xopt_coop, current_best_point.2, current_best_point.3);
+                            (xopt_coop, current_best_point.1, current_best_point.2);
                     }
                     success = true;
                 }

@@ -210,11 +210,18 @@ pub type Cstr = fn(&[f64], Option<&mut [f64]>, &mut InfillObjData<f64>) -> f64;
 /// See [`crate::criteria`]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InfillObjData<F: Float> {
+    /// Current objective minimum found
     pub fmin: F,
+    /// Current location of objective minimum
     pub xbest: Vec<F>,
+    /// Scaling of infill obj (aka value which once scaled is equal to one)
     pub scale_infill_obj: F,
+    /// Scaling of constraints (aka value which once scaled is equal to one)
     pub scale_cstr: Option<Array1<F>>,
+    /// Scaling of WB2 criterion (aka value which once scaled is equal to one)
     pub scale_wb2: F,
+    /// Whether a feasible point is found so far (all constraints within tolerances)
+    pub feasibility: bool,
 }
 
 impl<F: Float> Default for InfillObjData<F> {
@@ -225,6 +232,7 @@ impl<F: Float> Default for InfillObjData<F> {
             scale_infill_obj: F::one(),
             scale_cstr: None,
             scale_wb2: F::one(),
+            feasibility: false,
         }
     }
 }

@@ -28,6 +28,8 @@ pub struct EgorState<F: Float> {
     pub best_param: Option<Array1<F>>,
     /// Previous best parameter vector
     pub prev_best_param: Option<Array1<F>>,
+    /// At least one point is feasible
+    pub feasibility: bool,
 
     /// Current cost function value
     /// The first component is the actual cost value
@@ -356,6 +358,7 @@ where
             prev_param: None,
             best_param: None,
             prev_best_param: None,
+            feasibility: false,
 
             cost: None,
             prev_cost: None,

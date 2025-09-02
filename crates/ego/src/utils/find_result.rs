@@ -6,6 +6,7 @@ use linfa::Float;
 use ndarray::{array, s};
 use std::iter::zip;
 
+/// Compute sum of constraints above tolerance where y is [obj, cstr1, cstr2, ..., cstrn]
 fn cstr_sum<F: Float>(y: &ArrayBase<impl Data<Elem = F>, Ix1>, cstr_tol: &Array1<F>) -> F {
     y.slice(s![1..])
         .iter()
@@ -14,6 +15,8 @@ fn cstr_sum<F: Float>(y: &ArrayBase<impl Data<Elem = F>, Ix1>, cstr_tol: &Array1
         .fold(F::zero(), |acc, (i, &c)| acc + (c - cstr_tol[i]).abs())
 }
 
+/// This method compare y1 and y2 coming as the second component of a couple (index, y)
+/// where y consits in [obj, cstr1, cstr2, ..., cstrn]
 pub fn cstr_min<F: Float>(
     (_, y1): (usize, &ArrayBase<impl Data<Elem = F>, Ix1>),
     (_, y2): (usize, &ArrayBase<impl Data<Elem = F>, Ix1>),
@@ -79,7 +82,7 @@ pub fn find_best_result_index<F: Float>(
     if y_data.ncols() > 1 || c_data.ncols() > 0 {
         // Merge metamodelised constraints and function constraints
         let alldata = concatenate![Axis(1), y_data.to_owned(), c_data.to_owned()];
-        let alltols = concatenate![Axis(0), cstr_tol.to_owned(), Array1::zeros(c_data.ncols())];
+        let alltols = cstr_tol.clone();
 
         // Compute sum of violated constraints
         let cstrs = &alldata.slice(s![.., 1..]);
@@ -116,7 +119,7 @@ pub fn find_best_result_index<F: Float>(
             // Take min obj without looking at constraints
             let mut index = 0;
 
-            // sort regardoing minimal objective
+            // sort regarding minimal objective
             let perm = alldata.sort_axis_by(Axis(0), |i, j| alldata[[i, 0]] < alldata[[j, 0]]);
             let y_sort = alldata.to_owned().permute_axis(Axis(0), &perm);
 
@@ -135,6 +138,22 @@ pub fn find_best_result_index<F: Float>(
     } else {
         // unconstrained optimization
         y_data.column(0).argmin().unwrap()
+    }
+}
+
+/// Check if the sum of constraints above tolerance is zero
+/// meaning the given point do not violate any constraint
+pub fn is_feasible<F: Float>(
+    y: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    c: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    cstr_tol: &Array1<F>,
+) -> bool {
+    let y_c = concatenate![Axis(0), y.to_owned(), c.to_owned()];
+    if y_c.len() > 1 {
+        let sum_c = cstr_sum(&y_c, cstr_tol);
+        sum_c == F::zero()
+    } else {
+        true
     }
 }
 
@@ -299,7 +318,7 @@ mod tests {
             [-0.15955913666433047, 0.148321297],
             [0.0001603547177302953, 0.000153276785]
         ];
-        let cstr_tol = Array1::from_vec(vec![]);
+        let cstr_tol = Array1::from_vec(vec![1e-4, 1e-4]);
         let index = find_best_result_index(&y_data, &c_data, &cstr_tol);
         assert_eq!(10, index);
     }

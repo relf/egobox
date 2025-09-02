@@ -351,8 +351,15 @@ where
         fmin: f64,
         scale: f64,
         scale_ic: f64,
+        feasibility: bool,
     ) -> f64 {
-        let infill_obj = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
+        let infill_obj = if feasibility {
+            self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic)
+        } else {
+            // when no feasible point is found, make the infill criterion value neutral factor
+            // 1 when CEI, 0 when logCEI
+            (self.config.infill_criterion.name() != "LogEI") as i32 as f64
+        };
         if self.config.infill_criterion.name() == "LogEI" {
             infill_obj - logpofs(x, cstr_models, &cstr_tols.to_vec())
         } else {
@@ -370,21 +377,37 @@ where
         fmin: f64,
         scale: f64,
         scale_ic: f64,
+        feasibility: bool,
     ) -> Vec<f64> {
         if cstr_models.is_empty() {
             self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic)
         } else {
-            let infill_grad =
-                Array1::from_vec(self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic));
-
+            let infill_grad = if feasibility {
+                Array1::from_vec(self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic))
+            } else {
+                // when no feasible point is found, make the infill criterion gradient neutral factor
+                if self.config.infill_criterion.name() == "LogEI" {
+                    Array1::zeros(x.len())
+                } else {
+                    Array1::from_vec(self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic))
+                }
+            };
             if self.config.infill_criterion.name() == "LogEI" {
                 let logcei_grad = infill_grad - logpofs_grad(x, cstr_models, &cstr_tols.to_vec());
                 logcei_grad.to_vec()
             } else {
-                let infill = self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic);
-                let infill_grad = Array1::from_vec(
-                    self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic),
-                );
+                let (infill, infill_grad) = if feasibility {
+                    (
+                        self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic),
+                        Array1::from_vec(
+                            self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic),
+                        ),
+                    )
+                } else {
+                    // when no feasible point is found, make the grad infill criterion value neutral factor
+                    // 1 when CEI, 0 when logCEI
+                    (0., Array1::ones(x.len()))
+                };
 
                 let pofs = pofs(x, cstr_models, &cstr_tols.to_vec());
                 let pofs_grad = pofs_grad(x, cstr_models, &cstr_tols.to_vec());
