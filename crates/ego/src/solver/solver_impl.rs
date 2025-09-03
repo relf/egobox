@@ -319,7 +319,7 @@ where
             .cstr_tol
             .clone()
             .unwrap_or(Array1::from_elem(self.config.n_cstr, DEFAULT_CSTR_TOL));
-        let (scale_infill_obj, scale_cstr, _scale_fcstr, scale_wb2) = self.compute_scaling(
+        let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) = self.compute_scaling(
             &sampling,
             obj_model.as_ref(),
             cstr_models,
@@ -328,13 +328,16 @@ where
             fmin,
             None,
         );
+
+        let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
+
         problem.problem = Some(pb);
 
         InfillObjData {
             fmin,
             xbest,
             scale_infill_obj,
-            scale_cstr: Some(scale_cstr.to_owned()),
+            scale_cstr: Some(all_scale_cstr.to_owned()),
             scale_wb2,
             feasibility: state.feasibility,
         }
