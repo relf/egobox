@@ -326,6 +326,7 @@ where
             &cstr_tol,
             fcstrs,
             fmin,
+            None,
         );
         problem.problem = Some(pb);
 
@@ -635,6 +636,7 @@ where
                 cstr_tol,
                 cstr_funcs,
                 fmin,
+                None,
             );
 
             let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];

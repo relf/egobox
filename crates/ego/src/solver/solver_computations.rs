@@ -103,6 +103,7 @@ where
     SB: SurrogateBuilder + DeserializeOwned,
     C: CstrFn,
 {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn compute_scaling(
         &self,
         sampling: &Lhs<f64, Xoshiro256Plus>,
@@ -111,16 +112,19 @@ where
         cstr_tols: &Array1<f64>,
         fcstrs: &[impl CstrFn],
         fmin: f64,
+        sigma_weight: Option<f64>,
     ) -> (f64, Array1<f64>, Array1<f64>, f64) {
         let npts = (100 * self.xlimits.nrows()).min(1000);
         debug!("Use {npts} points to evaluate scalings");
         let scaling_points = sampling.sample(npts);
 
         let scale_ic = if self.config.infill_criterion.name() == "WB2S" {
-            let scale_ic =
-                self.config
-                    .infill_criterion
-                    .scaling(&scaling_points.view(), obj_model, fmin);
+            let scale_ic = self.config.infill_criterion.scaling(
+                &scaling_points.view(),
+                obj_model,
+                fmin,
+                sigma_weight,
+            );
             info!("WB2S scaling factor = {scale_ic}");
             scale_ic
         } else {
@@ -318,10 +322,11 @@ where
         scale_ic: f64,
     ) -> f64 {
         let x_f = x.to_vec();
-        let obj = -(self
-            .config
-            .infill_criterion
-            .value(&x_f, obj_model, fmin, Some(scale_ic)));
+        let obj =
+            -(self
+                .config
+                .infill_criterion
+                .value(&x_f, obj_model, fmin, None, Some(scale_ic)));
         obj / scale
     }
 
@@ -334,10 +339,11 @@ where
         scale_ic: f64,
     ) -> Vec<f64> {
         let x_f = x.to_vec();
-        let grad = -(self
-            .config
-            .infill_criterion
-            .grad(&x_f, obj_model, fmin, Some(scale_ic)));
+        let grad =
+            -(self
+                .config
+                .infill_criterion
+                .grad(&x_f, obj_model, fmin, None, Some(scale_ic)));
         (grad / scale).to_vec()
     }
 
