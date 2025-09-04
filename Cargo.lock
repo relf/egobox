@@ -644,6 +644,7 @@ dependencies = [
  "finitediff",
  "libm",
  "linfa",
+ "linfa-clustering",
  "linfa-linalg",
  "linfa-pls",
  "log",

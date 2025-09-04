@@ -74,6 +74,8 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         let c_data = Array2::zeros((x_data.nrows(), 0));
         // TODO: Coego not implemented
         let activity = None;
+        // TODO: Sigma weoghting portfolio not implemened
+        let sigma_weight = 1.;
 
         let best_index = find_best_result_index(y_data, &c_data, &cstr_tol);
         let feasibility = is_feasible(&y_data.row(best_index), &c_data.row(best_index), &cstr_tol);
@@ -92,6 +94,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             best_index,
             &fcstrs,
             feasibility,
+            sigma_weight,
             &mut rng,
         );
         x_dat
@@ -326,7 +329,7 @@ where
             &cstr_tol,
             fcstrs,
             fmin,
-            None,
+            1., // FIXME: TREGO does not use sigma weighting portfolio
         );
 
         let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
@@ -340,6 +343,7 @@ where
             scale_cstr: Some(all_scale_cstr.to_owned()),
             scale_wb2,
             feasibility: state.feasibility,
+            sigma_weight: 1., // FIXME: TREGO does not use sigma weighting portfolio
         }
     }
 
@@ -421,6 +425,8 @@ where
             let init = new_state.get_iter() == 0;
             let pb = problem.take_problem().unwrap();
             let fcstrs = pb.fn_constraints();
+
+            let sigma_weight = 1.;
             let (x_dat, y_dat, c_dat, infill_value, infill_data) = self.select_next_points(
                 init,
                 state.get_iter(),
@@ -435,6 +441,7 @@ where
                 state.best_index.unwrap(),
                 fcstrs,
                 state.feasibility,
+                sigma_weight,
                 &mut rng,
             );
             problem.problem = Some(pb);
@@ -561,6 +568,7 @@ where
         best_index: usize,
         cstr_funcs: &[impl CstrFn],
         feasibility: bool,
+        sigma_weight: f64,
         rng: &mut Xoshiro256Plus,
     ) -> (
         Array2<f64>,
@@ -639,7 +647,7 @@ where
                 cstr_tol,
                 cstr_funcs,
                 fmin,
-                None,
+                sigma_weight,
             );
 
             let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
@@ -651,6 +659,7 @@ where
                 scale_cstr: Some(all_scale_cstr.to_owned()),
                 scale_wb2,
                 feasibility,
+                sigma_weight,
             };
 
             let cstr_funcs = cstr_funcs

@@ -222,6 +222,8 @@ pub struct InfillObjData<F: Float> {
     pub scale_wb2: F,
     /// Whether a feasible point is found so far (all constraints within tolerances)
     pub feasibility: bool,
+    /// Sigma weighting portfolio
+    pub sigma_weight: F,
 }
 
 impl<F: Float> Default for InfillObjData<F> {
@@ -233,6 +235,7 @@ impl<F: Float> Default for InfillObjData<F> {
             scale_cstr: None,
             scale_wb2: F::one(),
             feasibility: false,
+            sigma_weight: F::one(),
         }
     }
 }

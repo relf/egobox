@@ -4,6 +4,7 @@ mod find_result;
 mod hot_start;
 mod logei_helper;
 mod misc;
+mod portfolio;
 mod sort_axis;
 mod start_points;
 

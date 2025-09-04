@@ -112,7 +112,7 @@ where
         cstr_tols: &Array1<f64>,
         fcstrs: &[impl CstrFn],
         fmin: f64,
-        sigma_weight: Option<f64>,
+        sigma_weight: f64,
     ) -> (f64, Array1<f64>, Array1<f64>, f64) {
         let npts = (100 * self.xlimits.nrows()).min(1000);
         debug!("Use {npts} points to evaluate scalings");
@@ -123,7 +123,7 @@ where
                 &scaling_points.view(),
                 obj_model,
                 fmin,
-                sigma_weight,
+                Some(sigma_weight),
             );
             info!("WB2S scaling factor = {scale_ic}");
             scale_ic
@@ -138,6 +138,7 @@ where
             cstr_tols,
             fmin,
             scale_ic,
+            sigma_weight,
         );
         info!(
             "Infill criterion {} scaling is updated to {}",
@@ -263,6 +264,7 @@ where
 
     /// The infill criterion scaling is computed using x (n points of nx dim)
     /// given the objective function surrogate
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn compute_infill_obj_scale(
         &self,
         x: &ArrayView2<f64>,
@@ -271,11 +273,13 @@ where
         cstr_tols: &Array1<f64>,
         fmin: f64,
         scale_ic: f64,
+        sigma_weight: f64,
     ) -> f64 {
         let mut crit_vals = Array1::zeros(x.nrows());
         let (mut nan_count, mut inf_count) = (0, 0);
         Zip::from(&mut crit_vals).and(x.rows()).for_each(|c, x| {
-            let val = self.eval_infill_obj(&x.to_vec(), obj_model, fmin, 1.0, scale_ic);
+            let val =
+                self.eval_infill_obj(&x.to_vec(), obj_model, fmin, 1.0, scale_ic, sigma_weight);
             *c = if val.is_nan() {
                 nan_count += 1;
                 1.0
@@ -320,13 +324,16 @@ where
         fmin: f64,
         scale: f64,
         scale_ic: f64,
+        sigma_weight: f64,
     ) -> f64 {
         let x_f = x.to_vec();
-        let obj =
-            -(self
-                .config
-                .infill_criterion
-                .value(&x_f, obj_model, fmin, None, Some(scale_ic)));
+        let obj = -(self.config.infill_criterion.value(
+            &x_f,
+            obj_model,
+            fmin,
+            Some(sigma_weight),
+            Some(scale_ic),
+        ));
         obj / scale
     }
 
@@ -358,9 +365,10 @@ where
         scale: f64,
         scale_ic: f64,
         feasibility: bool,
+        sigma_weight: f64,
     ) -> f64 {
         let infill_obj = if feasibility {
-            self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic)
+            self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic, sigma_weight)
         } else {
             // when no feasible point is found, make the infill criterion value neutral factor
             // -1 when CEI, 0 when logCEI
@@ -384,6 +392,7 @@ where
         scale: f64,
         scale_ic: f64,
         feasibility: bool,
+        sigma_weight: f64,
     ) -> Vec<f64> {
         if cstr_models.is_empty() {
             self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic)
@@ -404,7 +413,7 @@ where
             } else {
                 let (infill, infill_grad) = if feasibility {
                     (
-                        self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic),
+                        self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic, sigma_weight),
                         Array1::from_vec(
                             self.eval_grad_infill_obj(x, obj_model, fmin, scale, scale_ic),
                         ),
