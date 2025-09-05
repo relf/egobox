@@ -4,7 +4,10 @@ use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::solver::solver_infill_optim::InfillOptProblem;
-use crate::utils::{EGOBOX_LOG, find_best_result_index_from, is_feasible, update_data};
+use crate::utils::{
+    EGOBOX_LOG, EGOBOX_USE_PORTFOLIO, find_best_result_index_from, is_feasible,
+    select_from_portfolio, update_data,
+};
 use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
 use crate::{EgorConfig, find_best_result_index};
 use crate::{EgorState, types::*};
@@ -74,8 +77,6 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
         let c_data = Array2::zeros((x_data.nrows(), 0));
         // TODO: Coego not implemented
         let activity = None;
-        // TODO: Sigma weoghting portfolio not implemened
-        let sigma_weight = 1.;
 
         let best_index = find_best_result_index(y_data, &c_data, &cstr_tol);
         let feasibility = is_feasible(&y_data.row(best_index), &c_data.row(best_index), &cstr_tol);
@@ -94,7 +95,6 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
             best_index,
             &fcstrs,
             feasibility,
-            sigma_weight,
             &mut rng,
         );
         x_dat
@@ -420,13 +420,12 @@ where
             .take_data()
             .ok_or_else(argmin_error_closure!(PotentialBug, "EgorSolver: No data!"))?;
 
-        let (rejected_count, _) = loop {
+        let (try_add_count, rejected_count, _) = loop {
             let recluster = self.have_to_recluster(new_state.added, new_state.prev_added);
             let init = new_state.get_iter() == 0;
             let pb = problem.take_problem().unwrap();
             let fcstrs = pb.fn_constraints();
 
-            let sigma_weight = 1.;
             let (x_dat, y_dat, c_dat, infill_value, infill_data) = self.select_next_points(
                 init,
                 state.get_iter(),
@@ -441,9 +440,9 @@ where
                 state.best_index.unwrap(),
                 fcstrs,
                 state.feasibility,
-                sigma_weight,
                 &mut rng,
             );
+
             problem.problem = Some(pb);
 
             debug!("Try adding {x_dat}");
@@ -505,10 +504,10 @@ where
                 }
             } else {
                 // ok point added we can go on, just output number of rejected point
-                break (rejected_count, infill_data);
+                break (x_dat.nrows(), rejected_count, infill_data);
             }
         };
-        let add_count = (self.config.q_points - rejected_count) as i32;
+        let add_count = (try_add_count - rejected_count) as i32;
         let x_to_eval = x_data.slice(s![-add_count.., ..]).to_owned();
         debug!(
             "Eval {} point{} {}",
@@ -568,7 +567,6 @@ where
         best_index: usize,
         cstr_funcs: &[impl CstrFn],
         feasibility: bool,
-        sigma_weight: f64,
         rng: &mut Xoshiro256Plus,
     ) -> (
         Array2<f64>,
@@ -577,163 +575,202 @@ where
         f64,
         InfillObjData<f64>,
     ) {
-        debug!("Make surrogate with {x_data}");
-        let mut x_dat = Array2::zeros((0, x_data.ncols()));
-        let mut y_dat = Array2::zeros((0, y_data.ncols()));
-        let mut c_dat = Array2::zeros((0, c_data.ncols()));
-        let mut infill_val = f64::INFINITY;
-        let mut infill_data = InfillObjData {
-            feasibility,
-            ..Default::default()
-        };
+        let mut portfolio = vec![];
 
-        for i in 0..self.config.q_points {
-            let (xt, yt) = if i == 0 {
-                (x_data.to_owned(), y_data.to_owned())
+        let sigma_weights =
+            if std::env::var(EGOBOX_USE_PORTFOLIO).is_ok() && self.config.q_points == 1 {
+                // logspace(0.1, 100., 13) with 1. moved in front
+                vec![
+                    1.,
+                    0.1,
+                    0.1778279410038923,
+                    0.31622776601683794,
+                    0.5623413251903491,
+                    1.7782794100389228,
+                    3.1622776601683795,
+                    5.623413251903491,
+                    10.,
+                    17.78279410038923,
+                    31.622776601683793,
+                    56.23413251903491,
+                    100.,
+                ]
             } else {
-                (
-                    concatenate![Axis(0), x_data.to_owned(), x_dat.to_owned()],
-                    concatenate![Axis(0), y_data.to_owned(), y_dat.to_owned()],
-                )
+                vec![1.]
             };
 
-            log::debug!("activity: {activity:?}");
-            let actives = activity.unwrap_or(&self.full_activity()).to_owned();
-
-            info!("Train surrogates with {} points...", xt.nrows());
-            let models_and_inits = (0..=self.config.n_cstr).into_par_iter().map(|k| {
-                let name = if k == 0 {
-                    "Objective".to_string()
-                } else {
-                    format!("Constraint[{k}]")
-                };
-                let make_clustering = (init && i == 0) || recluster;
-                let optimize_theta =
-                    (iter as usize * self.config.q_points + i) % (self.config.q_optmod) == 0;
-                self.make_clustered_surrogate(
-                    &name,
-                    &xt,
-                    &yt.slice(s![.., k]).to_owned(),
-                    make_clustering,
-                    optimize_theta,
-                    clusterings[k].as_ref(),
-                    theta_inits[k].as_ref(),
-                    &actives,
-                )
-            });
-            let (models, inits): (Vec<_>, Vec<_>) = models_and_inits.unzip();
-
-            (0..=self.config.n_cstr).for_each(|k| {
-                clusterings[k] = Some(models[k].to_clustering());
-                theta_inits[k] = Some(inits[k].to_owned());
-            });
-
-            let (obj_model, cstr_models) = models.split_first().unwrap();
-            debug!("... surrogates trained");
-
-            let fmin = y_data[[best_index, 0]];
-            let ybest = y_data.row(best_index).to_owned();
-            let xbest = x_data.row(best_index).to_owned();
-            let cbest = c_data.row(best_index).to_owned();
-
-            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
-            let sampling = Lhs::new(&self.xlimits)
-                .with_rng(sub_rng)
-                .kind(LhsKind::Maximin);
-            let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) = self.compute_scaling(
-                &sampling,
-                obj_model.as_ref(),
-                cstr_models,
-                cstr_tol,
-                cstr_funcs,
-                fmin,
-                sigma_weight,
-            );
-
-            let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
-
-            infill_data = InfillObjData {
-                fmin,
-                xbest: xbest.to_vec(),
-                scale_infill_obj,
-                scale_cstr: Some(all_scale_cstr.to_owned()),
-                scale_wb2,
+        for (j, sigma_weight) in sigma_weights.iter().enumerate() {
+            debug!("Make surrogate with {x_data}");
+            let mut x_dat = Array2::zeros((0, x_data.ncols()));
+            let mut y_dat = Array2::zeros((0, y_data.ncols()));
+            let mut c_dat = Array2::zeros((0, c_data.ncols()));
+            let mut infill_val = f64::INFINITY;
+            let mut infill_data = InfillObjData {
                 feasibility,
-                sigma_weight,
+                ..Default::default()
             };
+            for i in 0..self.config.q_points {
+                let (xt, yt) = if i == 0 {
+                    (x_data.to_owned(), y_data.to_owned())
+                } else {
+                    (
+                        concatenate![Axis(0), x_data.to_owned(), x_dat.to_owned()],
+                        concatenate![Axis(0), y_data.to_owned(), y_dat.to_owned()],
+                    )
+                };
 
-            let cstr_funcs = cstr_funcs
-                .iter()
-                .enumerate()
-                .map(|(i, cstr)| {
-                    let scale_fc = scale_fcstr[i];
-                    move |x: &[f64],
-                          gradient: Option<&mut [f64]>,
-                          params: &mut InfillObjData<f64>|
-                          -> f64 {
-                        let x = if self.config.discrete() {
-                            let xary = Array2::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
-                            // We have to cast x to folded space as EgorSolver
-                            // works internally in the continuous space while
-                            // the constraint function expects discrete variable in folded space
-                            to_discrete_space(&self.config.xtypes, &xary)
-                                .row(0)
-                                .into_owned();
-                            &xary.into_iter().collect::<Vec<_>>()
-                        } else {
-                            x
-                        };
-                        cstr(x, gradient, params) / scale_fc
+                log::debug!("activity: {activity:?}");
+                let actives = activity.unwrap_or(&self.full_activity()).to_owned();
+
+                info!("Train surrogates with {} points...", xt.nrows());
+                let models_and_inits = (0..=self.config.n_cstr).into_par_iter().map(|k| {
+                    let name = if k == 0 {
+                        "Objective".to_string()
+                    } else {
+                        format!("Constraint[{k}]")
+                    };
+                    let make_clustering = (init && i == 0) || recluster;
+                    let optimize_theta =
+                        ((iter as usize * self.config.q_points + i) % (self.config.q_optmod) == 0)
+                            && j == 0;
+                    self.make_clustered_surrogate(
+                        &name,
+                        &xt,
+                        &yt.slice(s![.., k]).to_owned(),
+                        make_clustering,
+                        optimize_theta,
+                        clusterings[k].as_ref(),
+                        theta_inits[k].as_ref(),
+                        &actives,
+                    )
+                });
+                let (models, inits): (Vec<_>, Vec<_>) = models_and_inits.unzip();
+
+                (0..=self.config.n_cstr).for_each(|k| {
+                    clusterings[k] = Some(models[k].to_clustering());
+                    theta_inits[k] = Some(inits[k].to_owned());
+                });
+
+                let (obj_model, cstr_models) = models.split_first().unwrap();
+                debug!("... surrogates trained");
+
+                let fmin = y_data[[best_index, 0]];
+                let ybest = y_data.row(best_index).to_owned();
+                let xbest = x_data.row(best_index).to_owned();
+                let cbest = c_data.row(best_index).to_owned();
+
+                let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
+                let sampling = Lhs::new(&self.xlimits)
+                    .with_rng(sub_rng)
+                    .kind(LhsKind::Maximin);
+                let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) = self.compute_scaling(
+                    &sampling,
+                    obj_model.as_ref(),
+                    cstr_models,
+                    cstr_tol,
+                    cstr_funcs,
+                    fmin,
+                    *sigma_weight,
+                );
+
+                let all_scale_cstr = concatenate![Axis(0), scale_cstr, scale_fcstr];
+
+                infill_data = InfillObjData {
+                    fmin,
+                    xbest: xbest.to_vec(),
+                    scale_infill_obj,
+                    scale_cstr: Some(all_scale_cstr.to_owned()),
+                    scale_wb2,
+                    feasibility,
+                    sigma_weight: *sigma_weight,
+                };
+
+                let cstr_funcs = cstr_funcs
+                    .iter()
+                    .enumerate()
+                    .map(|(i, cstr)| {
+                        let scale_fc = scale_fcstr[i];
+                        move |x: &[f64],
+                              gradient: Option<&mut [f64]>,
+                              params: &mut InfillObjData<f64>|
+                              -> f64 {
+                            let x = if self.config.discrete() {
+                                let xary =
+                                    Array2::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
+                                // We have to cast x to folded space as EgorSolver
+                                // works internally in the continuous space while
+                                // the constraint function expects discrete variable in folded space
+                                to_discrete_space(&self.config.xtypes, &xary)
+                                    .row(0)
+                                    .into_owned();
+                                &xary.into_iter().collect::<Vec<_>>()
+                            } else {
+                                x
+                            };
+                            cstr(x, gradient, params) / scale_fc
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
+                // let multistarter = GlobalMultiStarter::new(&self.xlimits, sub_rng);
+                let xsamples = x_data.to_owned();
+                let multistarter = MiddlePickerMultiStarter::new(&self.xlimits, &xsamples, sub_rng);
+
+                let infill_optpb = InfillOptProblem {
+                    obj_model: obj_model.as_ref(),
+                    cstr_models,
+                    cstr_funcs: &cstr_funcs,
+                    cstr_tols: cstr_tol,
+                    infill_data: &infill_data,
+                    actives: &actives,
+                };
+
+                let (infill_obj, xk) = self.optimize_infill_criterion(
+                    infill_optpb,
+                    multistarter,
+                    (xbest, ybest, cbest),
+                );
+                debug!("+++++++  xk = {xk}");
+
+                match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
+                    Ok(yk) => {
+                        let yk = Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap();
+                        y_dat = concatenate![Axis(0), y_dat, yk];
+
+                        let ck = cstr_funcs
+                            .iter()
+                            .map(|cstr| cstr(&xk.to_vec(), None, &mut infill_data))
+                            .collect::<Vec<_>>();
+                        c_dat = concatenate![
+                            Axis(0),
+                            c_dat,
+                            Array2::from_shape_vec((1, cstr_funcs.len()), ck).unwrap()
+                        ];
+
+                        x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
+
+                        // infill objective was minimized while infill criterion itself
+                        // is expected to be maximized hence the negative sign here
+                        infill_val = -infill_obj;
                     }
-                })
-                .collect::<Vec<_>>();
-
-            let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
-            // let multistarter = GlobalMultiStarter::new(&self.xlimits, sub_rng);
-            let xsamples = x_data.to_owned();
-            let multistarter = MiddlePickerMultiStarter::new(&self.xlimits, &xsamples, sub_rng);
-
-            let infill_optpb = InfillOptProblem {
-                obj_model: obj_model.as_ref(),
-                cstr_models,
-                cstr_funcs: &cstr_funcs,
-                cstr_tols: cstr_tol,
-                infill_data: &infill_data,
-                actives: &actives,
-            };
-
-            let (infill_obj, xk) =
-                self.optimize_infill_criterion(infill_optpb, multistarter, (xbest, ybest, cbest));
-            debug!("+++++++  xk = {xk}");
-
-            match self.compute_virtual_point(&xk, y_data, obj_model.as_ref(), cstr_models) {
-                Ok(yk) => {
-                    let yk = Array2::from_shape_vec((1, 1 + self.config.n_cstr), yk).unwrap();
-                    y_dat = concatenate![Axis(0), y_dat, yk];
-
-                    let ck = cstr_funcs
-                        .iter()
-                        .map(|cstr| cstr(&xk.to_vec(), None, &mut infill_data))
-                        .collect::<Vec<_>>();
-                    c_dat = concatenate![
-                        Axis(0),
-                        c_dat,
-                        Array2::from_shape_vec((1, cstr_funcs.len()), ck).unwrap()
-                    ];
-
-                    x_dat = concatenate![Axis(0), x_dat, xk.insert_axis(Axis(0))];
-
-                    // infill objective was minimized while infill criterion itself
-                    // is expected to be maximized hence the negative sign here
-                    infill_val = -infill_obj;
-                }
-                Err(err) => {
-                    // Error while predict at best point: ignore
-                    info!("Error while getting virtual point: {err}");
-                    break;
+                    Err(err) => {
+                        // Error while predict at best point: ignore
+                        info!("Error while getting virtual point: {err}");
+                        break;
+                    }
                 }
             }
+            portfolio.push((x_dat.to_owned(), y_dat, c_dat, infill_val, infill_data));
         }
-        (x_dat, y_dat, c_dat, infill_val, infill_data)
+        info!("Portfolio of {} elements", portfolio.len());
+        info!(
+            "Portfolio : {:?}",
+            portfolio.iter().map(|v| v.0[[0, 0]]).collect::<Vec<_>>()
+        );
+        let (x_dat, y_dat, c_dat, infill_value, infill_data) = select_from_portfolio(portfolio);
+        log::info!("x_dat={} ", x_dat);
+        log::info!("y_dat={} ", y_dat);
+        (x_dat, y_dat, c_dat, infill_value, infill_data)
     }
 }

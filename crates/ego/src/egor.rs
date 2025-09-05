@@ -444,6 +444,26 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_xsinx_ei_egor_builder() {
+        //let initial_doe = array![[0.], [7.], [25.]];
+        let initial_doe = array![[2.5], [4.], [23.]];
+        let res = EgorBuilder::optimize(xsinx)
+            .configure(|cfg| {
+                cfg.infill_strategy(InfillStrategy::EI)
+                    .infill_optimizer(InfillOptimizer::Slsqp)
+                    .max_iters(20)
+                    .doe(&initial_doe)
+                    .seed(42)
+            })
+            .min_within(&array![[0.0, 25.0]])
+            .run()
+            .expect("Egor should minimize xsinx");
+        let expected = array![-15.125];
+        assert_abs_diff_eq!(expected, res.y_opt, epsilon = 2e-3);
+    }
+
+    #[test]
+    #[serial]
     fn test_xsinx_logei_egor_builder() {
         let initial_doe = array![[0.], [7.], [25.]];
         let res = EgorBuilder::optimize(xsinx)
