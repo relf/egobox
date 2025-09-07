@@ -14,7 +14,7 @@
 `egobox-ego` currently implements EGO using `egobox-moe` with the following features:
 
 * Mixture of gausian processes
-* Infill criteria: EI, WB2, WB2S, LogEI, CEI, LogCEI 
+* Infill criteria: EI, WB2, WB2S, LogEI, CEI, LogCEI
 * Handling of negative constraints: actual constraint functions or surrogates  
 * Mixed integer optimization available through continuous relaxation
 * Trust region EGO algorithm

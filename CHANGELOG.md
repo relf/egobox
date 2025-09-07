@@ -4,7 +4,8 @@
 
 ## Version 0.32.0 - 22/08/2025
 
-This release removes experimental or deprecated features so **breaking changes** below
+This release removes experimental or deprecated features so **breaking changes** below:
+
 * Remove experimental GBNM internal optimizer by @relf in <https://github.com/relf/egobox/pull/285>
 * GP/SGP 'predict()' and 'predict_var()' return a one-dimensional array by @relf in <https://github.com/relf/egobox/pull/286>
 * Remove deprecated features by @relf in <https://github.com/relf/egobox/pull/287>
