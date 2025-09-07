@@ -8,6 +8,7 @@ mod sampling;
 mod sparse_gp_mix;
 pub(crate) mod types;
 
+use egobox_ego::EGOBOX_LOG;
 use egor::*;
 use gp_mix::*;
 use sampling::*;
@@ -23,7 +24,7 @@ use pyo3_stub_gen::define_stub_info_gatherer;
 fn egobox(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
-    let env = Env::new().filter_or("EGOBOX_LOG", "info");
+    let env = Env::new().filter_or(EGOBOX_LOG, "info");
     let mut builder = Builder::from_env(env);
     let builder = builder.target(env_logger::Target::Stdout);
     builder.try_init().ok();
