@@ -1,5 +1,52 @@
 # Changes
 
+## Version 0.33.0 - unreleased
+
+## Version 0.32.0 - 22/08/2025
+
+This release removes experimental or deprecated features so **breaking changes** below
+* Remove experimental GBNM internal optimizer by @relf in <https://github.com/relf/egobox/pull/285>
+* GP/SGP 'predict()' and 'predict_var()' return a one-dimensional array by @relf in <https://github.com/relf/egobox/pull/286>
+* Remove deprecated features by @relf in <https://github.com/relf/egobox/pull/287>
+
+## Version 0.31.0 - 11/07/2025
+
+* Improve `LogEI` criterion computation by @relf in <https://github.com/relf/egobox/pull/281> and <https://github.com/relf/egobox/pull/283>
+* Improve hyperparameters theta bounds handling by @relf in <https://github.com/relf/egobox/pull/272>
+* Implement `LogCEI` criterion by @relf in <https://github.com/relf/egobox/pull/284>
+
+## Version 0.30.0 - 27/06/2025
+
+* Refactor GP configuration from Egor optimizer by @relf in <https://github.com/relf/egobox/pull/273>
+* Improve Egor Python API: `to_specs` is now useless and deprecated by @relf in <https://github.com/relf/egobox/pull/282>
+* Add new optim multistart strategy based on picking points in-between training points by @relf in <https://github.com/relf/egobox/pull/279>
+* Add pyi file generation using pyo3-stub-gen by @relf in <https://github.com/relf/egobox/pull/276>
+* Fix MoE (hard) gradients, py source dir and theta init by @relf in <https://github.com/relf/egobox/pull/278>
+* Add link to an [example](<https://github.com/relf/egobox/tree/master/doc#solve-an-analytical-mdo-problem-with-a-hidden-optimum>) of EGObox optimizer usage (MDO course 2025) by @jomorlier in <https://github.com/relf/egobox/pull/280>
+
+## Version 0.29.0 - 14/05/2025
+
+* Add experimental Global Bounded Nelder-Mead infill criterion optimizer  by @relf in <https://github.com/relf/egobox/pull/264>
+* Add Rust simple examples by @relf in <https://github.com/relf/egobox/pull/266>
+* Adjust bounds for GP/SGP theta hyperparameters optimization by @relf in <https://github.com/relf/egobox/pull/258>
+* Make GP max nb of likelihood evaluations in hyperparameter optimization configurable by @relf in <https://github.com/relf/egobox/pull/262>
+* Make CoEGO activity matrix more balanced by @relf in <https://github.com/relf/egobox/pull/265>
+* Fix MOE smooth derivatives test which fails from time to time by @relf in <https://github.com/relf/egobox/pull/260>
+* Refactor infill criterion optimization by @relf in <https://github.com/relf/egobox/pull/259>
+* Remove last resort LHS optimization by @relf in <https://github.com/relf/egobox/pull/261>
+
+## Version 0.28.0 - 17/04/2025
+
+This release contains an implementation of the CoEGO [1] algorithm in a CCBO [2] setting where expensive objective evaluations are done only when all partial optimization problems are solved.
+
+1. Zhan, Dawei, et al., [A cooperative approach to efficient global optimization](https://link.springer.com/article/10.1007/s10898-023-01316-6). Journal of Global Optimization 88.2 (2024): 327-357
+2. Lisa Pretsch et al., Bayesian optimization of cooperative components for multi-stage aero-structural compressor blade design. 2024
+
+See also some breaking changes description in optimizer options in PR #253
+
+* CoEGO implementation and refactoring by @relf in <https://github.com/relf/egobox/pull/253>
+* Prepare release 0.28.0 by @relf in <https://github.com/relf/egobox/pull/254>
+
 ## Version 0.27.0 - 13/03/2025
 
 * `ego`: 
