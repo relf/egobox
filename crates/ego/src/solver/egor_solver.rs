@@ -104,7 +104,9 @@
 //! println!("G24 min result = {:?}", res.state);
 //! ```
 //!
-use crate::utils::{EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY, find_best_result_index, is_feasible};
+use crate::utils::{
+    EGOBOX_LOG, EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY, find_best_result_index, is_feasible,
+};
 use crate::{EgoError, EgorConfig, EgorState, MAX_POINT_ADDITION_RETRY};
 
 use crate::types::*;
@@ -278,9 +280,22 @@ where
                     &initial_state.cstr_tol,
                 )
             };
+        if std::env::var(EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY).is_ok() {
+            info!("Using max proba of feasibility for infill criterion");
+            info!(
+                "Initial best point feasibility = {}",
+                initial_state.feasibility
+            );
+        }
 
         initial_state.activity = activity;
         debug!("Initial State = {initial_state:?}");
+        info!("{} set: {}", EGOBOX_LOG, std::env::var(EGOBOX_LOG).is_ok());
+        info!(
+            "{} set: {}",
+            EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY,
+            std::env::var(EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY).is_ok()
+        );
         Ok((initial_state, None))
     }
 
@@ -295,6 +310,8 @@ where
             state.get_max_iters()
         );
         let now = Instant::now();
+
+        let feasibility = state.feasibility;
 
         let mut res = if self.config.trego.activated {
             self.trego_iteration(problem, state)?
@@ -313,6 +330,13 @@ where
             res
         };
 
+        // Update feasibility
+        if res.0.feasibility != feasibility {
+            info!(
+                "Best point feasibility changed {} -> {}",
+                feasibility, res.0.feasibility
+            );
+        }
         info!(
             "********* End iteration {}/{} in {:.3}s: Best fun(x[{}])={} at x={}",
             res.0.get_iter() + 1,
