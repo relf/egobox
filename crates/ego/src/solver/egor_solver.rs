@@ -105,7 +105,8 @@
 //! ```
 //!
 use crate::utils::{
-    EGOBOX_LOG, EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY, find_best_result_index, is_feasible,
+    EGOBOX_LOG, EGOBOX_USE_GP_VAR_PORTFOLIO, EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY,
+    find_best_result_index, is_feasible,
 };
 use crate::{EgoError, EgorConfig, EgorState, MAX_POINT_ADDITION_RETRY};
 
@@ -295,6 +296,11 @@ where
             "{} set: {}",
             EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY,
             std::env::var(EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY).is_ok()
+        );
+        info!(
+            "{} set: {}",
+            EGOBOX_USE_GP_VAR_PORTFOLIO,
+            std::env::var(EGOBOX_USE_GP_VAR_PORTFOLIO).is_ok()
         );
         Ok((initial_state, None))
     }

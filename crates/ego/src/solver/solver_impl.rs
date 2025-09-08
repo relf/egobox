@@ -5,7 +5,7 @@ use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::solver::solver_infill_optim::InfillOptProblem;
 use crate::utils::{
-    EGOBOX_LOG, EGOBOX_USE_PORTFOLIO, find_best_result_index_from, is_feasible,
+    EGOBOX_LOG, EGOBOX_USE_GP_VAR_PORTFOLIO, find_best_result_index_from, is_feasible,
     select_from_portfolio, update_data,
 };
 use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
@@ -578,7 +578,7 @@ where
         let mut portfolio = vec![];
 
         let sigma_weights =
-            if std::env::var(EGOBOX_USE_PORTFOLIO).is_ok() && self.config.q_points == 1 {
+            if std::env::var(EGOBOX_USE_GP_VAR_PORTFOLIO).is_ok() && self.config.q_points == 1 {
                 // logspace(0.1, 100., 13) with 1. moved in front
                 vec![
                     1.,

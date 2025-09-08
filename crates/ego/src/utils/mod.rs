@@ -24,4 +24,4 @@ pub const EGOBOX_LOG: &str = "EGOBOX_LOG";
 pub const EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY: &str = "EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY";
 
 /// Env variable to enable the portfolio method used for global infill criterion optimization
-pub const EGOBOX_USE_PORTFOLIO: &str = "EGOBOX_USE_PORTFOLIO";
+pub const EGOBOX_USE_GP_VAR_PORTFOLIO: &str = "EGOBOX_USE_GP_VAR_PORTFOLIO";
