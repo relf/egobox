@@ -579,6 +579,8 @@ where
 
         let sigma_weights =
             if std::env::var(EGOBOX_USE_GP_VAR_PORTFOLIO).is_ok() && self.config.q_points == 1 {
+                // Do not believe GP variance, weight it to generate possibly several clusters
+                // hence several points to add
                 // logspace(0.1, 100., 13) with 1. moved in front
                 vec![
                     1.,
@@ -596,6 +598,7 @@ where
                     100.,
                 ]
             } else {
+                // Fallback to default GP usage
                 vec![1.]
             };
 
@@ -763,14 +766,13 @@ where
             }
             portfolio.push((x_dat.to_owned(), y_dat, c_dat, infill_val, infill_data));
         }
-        info!("Portfolio of {} elements", portfolio.len());
-        info!(
-            "Portfolio : {:?}",
-            portfolio.iter().map(|v| v.0[[0, 0]]).collect::<Vec<_>>()
-        );
+        if portfolio.len() > 1 {
+            info!(
+                "Portfolio : {:?}",
+                portfolio.iter().map(|v| v.0[[0, 0]]).collect::<Vec<_>>()
+            );
+        }
         let (x_dat, y_dat, c_dat, infill_value, infill_data) = select_from_portfolio(portfolio);
-        log::info!("x_dat={} ", x_dat);
-        log::info!("y_dat={} ", y_dat);
         (x_dat, y_dat, c_dat, infill_value, infill_data)
     }
 }

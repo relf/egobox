@@ -70,7 +70,7 @@ pub fn select_from_portfolio(
     // Indices of representative of a cluster
     let indices = cluster_as_indices(&xdat);
 
-    log::info!("Detect {} clusters", indices.len());
+    log::debug!("Detect {} clusters", indices.len());
 
     // Pick information from portfolio of given indices and concatenate
     let nclusters = indices.len();
@@ -90,10 +90,6 @@ pub fn select_from_portfolio(
         ydat.row_mut(0).assign(&portfolio[0].1.row(0));
         cdat.row_mut(0).assign(&portfolio[0].2.row(0));
     }
-
-    log::info!("xdat={} ", xdat);
-    log::info!("ydat={} ", ydat);
-
     // FIXME: Have to check if fmin and infill_data values are relevant
     // At the moment just pick the first values of portfolio
     (xdat, ydat, cdat, portfolio[0].3, portfolio[0].4.clone())
