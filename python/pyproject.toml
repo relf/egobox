@@ -15,6 +15,7 @@ classifiers = [
 requires-python = ">=3.9"
 dependencies = ["numpy"]
 dynamic = ["version"]
+readme = 'README.md'
 
 [build-system]
 build-backend = "maturin"
