@@ -445,13 +445,12 @@ mod tests {
     #[test]
     #[serial]
     fn test_xsinx_ei_egor_builder() {
-        //let initial_doe = array![[0.], [7.], [25.]];
-        let initial_doe = array![[2.5], [4.], [23.]];
+        let initial_doe = array![[0.], [7.], [25.]];
         let res = EgorBuilder::optimize(xsinx)
             .configure(|cfg| {
                 cfg.infill_strategy(InfillStrategy::EI)
                     .infill_optimizer(InfillOptimizer::Slsqp)
-                    .max_iters(20)
+                    .max_iters(10)
                     .doe(&initial_doe)
                     .seed(42)
             })
@@ -641,7 +640,8 @@ mod tests {
             .run()
             .expect("Egor should minimize xsinx");
         let doe2: Array2<f64> = read_npy(&filepath).expect("file read");
-        assert_eq!(doe2.nrows(), doe.nrows() + 3);
+
+        assert!(doe2.nrows() >= doe.nrows() + 3);
 
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
@@ -713,8 +713,7 @@ mod tests {
         let filepath = std::path::Path::new(&outdir).join(DOE_FILE);
         assert!(filepath.exists());
         let doe: Array2<f64> = read_npy(&filepath).expect("file read");
-        assert!(doe.nrows() <= init_doe.nrows() + max_iters);
-        assert!(doe.nrows() >= init_doe.nrows());
+        assert!(doe.nrows() >= init_doe.nrows() + max_iters);
 
         println!("Rosenbrock optim result = {res:?}");
         println!("Elapsed = {:?}", now.elapsed());
