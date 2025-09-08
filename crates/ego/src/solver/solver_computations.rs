@@ -357,8 +357,8 @@ where
             self.eval_infill_obj(x, obj_model, fmin, scale, scale_ic)
         } else {
             // when no feasible point is found, make the infill criterion value neutral factor
-            // 1 when CEI, 0 when logCEI
-            (self.config.infill_criterion.name() != "LogEI") as i32 as f64
+            // -1 when CEI, 0 when logCEI
+            -((self.config.infill_criterion.name() != "LogEI") as i32 as f64)
         };
         if self.config.infill_criterion.name() == "LogEI" {
             infill_obj - logpofs(x, cstr_models, &cstr_tols.to_vec())
@@ -405,8 +405,8 @@ where
                     )
                 } else {
                     // when no feasible point is found, make the grad infill criterion value neutral factor
-                    // 1 when CEI, 0 when logCEI
-                    (0., Array1::ones(x.len()))
+                    // -1 when CEI, 0 when logCEI
+                    (-1., Array1::zeros(x.len()))
                 };
 
                 let pofs = pofs(x, cstr_models, &cstr_tols.to_vec());

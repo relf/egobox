@@ -4,7 +4,7 @@ use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::solver::solver_infill_optim::InfillOptProblem;
-use crate::utils::{find_best_result_index_from, is_feasible, update_data};
+use crate::utils::{EGOBOX_LOG, find_best_result_index_from, is_feasible, update_data};
 use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
 use crate::{EgorConfig, find_best_result_index};
 use crate::{EgorState, types::*};
@@ -33,7 +33,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     /// The function `f` should return an objective but also constraint values if any.
     /// Design space is specified by a list of types for input variables `x` of `f` (see [`XType`]).
     pub fn new(config: EgorConfig) -> Self {
-        let env = Env::new().filter_or("EGOBOX_LOG", "info");
+        let env = Env::new().filter_or(EGOBOX_LOG, "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();

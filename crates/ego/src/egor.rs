@@ -364,7 +364,7 @@ mod tests {
     use serial_test::serial;
     use std::time::Instant;
 
-    use crate::{CoegoStatus, DOE_FILE, DOE_INITIAL_FILE, gpmix::spec::*};
+    use crate::{CoegoStatus, DOE_FILE, DOE_INITIAL_FILE, gpmix::spec::*, utils::EGOBOX_LOG};
 
     #[cfg(not(feature = "blas"))]
     use linfa_linalg::norm::*;
@@ -1013,7 +1013,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixobj_mixint_egor_builder() {
-        let env = env_logger::Env::new().filter_or("EGOBOX_LOG", "info");
+        let env = env_logger::Env::new().filter_or(EGOBOX_LOG, "info");
         let mut builder = env_logger::Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();
@@ -1045,7 +1045,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_mixobj_mixint_warmstart_egor_builder() {
-        let env = env_logger::Env::new().filter_or("EGOBOX_LOG", "info");
+        let env = env_logger::Env::new().filter_or(EGOBOX_LOG, "info");
         let mut builder = env_logger::Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
         builder.try_init().ok();
