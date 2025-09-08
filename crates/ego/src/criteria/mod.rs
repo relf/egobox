@@ -19,13 +19,15 @@ pub trait InfillCriterion: Clone + Sync {
     fn name(&self) -> &'static str;
 
     /// Criterion value at given point x with regards to given
-    /// surrogate of the objective function, the current found min
-    /// and an optional scaling factor
+    /// surrogate of the objective function, the current found min,
+    /// an optional scaling factor and an optional weight for the
+    /// standard deviation
     fn value(
         &self,
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
         fmin: f64,
+        sigma_weight: Option<f64>,
         scale: Option<f64>,
     ) -> f64;
 
@@ -35,11 +37,20 @@ pub trait InfillCriterion: Clone + Sync {
         x: &[f64],
         obj_model: &dyn MixtureGpSurrogate,
         fmin: f64,
+        sigma_weight: Option<f64>,
         scale: Option<f64>,
     ) -> Array1<f64>;
 
     /// Scaling factor computation
-    fn scaling(&self, x: &ArrayView2<f64>, obj_model: &dyn MixtureGpSurrogate, fmin: f64) -> f64;
+    fn scaling(
+        &self,
+        _x: &ArrayView2<f64>,
+        _obj_model: &dyn MixtureGpSurrogate,
+        _fmin: f64,
+        _sigma_weight: Option<f64>,
+    ) -> f64 {
+        1.0
+    }
 }
 
 impl std::fmt::Debug for dyn InfillCriterion {
