@@ -4,9 +4,15 @@ use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::solver::solver_infill_optim::InfillOptProblem;
+//use crate::utils::gp_recorder;
 use crate::utils::{
-    EGOBOX_LOG, EGOBOX_USE_GP_VAR_PORTFOLIO, find_best_result_index_from, is_feasible,
-    select_from_portfolio, update_data,
+    //EGOBOX_GP_RECORDER,
+    EGOBOX_LOG,
+    EGOBOX_USE_GP_VAR_PORTFOLIO,
+    find_best_result_index_from,
+    is_feasible,
+    select_from_portfolio,
+    update_data,
 };
 use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
 use crate::{EgorConfig, find_best_result_index};
@@ -648,6 +654,9 @@ where
                     )
                 });
                 let (models, inits): (Vec<_>, Vec<_>) = models_and_inits.unzip();
+                // if std::env::var(EGOBOX_GP_RECORDER).is_ok() {
+                //     gp_recorder::save_gp_models(&models);
+                // }
 
                 (0..=self.config.n_cstr).for_each(|k| {
                     clusterings[k] = Some(models[k].to_clustering());
@@ -766,13 +775,18 @@ where
             }
             portfolio.push((x_dat.to_owned(), y_dat, c_dat, infill_val, infill_data));
         }
-        if portfolio.len() > 1 {
+        let (x_dat, y_dat, c_dat, infill_value, infill_data) = if portfolio.len() > 1 {
             info!(
                 "Portfolio : {:?}",
                 portfolio.iter().map(|v| v.0[[0, 0]]).collect::<Vec<_>>()
             );
-        }
-        let (x_dat, y_dat, c_dat, infill_value, infill_data) = select_from_portfolio(portfolio);
+            // Use portfolio strategy: Pick one point from portfolio
+            select_from_portfolio(portfolio)
+        } else {
+            // Fallback to default returning one or several points (in case of qEI strategy)
+            portfolio.remove(0)
+        };
+
         (x_dat, y_dat, c_dat, infill_value, infill_data)
     }
 }
