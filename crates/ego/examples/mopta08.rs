@@ -265,33 +265,61 @@ fn main() -> anyhow::Result<()> {
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
 
-    let res = EgorBuilder::optimize(mopta_func(dim))
-        .configure(|config| {
-            config
-                .n_cstr(N_CSTR)
-                .cstr_tol(cstr_tol.clone())
-                .n_doe(n_doe)
-                .max_iters(max_iters)
-                .configure_gp(|gp| {
-                    gp.n_clusters(NbClusters::fixed(1))
-                        .regression_spec(RegressionSpec::CONSTANT)
-                        .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
-                })
-                .infill_optimizer(InfillOptimizer::Cobyla)
-                .n_start(50)
-                .infill_strategy(InfillStrategy::EI)
-                .cstr_infill(true)
-                .q_points(10)
-                .q_optmod(2)
-                .qei_strategy(QEiStrategy::KrigingBeliever)
-                .outdir(outdir)
-                .warm_start(true)
-                .coego(CoegoStatus::Enabled(5))
-                .hot_start(HotStartMode::Enabled)
-        })
-        .min_within(&xlimits)
-        .run()
-        .expect("Minimize failure");
+    let res = if std::env::var(egobox_ego::EGOBOX_USE_GP_VAR_PORTFOLIO).is_ok() {
+        EgorBuilder::optimize(mopta_func(dim))
+            .configure(|config| {
+                config
+                    .n_cstr(N_CSTR)
+                    .cstr_tol(cstr_tol.clone())
+                    .n_doe(200)
+                    .max_iters(max_iters)
+                    .configure_gp(|gp| {
+                        gp.n_clusters(NbClusters::fixed(1))
+                            .regression_spec(RegressionSpec::CONSTANT)
+                            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+                    })
+                    .infill_optimizer(InfillOptimizer::Cobyla)
+                    .n_start(150)
+                    .infill_strategy(InfillStrategy::EI)
+                    .cstr_infill(true)
+                    .outdir(outdir)
+                    .warm_start(true)
+                    .coego(CoegoStatus::Enabled(5))
+                    .hot_start(HotStartMode::Enabled)
+            })
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure")
+    } else {
+        EgorBuilder::optimize(mopta_func(dim))
+            .configure(|config| {
+                config
+                    .n_cstr(N_CSTR)
+                    .cstr_tol(cstr_tol.clone())
+                    .n_doe(n_doe)
+                    .max_iters(max_iters)
+                    .configure_gp(|gp| {
+                        gp.n_clusters(NbClusters::fixed(1))
+                            .regression_spec(RegressionSpec::CONSTANT)
+                            .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+                    })
+                    .infill_optimizer(InfillOptimizer::Cobyla)
+                    .n_start(50)
+                    .infill_strategy(InfillStrategy::EI)
+                    .cstr_infill(true)
+                    .q_points(10)
+                    .q_optmod(2)
+                    .qei_strategy(QEiStrategy::KrigingBeliever)
+                    .outdir(outdir)
+                    .warm_start(true)
+                    .coego(CoegoStatus::Enabled(5))
+                    .hot_start(HotStartMode::Enabled)
+            })
+            .min_within(&xlimits)
+            .run()
+            .expect("Minimize failure")
+    };
+
     println!(
         "Mopta08 dim={} minimum y = {} at x = {}",
         dim, res.y_opt, res.x_opt
