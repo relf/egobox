@@ -549,6 +549,7 @@ impl CrossValScore<f64, MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     }
 }
 
+#[typetag::serde]
 impl MixtureGpSurrogate for GpMixture {
     /// Selected experts in the mixture
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {

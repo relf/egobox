@@ -38,4 +38,8 @@ pub enum EgoError {
     /// When global EGO step cannot add any point
     #[error("EGO exit (no more point)")]
     NoMorePointToAddError(Box<EgorState<f64>>),
+    /// When error during saving
+    #[cfg(feature = "persistent")]
+    #[error("Save error: {0}")]
+    SaveBinaryError(#[from] bincode::Error),
 }

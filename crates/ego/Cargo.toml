@@ -11,7 +11,7 @@ keywords = ["machine-learning", "bayesian", "optimization"]
 categories = ["algorithms", "mathematics", "science"]
 
 [features]
-default = []
+default = ["persistent"]
 
 persistent = ["egobox-moe/persistent"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]

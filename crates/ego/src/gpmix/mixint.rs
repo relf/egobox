@@ -662,6 +662,7 @@ impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixtu
     }
 }
 
+#[typetag::serde]
 impl MixtureGpSurrogate for MixintGpMixture {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
         self.moe.experts()

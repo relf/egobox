@@ -1,6 +1,7 @@
 mod bounds;
 mod cstr_pof;
 mod find_result;
+pub(crate) mod gp_recorder;
 mod hot_start;
 mod logei_helper;
 mod misc;
@@ -21,7 +22,16 @@ pub use start_points::*;
 pub const EGOBOX_LOG: &str = "EGOBOX_LOG";
 
 /// Env variable to enable the use of PoF as criterion while no feasible point is found
-pub const EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY: &str = "EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY";
+pub const EGOR_USE_MAX_PROBA_OF_FEASIBILITY: &str = "EGOR_USE_MAX_PROBA_OF_FEASIBILITY";
 
 /// Env variable to enable the portfolio method used for global infill criterion optimization
-pub const EGOBOX_USE_GP_VAR_PORTFOLIO: &str = "EGOBOX_USE_GP_VAR_PORTFOLIO";
+pub const EGOR_USE_GP_VAR_PORTFOLIO: &str = "EGOR_USE_GP_VAR_PORTFOLIO";
+
+/// Env variable to trigger GP recording
+pub const EGOR_GP_RECORDER: &str = "EGOR_GP_RECORDER";
+
+/// Gaussian process filename to save initial GPs built from initial_doe
+pub const EGOR_INITIAL_GP_FILENAME: &str = "egor_initial_gp.bin";
+
+/// Gaussian process filename to save GPs built at the last iteration
+pub const EGOR_GP_FILENAME: &str = "egor_gp.bin";

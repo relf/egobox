@@ -122,6 +122,7 @@ impl Clustering {
 }
 
 /// A trait for Mixture of GP surrogates with derivatives using clustering
+#[typetag::serde(tag = "type")]
 pub trait MixtureGpSurrogate: Clustered + GpSurrogate + GpSurrogateExt {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>>;
 }
