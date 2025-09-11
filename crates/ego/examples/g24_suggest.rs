@@ -1,6 +1,6 @@
 use egobox_doe::{Lhs, SamplingMethod};
-use egobox_ego::{EgorBuilder, InfillOptimizer};
-use ndarray::{Array2, ArrayBase, ArrayView2, Data, Ix1, Zip, array};
+use egobox_ego::{Cstr, EgorServiceFactory};
+use ndarray::{Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Zip, array, concatenate};
 
 // Objective
 fn g24(x: &ArrayBase<impl Data<Elem = f64>, Ix1>) -> f64 {
@@ -30,19 +30,21 @@ fn f_g24(x: &ArrayView2<f64>) -> Array2<f64> {
 
 fn main() {
     let xlimits = array![[0., 3.], [0., 4.]];
-    let doe = Lhs::new(&xlimits).sample(3);
+    let mut doe = Lhs::new(&xlimits).sample(3);
 
-    let res = EgorBuilder::optimize(f_g24)
-        .configure(|config| {
-            config
-                .n_cstr(2)
-                .doe(&doe)
-                .max_iters(100)
-                .infill_optimizer(InfillOptimizer::Cobyla)
-                .seed(42)
-        })
-        .min_within(&xlimits)
-        .run()
-        .expect("Minimize failure");
-    println!("G24 optim result = {}", res.y_opt);
+    // We use Egor optimizer as a service
+    let egor = EgorServiceFactory::<Cstr>::optimize()
+        .configure(|config| config.n_cstr(2).seed(42))
+        .min_within(&xlimits);
+
+    let mut y_doe = f_g24(&doe.view());
+    for _i in 0..10 {
+        // We tell function values and ask for next x location
+        let x_suggested = egor.suggest(&doe, &y_doe);
+
+        doe = concatenate![Axis(0), doe, x_suggested];
+        y_doe = f_g24(&doe.view());
+    }
+
+    println!("G24 optim x suggestion history = {doe:?}");
 }

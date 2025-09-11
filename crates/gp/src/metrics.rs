@@ -3,7 +3,7 @@ use linfa::{
     Float, ParamGuard,
     traits::{Fit, Predict, PredictInplace},
 };
-use ndarray::{Array1, Array2, ArrayBase, Ix2, OwnedRepr};
+use ndarray::{Array1, Array2};
 
 use crate::{
     GaussianProcess, GpError, GpParams, SgpParams, SparseGaussianProcess, correlation_models,
@@ -16,18 +16,19 @@ where
     F: Float,
     ER: std::error::Error + From<linfa::error::Error>,
     P: Fit<Array2<F>, Array1<F>, ER, Object = O> + ParamGuard,
-    O: PredictInplace<ArrayBase<OwnedRepr<F>, Ix2>, Array1<F>>,
+    O: PredictInplace<Array2<F>, Array1<F>>,
 {
     fn training_data(&self) -> &(Array2<F>, Array1<F>);
 
     fn params(&self) -> P;
 
-    /// Compute quality metric based on cross validation
-    fn cv_score(&self, fold: usize) -> F {
+    /// Compute quality metric NRMSD based on cross validation
+    /// See https://en.wikipedia.org/wiki/Root_mean_square_deviation
+    fn cv_score(&self, kfold: usize) -> F {
         let (xt, yt) = self.training_data();
         let dataset = Dataset::new(xt.to_owned(), yt.to_owned());
         let mut error = F::zero();
-        for (train, valid) in dataset.fold(fold).into_iter() {
+        for (train, valid) in dataset.fold(kfold).into_iter() {
             let params = self.params();
             let model: O = params
                 .fit(&train)
@@ -35,10 +36,10 @@ where
             let pred = model.predict(valid.records());
             error += (valid.targets() - pred).mapv(|v| v * v).sum();
         }
-        (error / F::cast(fold)).sqrt() / yt.mean().unwrap()
+        (error / F::cast(kfold)).sqrt() / yt.mean().unwrap()
     }
 
-    /// Leave one out cross validation
+    /// NRMSD Leave one out cross validation
     fn loocv_score(&self) -> F {
         self.cv_score(self.training_data().0.nrows())
     }
@@ -80,7 +81,7 @@ mod test {
     use crate::{Inducings, SparseKriging};
     use approx::assert_abs_diff_eq;
     use egobox_doe::{Lhs, SamplingMethod};
-    use ndarray::{Array, Array1, Axis, Data, Ix2, Zip, array};
+    use ndarray::{Array, Array1, ArrayBase, Axis, Data, Ix2, Zip, array};
     use ndarray_rand::RandomExt;
     use ndarray_rand::rand::SeedableRng;
     use ndarray_rand::rand_distr::{Normal, Uniform};

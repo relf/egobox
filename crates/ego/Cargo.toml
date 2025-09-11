@@ -11,7 +11,7 @@ keywords = ["machine-learning", "bayesian", "optimization"]
 categories = ["algorithms", "mathematics", "science"]
 
 [features]
-default = []
+default = ["persistent"]
 
 persistent = ["egobox-moe/persistent"]
 blas = ["ndarray-linalg", "linfa/ndarray-linalg", "linfa-pls/blas"]
@@ -43,7 +43,7 @@ nlopt = { version = "0.8", optional = true }
 
 rand_xoshiro = { version = "0.6", features = ["serde1"] }
 argmin = { version = "0.10.0", features = ["serde1", "ctrlc"] }
-bincode = { version = "1.3.0" }
+bincode.workspace = true
 web-time = "1.1.0"
 libm = "0.2.6"
 finitediff.workspace = true
@@ -53,7 +53,7 @@ log.workspace = true
 env_logger.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
-clap = { version = "4", features = ["derive"] }
+clap.workspace = true
 
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json.workspace = true

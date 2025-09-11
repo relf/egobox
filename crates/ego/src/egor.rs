@@ -907,6 +907,7 @@ mod tests {
         let doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(42))
             .sample(10);
+        let q = 2;
         let res = EgorBuilder::optimize(f_g24)
             .configure(|config| {
                 config
@@ -916,7 +917,7 @@ mod tests {
                     })
                     .n_cstr(2)
                     .cstr_tol(array![2e-6, 2e-6])
-                    .q_points(2)
+                    .q_points(q)
                     .qei_strategy(QEiStrategy::KrigingBeliever)
                     .doe(&doe)
                     .target(-5.5030)
@@ -926,6 +927,7 @@ mod tests {
             .min_within(&xlimits)
             .run()
             .expect("Egor minimization");
+        assert_eq!(res.x_doe.nrows(), doe.nrows() + q * res.state.iter as usize);
         println!("G24 optim result = {res:?}");
         let expected = array![2.3295, 3.1785];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 2e-2);
