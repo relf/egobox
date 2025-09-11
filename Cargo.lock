@@ -898,8 +898,10 @@ version = "0.32.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "clap",
  "egobox-ego",
  "egobox-moe",
+ "rayon",
 ]
 
 [[package]]

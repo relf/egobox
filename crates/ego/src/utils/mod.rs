@@ -28,7 +28,7 @@ pub const EGOR_USE_MAX_PROBA_OF_FEASIBILITY: &str = "EGOR_USE_MAX_PROBA_OF_FEASI
 pub const EGOR_USE_GP_VAR_PORTFOLIO: &str = "EGOR_USE_GP_VAR_PORTFOLIO";
 
 /// Env variable to trigger GP recording
-pub const EGOR_GP_RECORDER: &str = "EGOR_GP_RECORDER";
+pub const EGOR_USE_GP_RECORDER: &str = "EGOR_USE_GP_RECORDER";
 
 /// Gaussian process filename to save initial GPs built from initial_doe
 pub const EGOR_INITIAL_GP_FILENAME: &str = "egor_initial_gp.bin";

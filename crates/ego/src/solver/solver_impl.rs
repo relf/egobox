@@ -649,7 +649,7 @@ where
                 });
                 let (models, inits): (Vec<_>, Vec<_>) = models_and_inits.unzip();
                 #[cfg(feature = "persistent")]
-                if std::env::var(crate::EGOR_GP_RECORDER).is_ok() {
+                if std::env::var(crate::EGOR_USE_GP_RECORDER).is_ok() {
                     use crate::utils::{EGOR_GP_FILENAME, EGOR_INITIAL_GP_FILENAME, gp_recorder};
 
                     let default_dir = String::from("./");

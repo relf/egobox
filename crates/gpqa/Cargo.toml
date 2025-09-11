@@ -11,10 +11,12 @@ keywords = ["machine-learning", "bayesian", "optimization"]
 categories = ["algorithms", "mathematics", "science"]
 
 [dependencies]
-anyhow.workspace = true
-bincode = "1.0.0"
 egobox-ego = { version = "0.32", path = "../ego" }
 egobox-moe = { version = "0.32", path = "../moe" }
+anyhow.workspace = true
+clap.workspace = true
+bincode.workspace = true
+rayon.workspace = true
 
 [[bin]]
 name = "gpqa"
