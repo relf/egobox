@@ -8,6 +8,7 @@ use egobox_gp::correlation_models::{
 #[allow(unused_imports)]
 use egobox_gp::mean_models::{ConstantMean, LinearMean, QuadraticMean};
 use linfa::Float;
+use ndarray::{Array1, Array2};
 use std::fmt::Display;
 
 #[cfg(feature = "serializable")]
@@ -121,9 +122,17 @@ impl Clustering {
     }
 }
 
+pub trait GpQualityAssurance {
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>);
+    fn cv(&self, kfold: usize) -> f64;
+    fn loocv(&self) -> f64;
+}
+
 /// A trait for Mixture of GP surrogates with derivatives using clustering
 #[typetag::serde(tag = "type")]
-pub trait MixtureGpSurrogate: Clustered + GpSurrogate + GpSurrogateExt {
+pub trait MixtureGpSurrogate:
+    Clustered + GpSurrogate + GpSurrogateExt + GpQualityAssurance
+{
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>>;
 }
 

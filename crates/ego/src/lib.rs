@@ -300,9 +300,9 @@ pub use crate::gpmix::spec::{CorrelationSpec, RegressionSpec};
 pub use crate::solver::*;
 pub use crate::types::*;
 pub use crate::utils::{
-    CHECKPOINT_FILE, Checkpoint, CheckpointingFrequency, EGOBOX_LOG, EGOR_GP_RECORDER,
-    EGOR_USE_GP_VAR_PORTFOLIO, EGOR_USE_MAX_PROBA_OF_FEASIBILITY, HotStartCheckpoint, HotStartMode,
-    find_best_result_index,
+    CHECKPOINT_FILE, Checkpoint, CheckpointingFrequency, EGOBOX_LOG, EGOR_GP_FILENAME,
+    EGOR_GP_RECORDER, EGOR_INITIAL_GP_FILENAME, EGOR_USE_GP_VAR_PORTFOLIO,
+    EGOR_USE_MAX_PROBA_OF_FEASIBILITY, HotStartCheckpoint, HotStartMode, find_best_result_index,
 };
 
 mod optimizers;

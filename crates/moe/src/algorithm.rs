@@ -549,6 +549,20 @@ impl CrossValScore<f64, MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     }
 }
 
+impl GpQualityAssurance for GpMixture {
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
+        (self as &dyn CrossValScore<_, _, _, _>).training_data()
+    }
+
+    fn cv(&self, kfold: usize) -> f64 {
+        (self as &dyn CrossValScore<_, _, _, _>).cv_score(kfold)
+    }
+
+    fn loocv(&self) -> f64 {
+        (self as &dyn CrossValScore<_, _, _, _>).loocv_score()
+    }
+}
+
 #[typetag::serde]
 impl MixtureGpSurrogate for GpMixture {
     /// Selected experts in the mixture

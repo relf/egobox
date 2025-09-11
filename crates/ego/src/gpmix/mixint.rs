@@ -10,7 +10,8 @@ use egobox_gp::ThetaTuning;
 use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{
     Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
-    GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, Recombination, RegressionSpec,
+    GpQualityAssurance, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, Recombination,
+    RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -659,6 +660,20 @@ impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixtu
 
     fn params(&self) -> MixintGpMixtureParams {
         MixintGpMixtureParams::from(self.params.clone())
+    }
+}
+
+impl GpQualityAssurance for MixintGpMixture {
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
+        (self as &dyn CrossValScore<_, _, _, _>).training_data()
+    }
+
+    fn cv(&self, kfold: usize) -> f64 {
+        (self as &dyn CrossValScore<_, _, _, _>).cv_score(kfold)
+    }
+
+    fn loocv(&self) -> f64 {
+        (self as &dyn CrossValScore<_, _, _, _>).loocv_score()
     }
 }
 

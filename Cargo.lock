@@ -893,6 +893,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpqa"
+version = "0.32.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "egobox-ego",
+ "egobox-moe",
+]
+
+[[package]]
 name = "half"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

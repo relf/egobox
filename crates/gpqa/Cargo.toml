@@ -1,0 +1,20 @@
+[package]
+name = "gpqa"
+authors.workspace = true
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+homepage.workspace = true
+description = "Utility to assess Egor GPs quality saved using GP recorder"
+repository = "https://github.com/relf/egobox/crates/gpqa"
+keywords = ["machine-learning", "bayesian", "optimization"]
+categories = ["algorithms", "mathematics", "science"]
+
+[dependencies]
+anyhow.workspace = true
+bincode = "1.0.0"
+egobox-ego = { version = "0.32", path = "../ego" }
+egobox-moe = { version = "0.32", path = "../moe" }
+
+[[bin]]
+name = "gpqa"
