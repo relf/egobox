@@ -20,19 +20,19 @@ struct Args {
 }
 
 fn main() -> Result<()> {
-    let cli = Args::parse();
+    let args = Args::parse();
 
-    let data: Vec<u8> = fs::read(cli.filename)?;
+    let data: Vec<u8> = fs::read(&args.filename)?;
     let gp_models: Vec<Box<dyn MixtureGpSurrogate>> = bincode::deserialize(&data[..])?;
 
     let _res: Vec<_> = gp_models
         .par_iter()
         .enumerate()
         .map(|(i, gp)| {
-            let nrmse = if cli.loo {
+            let nrmse = if args.loo {
                 gp.as_ref().loocv()
             } else {
-                gp.as_ref().cv(cli.kfold)
+                gp.as_ref().cv(args.kfold)
             };
             let n = gp.training_data().0.nrows();
             let mean = gp.training_data().1.mean().unwrap();

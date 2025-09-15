@@ -620,6 +620,19 @@ impl GpSurrogate for MixintGpMixture {
     }
 }
 
+impl MixintGpMixture {
+    /// Load MixintGpMixture from given file.
+    #[cfg(feature = "persistent")]
+    pub fn load(path: &str, format: GpFileFormat) -> Result<Box<MixintGpMixture>> {
+        let data = fs::read(path)?;
+        let moe = match format {
+            GpFileFormat::Json => serde_json::from_slice(&data).unwrap(),
+            GpFileFormat::Binary => bincode::deserialize(&data).unwrap(),
+        };
+        Ok(Box::new(moe))
+    }
+}
+
 #[typetag::serde]
 impl GpSurrogateExt for MixintGpMixture {
     fn predict_gradients(&self, x: &ArrayView2<f64>) -> egobox_moe::Result<Array2<f64>> {

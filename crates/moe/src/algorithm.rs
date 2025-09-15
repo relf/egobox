@@ -888,8 +888,8 @@ impl GpMixture {
     //     error / self.ytrain.std(1.)
     // }
 
+    /// Load Moe from the given file.
     #[cfg(feature = "persistent")]
-    /// Load Moe from given json file.
     pub fn load(path: &str, format: GpFileFormat) -> Result<Box<GpMixture>> {
         let data = fs::read(path)?;
         let moe = match format {
