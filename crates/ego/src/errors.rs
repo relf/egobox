@@ -41,5 +41,5 @@ pub enum EgoError {
     /// When error during saving
     #[cfg(feature = "persistent")]
     #[error("Save error: {0}")]
-    SaveBinaryError(#[from] bincode::Error),
+    SaveBinaryError(#[from] bincode::error::EncodeError),
 }

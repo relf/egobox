@@ -1,5 +1,9 @@
 use anyhow::Result;
 use clap::Parser;
+#[allow(unused_imports)]
+// Though not directly used, this import is required for bincode
+// to properly load MixintGpMixture (while serde_json does not need it)
+use egobox_ego::gpmix::mixint::MixintGpMixture;
 use egobox_moe::MixtureGpSurrogate;
 use rayon::prelude::*;
 use std::fs;
@@ -23,7 +27,9 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     let data: Vec<u8> = fs::read(&args.filename)?;
-    let gp_models: Vec<Box<dyn MixtureGpSurrogate>> = bincode::deserialize(&data[..])?;
+    let gp_models: Vec<Box<dyn MixtureGpSurrogate>> =
+        bincode::serde::decode_from_slice(&data[..], bincode::config::standard())
+            .map(|(res, _)| res)?;
 
     let _res: Vec<_> = gp_models
         .par_iter()

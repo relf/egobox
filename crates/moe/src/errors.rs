@@ -34,7 +34,7 @@ pub enum MoeError {
     /// When error during saving
     #[cfg(feature = "persistent")]
     #[error("Save error: {0}")]
-    SaveBinaryError(#[from] bincode::Error),
+    SaveBinaryError(#[from] bincode::error::EncodeError),
     /// When error during loading
     #[error("Load IO error")]
     LoadIoError(#[from] std::io::Error),

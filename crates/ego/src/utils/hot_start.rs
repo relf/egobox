@@ -1,8 +1,7 @@
 use argmin::core::Error;
 pub use argmin::core::checkpointing::{Checkpoint, CheckpointingFrequency};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::Write;
 use std::path::PathBuf;
 
 use crate::EgorState;
@@ -93,8 +92,9 @@ where
             std::fs::create_dir_all(&self.directory)?
         }
         let fname = self.directory.join(&self.filename);
-        let f = BufWriter::new(File::create(fname)?);
-        bincode::serialize_into(f, &(solver, state))?;
+        let mut file = std::fs::File::create(fname).unwrap();
+        let bytes = bincode::serde::encode_to_vec((solver, state), bincode::config::standard())?;
+        file.write_all(&bytes)?;
         Ok(())
     }
 
@@ -108,9 +108,11 @@ where
         if !path.exists() {
             return Ok(None);
         }
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let (solver, mut state): (_, EgorState<_>) = bincode::deserialize_from(reader)?;
+        let data = std::fs::read(path)?;
+        let (solver, mut state): (_, EgorState<_>) =
+            bincode::serde::decode_from_slice(&data[..], bincode::config::standard())
+                .map(|(res, _)| res)
+                .unwrap();
         if let HotStartMode::ExtendedIters(n_iters) = self.mode {
             state.extend_max_iters(n_iters);
         }

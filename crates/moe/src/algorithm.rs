@@ -504,7 +504,10 @@ impl GpSurrogate for GpMixture {
 
         let bytes = match format {
             GpFileFormat::Json => serde_json::to_vec(self).map_err(MoeError::SaveJsonError)?,
-            GpFileFormat::Binary => bincode::serialize(self).map_err(MoeError::SaveBinaryError)?,
+            GpFileFormat::Binary => {
+                bincode::serde::encode_to_vec(self, bincode::config::standard())
+                    .map_err(MoeError::SaveBinaryError)?
+            }
         };
         file.write_all(&bytes)?;
 
@@ -894,7 +897,11 @@ impl GpMixture {
         let data = fs::read(path)?;
         let moe = match format {
             GpFileFormat::Json => serde_json::from_slice(&data).unwrap(),
-            GpFileFormat::Binary => bincode::deserialize(&data).unwrap(),
+            GpFileFormat::Binary => {
+                bincode::serde::decode_from_slice(&data, bincode::config::standard())
+                    .map(|(surrogate, _)| surrogate)
+                    .unwrap()
+            }
         };
         Ok(Box::new(moe))
     }

@@ -13,7 +13,7 @@ pub(crate) fn save_gp_models<P: AsRef<Path>>(
     let mut file = fs::File::create(path).unwrap();
 
     println!("Saving {} GP models...", models.len());
-    let bytes = bincode::serialize(models)?;
+    let bytes = bincode::serde::encode_to_vec(models, bincode::config::standard())?;
     file.write_all(&bytes)?;
 
     Ok(())
