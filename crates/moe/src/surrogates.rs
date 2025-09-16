@@ -171,7 +171,7 @@ macro_rules! declare_surrogate {
                         GpFileFormat::Json => serde_json::to_vec(self as &dyn GpSurrogate)
                             .map_err(MoeError::SaveJsonError)?,
                         GpFileFormat::Binary => {
-                            bincode::serialize(self as &dyn GpSurrogate).map_err(MoeError::SaveBinaryError)?
+                            bincode::serde::encode_to_vec(self as &dyn GpSurrogate, bincode::config::standard()).map_err(MoeError::SaveBinaryError)?
                         }
                     };
                     file.write_all(&bytes)?;
@@ -333,7 +333,7 @@ macro_rules! declare_sgp_surrogate {
                         GpFileFormat::Json => serde_json::to_vec(self as &dyn SgpSurrogate)
                             .map_err(MoeError::SaveJsonError)?,
                         GpFileFormat::Binary => {
-                            bincode::serialize(self as &dyn SgpSurrogate).map_err(MoeError::SaveBinaryError)?
+                            bincode::serde::encode_to_vec(self as &dyn SgpSurrogate, bincode::config::standard()).map_err(MoeError::SaveBinaryError)?
                         }
                     };
                     file.write_all(&bytes)?;
@@ -409,8 +409,12 @@ pub fn load(path: &str, format: GpFileFormat) -> Result<Box<dyn GpSurrogate>> {
                 MoeError::LoadError(format!("Error while loading from {path}: ({err})"))
             })
         }
-        GpFileFormat::Binary => bincode::deserialize(&data)
-            .map_err(|err| MoeError::LoadError(format!("Error while loading from {path} ({err})"))),
+        GpFileFormat::Binary => bincode::serde::decode_from_slice::<Box<dyn GpSurrogate>, _>(
+            &data,
+            bincode::config::standard(),
+        )
+        .map(|(surrogate, _)| surrogate)
+        .map_err(|err| MoeError::LoadError(format!("Error while loading from {path} ({err})"))),
     }
 }
 

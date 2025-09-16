@@ -52,7 +52,7 @@ thiserror.workspace = true
 
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
-bincode = { version = "1.3.3", optional = true }
+bincode = { workspace = true, optional = true }
 
 typetag = { version = "0.2", optional = true }
 

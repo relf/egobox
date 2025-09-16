@@ -504,7 +504,10 @@ impl GpSurrogate for GpMixture {
 
         let bytes = match format {
             GpFileFormat::Json => serde_json::to_vec(self).map_err(MoeError::SaveJsonError)?,
-            GpFileFormat::Binary => bincode::serialize(self).map_err(MoeError::SaveBinaryError)?,
+            GpFileFormat::Binary => {
+                bincode::serde::encode_to_vec(self, bincode::config::standard())
+                    .map_err(MoeError::SaveBinaryError)?
+            }
         };
         file.write_all(&bytes)?;
 
@@ -549,6 +552,21 @@ impl CrossValScore<f64, MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     }
 }
 
+impl GpQualityAssurance for GpMixture {
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
+        (self as &dyn CrossValScore<_, _, _, _>).training_data()
+    }
+
+    fn cv(&self, kfold: usize) -> f64 {
+        (self as &dyn CrossValScore<_, _, _, _>).cv_score(kfold)
+    }
+
+    fn loocv(&self) -> f64 {
+        (self as &dyn CrossValScore<_, _, _, _>).loocv_score()
+    }
+}
+
+#[typetag::serde]
 impl MixtureGpSurrogate for GpMixture {
     /// Selected experts in the mixture
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
@@ -873,13 +891,17 @@ impl GpMixture {
     //     error / self.ytrain.std(1.)
     // }
 
+    /// Load Moe from the given file.
     #[cfg(feature = "persistent")]
-    /// Load Moe from given json file.
     pub fn load(path: &str, format: GpFileFormat) -> Result<Box<GpMixture>> {
         let data = fs::read(path)?;
         let moe = match format {
             GpFileFormat::Json => serde_json::from_slice(&data).unwrap(),
-            GpFileFormat::Binary => bincode::deserialize(&data).unwrap(),
+            GpFileFormat::Binary => {
+                bincode::serde::decode_from_slice(&data, bincode::config::standard())
+                    .map(|(surrogate, _)| surrogate)
+                    .unwrap()
+            }
         };
         Ok(Box::new(moe))
     }

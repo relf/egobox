@@ -10,7 +10,8 @@ use egobox_gp::ThetaTuning;
 use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{
     Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
-    GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, Recombination, RegressionSpec,
+    GpQualityAssurance, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, Recombination,
+    RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -612,10 +613,30 @@ impl GpSurrogate for MixintGpMixture {
         let mut file = fs::File::create(path).unwrap();
         let bytes = match format {
             GpFileFormat::Json => serde_json::to_vec(self).map_err(MoeError::SaveJsonError)?,
-            GpFileFormat::Binary => bincode::serialize(self).map_err(MoeError::SaveBinaryError)?,
+            GpFileFormat::Binary => {
+                bincode::serde::encode_to_vec(self, bincode::config::standard())
+                    .map_err(MoeError::SaveBinaryError)?
+            }
         };
         file.write_all(&bytes)?;
         Ok(())
+    }
+}
+
+impl MixintGpMixture {
+    /// Load MixintGpMixture from given file.
+    #[cfg(feature = "persistent")]
+    pub fn load(path: &str, format: GpFileFormat) -> Result<Box<MixintGpMixture>> {
+        let data = fs::read(path)?;
+        let moe = match format {
+            GpFileFormat::Json => serde_json::from_slice(&data).unwrap(),
+            GpFileFormat::Binary => {
+                bincode::serde::decode_from_slice(&data, bincode::config::standard())
+                    .map(|(surrogate, _)| surrogate)
+                    .unwrap()
+            }
+        };
+        Ok(Box::new(moe))
     }
 }
 
@@ -662,6 +683,21 @@ impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixtu
     }
 }
 
+impl GpQualityAssurance for MixintGpMixture {
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
+        (self as &dyn CrossValScore<_, _, _, _>).training_data()
+    }
+
+    fn cv(&self, kfold: usize) -> f64 {
+        (self as &dyn CrossValScore<_, _, _, _>).cv_score(kfold)
+    }
+
+    fn loocv(&self) -> f64 {
+        (self as &dyn CrossValScore<_, _, _, _>).loocv_score()
+    }
+}
+
+#[typetag::serde]
 impl MixtureGpSurrogate for MixintGpMixture {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
         self.moe.experts()
