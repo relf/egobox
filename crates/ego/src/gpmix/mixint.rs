@@ -7,11 +7,10 @@ use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
 use egobox_gp::ThetaTuning;
-use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{
     Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
-    GpQualityAssurance, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, Recombination,
-    RegressionSpec,
+    GpQualityAssurance, GpScore, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters,
+    Recombination, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -673,27 +672,35 @@ impl GpSurrogateExt for MixintGpMixture {
     }
 }
 
-impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
-    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
-        &self.training_data
+impl GpScore<EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
+    fn params(&self) -> MixintGpMixtureParams {
+        self.params.clone().into()
     }
 
-    fn params(&self) -> MixintGpMixtureParams {
-        MixintGpMixtureParams::from(self.params.clone())
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
+        (self as &dyn GpScore<_, _, _>).training_data()
     }
 }
 
 impl GpQualityAssurance for MixintGpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
-        (self as &dyn CrossValScore<_, _, _, _>).training_data()
+        (self as &dyn GpScore<_, _, _>).training_data()
     }
 
-    fn cv(&self, kfold: usize) -> f64 {
-        (self as &dyn CrossValScore<_, _, _, _>).cv_score(kfold)
+    fn q2(&self, kfold: usize) -> f64 {
+        (self as &dyn GpScore<_, _, _>).q2_score(kfold)
     }
 
-    fn loocv(&self) -> f64 {
-        (self as &dyn CrossValScore<_, _, _, _>).loocv_score()
+    fn looq2(&self) -> f64 {
+        (self as &dyn GpScore<_, _, _>).looq2_score()
+    }
+
+    fn pva(&self, kfold: usize) -> f64 {
+        (self as &dyn GpScore<_, _, _>).pva_score(kfold)
+    }
+
+    fn loopva(&self) -> f64 {
+        (self as &dyn GpScore<_, _, _>).loopva_score()
     }
 }
 

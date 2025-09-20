@@ -35,21 +35,19 @@ fn main() -> Result<()> {
         .par_iter()
         .enumerate()
         .map(|(i, gp)| {
-            let nrmse = if args.loo {
-                gp.as_ref().loocv()
+            let q2 = if args.loo {
+                gp.as_ref().looq2()
             } else {
-                gp.as_ref().cv(args.kfold)
+                gp.as_ref().q2(args.kfold)
+            };
+
+            let pva = if args.loo {
+                gp.as_ref().loopva()
+            } else {
+                gp.as_ref().pva(args.kfold)
             };
             let n = gp.training_data().0.nrows();
-            let mean = gp.training_data().1.mean().unwrap();
-            println!(
-                "GP({}): nbpts={}, mean={}, RMSE={}, NRMSE={}",
-                i,
-                n,
-                mean,
-                mean * nrmse,
-                nrmse
-            );
+            println!("GP({i}): nbpts={n}, Q2={q2}, PVA={pva}");
         })
         .collect();
 

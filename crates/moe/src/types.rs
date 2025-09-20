@@ -124,8 +124,10 @@ impl Clustering {
 
 pub trait GpQualityAssurance {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>);
-    fn cv(&self, kfold: usize) -> f64;
-    fn loocv(&self) -> f64;
+    fn q2(&self, kfold: usize) -> f64;
+    fn looq2(&self) -> f64;
+    fn pva(&self, kfold: usize) -> f64;
+    fn loopva(&self) -> f64;
 }
 
 /// A trait for Mixture of GP surrogates with derivatives using clustering

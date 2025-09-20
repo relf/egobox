@@ -3,11 +3,10 @@ use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::parameters::{GpMixtureParams, GpMixtureValidParams};
-use crate::types::*;
+use crate::{GpScore, types::*};
 use crate::{GpType, expertise_macros::*};
 use crate::{NbClusters, surrogates::*};
 
-use egobox_gp::metrics::CrossValScore;
 use egobox_gp::{GaussianProcess, SparseGaussianProcess, correlation_models::*, mean_models::*};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict, PredictInplace};
@@ -497,6 +496,7 @@ impl GpSurrogate for GpMixture {
             Recombination::Smooth(_) => self.predict_var_smooth(x),
         }
     }
+
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
@@ -542,7 +542,7 @@ impl GpSurrogateExt for GpMixture {
     }
 }
 
-impl CrossValScore<f64, MoeError, GpMixtureParams<f64>, Self> for GpMixture {
+impl GpScore<MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
         &self.training_data
     }
@@ -554,15 +554,21 @@ impl CrossValScore<f64, MoeError, GpMixtureParams<f64>, Self> for GpMixture {
 
 impl GpQualityAssurance for GpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
-        (self as &dyn CrossValScore<_, _, _, _>).training_data()
+        (self as &dyn GpScore<_, _, _>).training_data()
     }
 
-    fn cv(&self, kfold: usize) -> f64 {
-        (self as &dyn CrossValScore<_, _, _, _>).cv_score(kfold)
+    fn q2(&self, kfold: usize) -> f64 {
+        (self as &dyn GpScore<_, _, _>).q2_score(kfold)
+    }
+    fn looq2(&self) -> f64 {
+        (self as &dyn GpScore<_, _, _>).looq2_score()
     }
 
-    fn loocv(&self) -> f64 {
-        (self as &dyn CrossValScore<_, _, _, _>).loocv_score()
+    fn pva(&self, kfold: usize) -> f64 {
+        (self as &dyn GpScore<_, _, _>).pva_score(kfold)
+    }
+    fn loopva(&self) -> f64 {
+        (self as &dyn GpScore<_, _, _>).loopva_score()
     }
 }
 
@@ -1036,7 +1042,7 @@ mod tests {
             moe.predict(&array![[0.82]]).unwrap()[0],
             epsilon = 1e-4
         );
-        println!("LOOCV = {}", moe.loocv_score());
+        println!("LOOQ2 = {}", moe.looq2_score());
     }
 
     #[test]

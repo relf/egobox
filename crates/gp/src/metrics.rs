@@ -10,8 +10,8 @@ use crate::{
     mean_models,
 };
 
-/// A trait for cross validation score
-pub trait CrossValScore<F, ER, P, O>
+/// A trait for Q2 predictive coefficient cross validation score
+pub trait PredictScore<F, ER, P, O>
 where
     F: Float,
     ER: std::error::Error + From<linfa::error::Error>,
@@ -22,30 +22,34 @@ where
 
     fn params(&self) -> P;
 
-    /// Compute quality metric NRMSD based on cross validation
-    /// See https://en.wikipedia.org/wiki/Root_mean_square_deviation
-    fn cv_score(&self, kfold: usize) -> F {
+    /// Compute quality metric Q2 with kfold cross validation
+    fn q2_score(&self, kfold: usize) -> F {
         let (xt, yt) = self.training_data();
         let dataset = Dataset::new(xt.to_owned(), yt.to_owned());
-        let mut error = F::zero();
+        let yt_mean = yt.mean().unwrap();
+        // Predictive Residual Sum of Squares
+        let mut press = F::zero();
+        // Total Sum of Squares
+        let mut tss = F::zero();
         for (train, valid) in dataset.fold(kfold).into_iter() {
             let params = self.params();
             let model: O = params
                 .fit(&train)
                 .expect("cross-validation: sub model fitted");
             let pred = model.predict(valid.records());
-            error += (valid.targets() - pred).mapv(|v| v * v).sum();
+            press += (valid.targets() - pred).mapv(|v| v * v).sum();
+            tss += (valid.targets() - yt_mean).mapv(|v| v * v).sum();
         }
-        (error / F::cast(kfold)).sqrt() / yt.mean().unwrap()
+        F::one() - press / tss
     }
 
-    /// NRMSD Leave one out cross validation
-    fn loocv_score(&self) -> F {
-        self.cv_score(self.training_data().0.nrows())
+    /// Q2 predictive coefficient with Leave-One-Out Cross-Validation
+    fn looq2_score(&self) -> F {
+        self.q2_score(self.training_data().0.nrows())
     }
 }
 
-impl<F, Mean, Corr> CrossValScore<F, GpError, GpParams<F, Mean, Corr>, Self>
+impl<F, Mean, Corr> PredictScore<F, GpError, GpParams<F, Mean, Corr>, Self>
     for GaussianProcess<F, Mean, Corr>
 where
     F: Float,
@@ -61,7 +65,7 @@ where
     }
 }
 
-impl<F, Corr> CrossValScore<F, GpError, SgpParams<F, Corr>, Self> for SparseGaussianProcess<F, Corr>
+impl<F, Corr> PredictScore<F, GpError, SgpParams<F, Corr>, Self> for SparseGaussianProcess<F, Corr>
 where
     F: Float,
     Corr: correlation_models::CorrelationModel<F>,
@@ -102,7 +106,7 @@ mod test {
     }
 
     #[test]
-    fn test_cv_gp_griewank() {
+    fn test_q2_gp_griewank() {
         let dims = [5]; // , 10, 60];
         let nts = [100]; // , 300, 500];
         let lim = array![[-600., 600.]];
@@ -128,8 +132,8 @@ mod test {
             .fit(&Dataset::new(xt, yt))
             .expect("GP fit error");
 
-            assert_abs_diff_eq!(gp.loocv_score(), 0., epsilon = 1e-2);
-            assert_abs_diff_eq!(gp.cv_score(10), 0., epsilon = 1e-2);
+            assert_abs_diff_eq!(gp.looq2_score(), 1., epsilon = 1e-2);
+            assert_abs_diff_eq!(gp.q2_score(10), 1., epsilon = 1e-2);
         });
     }
 
@@ -152,7 +156,7 @@ mod test {
     }
 
     #[test]
-    fn test_cv_sgp() {
+    fn test_q2_sgp() {
         let mut rng = Xoshiro256Plus::seed_from_u64(42);
         // Generate training data
         let nt = 200;
@@ -165,7 +169,7 @@ mod test {
             .fit(&Dataset::new(xt.clone(), yt.clone()))
             .expect("GP fitted");
 
-        assert_abs_diff_eq!(sgp.loocv_score(), 13.73, epsilon = 3.1);
-        assert_abs_diff_eq!(sgp.cv_score(10), 62.16, epsilon = 3.);
+        assert_abs_diff_eq!(sgp.looq2_score(), 1., epsilon = 2e-2);
+        assert_abs_diff_eq!(sgp.q2_score(10), 1., epsilon = 2e-2);
     }
 }
