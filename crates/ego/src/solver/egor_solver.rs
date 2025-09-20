@@ -444,7 +444,9 @@ where
         }
 
         let is_global_phase = (last_iter_success && state.prev_step_ego)
-            || ((state.get_iter() % (1 + self.config.trego.n_local_steps)) == 0);
+            || state
+                .get_iter()
+                .is_multiple_of(1 + self.config.trego.n_local_steps);
 
         if is_global_phase {
             // Global step

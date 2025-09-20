@@ -108,7 +108,7 @@ where
 {
     pub fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
         self.config.gp.n_clusters.is_auto()
-            && (added != 0 && added % 10 == 0 && added - prev_added > 0)
+            && (added != 0 && added.is_multiple_of(10) && added - prev_added > 0)
     }
 
     /// Build surrogate given training data and surrogate builder
@@ -633,9 +633,9 @@ where
                         format!("Constraint[{k}]")
                     };
                     let make_clustering = (init && i == 0) || recluster;
-                    let optimize_theta =
-                        ((iter as usize * self.config.q_points + i) % (self.config.q_optmod) == 0)
-                            && j == 0;
+                    let optimize_theta = (iter as usize * self.config.q_points + i)
+                        .is_multiple_of(self.config.q_optmod)
+                        && j == 0;
                     self.make_clustered_surrogate(
                         &name,
                         &xt,

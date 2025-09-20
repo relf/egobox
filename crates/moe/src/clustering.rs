@@ -21,7 +21,7 @@ fn median(v: &[f64]) -> f64 {
     list.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
     let len = list.len();
     let mid = len / 2;
-    if len % 2 == 0 {
+    if len.is_multiple_of(2) {
         mean(&list[(mid - 1)..(mid + 1)])
     } else {
         list[mid]
