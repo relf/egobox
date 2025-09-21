@@ -57,12 +57,9 @@ where
                 .expect("cross-validation: sub model fitted");
             let pred = model.predict(&valid.records().view()).unwrap();
             let var = model.predict_var(&valid.records().view()).unwrap();
-            println!("num ={:?}", (valid.targets() - &pred).mapv(|v| v * v));
-            println!("den ={:?}", var);
             varss += ((valid.targets() - &pred).mapv(|v| v * v) / var).sum();
             n += valid.nsamples();
         }
-        println!("n={}", n);
         (varss / n as f64).ln().abs()
     }
 
