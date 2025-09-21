@@ -902,11 +902,10 @@ impl GpMixture {
     pub fn load(path: &str, format: GpFileFormat) -> Result<Box<GpMixture>> {
         let data = fs::read(path)?;
         let moe = match format {
-            GpFileFormat::Json => serde_json::from_slice(&data).unwrap(),
+            GpFileFormat::Json => serde_json::from_slice(&data)?,
             GpFileFormat::Binary => {
                 bincode::serde::decode_from_slice(&data, bincode::config::standard())
-                    .map(|(surrogate, _)| surrogate)
-                    .unwrap()
+                    .map(|(surrogate, _)| surrogate)?
             }
         };
         Ok(Box::new(moe))
