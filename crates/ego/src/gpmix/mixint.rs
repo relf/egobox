@@ -677,10 +677,11 @@ impl GpScore<EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
     }
 
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
-        (self as &dyn GpScore<_, _, _>).training_data()
+        &self.training_data
     }
 }
 
+#[typetag::serde]
 impl GpQualityAssurance for MixintGpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
         (self as &dyn GpScore<_, _, _>).training_data()

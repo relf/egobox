@@ -43,7 +43,7 @@ pub trait SgpSurrogateParams: GpSurrogateParams {
 }
 
 /// A trait for a base GP surrogate
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gp"))]
 pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     /// Returns input/output dims
     fn dims(&self) -> (usize, usize);
@@ -62,7 +62,7 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
 }
 
 /// A trait for a GP surrogate with derivatives predictions and sampling
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpext"))]
 pub trait GpSurrogateExt {
     /// Predict derivatives at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
@@ -75,7 +75,7 @@ pub trait GpSurrogateExt {
 }
 
 /// A trait for a GP surrogate.
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpparam"))]
 pub trait GpParameterized {
     fn theta(&self) -> &Array1<f64>;
     fn variance(&self) -> f64;
@@ -84,11 +84,11 @@ pub trait GpParameterized {
 }
 
 /// A trait for a GP surrogate.
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_fullgp"))]
 pub trait FullGpSurrogate: GpParameterized + GpSurrogate + GpSurrogateExt {}
 
 /// A trait for a Sparse GP surrogate.
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_sgp"))]
 pub trait SgpSurrogate: FullGpSurrogate {}
 
 /// A macro to declare GP surrogate using regression model and correlation model names.

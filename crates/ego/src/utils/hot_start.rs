@@ -110,7 +110,7 @@ where
         }
         let data = std::fs::read(path)?;
         let (solver, mut state): (_, EgorState<_>) =
-            bincode::serde::decode_from_slice(&data[..], bincode::config::standard())
+            bincode::serde::decode_from_slice(&data, bincode::config::standard())
                 .map(|(res, _)| res)
                 .unwrap();
         if let HotStartMode::ExtendedIters(n_iters) = self.mode {

@@ -477,7 +477,7 @@ impl Clustered for GpMixture {
     }
 }
 
-#[cfg_attr(feature = "serializable", typetag::serde)]
+#[typetag::serde]
 impl GpSurrogate for GpMixture {
     fn dims(&self) -> (usize, usize) {
         self.experts[0].dims()
@@ -515,7 +515,7 @@ impl GpSurrogate for GpMixture {
     }
 }
 
-#[cfg_attr(feature = "serializable", typetag::serde)]
+#[typetag::serde]
 impl GpSurrogateExt for GpMixture {
     fn predict_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
@@ -552,6 +552,7 @@ impl GpScore<MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     }
 }
 
+#[typetag::serde]
 impl GpQualityAssurance for GpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
         (self as &dyn GpScore<_, _, _>).training_data()

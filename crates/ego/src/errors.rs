@@ -46,4 +46,8 @@ pub enum EgoError {
     #[cfg(feature = "persistent")]
     #[error("Load error: {0}")]
     LoadBinaryError(#[from] bincode::error::DecodeError),
+    /// When error during saving
+    #[cfg(feature = "persistent")]
+    #[error("Save error: {0}")]
+    JsonError(#[from] serde_json::Error),
 }
