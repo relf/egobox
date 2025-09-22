@@ -1,9 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-#[allow(unused_imports)]
-// Though not directly used, this import is required for bincode
-// to properly load MixintGpMixture (while serde_json does not need it)
-use egobox_ego::gpmix::mixint::MixintGpMixture;
+use egobox_moe::GpMixture;
 use egobox_moe::MixtureGpSurrogate;
 use rayon::prelude::*;
 use std::fs;
@@ -19,7 +16,7 @@ struct Args {
     loo: bool,
 
     /// Use K folding cross validation procedure
-    #[arg(short, long, default_value = "5")]
+    #[arg(short, long, default_value = "10")]
     kfold: usize,
 }
 
@@ -27,9 +24,36 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     let data: Vec<u8> = fs::read(&args.filename)?;
+
+    // Try to load a vector of GP models (Egor optimizer save)
     let gp_models: Vec<Box<dyn MixtureGpSurrogate>> =
-        bincode::serde::decode_from_slice(&data[..], bincode::config::standard())
-            .map(|(res, _)| res)?;
+        bincode::serde::decode_from_slice(&data, bincode::config::standard())
+            .map(|(res, _)| res)
+            .unwrap_or_default();
+
+    let gp_models = if gp_models.is_empty() {
+        // Try to load a single GP model (Gpx save)
+        let gp: Box<GpMixture> =
+            bincode::serde::decode_from_slice(&data, bincode::config::standard())
+                .map(|(res, _)| res)?;
+        vec![gp as Box<dyn MixtureGpSurrogate>]
+    } else {
+        gp_models
+    };
+
+    println!(
+        "Loaded {} GP model(s) from {}",
+        gp_models.len(),
+        args.filename
+    );
+
+    let (xt, _yt) = gp_models.first().unwrap().training_data();
+    println!("Training data: {} samples ({}-dim)", xt.nrows(), xt.ncols());
+
+    println!(
+        "Computing Q2 and PVA with {}-fold cross-validation...",
+        if args.loo { xt.nrows() } else { args.kfold }
+    );
 
     let _res: Vec<_> = gp_models
         .par_iter()
@@ -46,8 +70,7 @@ fn main() -> Result<()> {
             } else {
                 gp.as_ref().pva(args.kfold)
             };
-            let n = gp.training_data().0.nrows();
-            println!("GP({i}): nbpts={n}, Q2={q2}, PVA={pva}");
+            println!("GP({i}): Q2={q2}, PVA={pva}");
         })
         .collect();
 
