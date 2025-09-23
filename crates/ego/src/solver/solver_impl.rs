@@ -4,15 +4,9 @@ use crate::errors::{EgoError, Result};
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::solver::solver_infill_optim::InfillOptProblem;
-//use crate::utils::gp_recorder;
 use crate::utils::{
-    //EGOBOX_GP_RECORDER,
-    EGOBOX_LOG,
-    EGOBOX_USE_GP_VAR_PORTFOLIO,
-    find_best_result_index_from,
-    is_feasible,
-    select_from_portfolio,
-    update_data,
+    EGOBOX_LOG, EGOR_USE_GP_VAR_PORTFOLIO, find_best_result_index_from, is_feasible,
+    select_from_portfolio, update_data,
 };
 use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
 use crate::{EgorConfig, find_best_result_index};
@@ -114,7 +108,7 @@ where
 {
     pub fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
         self.config.gp.n_clusters.is_auto()
-            && (added != 0 && added % 10 == 0 && added - prev_added > 0)
+            && (added != 0 && added.is_multiple_of(10) && added - prev_added > 0)
     }
 
     /// Build surrogate given training data and surrogate builder
@@ -584,7 +578,7 @@ where
         let mut portfolio = vec![];
 
         let sigma_weights =
-            if std::env::var(EGOBOX_USE_GP_VAR_PORTFOLIO).is_ok() && self.config.q_points == 1 {
+            if std::env::var(EGOR_USE_GP_VAR_PORTFOLIO).is_ok() && self.config.q_points == 1 {
                 // Do not believe GP variance, weight it to generate possibly several clusters
                 // hence several points to add
                 // logspace(0.1, 100., 13) with 1. moved in front
@@ -639,9 +633,9 @@ where
                         format!("Constraint[{k}]")
                     };
                     let make_clustering = (init && i == 0) || recluster;
-                    let optimize_theta =
-                        ((iter as usize * self.config.q_points + i) % (self.config.q_optmod) == 0)
-                            && j == 0;
+                    let optimize_theta = (iter as usize * self.config.q_points + i)
+                        .is_multiple_of(self.config.q_optmod)
+                        && j == 0;
                     self.make_clustered_surrogate(
                         &name,
                         &xt,
@@ -654,9 +648,23 @@ where
                     )
                 });
                 let (models, inits): (Vec<_>, Vec<_>) = models_and_inits.unzip();
-                // if std::env::var(EGOBOX_GP_RECORDER).is_ok() {
-                //     gp_recorder::save_gp_models(&models);
-                // }
+                #[cfg(feature = "persistent")]
+                if std::env::var(crate::EGOR_USE_GP_RECORDER).is_ok() {
+                    use crate::utils::{EGOR_GP_FILENAME, EGOR_INITIAL_GP_FILENAME, gp_recorder};
+
+                    let default_dir = String::from("./");
+                    let outdir = self.config.outdir.as_ref().unwrap_or(&default_dir);
+                    let filename = if iter == 0 {
+                        EGOR_INITIAL_GP_FILENAME
+                    } else {
+                        EGOR_GP_FILENAME
+                    };
+                    let filepath = std::path::Path::new(outdir).join(filename);
+                    match gp_recorder::save_gp_models(&filepath, &models) {
+                        Ok(_) => log::info!("GP models saved to {:?}", filepath),
+                        Err(err) => log::info!("Cannot save GP models: {:?}", err),
+                    };
+                }
 
                 (0..=self.config.n_cstr).for_each(|k| {
                     clusterings[k] = Some(models[k].to_clustering());

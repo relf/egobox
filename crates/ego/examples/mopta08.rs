@@ -265,7 +265,7 @@ fn main() -> anyhow::Result<()> {
     let mut xlimits = Array2::zeros((dim, 2));
     xlimits.column_mut(1).assign(&Array1::ones(dim));
 
-    let res = if std::env::var(egobox_ego::EGOBOX_USE_GP_VAR_PORTFOLIO).is_ok() {
+    let res = if std::env::var(egobox_ego::EGOR_USE_GP_VAR_PORTFOLIO).is_ok() {
         EgorBuilder::optimize(mopta_func(dim))
             .configure(|config| {
                 config

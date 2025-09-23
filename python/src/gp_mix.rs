@@ -14,8 +14,7 @@ use std::{cmp::Ordering, path::Path};
 use crate::gp_config::GpConfig;
 use crate::types::*;
 use egobox_ego::{EGO_GP_OPTIM_MAX_EVAL, EGO_GP_OPTIM_N_START};
-use egobox_gp::metrics::CrossValScore;
-use egobox_moe::{Clustered, MixtureGpSurrogate, NbClusters, ThetaTuning};
+use egobox_moe::{Clustered, GpQualityAssurance, MixtureGpSurrogate, NbClusters, ThetaTuning};
 #[allow(unused_imports)] // Avoid linting problem
 use egobox_moe::{GpMixture, GpSurrogate, GpSurrogateExt};
 use linfa::{Dataset, traits::Fit};

@@ -7,10 +7,10 @@ use crate::errors::{EgoError, Result};
 use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
 use egobox_gp::ThetaTuning;
-use egobox_gp::metrics::CrossValScore;
 use egobox_moe::{
     Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
-    GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, Recombination, RegressionSpec,
+    GpQualityAssurance, GpScore, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters,
+    Recombination, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -612,10 +612,29 @@ impl GpSurrogate for MixintGpMixture {
         let mut file = fs::File::create(path).unwrap();
         let bytes = match format {
             GpFileFormat::Json => serde_json::to_vec(self).map_err(MoeError::SaveJsonError)?,
-            GpFileFormat::Binary => bincode::serialize(self).map_err(MoeError::SaveBinaryError)?,
+            GpFileFormat::Binary => {
+                bincode::serde::encode_to_vec(self, bincode::config::standard())
+                    .map_err(MoeError::SaveBinaryError)?
+            }
         };
         file.write_all(&bytes)?;
         Ok(())
+    }
+}
+
+impl MixintGpMixture {
+    /// Load MixintGpMixture from given file.
+    #[cfg(feature = "persistent")]
+    pub fn load(path: &str, format: GpFileFormat) -> Result<Box<MixintGpMixture>> {
+        let data = fs::read(path)?;
+        let moe = match format {
+            GpFileFormat::Json => serde_json::from_slice(&data).unwrap(),
+            GpFileFormat::Binary => {
+                bincode::serde::decode_from_slice(&data, bincode::config::standard())
+                    .map(|(surrogate, _)| surrogate)?
+            }
+        };
+        Ok(Box::new(moe))
     }
 }
 
@@ -652,16 +671,40 @@ impl GpSurrogateExt for MixintGpMixture {
     }
 }
 
-impl CrossValScore<f64, EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
+impl GpScore<EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
+    fn params(&self) -> MixintGpMixtureParams {
+        self.params.clone().into()
+    }
+
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
         &self.training_data
     }
+}
 
-    fn params(&self) -> MixintGpMixtureParams {
-        MixintGpMixtureParams::from(self.params.clone())
+#[typetag::serde]
+impl GpQualityAssurance for MixintGpMixture {
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
+        (self as &dyn GpScore<_, _, _>).training_data()
+    }
+
+    fn q2(&self, kfold: usize) -> f64 {
+        (self as &dyn GpScore<_, _, _>).q2_score(kfold)
+    }
+
+    fn looq2(&self) -> f64 {
+        (self as &dyn GpScore<_, _, _>).looq2_score()
+    }
+
+    fn pva(&self, kfold: usize) -> f64 {
+        (self as &dyn GpScore<_, _, _>).pva_score(kfold)
+    }
+
+    fn loopva(&self) -> f64 {
+        (self as &dyn GpScore<_, _, _>).loopva_score()
     }
 }
 
+#[typetag::serde]
 impl MixtureGpSurrogate for MixintGpMixture {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
         self.moe.experts()

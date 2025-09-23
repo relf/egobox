@@ -105,7 +105,7 @@
 //! ```
 //!
 use crate::utils::{
-    EGOBOX_LOG, EGOBOX_USE_GP_VAR_PORTFOLIO, EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY,
+    EGOBOX_LOG, EGOR_USE_GP_VAR_PORTFOLIO, EGOR_USE_MAX_PROBA_OF_FEASIBILITY,
     find_best_result_index, is_feasible,
 };
 use crate::{EgoError, EgorConfig, EgorState, MAX_POINT_ADDITION_RETRY};
@@ -273,15 +273,14 @@ where
         // Use proba of feasibility require related env var to be defined
         // (err to get var means not defined, means feasability is set to true whatever,
         // means given infill criterion is used whatever)
-        initial_state.feasibility = std::env::var(EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY).is_err()
-            || {
-                is_feasible(
-                    &y_data.row(best_index),
-                    &c_data.row(best_index),
-                    &initial_state.cstr_tol,
-                )
-            };
-        if std::env::var(EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY).is_ok() {
+        initial_state.feasibility = std::env::var(EGOR_USE_MAX_PROBA_OF_FEASIBILITY).is_err() || {
+            is_feasible(
+                &y_data.row(best_index),
+                &c_data.row(best_index),
+                &initial_state.cstr_tol,
+            )
+        };
+        if std::env::var(EGOR_USE_MAX_PROBA_OF_FEASIBILITY).is_ok() {
             info!("Using max proba of feasibility for infill criterion");
             info!(
                 "Initial best point feasibility = {}",
@@ -294,13 +293,13 @@ where
         info!("{} set: {}", EGOBOX_LOG, std::env::var(EGOBOX_LOG).is_ok());
         info!(
             "{} set: {}",
-            EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY,
-            std::env::var(EGOBOX_USE_MAX_PROBA_OF_FEASIBILITY).is_ok()
+            EGOR_USE_MAX_PROBA_OF_FEASIBILITY,
+            std::env::var(EGOR_USE_MAX_PROBA_OF_FEASIBILITY).is_ok()
         );
         info!(
             "{} set: {}",
-            EGOBOX_USE_GP_VAR_PORTFOLIO,
-            std::env::var(EGOBOX_USE_GP_VAR_PORTFOLIO).is_ok()
+            EGOR_USE_GP_VAR_PORTFOLIO,
+            std::env::var(EGOR_USE_GP_VAR_PORTFOLIO).is_ok()
         );
         Ok((initial_state, None))
     }
@@ -445,7 +444,9 @@ where
         }
 
         let is_global_phase = (last_iter_success && state.prev_step_ego)
-            || ((state.get_iter() % (1 + self.config.trego.n_local_steps)) == 0);
+            || state
+                .get_iter()
+                .is_multiple_of(1 + self.config.trego.n_local_steps);
 
         if is_global_phase {
             // Global step

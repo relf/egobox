@@ -93,11 +93,13 @@ mod surrogates;
 mod types;
 
 mod algorithm;
+mod metrics;
 mod parameters;
 
 pub use clustering::*;
 pub use errors::*;
 pub use gaussian_mixture::*;
+pub use metrics::*;
 pub use surrogates::*;
 pub use types::*;
 

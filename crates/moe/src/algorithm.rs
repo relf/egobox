@@ -3,11 +3,10 @@ use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::parameters::{GpMixtureParams, GpMixtureValidParams};
-use crate::types::*;
+use crate::{GpScore, types::*};
 use crate::{GpType, expertise_macros::*};
 use crate::{NbClusters, surrogates::*};
 
-use egobox_gp::metrics::CrossValScore;
 use egobox_gp::{GaussianProcess, SparseGaussianProcess, correlation_models::*, mean_models::*};
 use linfa::dataset::Records;
 use linfa::traits::{Fit, Predict, PredictInplace};
@@ -478,7 +477,7 @@ impl Clustered for GpMixture {
     }
 }
 
-#[cfg_attr(feature = "serializable", typetag::serde)]
+#[typetag::serde]
 impl GpSurrogate for GpMixture {
     fn dims(&self) -> (usize, usize) {
         self.experts[0].dims()
@@ -497,6 +496,7 @@ impl GpSurrogate for GpMixture {
             Recombination::Smooth(_) => self.predict_var_smooth(x),
         }
     }
+
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
@@ -504,7 +504,10 @@ impl GpSurrogate for GpMixture {
 
         let bytes = match format {
             GpFileFormat::Json => serde_json::to_vec(self).map_err(MoeError::SaveJsonError)?,
-            GpFileFormat::Binary => bincode::serialize(self).map_err(MoeError::SaveBinaryError)?,
+            GpFileFormat::Binary => {
+                bincode::serde::encode_to_vec(self, bincode::config::standard())
+                    .map_err(MoeError::SaveBinaryError)?
+            }
         };
         file.write_all(&bytes)?;
 
@@ -512,7 +515,7 @@ impl GpSurrogate for GpMixture {
     }
 }
 
-#[cfg_attr(feature = "serializable", typetag::serde)]
+#[typetag::serde]
 impl GpSurrogateExt for GpMixture {
     fn predict_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
@@ -539,7 +542,7 @@ impl GpSurrogateExt for GpMixture {
     }
 }
 
-impl CrossValScore<f64, MoeError, GpMixtureParams<f64>, Self> for GpMixture {
+impl GpScore<MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
         &self.training_data
     }
@@ -549,6 +552,28 @@ impl CrossValScore<f64, MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     }
 }
 
+#[typetag::serde]
+impl GpQualityAssurance for GpMixture {
+    fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
+        (self as &dyn GpScore<_, _, _>).training_data()
+    }
+
+    fn q2(&self, kfold: usize) -> f64 {
+        (self as &dyn GpScore<_, _, _>).q2_score(kfold)
+    }
+    fn looq2(&self) -> f64 {
+        (self as &dyn GpScore<_, _, _>).looq2_score()
+    }
+
+    fn pva(&self, kfold: usize) -> f64 {
+        (self as &dyn GpScore<_, _, _>).pva_score(kfold)
+    }
+    fn loopva(&self) -> f64 {
+        (self as &dyn GpScore<_, _, _>).loopva_score()
+    }
+}
+
+#[typetag::serde]
 impl MixtureGpSurrogate for GpMixture {
     /// Selected experts in the mixture
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
@@ -873,13 +898,16 @@ impl GpMixture {
     //     error / self.ytrain.std(1.)
     // }
 
+    /// Load Moe from the given file.
     #[cfg(feature = "persistent")]
-    /// Load Moe from given json file.
     pub fn load(path: &str, format: GpFileFormat) -> Result<Box<GpMixture>> {
         let data = fs::read(path)?;
         let moe = match format {
-            GpFileFormat::Json => serde_json::from_slice(&data).unwrap(),
-            GpFileFormat::Binary => bincode::deserialize(&data).unwrap(),
+            GpFileFormat::Json => serde_json::from_slice(&data)?,
+            GpFileFormat::Binary => {
+                bincode::serde::decode_from_slice(&data, bincode::config::standard())
+                    .map(|(surrogate, _)| surrogate)?
+            }
         };
         Ok(Box::new(moe))
     }
@@ -1014,7 +1042,7 @@ mod tests {
             moe.predict(&array![[0.82]]).unwrap()[0],
             epsilon = 1e-4
         );
-        println!("LOOCV = {}", moe.loocv_score());
+        println!("LOOQ2 = {}", moe.looq2_score());
     }
 
     #[test]

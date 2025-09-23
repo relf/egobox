@@ -13,7 +13,7 @@ use ndarray::{Array1, ArrayView2};
 /// determine the next most promising point expected to be the
 /// optimum location of the objective function
 #[clonable]
-#[typetag::serde(tag = "type")]
+#[typetag::serde(tag = "type_infill")]
 pub trait InfillCriterion: Clone + Sync {
     /// Name of the infill criterion
     fn name(&self) -> &'static str;

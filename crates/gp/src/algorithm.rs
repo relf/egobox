@@ -941,7 +941,7 @@ fn reduced_likelihood<F: Float>(
     nugget: F,
 ) -> Result<(F, GpInnerParams<F>)> {
     // Set up R
-    let mut r_mx: Array2<F> = Array2::<F>::eye(x_distances.n_obs).mapv(|v| (v + v * nugget));
+    let mut r_mx: Array2<F> = Array2::<F>::eye(x_distances.n_obs).mapv(|v| v + v * nugget);
     for (i, ij) in x_distances.d_indices.outer_iter().enumerate() {
         r_mx[[ij[0], ij[1]]] = rxx[[i, 0]];
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];
@@ -1012,7 +1012,7 @@ fn reduced_likelihood<F: Float>(
     nugget: F,
 ) -> Result<(F, GpInnerParams<F>)> {
     // Set up R
-    let mut r_mx: Array2<F> = Array2::<F>::eye(x_distances.n_obs).mapv(|v| (v + v * nugget));
+    let mut r_mx: Array2<F> = Array2::<F>::eye(x_distances.n_obs).mapv(|v| v + v * nugget);
     for (i, ij) in x_distances.d_indices.outer_iter().enumerate() {
         r_mx[[ij[0], ij[1]]] = rxx[[i, 0]];
         r_mx[[ij[1], ij[0]]] = rxx[[i, 0]];

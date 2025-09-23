@@ -43,7 +43,7 @@ pub trait SgpSurrogateParams: GpSurrogateParams {
 }
 
 /// A trait for a base GP surrogate
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gp"))]
 pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     /// Returns input/output dims
     fn dims(&self) -> (usize, usize);
@@ -62,7 +62,7 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
 }
 
 /// A trait for a GP surrogate with derivatives predictions and sampling
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpext"))]
 pub trait GpSurrogateExt {
     /// Predict derivatives at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
@@ -75,7 +75,7 @@ pub trait GpSurrogateExt {
 }
 
 /// A trait for a GP surrogate.
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpparam"))]
 pub trait GpParameterized {
     fn theta(&self) -> &Array1<f64>;
     fn variance(&self) -> f64;
@@ -84,11 +84,11 @@ pub trait GpParameterized {
 }
 
 /// A trait for a GP surrogate.
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_fullgp"))]
 pub trait FullGpSurrogate: GpParameterized + GpSurrogate + GpSurrogateExt {}
 
 /// A trait for a Sparse GP surrogate.
-#[cfg_attr(feature = "serializable", typetag::serde(tag = "type"))]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_sgp"))]
 pub trait SgpSurrogate: FullGpSurrogate {}
 
 /// A macro to declare GP surrogate using regression model and correlation model names.
@@ -171,7 +171,7 @@ macro_rules! declare_surrogate {
                         GpFileFormat::Json => serde_json::to_vec(self as &dyn GpSurrogate)
                             .map_err(MoeError::SaveJsonError)?,
                         GpFileFormat::Binary => {
-                            bincode::serialize(self as &dyn GpSurrogate).map_err(MoeError::SaveBinaryError)?
+                            bincode::serde::encode_to_vec(self as &dyn GpSurrogate, bincode::config::standard()).map_err(MoeError::SaveBinaryError)?
                         }
                     };
                     file.write_all(&bytes)?;
@@ -333,7 +333,7 @@ macro_rules! declare_sgp_surrogate {
                         GpFileFormat::Json => serde_json::to_vec(self as &dyn SgpSurrogate)
                             .map_err(MoeError::SaveJsonError)?,
                         GpFileFormat::Binary => {
-                            bincode::serialize(self as &dyn SgpSurrogate).map_err(MoeError::SaveBinaryError)?
+                            bincode::serde::encode_to_vec(self as &dyn SgpSurrogate, bincode::config::standard()).map_err(MoeError::SaveBinaryError)?
                         }
                     };
                     file.write_all(&bytes)?;
@@ -409,8 +409,12 @@ pub fn load(path: &str, format: GpFileFormat) -> Result<Box<dyn GpSurrogate>> {
                 MoeError::LoadError(format!("Error while loading from {path}: ({err})"))
             })
         }
-        GpFileFormat::Binary => bincode::deserialize(&data)
-            .map_err(|err| MoeError::LoadError(format!("Error while loading from {path} ({err})"))),
+        GpFileFormat::Binary => bincode::serde::decode_from_slice::<Box<dyn GpSurrogate>, _>(
+            &data,
+            bincode::config::standard(),
+        )
+        .map(|(surrogate, _)| surrogate)
+        .map_err(|err| MoeError::LoadError(format!("Error while loading from {path} ({err})"))),
     }
 }
 
