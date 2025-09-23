@@ -1,4 +1,12 @@
-# Egobox
+<p align="center">
+  <img
+    width="100"
+    src="./LOGO_EGOBOX_v4_100x100.png"
+    alt="Efficient Global Optimization toolbox in Rust"
+  />
+</p>
+
+# EGObox - Efficient Global Optimization toolbox
 
 ## Surrogate-based adaptative optimization: _Egor_
 
