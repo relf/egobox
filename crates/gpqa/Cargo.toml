@@ -1,7 +1,8 @@
 [package]
 name = "gpqa"
+version = "0.1.0"
+readme = "README.md"
 authors.workspace = true
-version.workspace = true
 license.workspace = true
 edition.workspace = true
 homepage.workspace = true
