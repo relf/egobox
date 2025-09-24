@@ -80,7 +80,7 @@ pub(crate) fn compute_wb2s_scale(
         .unwrap()[0];
     let ei_max = ei_x[i_max];
     if ei_max.abs() > 100. * f64::EPSILON {
-        ratio * pred_max / ei_max
+        ratio * pred_max.abs() / ei_max
     } else {
         1.
     }
