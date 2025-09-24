@@ -59,3 +59,8 @@ bincode = { version = "2", features = ["serde"] }
 criterion = "0.5"
 approx = "0.4"
 argmin_testfunctions = "0.2"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
