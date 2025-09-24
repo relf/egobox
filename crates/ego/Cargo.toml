@@ -5,8 +5,8 @@ version.workspace = true
 license.workspace = true
 edition.workspace = true
 homepage.workspace = true
+repository.workspace = true
 description = "A library for efficient global optimization"
-repository = "https://github.com/relf/egobox/crates/ego"
 keywords = ["machine-learning", "bayesian", "optimization"]
 categories = ["algorithms", "mathematics", "science"]
 

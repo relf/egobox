@@ -5,8 +5,8 @@ version.workspace = true
 license.workspace = true
 edition.workspace = true
 homepage.workspace = true
+repository.workspace = true
 description = "Utility to assess Egor GPs quality saved using GP recorder"
-repository = "https://github.com/relf/egobox/crates/gpqa"
 keywords = ["machine-learning", "bayesian", "optimization"]
 categories = ["algorithms", "mathematics", "science"]
 
