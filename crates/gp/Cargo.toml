@@ -6,6 +6,7 @@ license.workspace = true
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "A library for gaussian process modeling"
 keywords = ["machine-learning", "gaussian-process", "kriging", "surrogate"]
 categories = ["algorithms", "mathematics", "science"]

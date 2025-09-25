@@ -5,11 +5,11 @@ resolver = "2"
 [workspace.package]
 license = "Apache-2.0"
 edition = "2024"
-readme = "README.md"
 version = "0.32.0"
 authors = ["Rémi Lafage <remi.lafage@onera.fr>"]
 homepage = "https://github.com/relf/egobox"
 documentation = "https://pypi.org/project/egobox"
+readme = "README.md"
 description = "A toolbox for efficient global optimization"
 repository = "https://github.com/relf/egobox"
 keywords = [

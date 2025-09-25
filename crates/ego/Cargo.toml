@@ -6,6 +6,7 @@ license.workspace = true
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "A library for efficient global optimization"
 keywords = ["machine-learning", "bayesian", "optimization"]
 categories = ["algorithms", "mathematics", "science"]

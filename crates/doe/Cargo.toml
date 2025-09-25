@@ -6,6 +6,7 @@ license.workspace = true
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "A library for design of experiments"
 keywords = [
     "machine-learning",
@@ -14,7 +15,6 @@ keywords = [
     "lhs",
     "full-factorial",
 ]
-readme = "README.md"
 
 [features]
 default = []
