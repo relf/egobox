@@ -5,8 +5,8 @@ version.workspace = true
 license.workspace = true
 edition.workspace = true
 homepage.workspace = true
+repository.workspace = true
 description = "A library for mixture of expert gaussian processes"
-repository = "https://github.com/relf/egobox/crates/moe"
 keywords = [
     "machine-learning",
     "mixture",

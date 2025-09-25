@@ -5,8 +5,9 @@ version.workspace = true
 license.workspace = true
 edition.workspace = true
 homepage.workspace = true
+repository.workspace = true
+readme = "README.md"
 description = "A library for design of experiments"
-repository = "https://github.com/relf/egobox/crates/doe"
 keywords = [
     "machine-learning",
     "design",
@@ -14,7 +15,6 @@ keywords = [
     "lhs",
     "full-factorial",
 ]
-readme = "README.md"
 
 [features]
 default = []

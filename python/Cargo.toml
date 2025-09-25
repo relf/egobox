@@ -5,9 +5,10 @@ version.workspace = true
 license.workspace = true
 edition.workspace = true
 homepage.workspace = true
+repository.workspace = true
 description = "A python binding for egobox crates"
-repository = "https://github.com/relf/egobox/python"
 readme = "README.md"
+publish = false
 
 [lib]
 name = "egobox"

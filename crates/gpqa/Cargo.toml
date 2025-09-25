@@ -1,12 +1,13 @@
 [package]
 name = "gpqa"
+version = "0.1.0"
 authors.workspace = true
-version.workspace = true
 license.workspace = true
 edition.workspace = true
 homepage.workspace = true
+repository.workspace = true
+readme = "README.md"
 description = "Utility to assess Egor GPs quality saved using GP recorder"
-repository = "https://github.com/relf/egobox/crates/gpqa"
 keywords = ["machine-learning", "bayesian", "optimization"]
 categories = ["algorithms", "mathematics", "science"]
 
