@@ -116,7 +116,8 @@ pub fn pairwise_differences<F: Float>(
     let d = x3 - y3;
     let n = d.len();
     let res = Array::from_iter(d.iter().cloned());
-    res.into_shape_with_order((n / x.ncols(), x.ncols())).unwrap()
+    res.into_shape_with_order((n / x.ncols(), x.ncols()))
+        .unwrap()
 }
 
 /// Computes differences between x and each element of y
