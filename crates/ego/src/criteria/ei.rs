@@ -194,7 +194,7 @@ mod tests {
     };
     use approx::assert_abs_diff_eq;
     // use egobox_moe::GpSurrogate;
-    use finitediff::FiniteDiff;
+    use finitediff::vec;
     use linfa::Dataset;
     use ndarray::{Array2, ArrayView2, array};
     use ndarray_npy::write_npy;
@@ -217,8 +217,10 @@ mod tests {
         let x = vec![3.];
         let grad = EI.grad(&x, &mixi_moe, 0., Some(0.75), None);
 
-        let f = |x: &Vec<f64>| -> f64 { EI.value(x, &mixi_moe, 0., Some(0.75), None) };
-        let grad_central = x.central_diff(&f);
+        let f = |x: &Vec<f64>| -> std::result::Result<f64, anyhow::Error> {
+            Ok(EI.value(x, &mixi_moe, 0., Some(0.75), None))
+        };
+        let grad_central = (vec::central_diff(&f)(&x)).unwrap();
         assert_abs_diff_eq!(grad[0], grad_central[0], epsilon = 1e-6);
 
         // let cx = Array1::linspace(0., 25., 100);
@@ -267,8 +269,10 @@ mod tests {
         let grad = x.mapv(|v| LOG_EI.grad(&[v], &mixi_moe, 0., None, None)[0]);
         write_npy("logei_grad.npy", &grad).expect("save grad log ei");
 
-        let f = |x: &Vec<f64>| -> f64 { LOG_EI.value(x, &mixi_moe, 0., None, None) };
-        let grad_central = x.mapv(|v| vec![v].central_diff(&f)[0]);
+        let f = |x: &Vec<f64>| -> std::result::Result<f64, anyhow::Error> {
+            Ok(LOG_EI.value(x, &mixi_moe, 0., None, None))
+        };
+        let grad_central = x.mapv(|v| vec::central_diff(&f)(&vec![v]).unwrap()[0]);
         write_npy("logei_fdiff.npy", &grad_central).expect("save fdiff log ei");
 
         // check relative error between finite difference and analytical gradient

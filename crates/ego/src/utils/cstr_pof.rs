@@ -132,7 +132,7 @@ mod tests {
         types::*,
     };
     use approx::assert_abs_diff_eq;
-    use finitediff::FiniteDiff;
+    use finitediff::vec;
     use linfa::Dataset;
     use ndarray::array;
 
@@ -153,8 +153,9 @@ mod tests {
         let x = vec![0.3];
         let grad = pof_grad(&x, &mixi_moe, 0.);
 
-        let f = |x: &Vec<f64>| -> f64 { pof(x, &mixi_moe, 0.) };
-        let grad_central = x.central_diff(&f);
+        let f =
+            |x: &Vec<f64>| -> std::result::Result<f64, anyhow::Error> { Ok(pof(x, &mixi_moe, 0.)) };
+        let grad_central = vec::central_diff(&f)(&x).unwrap();
 
         assert_abs_diff_eq!(grad[0], grad_central[0], epsilon = 1e-6);
     }
@@ -186,8 +187,10 @@ mod tests {
         let x = vec![0.3];
         let grad = pofs_grad(&x, &cstr_models, &cstr_tols);
 
-        let f = |x: &Vec<f64>| -> f64 { pofs(x, &cstr_models, &cstr_tols) };
-        let grad_central = x.central_diff(&f);
+        let f = |x: &Vec<f64>| -> std::result::Result<f64, anyhow::Error> {
+            Ok(pofs(x, &cstr_models, &cstr_tols))
+        };
+        let grad_central = vec::central_diff(&f)(&x).unwrap();
 
         let term1 =
             pof_grad(&x, &*cstr_models[0], cstr_tols[0]) * pof(&x, &*cstr_models[1], cstr_tols[1]);

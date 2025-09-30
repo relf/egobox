@@ -132,7 +132,7 @@ where
     use cobyla::{Func, StopTols, minimize};
 
     let cons: Vec<&dyn Func<()>> = vec![];
-    let param0 = param0.map(|v| into_f64(v)).into_raw_vec();
+    let param0 = param0.map(|v| into_f64(v)).into_raw_vec_and_offset().0;
 
     let bounds: Vec<_> = bounds
         .iter()

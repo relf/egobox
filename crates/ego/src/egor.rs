@@ -1028,7 +1028,7 @@ mod tests {
             + (x2 + x3.mapv(|v| 2. * v) + x4.mapv(|v| 3. * v)) * x6 * 0.95 * x1
             + i;
         let d = y.len();
-        y.into_shape((d, 1)).unwrap()
+        y.into_shape_with_order((d, 1)).unwrap()
     }
 
     #[test]
