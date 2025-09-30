@@ -20,7 +20,6 @@ keywords = [
     "optimization",
 ]
 categories = ["algorithms", "mathematics", "science"]
-# rust-version = "1.79" # MSVR
 
 exclude = [".github/"]
 
