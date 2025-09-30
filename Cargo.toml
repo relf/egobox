@@ -20,7 +20,6 @@ keywords = [
     "optimization",
 ]
 categories = ["algorithms", "mathematics", "science"]
-# rust-version = "1.79" # MSVR
 
 exclude = [".github/"]
 
@@ -29,12 +28,13 @@ shared-version = true
 tag-name = "{{version}}"
 
 [workspace.dependencies]
-linfa = { version = "0.7", default-features = false }
+linfa = { version = "0.8", default-features = false }
+linfa-linalg = { version = "0.2", default-features = false }
 
-ndarray = { version = "0.15", features = ["rayon", "approx"] }
-ndarray-rand = "0.14"
-ndarray-stats = "0.5"
-ndarray-npy = "0.8"
+ndarray = { version = "0.16", features = ["rayon", "approx"] }
+ndarray-rand = "0.15"
+ndarray-stats = "0.6"
+ndarray-npy = "0.9"
 
 num-traits = "0.2"
 
@@ -43,7 +43,7 @@ anyhow = "1"
 rayon = "1"
 
 rand_xoshiro = "0.6"
-finitediff = { version = "0.1.4", features = ["ndarray"] }
+finitediff = { version = "0.2", features = ["ndarray"] }
 env_logger = "0.11"
 log = "0.4"
 
@@ -57,7 +57,7 @@ bincode = { version = "2", features = ["serde"] }
 
 # dev dependencies 
 criterion = "0.5"
-approx = "0.4"
+approx = "0.5"
 argmin_testfunctions = "0.2"
 
 # The profile that 'dist' will build with

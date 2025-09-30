@@ -3,12 +3,12 @@ use crate::errors::{GpError, Result};
 use crate::optimization::{CobylaParams, optimize_params, prepare_multistart};
 use crate::sparse_parameters::{Inducings, ParamTuning, SgpParams, SgpValidParams, SparseMethod};
 use crate::{GpSamplingMethod, correlation_models::*, sample, utils::pairwise_differences};
-use finitediff::FiniteDiff;
+use finitediff::ndarr;
 use linfa::prelude::{Dataset, DatasetBase, Fit, Float, PredictInplace};
 use linfa_linalg::{cholesky::*, triangular::*};
 use linfa_pls::PlsRegression;
 use ndarray::{Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip, s};
-use ndarray_einsum_beta::*;
+use ndarray_einsum::*;
 use ndarray_rand::rand::SeedableRng;
 use ndarray_rand::rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256Plus;
@@ -226,7 +226,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         let dx = pairwise_differences(a, b);
         // Compute the correlation function
         let r = self.corr.value(&dx, theta, w_star);
-        r.into_shape((a.nrows(), b.nrows()))
+        r.into_shape_with_order((a.nrows(), b.nrows()))
             .unwrap()
             .mapv(|v| v * sigma2)
     }
@@ -296,32 +296,33 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
 
     pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.training_data.0.ncols()));
-        let f = |x: &Array1<f64>| -> f64 {
+        let f = |x: &Array1<f64>| -> std::result::Result<f64, anyhow::Error> {
             let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
             let v = self.predict(&x).unwrap()[0];
-            unsafe { *(&v as *const F as *const f64) }
+            Ok(unsafe { *(&v as *const F as *const f64) })
         };
         Zip::from(drv.rows_mut())
             .and(x.rows())
             .for_each(|mut row, xi| {
                 let xi = xi.mapv(|v| unsafe { *(&v as *const F as *const f64) });
-                let grad = xi.central_diff(&f).mapv(|v| F::cast(v));
+                let g_central = ndarr::central_diff(&f);
+                let grad = g_central(&xi).unwrap().mapv(|v| F::cast(v));
                 row.assign(&grad);
             });
         drv
     }
     pub fn predict_var_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.training_data.0.ncols()));
-        let f = |x: &Array1<f64>| -> f64 {
+        let f = |x: &Array1<f64>| -> std::result::Result<f64, anyhow::Error> {
             let x = x.to_owned().insert_axis(Axis(0)).mapv(|v| F::cast(v));
             let v = self.predict_var(&x).unwrap()[0];
-            unsafe { *(&v as *const F as *const f64) }
+            Ok(unsafe { *(&v as *const F as *const f64) })
         };
         Zip::from(drv.rows_mut())
             .and(x.rows())
             .for_each(|mut row, xi| {
                 let xi = xi.mapv(|v| unsafe { *(&v as *const F as *const f64) });
-                let grad = xi.central_diff(&f).mapv(|v| F::cast(v));
+                let grad = ndarr::central_diff(&f)(&xi).unwrap().mapv(|v| F::cast(v));
                 row.assign(&grad);
             });
         drv
@@ -678,7 +679,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpValidParams<F, Corr> {
         let dx = pairwise_differences(a, b);
         // Compute the correlation function
         let r = self.corr().value(&dx, theta, w_star);
-        r.into_shape((a.nrows(), b.nrows()))
+        r.into_shape_with_order((a.nrows(), b.nrows()))
             .unwrap()
             .mapv(|v| v * sigma2)
     }

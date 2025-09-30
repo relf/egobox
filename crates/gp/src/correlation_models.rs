@@ -9,7 +9,7 @@
 use crate::utils::differences;
 use linfa::Float;
 use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, Zip};
-use ndarray_einsum_beta::einsum;
+use ndarray_einsum::einsum;
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -89,7 +89,7 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
             .sum_axis(Axis(1));
         let r = d.mapv(|v| v.powf(F::cast(2.))).dot(&theta_w);
         r.mapv(|v| F::exp(F::cast(-0.5) * v))
-            .into_shape((d.nrows(), 1))
+            .into_shape_with_order((d.nrows(), 1))
             .unwrap()
     }
 
@@ -161,7 +161,9 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
     ) -> Array2<F> {
         let theta_w = weights.mapv(|v| v.abs()).dot(theta);
         let r = d.mapv(|v| v.abs()).dot(&theta_w);
-        r.mapv(|v| F::exp(-v)).into_shape((d.nrows(), 1)).unwrap()
+        r.mapv(|v| F::exp(-v))
+            .into_shape_with_order((d.nrows(), 1))
+            .unwrap()
     }
 
     fn jacobian(
@@ -258,7 +260,7 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
     ) -> Array2<F> {
         let (a, b) = self.compute_r_factors(d, theta, weights);
         let r = a * b;
-        r.into_shape((d.nrows(), 1)).unwrap()
+        r.into_shape_with_order((d.nrows(), 1)).unwrap()
     }
 
     fn jacobian(
@@ -320,7 +322,7 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
 
         let da = einsum("i,ij->ij", &[&b, &da])
             .unwrap()
-            .into_shape((xtrain.nrows(), xtrain.ncols()))
+            .into_shape_with_order((xtrain.nrows(), xtrain.ncols()))
             .unwrap();
         db + da
     }
@@ -405,7 +407,7 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
     ) -> Array2<F> {
         let (a, b) = self.compute_r_factors(d, theta, weights);
         let r = a * b;
-        r.into_shape((d.nrows(), 1)).unwrap()
+        r.into_shape_with_order((d.nrows(), 1)).unwrap()
     }
 
     fn jacobian(
@@ -469,7 +471,7 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
             });
         let da = einsum("i,ij->ij", &[&b, &da])
             .unwrap()
-            .into_shape((xtrain.nrows(), xtrain.ncols()))
+            .into_shape_with_order((xtrain.nrows(), xtrain.ncols()))
             .unwrap();
         db + da
     }

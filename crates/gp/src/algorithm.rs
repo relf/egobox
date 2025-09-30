@@ -278,7 +278,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
         let cross_dx = pairwise_differences(&xnorm, &xnorm);
         let k = self.params.corr.value(&cross_dx, &self.theta, &self.w_star);
-        let k = k.into_shape((xnorm.nrows(), xnorm.nrows())).unwrap();
+        let k = k
+            .into_shape_with_order((xnorm.nrows(), xnorm.nrows()))
+            .unwrap();
 
         // let cov_matrix =
         //     &array![self.inner_params.sigma2] * (k - rt.t().to_owned().dot(&rt) + u.t().dot(&u));
@@ -339,7 +341,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
         let n_obs = xnorm.nrows();
         let nt = self.xt_norm.data.nrows();
-        r.into_shape((n_obs, nt)).unwrap().to_owned()
+        r.into_shape_with_order((n_obs, nt)).unwrap().to_owned()
     }
 
     /// Sample the gaussian process for `n_traj` trajectories using cholesky decomposition
@@ -437,7 +439,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         let d_dx_1 = &xnorm
             .column(kx)
             .to_owned()
-            .into_shape((nr, 1))
+            .into_shape_with_order((nr, 1))
             .unwrap()
             .broadcast((nr, nc))
             .unwrap()
@@ -449,7 +451,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .column(kx)
             .to_owned()
             .as_standard_layout()
-            .into_shape((1, nc))
+            .into_shape_with_order((1, nc))
             .unwrap()
             .to_owned();
 
@@ -1618,7 +1620,7 @@ mod tests {
         let n_traj = 10;
         let (x_min, x_max) = (-10., 10.);
         let x = Array::linspace(x_min, x_max, n_plot)
-            .into_shape((n_plot, 1))
+            .into_shape_with_order((n_plot, 1))
             .unwrap();
         let trajs = krg.sample(&x, n_traj);
         assert_eq!(&[n_plot, n_traj], trajs.shape())
@@ -1635,7 +1637,7 @@ mod tests {
         let n_traj = 10;
         let (x_min, x_max) = (-10., 10.);
         let x = Array::linspace(x_min, x_max, n_plot)
-            .into_shape((n_plot, 1))
+            .into_shape_with_order((n_plot, 1))
             .unwrap();
         let trajs = krg.sample_eig(&x, n_traj);
         assert_eq!(&[n_plot, n_traj], trajs.shape());
@@ -1662,7 +1664,7 @@ mod tests {
         let x2 = x.column(0).mapv(|v| 2. * v) + x.column(1).mapv(|v| 5. * v);
         (x1 + x2)
             .mapv(|v| v + 10.)
-            .into_shape((x.nrows(), 1))
+            .into_shape_with_order((x.nrows(), 1))
             .unwrap()
     }
 

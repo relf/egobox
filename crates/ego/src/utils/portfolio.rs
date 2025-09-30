@@ -98,7 +98,7 @@ pub fn select_from_portfolio(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::*;
+    use ndarray::array;
 
     #[test]
     fn test_logspace_endpoints() {

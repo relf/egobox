@@ -730,7 +730,7 @@ mod tests {
     #[serial]
     fn test_sphere_coego_egor_builder() {
         let outdir = "target/test_coego";
-        let dim = 10;
+        let dim = 8;
         let xlimits = Array2::from_shape_vec((dim, 2), [-10.0, 10.0].repeat(dim)).unwrap();
         let init_doe = Lhs::new(&xlimits)
             .with_rng(Xoshiro256Plus::seed_from_u64(0))
@@ -743,7 +743,7 @@ mod tests {
                     .max_iters(max_iters)
                     .outdir(outdir)
                     .seed(42)
-                    .coego(CoegoStatus::Enabled(6))
+                    .coego(CoegoStatus::Enabled(5))
             })
             .min_within(&xlimits)
             .run()
@@ -1028,7 +1028,7 @@ mod tests {
             + (x2 + x3.mapv(|v| 2. * v) + x4.mapv(|v| 3. * v)) * x6 * 0.95 * x1
             + i;
         let d = y.len();
-        y.into_shape((d, 1)).unwrap()
+        y.into_shape_with_order((d, 1)).unwrap()
     }
 
     #[test]

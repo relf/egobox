@@ -1418,7 +1418,7 @@ mod tests {
     fn sphere(x: &Array2<f64>) -> Array1<f64> {
         (x * x)
             .sum_axis(Axis(1))
-            .into_shape((x.nrows(),))
+            .into_shape_with_order((x.nrows(),))
             .expect("Cannot reshape sphere output")
     }
 
