@@ -167,7 +167,9 @@ where
     C: CstrFn,
     SB: SurrogateBuilder + DeserializeOwned,
 {
-    const NAME: &'static str = "Egor";
+    fn name(&self) -> &str {
+        "Egor"
+    }
 
     fn init(
         &mut self,
