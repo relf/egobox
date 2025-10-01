@@ -33,9 +33,9 @@ egobox-ego = { version = "0.32.0", path = "../crates/ego", features = [
   "persistent",
 ] }
 
-pyo3 = { version = "0.25" }
-pyo3-log = "0.12"
-numpy = "0.25"
+pyo3 = { version = "0.26" }
+pyo3-log = "0.13"
+numpy = "0.26"
 
 linfa.workspace = true
 ndarray.workspace = true
@@ -50,7 +50,7 @@ serde_json.workspace = true
 ctrlc.workspace = true
 
 argmin_testfunctions.workspace = true
-pyo3-stub-gen = { version = "0.13", features = ["numpy"] }
+pyo3-stub-gen = { version = "0.14", features = ["numpy"] }
 
 [[bin]]
 name = "stub_gen"

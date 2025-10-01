@@ -128,7 +128,7 @@ use std::cmp::Ordering;
 #[gen_stub_pyclass]
 #[pyclass]
 pub(crate) struct Egor {
-    pub xspecs: PyObject,
+    pub xspecs: Py<PyAny>,
     pub gp_config: GpConfig,
     pub n_cstr: usize,
     pub cstr_tol: Option<Vec<f64>>,
@@ -181,7 +181,7 @@ impl Egor {
     #[allow(clippy::too_many_arguments)]
     fn new(
         _py: Python,
-        xspecs: PyObject,
+        xspecs: Py<PyAny>,
         gp_config: GpConfig,
         n_cstr: usize,
         cstr_tol: Option<Vec<f64>>,
@@ -264,12 +264,12 @@ impl Egor {
     fn minimize(
         &self,
         py: Python,
-        fun: PyObject,
-        fcstrs: Vec<PyObject>,
+        fun: Py<PyAny>,
+        fcstrs: Vec<Py<PyAny>>,
         max_iters: usize,
     ) -> PyResult<OptimResult> {
         let obj = |x: &ArrayView2<f64>| -> Array2<f64> {
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 let args = (x.to_owned().into_pyarray(py),);
                 let res = fun.bind(py).call1(args).unwrap();
                 let pyarray = res.downcast_into::<PyArray2<f64>>().unwrap();
@@ -282,7 +282,7 @@ impl Egor {
             .iter()
             .map(|cstr| {
                 |x: &[f64], g: Option<&mut [f64]>, _u: &mut InfillObjData<f64>| -> f64 {
-                    Python::with_gil(|py| {
+                    Python::attach(|py| {
                         if let Some(g) = g {
                             let args = (Array1::from(x.to_vec()).into_pyarray(py), true);
                             let grad = cstr.bind(py).call1(args).unwrap();
@@ -305,7 +305,7 @@ impl Egor {
             })
             .min_within_mixint_space(&xtypes);
 
-        let res = py.allow_threads(|| {
+        let res = py.detach(|| {
             mixintegor
                 .run()
                 .expect("Egor should optimize the objective function")
@@ -349,7 +349,7 @@ impl Egor {
             .configure(|config| self.apply_config(config, Some(1), 0, Some(&doe)))
             .min_within_mixint_space(&xtypes);
 
-        let x_suggested = py.allow_threads(|| mixintegor.suggest(&x_doe, &y_doe));
+        let x_suggested = py.detach(|| mixintegor.suggest(&x_doe, &y_doe));
         x_suggested.to_pyarray(py).into()
     }
 
