@@ -711,7 +711,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "slsqp",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "typetag",
  "web-time",
 ]
@@ -744,7 +744,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "typetag",
 ]
 
@@ -776,7 +776,7 @@ dependencies = [
  "rand_xoshiro",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "typetag",
 ]
 
