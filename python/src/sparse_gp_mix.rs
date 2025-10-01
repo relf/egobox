@@ -198,7 +198,7 @@ impl SparseGpMix {
         if let Err(ctrlc::Error::MultipleHandlers) = ctrlc::set_handler(|| std::process::exit(2)) {
             // ignore multiple handlers error
         };
-        let sgp = py.allow_threads(|| {
+        let sgp = py.detach(|| {
             GpMixture::params()
                 .gp_type(GpType::SparseGp {
                     sparse_method: method,

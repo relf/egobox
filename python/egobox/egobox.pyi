@@ -8,7 +8,11 @@ import typing
 from enum import Enum
 
 class CorrelationSpec:
-    ...
+    ALL: builtins.int = 15
+    SQUARED_EXPONENTIAL: builtins.int = 1
+    ABSOLUTE_EXPONENTIAL: builtins.int = 2
+    MATERN32: builtins.int = 4
+    MATERN52: builtins.int = 8
 
 class Egor:
     r"""
@@ -189,77 +193,161 @@ class Egor:
         """
 
 class ExpectedOptimum:
-    val: builtins.float
-    tol: builtins.float
+    @property
+    def val(self) -> builtins.float: ...
+    @property
+    def tol(self) -> builtins.float: ...
 
 class GpConfig:
     r"""
     GP configuration used by `Egor` and `GpMix`
     """
-    regr_spec: builtins.int
-    r"""
-    (RegressionSpec flags, an int in [1, 7])
-      Specification of regression models used in mixture.
-      Can be RegressionSpec.CONSTANT (1), RegressionSpec.LINEAR (2), RegressionSpec.QUADRATIC (4) or
-      any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
-    """
-    corr_spec: builtins.int
-    r"""
-    (CorrelationSpec flags, an int in [1, 15])
-      Specification of correlation models used in mixture.
-      Can be CorrelationSpec.SQUARED_EXPONENTIAL (1), CorrelationSpec.ABSOLUTE_EXPONENTIAL (2),
-      CorrelationSpec.MATERN32 (4), CorrelationSpec.MATERN52 (8) or
-      any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
-    """
-    kpls_dim: typing.Optional[builtins.int]
-    r"""
-    (0 < int < nx where nx is the dimension of inputs x)
-      Number of components to be used when PLS projection is used (a.k.a KPLS method).
-      This is used to address high-dimensional problems typically when nx > 9.
-    """
-    n_clusters: builtins.int
-    r"""
-    (int)
-      Number of clusters used by the mixture of surrogate experts (default is 1).
-      When set to 0, the number of cluster is determined automatically and refreshed every
-      10-points addition (should say 'tentative addition' because addition may fail for some points
-      but it is counted anyway).
-      When set to negative number -n, the number of clusters is determined automatically in [1, n]
-      this is used to limit the number of trials hence the execution time.
-    """
-    recombination: Recombination
-    r"""
-    (Recombination.Smooth or Recombination.Hard (default))
-      Specify how the various experts predictions are recombined
-      * Smooth: prediction is a combination of experts prediction wrt their responsabilities,
-      the heaviside factor which controls steepness of the change between experts regions is optimized
-      to get best mixture quality.
-      * Hard: prediction is taken from the expert with highest responsability
-      resulting in a model with discontinuities.
-    """
-    theta_init: typing.Optional[builtins.list[builtins.float]]
-    r"""
-    ([nx] where nx is the dimension of inputs x)
-      Initial guess for GP theta hyperparameters.
-      When None the default is 1e-2 for all components
-    """
-    theta_bounds: typing.Optional[builtins.list[builtins.list[builtins.float]]]
-    r"""
-    ([[lower_1, upper_1], ..., [lower_nx, upper_nx]] where nx is the dimension of inputs x)
-      Space search when optimizing theta GP hyperparameters
-      When None the default is [1e-6, 1e2] for all components
-    """
-    n_start: builtins.int
-    r"""
-    (int >= 0)
-      Number of internal GP hyperpameters optimization restart (multistart)
-      When is negative optimization is disabled and theta init value is used
-    """
-    max_eval: builtins.int
-    r"""
-    (int >= 0)
-      Max number of likelihood evaluations during GP hyperparameters optimization
-    """
+    @property
+    def regr_spec(self) -> builtins.int:
+        r"""
+        (RegressionSpec flags, an int in [1, 7])
+          Specification of regression models used in mixture.
+          Can be RegressionSpec.CONSTANT (1), RegressionSpec.LINEAR (2), RegressionSpec.QUADRATIC (4) or
+          any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
+        """
+    @property
+    def corr_spec(self) -> builtins.int:
+        r"""
+        (CorrelationSpec flags, an int in [1, 15])
+          Specification of correlation models used in mixture.
+          Can be CorrelationSpec.SQUARED_EXPONENTIAL (1), CorrelationSpec.ABSOLUTE_EXPONENTIAL (2),
+          CorrelationSpec.MATERN32 (4), CorrelationSpec.MATERN52 (8) or
+          any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
+        """
+    @property
+    def kpls_dim(self) -> typing.Optional[builtins.int]:
+        r"""
+        (0 < int < nx where nx is the dimension of inputs x)
+          Number of components to be used when PLS projection is used (a.k.a KPLS method).
+          This is used to address high-dimensional problems typically when nx > 9.
+        """
+    @property
+    def n_clusters(self) -> builtins.int:
+        r"""
+        (int)
+          Number of clusters used by the mixture of surrogate experts (default is 1).
+          When set to 0, the number of cluster is determined automatically and refreshed every
+          10-points addition (should say 'tentative addition' because addition may fail for some points
+          but it is counted anyway).
+          When set to negative number -n, the number of clusters is determined automatically in [1, n]
+          this is used to limit the number of trials hence the execution time.
+        """
+    @property
+    def recombination(self) -> Recombination:
+        r"""
+        (Recombination.Smooth or Recombination.Hard (default))
+          Specify how the various experts predictions are recombined
+          * Smooth: prediction is a combination of experts prediction wrt their responsabilities,
+          the heaviside factor which controls steepness of the change between experts regions is optimized
+          to get best mixture quality.
+          * Hard: prediction is taken from the expert with highest responsability
+          resulting in a model with discontinuities.
+        """
+    @property
+    def theta_init(self) -> typing.Optional[builtins.list[builtins.float]]:
+        r"""
+        ([nx] where nx is the dimension of inputs x)
+          Initial guess for GP theta hyperparameters.
+          When None the default is 1e-2 for all components
+        """
+    @property
+    def theta_bounds(self) -> typing.Optional[builtins.list[builtins.list[builtins.float]]]:
+        r"""
+        ([[lower_1, upper_1], ..., [lower_nx, upper_nx]] where nx is the dimension of inputs x)
+          Space search when optimizing theta GP hyperparameters
+          When None the default is [1e-6, 1e2] for all components
+        """
+    @property
+    def n_start(self) -> builtins.int:
+        r"""
+        (int >= 0)
+          Number of internal GP hyperpameters optimization restart (multistart)
+          When is negative optimization is disabled and theta init value is used
+        """
+    @property
+    def max_eval(self) -> builtins.int:
+        r"""
+        (int >= 0)
+          Max number of likelihood evaluations during GP hyperparameters optimization
+        """
+    @regr_spec.setter
+    def regr_spec(self, value: builtins.int) -> None:
+        r"""
+        (RegressionSpec flags, an int in [1, 7])
+          Specification of regression models used in mixture.
+          Can be RegressionSpec.CONSTANT (1), RegressionSpec.LINEAR (2), RegressionSpec.QUADRATIC (4) or
+          any bit-wise union of these values (e.g. RegressionSpec.CONSTANT | RegressionSpec.LINEAR)
+        """
+    @corr_spec.setter
+    def corr_spec(self, value: builtins.int) -> None:
+        r"""
+        (CorrelationSpec flags, an int in [1, 15])
+          Specification of correlation models used in mixture.
+          Can be CorrelationSpec.SQUARED_EXPONENTIAL (1), CorrelationSpec.ABSOLUTE_EXPONENTIAL (2),
+          CorrelationSpec.MATERN32 (4), CorrelationSpec.MATERN52 (8) or
+          any bit-wise union of these values (e.g. CorrelationSpec.MATERN32 | CorrelationSpec.MATERN52)
+        """
+    @kpls_dim.setter
+    def kpls_dim(self, value: typing.Optional[builtins.int]) -> None:
+        r"""
+        (0 < int < nx where nx is the dimension of inputs x)
+          Number of components to be used when PLS projection is used (a.k.a KPLS method).
+          This is used to address high-dimensional problems typically when nx > 9.
+        """
+    @n_clusters.setter
+    def n_clusters(self, value: builtins.int) -> None:
+        r"""
+        (int)
+          Number of clusters used by the mixture of surrogate experts (default is 1).
+          When set to 0, the number of cluster is determined automatically and refreshed every
+          10-points addition (should say 'tentative addition' because addition may fail for some points
+          but it is counted anyway).
+          When set to negative number -n, the number of clusters is determined automatically in [1, n]
+          this is used to limit the number of trials hence the execution time.
+        """
+    @recombination.setter
+    def recombination(self, value: Recombination) -> None:
+        r"""
+        (Recombination.Smooth or Recombination.Hard (default))
+          Specify how the various experts predictions are recombined
+          * Smooth: prediction is a combination of experts prediction wrt their responsabilities,
+          the heaviside factor which controls steepness of the change between experts regions is optimized
+          to get best mixture quality.
+          * Hard: prediction is taken from the expert with highest responsability
+          resulting in a model with discontinuities.
+        """
+    @theta_init.setter
+    def theta_init(self, value: typing.Optional[builtins.list[builtins.float]]) -> None:
+        r"""
+        ([nx] where nx is the dimension of inputs x)
+          Initial guess for GP theta hyperparameters.
+          When None the default is 1e-2 for all components
+        """
+    @theta_bounds.setter
+    def theta_bounds(self, value: typing.Optional[builtins.list[builtins.list[builtins.float]]]) -> None:
+        r"""
+        ([[lower_1, upper_1], ..., [lower_nx, upper_nx]] where nx is the dimension of inputs x)
+          Space search when optimizing theta GP hyperparameters
+          When None the default is [1e-6, 1e2] for all components
+        """
+    @n_start.setter
+    def n_start(self, value: builtins.int) -> None:
+        r"""
+        (int >= 0)
+          Number of internal GP hyperpameters optimization restart (multistart)
+          When is negative optimization is disabled and theta init value is used
+        """
+    @max_eval.setter
+    def max_eval(self, value: builtins.int) -> None:
+        r"""
+        (int >= 0)
+          Max number of likelihood evaluations during GP hyperparameters optimization
+        """
 
 class GpMix:
     def __new__(cls, regr_spec:builtins.int=1, corr_spec:builtins.int=1, kpls_dim:typing.Optional[builtins.int]=None, n_clusters:builtins.int=1, recombination:Recombination=Recombination.HARD, theta_init:typing.Optional[typing.Sequence[builtins.float]]=None, theta_bounds:typing.Optional[typing.Sequence[typing.Sequence[builtins.float]]]=None, n_start:builtins.int=10, max_eval:builtins.int=50, seed:typing.Optional[builtins.int]=None) -> GpMix:
@@ -463,13 +551,20 @@ class Gpx:
         """
 
 class OptimResult:
-    x_opt: numpy.typing.NDArray[numpy.float64]
-    y_opt: numpy.typing.NDArray[numpy.float64]
-    x_doe: numpy.typing.NDArray[numpy.float64]
-    y_doe: numpy.typing.NDArray[numpy.float64]
+    @property
+    def x_opt(self) -> numpy.typing.NDArray[numpy.float64]: ...
+    @property
+    def y_opt(self) -> numpy.typing.NDArray[numpy.float64]: ...
+    @property
+    def x_doe(self) -> numpy.typing.NDArray[numpy.float64]: ...
+    @property
+    def y_doe(self) -> numpy.typing.NDArray[numpy.float64]: ...
 
 class RegressionSpec:
-    ...
+    ALL: builtins.int = 7
+    CONSTANT: builtins.int = 1
+    LINEAR: builtins.int = 2
+    QUADRATIC: builtins.int = 4
 
 class SparseGpMix:
     r"""
@@ -650,9 +745,12 @@ class SparseGpx:
         """
 
 class XSpec:
-    xtype: XType
-    xlimits: builtins.list[builtins.float]
-    tags: builtins.list[builtins.str]
+    @property
+    def xtype(self) -> XType: ...
+    @property
+    def xlimits(self) -> builtins.list[builtins.float]: ...
+    @property
+    def tags(self) -> builtins.list[builtins.str]: ...
     def __new__(cls, xtype:XType, xlimits:typing.Sequence[builtins.float]=[], tags:typing.Sequence[builtins.str]=[]) -> XSpec: ...
 
 class ConstraintStrategy(Enum):
@@ -733,5 +831,4 @@ def sampling(method:Sampling, xspecs:typing.Any, n_samples:builtins.int, seed:ty
     # Returns
        ndarray of shape (n_samples, n_variables)
     """
-
 

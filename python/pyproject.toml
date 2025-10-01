@@ -12,7 +12,7 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: Unix",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = ["numpy"]
 dynamic = ["version"]
 readme = 'README.md'

@@ -30,7 +30,7 @@ impl Domain<'_> {
 }
 
 /// Translate Python domain specifications into a vector of `XType`
-pub(crate) fn parse(py: Python, xspecs: PyObject) -> Vec<egobox_ego::XType> {
+pub(crate) fn parse(py: Python, xspecs: Py<PyAny>) -> Vec<egobox_ego::XType> {
     let domain: Domain = xspecs.extract(py).expect("Error in xspecs conversion");
     if domain.is_empty() {
         panic!("Error: domain argument cannot be empty")

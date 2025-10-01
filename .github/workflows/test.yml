@@ -41,6 +41,11 @@ jobs:
       - name: Log active toolchain
         run: rustup show
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12' 
+
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1
         with:
@@ -71,6 +76,11 @@ jobs:
 
       - name: Log active toolchain
         run: rustup show
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12' 
 
       - name: Run cargo test in release mode
         uses: actions-rs/cargo@v1

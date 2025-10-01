@@ -35,7 +35,7 @@ pub enum Sampling {
 pub fn sampling(
     py: Python<'_>,
     method: Sampling,
-    xspecs: PyObject,
+    xspecs: Py<PyAny>,
     n_samples: usize,
     seed: Option<u64>,
 ) -> Bound<'_, PyArray2<f64>> {
@@ -78,7 +78,7 @@ pub fn sampling(
 #[pyo3(signature = (xspecs, n_samples, seed=None))]
 pub(crate) fn lhs(
     py: Python,
-    xspecs: PyObject,
+    xspecs: Py<PyAny>,
     n_samples: usize,
     seed: Option<u64>,
 ) -> Bound<PyArray2<f64>> {
