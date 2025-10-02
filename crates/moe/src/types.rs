@@ -122,7 +122,7 @@ impl Clustering {
     }
 }
 
-#[typetag::serde(tag = "type_gpqa")]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpqa"))]
 pub trait GpQualityAssurance {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>);
     fn q2(&self, kfold: usize) -> f64;
@@ -132,7 +132,7 @@ pub trait GpQualityAssurance {
 }
 
 /// A trait for Mixture of GP surrogates with derivatives using clustering
-#[typetag::serde(tag = "type_mixture")]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_mixture"))]
 pub trait MixtureGpSurrogate:
     Clustered + GpSurrogate + GpSurrogateExt + GpQualityAssurance
 {
