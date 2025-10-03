@@ -20,6 +20,26 @@ struct Args {
     kfold: usize,
 }
 
+struct Metrics {
+    pub q2: f64,
+    pub pva: f64,
+}
+
+fn compute_metrics(gp_models: &[Box<dyn MixtureGpSurrogate>], kfold: usize) -> Vec<Metrics> {
+    let mut res: Vec<_> = gp_models
+        .par_iter()
+        .enumerate()
+        .map(|(i, gp)| {
+            let q2 = gp.as_ref().q2(kfold);
+            let pva = gp.as_ref().pva(kfold);
+            (i, Metrics { q2, pva })
+        })
+        .collect();
+    // Sort by index
+    res.sort_by_key(|(i, _)| *i);
+    res.into_iter().map(|(_, m)| m).collect::<Vec<_>>()
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -55,24 +75,12 @@ fn main() -> Result<()> {
         if args.loo { xt.nrows() } else { args.kfold }
     );
 
-    let _res: Vec<_> = gp_models
-        .par_iter()
-        .enumerate()
-        .map(|(i, gp)| {
-            let q2 = if args.loo {
-                gp.as_ref().looq2()
-            } else {
-                gp.as_ref().q2(args.kfold)
-            };
+    let k = if args.loo { xt.nrows() } else { args.kfold };
+    let res: Vec<_> = compute_metrics(&gp_models, k);
 
-            let pva = if args.loo {
-                gp.as_ref().loopva()
-            } else {
-                gp.as_ref().pva(args.kfold)
-            };
-            println!("GP({i}): Q2={q2}, PVA={pva}");
-        })
-        .collect();
+    for (i, m) in res.iter().enumerate() {
+        println!("GP({}): Q2 = {:.6}, PVA = {:.6}", i, m.q2, m.pva);
+    }
 
     Ok(())
 }
