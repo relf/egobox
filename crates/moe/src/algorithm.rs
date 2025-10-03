@@ -3,7 +3,7 @@ use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::parameters::{GpMixtureParams, GpMixtureValidParams};
-use crate::{GpScore, types::*};
+use crate::{GpMetrics, types::*};
 use crate::{GpType, expertise_macros::*};
 use crate::{NbClusters, surrogates::*};
 
@@ -542,7 +542,7 @@ impl GpSurrogateExt for GpMixture {
     }
 }
 
-impl GpScore<MoeError, GpMixtureParams<f64>, Self> for GpMixture {
+impl GpMetrics<MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
         &self.training_data
     }
@@ -555,21 +555,21 @@ impl GpScore<MoeError, GpMixtureParams<f64>, Self> for GpMixture {
 #[cfg_attr(feature = "serializable", typetag::serde)]
 impl GpQualityAssurance for GpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
-        (self as &dyn GpScore<_, _, _>).training_data()
+        (self as &dyn GpMetrics<_, _, _>).training_data()
     }
 
     fn q2(&self, kfold: usize) -> f64 {
-        (self as &dyn GpScore<_, _, _>).q2_score(kfold)
+        (self as &dyn GpMetrics<_, _, _>).q2_score(kfold)
     }
     fn looq2(&self) -> f64 {
-        (self as &dyn GpScore<_, _, _>).looq2_score()
+        (self as &dyn GpMetrics<_, _, _>).looq2_score()
     }
 
     fn pva(&self, kfold: usize) -> f64 {
-        (self as &dyn GpScore<_, _, _>).pva_score(kfold)
+        (self as &dyn GpMetrics<_, _, _>).pva_score(kfold)
     }
     fn loopva(&self) -> f64 {
-        (self as &dyn GpScore<_, _, _>).loopva_score()
+        (self as &dyn GpMetrics<_, _, _>).loopva_score()
     }
 }
 
