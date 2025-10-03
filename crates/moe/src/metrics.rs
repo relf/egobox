@@ -7,7 +7,7 @@ use statrs::distribution::{ContinuousCDF, Normal};
 use crate::GpSurrogate;
 
 /// A trait for cross validation score
-pub trait GpScore<ER, P, O>
+pub trait GpMetrics<ER, P, O>
 where
     ER: std::error::Error + From<linfa::error::Error>,
     P: Fit<Array2<f64>, Array1<f64>, ER, Object = O> + ParamGuard,

@@ -8,9 +8,9 @@ use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
 use egobox_gp::ThetaTuning;
 use egobox_moe::{
-    Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
-    GpQualityAssurance, GpScore, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters,
-    Recombination, RegressionSpec,
+    Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMetrics, GpMixture, GpMixtureParams,
+    GpQualityAssurance, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, Recombination,
+    RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -671,7 +671,7 @@ impl GpSurrogateExt for MixintGpMixture {
     }
 }
 
-impl GpScore<EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
+impl GpMetrics<EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
     fn params(&self) -> MixintGpMixtureParams {
         self.params.clone().into()
     }
@@ -684,23 +684,23 @@ impl GpScore<EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
 #[typetag::serde]
 impl GpQualityAssurance for MixintGpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
-        (self as &dyn GpScore<_, _, _>).training_data()
+        (self as &dyn GpMetrics<_, _, _>).training_data()
     }
 
     fn q2(&self, kfold: usize) -> f64 {
-        (self as &dyn GpScore<_, _, _>).q2_score(kfold)
+        (self as &dyn GpMetrics<_, _, _>).q2_score(kfold)
     }
 
     fn looq2(&self) -> f64 {
-        (self as &dyn GpScore<_, _, _>).looq2_score()
+        (self as &dyn GpMetrics<_, _, _>).looq2_score()
     }
 
     fn pva(&self, kfold: usize) -> f64 {
-        (self as &dyn GpScore<_, _, _>).pva_score(kfold)
+        (self as &dyn GpMetrics<_, _, _>).pva_score(kfold)
     }
 
     fn loopva(&self) -> f64 {
-        (self as &dyn GpScore<_, _, _>).loopva_score()
+        (self as &dyn GpMetrics<_, _, _>).loopva_score()
     }
 }
 
