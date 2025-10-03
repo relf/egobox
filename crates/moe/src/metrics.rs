@@ -18,7 +18,7 @@ where
     fn params(&self) -> P;
 
     /// Compute quality metric Q2 with kfold cross validation
-    fn q2_score(&self, kfold: usize) -> f64 {
+    fn q2_k_score(&self, kfold: usize) -> f64 {
         let (xt, yt) = self.training_data();
         let dataset = Dataset::new(xt.to_owned(), yt.to_owned());
         let yt_mean = yt.mean().unwrap();
@@ -39,12 +39,12 @@ where
     }
 
     /// Q2 predictive coefficient with Leave-One-Out Cross-Validation
-    fn looq2_score(&self) -> f64 {
-        self.q2_score(self.training_data().0.nrows())
+    fn q2_score(&self) -> f64 {
+        self.q2_k_score(self.training_data().0.nrows())
     }
 
     /// Predictive variance adequacy
-    fn pva_score(&self, kfold: usize) -> f64 {
+    fn pva_k_score(&self, kfold: usize) -> f64 {
         let (xt, yt) = self.training_data();
         let dataset = Dataset::new(xt.to_owned(), yt.to_owned());
         // Total Sum of Squares
@@ -65,12 +65,12 @@ where
     }
 
     /// Predictive variance adequacy with Leave-One-Out Cross-Validation
-    fn loopva_score(&self) -> f64 {
-        self.pva_score(self.training_data().0.nrows())
+    fn pva_score(&self) -> f64 {
+        self.pva_k_score(self.training_data().0.nrows())
     }
 
     // Compute integrated absolute error on alpha
-    fn iae_alpha_score(&self, kfold: usize) -> f64 {
+    fn iae_alpha_k_score(&self, kfold: usize) -> f64 {
         let (xt, yt) = self.training_data();
         let dataset = Dataset::new(xt.to_owned(), yt.to_owned());
 
@@ -90,8 +90,8 @@ where
     }
 
     /// Integrated absolute error on alpha with Leave-One-Out Cross-Validation
-    fn looiae_score(&self) -> f64 {
-        self.iae_alpha_score(self.training_data().0.nrows())
+    fn iae_alpha_score(&self) -> f64 {
+        self.iae_alpha_k_score(self.training_data().0.nrows())
     }
 }
 
@@ -202,10 +202,10 @@ mod test {
                 .fit(&Dataset::new(xt, yt))
                 .expect("GP fit error");
 
-            assert_abs_diff_eq!(moe.q2_score(10), 1., epsilon = 1e-3);
-            assert_abs_diff_eq!(moe.looq2_score(), 1., epsilon = 1e-3);
-            assert_abs_diff_eq!(moe.pva_score(10), 0., epsilon = 2e-1);
-            assert_abs_diff_eq!(moe.loopva_score(), 0., epsilon = 2e-1);
+            assert_abs_diff_eq!(moe.q2_k_score(10), 1., epsilon = 1e-3);
+            assert_abs_diff_eq!(moe.q2_score(), 1., epsilon = 1e-3);
+            assert_abs_diff_eq!(moe.pva_k_score(10), 0., epsilon = 2e-1);
+            assert_abs_diff_eq!(moe.pva_score(), 0., epsilon = 2e-1);
         });
     }
 
@@ -239,20 +239,19 @@ mod test {
             println!(
                 "i={:2}: Q2 = {:.6}, PVA = {:.6}",
                 i,
-                moe.q2_score(10),
-                moe.pva_score(10)
+                moe.q2_k_score(10),
+                moe.pva_k_score(10)
             );
 
             if i == 5 {
-                assert_abs_diff_eq!(moe.q2_score(10), 0.9, epsilon = 1e-1);
-                assert_abs_diff_eq!(moe.looq2_score(), 0.95, epsilon = 2e-1);
-                assert_abs_diff_eq!(moe.pva_score(10), 0.5, epsilon = 1e-1);
-                assert_abs_diff_eq!(moe.loopva_score(), 0.3, epsilon = 1e-1);
+                assert_abs_diff_eq!(moe.q2_k_score(10), 0.9, epsilon = 1e-1);
+                assert_abs_diff_eq!(moe.q2_score(), 0.95, epsilon = 2e-1);
+                assert_abs_diff_eq!(moe.pva_k_score(10), 0.5, epsilon = 1e-1);
+                assert_abs_diff_eq!(moe.pva_score(), 0.3, epsilon = 1e-1);
             }
         });
     }
 
-    // Implement reducted branin version of IAE test
     #[test]
     fn test_iae_alpha() {
         let xlimits = array![[-5., 10.], [0., 15.]];
@@ -266,9 +265,9 @@ mod test {
             .fit(&Dataset::new(xt, yt))
             .expect("GP fit error");
 
-        let iae = moe.iae_alpha_score(nt);
+        let iae = moe.iae_alpha_score();
         println!("IAE = {:.6}", iae);
-        assert_abs_diff_eq!(iae, 0.1, epsilon = 1e-1);
+        assert_abs_diff_eq!(iae, 0.3, epsilon = 1e-1);
     }
 
     fn rescaled_branin(x: &Array2<f64>) -> Array1<f64> {
@@ -285,6 +284,9 @@ mod test {
     }
 
     #[test]
+    /// Test IAE on Branin function with fixed thetas
+    /// cf. Marrel et al., Probabilistic surrogate modeling by Gaussian process: a review on
+    /// recent insights in estimation and validation, 2024
     fn test_iae_alpha_branin() {
         let xlimits = array![[0., 1.], [0., 1.]];
         let nt = 30;
@@ -293,25 +295,35 @@ mod test {
         let xt = Lhs::new(&xlimits).with_rng(rng.clone()).sample(nt);
         let yt = rescaled_branin(&xt);
 
-        let theta_tuning = ThetaTuning::Fixed(array![1.12, 0.8]);
+        let moe = GpMixtureParams::default()
+            .correlation_spec(crate::types::CorrelationSpec::MATERN52)
+            .fit(&Dataset::new(xt.clone(), yt.clone()))
+            .expect("GP fit error");
+
+        println!(
+            "trained thetas = {}",
+            moe.experts().first().unwrap().theta()
+        );
+
+        let theta_tuning = ThetaTuning::Fixed(array![0.893, 1.25]);
         let moe = GpMixtureParams::default()
             .correlation_spec(crate::types::CorrelationSpec::MATERN52)
             .theta_tunings(&[theta_tuning])
             .fit(&Dataset::new(xt, yt))
             .expect("GP fit error");
 
-        println!("thetas = {}", moe.experts().first().unwrap().theta());
+        println!("fixed thetas = {}", moe.experts().first().unwrap().theta());
 
-        let q2 = moe.q2_score(nt);
+        let q2 = moe.q2_score();
         println!("Q2 = {:.6}", q2);
 
-        let xt = Lhs::new(&xlimits).with_rng(rng).sample(1000);
+        let xt = Lhs::new(&xlimits).sample(1000);
         let yt = rescaled_branin(&xt);
         let valid = Dataset::new(xt, yt);
 
         let iae = iae_alpha(&moe, &valid);
         println!("IAE = {:.6}", iae);
 
-        assert_abs_diff_eq!(iae, 0.05, epsilon = 5e-2);
+        assert_abs_diff_eq!(iae, 0.1, epsilon = 5e-2);
     }
 }

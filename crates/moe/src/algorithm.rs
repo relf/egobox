@@ -558,18 +558,25 @@ impl GpQualityAssurance for GpMixture {
         (self as &dyn GpMetrics<_, _, _>).training_data()
     }
 
-    fn q2(&self, kfold: usize) -> f64 {
-        (self as &dyn GpMetrics<_, _, _>).q2_score(kfold)
+    fn q2_k(&self, kfold: usize) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).q2_k_score(kfold)
     }
-    fn looq2(&self) -> f64 {
-        (self as &dyn GpMetrics<_, _, _>).looq2_score()
+    fn q2(&self) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).q2_score()
     }
 
-    fn pva(&self, kfold: usize) -> f64 {
-        (self as &dyn GpMetrics<_, _, _>).pva_score(kfold)
+    fn pva_k(&self, kfold: usize) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).pva_k_score(kfold)
     }
-    fn loopva(&self) -> f64 {
-        (self as &dyn GpMetrics<_, _, _>).loopva_score()
+    fn pva(&self) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).pva_score()
+    }
+
+    fn iae_alpha_k(&self, kfold: usize) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold)
+    }
+    fn iae_alpha(&self) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_score()
     }
 }
 
@@ -1042,7 +1049,7 @@ mod tests {
             moe.predict(&array![[0.82]]).unwrap()[0],
             epsilon = 1e-4
         );
-        println!("LOOQ2 = {}", moe.looq2_score());
+        println!("LOOQ2 = {}", moe.q2_score());
     }
 
     #[test]
