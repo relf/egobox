@@ -122,9 +122,27 @@ impl Clustering {
     }
 }
 
+/// Enum of available metrics for Gaussian Process quality assessment
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum GpMetric {
+    /// Coefficient of determination
+    Q2,
+    /// Predictive Variance Adequacy
+    Pva,
+    /// Integrated Absolute Error on alpha
+    IAEAlpha,
+}
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpqa"))]
 pub trait GpQualityAssurance {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>);
+
+    fn score(&self, metric: GpMetric, kfold: usize) -> f64 {
+        match metric {
+            GpMetric::Q2 => self.q2_k(kfold),
+            GpMetric::Pva => self.pva_k(kfold),
+            GpMetric::IAEAlpha => self.iae_alpha_k(kfold),
+        }
+    }
 
     fn q2_k(&self, kfold: usize) -> f64;
     fn q2(&self) -> f64;
