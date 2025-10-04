@@ -1,8 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
+use egobox_moe::GpMetric;
 use egobox_moe::GpMixture;
 use egobox_moe::MixtureGpSurrogate;
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::fs;
 
 #[derive(Parser)]
@@ -27,20 +29,24 @@ fn compute_metrics(gp_models: &[Box<dyn MixtureGpSurrogate>], kfold: usize) -> V
         .par_iter()
         .enumerate()
         .map(|(i, gp)| {
-            let q2 = gp.as_ref().q2_k(kfold);
-            let pva = gp.as_ref().pva_k(kfold);
-            let iae = gp.as_ref().iae_alpha_k(kfold);
+            let scores: Vec<_> = [GpMetric::Q2, GpMetric::Pva, GpMetric::IAEAlpha]
+                .par_iter()
+                .map(|m| {
+                    let score = gp.as_ref().score(*m, kfold);
+                    (m, score)
+                })
+                .collect();
+            let scores: HashMap<_, _> = scores.into_iter().collect();
             (
                 i,
                 Metrics {
-                    q2,
-                    pva,
-                    iae_alpha: iae,
+                    q2: *scores.get(&GpMetric::Q2).unwrap(),
+                    pva: *scores.get(&GpMetric::Pva).unwrap(),
+                    iae_alpha: *scores.get(&GpMetric::IAEAlpha).unwrap(),
                 },
             )
         })
         .collect();
-    // Sort by index
     res.sort_by_key(|(i, _)| *i);
     res.into_iter().map(|(_, m)| m).collect::<Vec<_>>()
 }
