@@ -74,6 +74,9 @@ where
         let (xt, yt) = self.training_data();
         let dataset = Dataset::new(xt.to_owned(), yt.to_owned());
 
+        let n_alpha = 20;
+        let alphas = Array1::linspace(0.02, 0.98, n_alpha);
+
         let iaes = dataset
             .fold(kfold)
             .into_iter()
@@ -82,11 +85,37 @@ where
                 let model: O = params
                     .fit(&train)
                     .expect("cross-validation: sub model fitted");
-                iae_alpha(&model, &valid)
+                iae_alpha(&model, &valid, &alphas)
             })
-            .collect::<Vec<f64>>();
+            .collect::<Vec<_>>();
 
-        iaes.iter().sum::<f64>() / iaes.len() as f64
+        let score = iaes.iter().fold(0., |acc, infos| acc + infos.0) / iaes.len() as f64;
+
+        let n_iaes = iaes.len() as f64;
+        let deltas = iaes
+            .into_iter()
+            .fold(Array1::<f64>::zeros(n_alpha), |acc, infos| acc + infos.1)
+            / n_iaes;
+
+        println!("Alpha | Empirical coverage | Target coverage | Delta");
+        println!("---------------------------------------------------");
+        let mut score2 = 0.;
+        for i in 0..n_alpha {
+            let alpha = alphas[i];
+            let delta = deltas[i];
+            score2 += (delta - (1. - alpha)).abs();
+            println!(
+                "{:5.2}% |       {:5.2}%      |     {:5.2}%    | {:5.2}%",
+                alpha * 100.,
+                delta * 100.,
+                (1. - alpha) * 100.,
+                (delta - (1. - alpha)).abs() * 100.
+            );
+        }
+
+        let _score2 = score2 * 100. / n_alpha as f64;
+        //println!("IAE (computed) = {:.2}%", score2);
+        score
     }
 
     /// Integrated absolute error on alpha with Leave-One-Out Cross-Validation
@@ -95,17 +124,19 @@ where
     }
 }
 
-fn iae_alpha(model: &dyn GpSurrogate, valid: &linfa::Dataset<f64, f64, Ix1>) -> f64 {
+fn iae_alpha(
+    model: &dyn GpSurrogate,
+    valid: &linfa::Dataset<f64, f64, Ix1>,
+    alphas: &Array1<f64>,
+) -> (f64, Array1<f64>) {
     let x = valid.records();
     let y = valid.targets();
-
-    let n_alpha = 20;
-    let alphas = Array1::linspace(0.02, 0.98, n_alpha);
 
     let pred = model.predict(&x.view()).unwrap();
     let sigma = model.predict_var(&x.view()).unwrap().sqrt();
 
     let n_test = x.nrows();
+    let n_alpha = alphas.len();
 
     let normal = Normal::new(0.0, 1.0).unwrap();
     let norm_ppf: Vec<f64> = alphas
@@ -134,12 +165,14 @@ fn iae_alpha(model: &dyn GpSurrogate, valid: &linfa::Dataset<f64, f64, Ix1>) -> 
     let deltas = empirical_coverage(targets.view(), ci_inf.view(), ci_sup.view());
 
     // Compute IAE
-    Zip::from(&deltas)
-        .and(&alphas)
+    let iae = Zip::from(&deltas)
+        .and(alphas)
         .fold(0.0, |acc, &delta, &alpha| {
             acc + (delta - (1.0 - alpha)).abs()
         })
-        / n_alpha as f64
+        / n_alpha as f64;
+
+    (iae, deltas)
 }
 
 /// Compute empirical coverage: fraction of `y` values inside CI for each alpha.
@@ -321,7 +354,8 @@ mod test {
         let yt = rescaled_branin(&xt);
         let valid = Dataset::new(xt, yt);
 
-        let iae = iae_alpha(&moe, &valid);
+        let alphas = Array1::linspace(0.02, 0.98, 20);
+        let iae = iae_alpha(&moe, &valid, &alphas).0;
         println!("IAE = {:.6}", iae);
 
         assert_abs_diff_eq!(iae, 0.1, epsilon = 5e-2);
