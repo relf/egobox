@@ -157,7 +157,7 @@ pub trait GpQualityAssurance {
 /// A trait for Mixture of GP surrogates with derivatives using clustering
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type_mixture"))]
 pub trait MixtureGpSurrogate:
-    Clustered + GpSurrogate + GpSurrogateExt + GpQualityAssurance
+    Clustered + GpSurrogate + GpSurrogateExt + GpQualityAssurance + Display
 {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>>;
 }

@@ -77,6 +77,9 @@ fn main() -> Result<()> {
         gp_models.len(),
         args.filename
     );
+    gp_models.iter().for_each(|gp| {
+        println!("Loaded GP model: {}", gp);
+    });
 
     let (xt, _yt) = gp_models.first().unwrap().training_data();
     println!("Training data: {} samples ({}-dim)", xt.nrows(), xt.ncols());
