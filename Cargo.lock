@@ -120,28 +120,12 @@ checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
 
 [[package]]
 name = "argmin"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "760a49d596b18b881d2fe6e9e6da4608fa64d4a7653ef5cd43bfaa4da018d596"
-dependencies = [
- "anyhow",
- "argmin-math 0.4.0",
- "instant",
- "num-traits",
- "paste",
- "rand 0.8.5",
- "rand_xoshiro 0.6.0",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "argmin"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7ab7ca97779074715a402e5e8045fae27e7191acaec9b4c5653276316e9e404"
 dependencies = [
  "anyhow",
- "argmin-math 0.5.1",
+ "argmin-math",
  "ctrlc",
  "num-traits",
  "paste",
@@ -150,21 +134,6 @@ dependencies = [
  "serde",
  "thiserror 2.0.17",
  "web-time",
-]
-
-[[package]]
-name = "argmin-math"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d93a0d0269b60bd1cd674de70314e3f0da97406cf8c1936ce760d2a46e0f13fe"
-dependencies = [
- "anyhow",
- "cfg-if",
- "num-complex",
- "num-integer",
- "num-traits",
- "rand 0.8.5",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -184,12 +153,12 @@ dependencies = [
 
 [[package]]
 name = "argmin-observer-slog"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83d798c8ab61e6a55d161775f2ae8c42e56c15b746398878c36234575e6839aa"
+checksum = "0b520dbfd3ae35ee2e1d2e456e48c595abaea98c2e5af244a831f62e733c8469"
 dependencies = [
  "anyhow",
- "argmin 0.10.0",
+ "argmin",
  "slog",
  "slog-async",
  "slog-term",
@@ -400,14 +369,14 @@ dependencies = [
 
 [[package]]
 name = "cobyla"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00d2798ffc66a34e9a9358f384273831c9b893df4e724affff94c0095bfeb926"
+checksum = "8966fd0bfbeb685c41459cd22a00a2201b9eb5ae23e98f32375a9799988e6259"
 dependencies = [
- "argmin 0.10.0",
+ "argmin",
  "argmin-observer-slog",
- "instant",
  "libc",
+ "web-time",
 ]
 
 [[package]]
@@ -678,7 +647,7 @@ version = "0.32.0"
 dependencies = [
  "anyhow",
  "approx",
- "argmin 0.11.0",
+ "argmin",
  "argmin_testfunctions",
  "bincode",
  "clap",
@@ -1058,15 +1027,6 @@ name = "indoc"
 version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4c7245a08504955605670dbf141fceab975f15ca21570696aebe9d2e71576bd"
-
-[[package]]
-name = "instant"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
-dependencies = [
- "cfg-if",
-]
 
 [[package]]
 name = "inventory"
