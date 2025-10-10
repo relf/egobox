@@ -42,6 +42,7 @@ fn compute_metrics(gp_models: &[Box<dyn MixtureGpSurrogate>], kfold: usize) -> V
             if i == 0
                 && let Some(data) = &scores.get(&GpMetric::IAEAlphaWithPlot).unwrap().plot_data
             {
+                println!("\nIAEα plot data for first GP model:");
                 println!("Alpha | Empirical coverage | Target coverage | Delta");
                 println!("---------------------------------------------------");
                 for i in 0..data.alphas.len() {
@@ -56,6 +57,7 @@ fn compute_metrics(gp_models: &[Box<dyn MixtureGpSurrogate>], kfold: usize) -> V
                         (delta - (1. - alpha)).abs() * 100.
                     );
                 }
+                println!();
             }
 
             (
