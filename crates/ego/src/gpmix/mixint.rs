@@ -9,8 +9,8 @@ use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
 use egobox_gp::ThetaTuning;
 use egobox_moe::{
     Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMetrics, GpMixture, GpMixtureParams,
-    GpQualityAssurance, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters, Recombination,
-    RegressionSpec,
+    GpQualityAssurance, GpSurrogate, GpSurrogateExt, IaeAlphaPlotData, MixtureGpSurrogate,
+    NbClusters, Recombination, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -702,10 +702,13 @@ impl GpQualityAssurance for MixintGpMixture {
     }
 
     fn iae_alpha_k(&self, kfold: usize) -> f64 {
-        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold)
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold, None)
+    }
+    fn iae_alpha_k_score_with_plot(&self, kfold: usize, plot_data: &mut IaeAlphaPlotData) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold, Some(plot_data))
     }
     fn iae_alpha(&self) -> f64 {
-        (self as &dyn GpMetrics<_, _, _>).iae_alpha_score()
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_score(None)
     }
 }
 

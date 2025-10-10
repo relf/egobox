@@ -18,6 +18,7 @@ struct Args {
     kfold: usize,
 }
 
+#[derive(Debug, Clone)]
 struct Metrics {
     pub q2: f64,
     pub pva: f64,
@@ -29,7 +30,7 @@ fn compute_metrics(gp_models: &[Box<dyn MixtureGpSurrogate>], kfold: usize) -> V
         .par_iter()
         .enumerate()
         .map(|(i, gp)| {
-            let scores: Vec<_> = [GpMetric::Q2, GpMetric::Pva, GpMetric::IAEAlpha]
+            let scores: Vec<_> = [GpMetric::Q2, GpMetric::Pva, GpMetric::IAEAlphaWithPlot]
                 .par_iter()
                 .map(|m| {
                     let score = gp.as_ref().score(*m, kfold);
@@ -37,12 +38,32 @@ fn compute_metrics(gp_models: &[Box<dyn MixtureGpSurrogate>], kfold: usize) -> V
                 })
                 .collect();
             let scores: HashMap<_, _> = scores.into_iter().collect();
+
+            if i == 0
+                && let Some(data) = &scores.get(&GpMetric::IAEAlphaWithPlot).unwrap().plot_data
+            {
+                println!("Alpha | Empirical coverage | Target coverage | Delta");
+                println!("---------------------------------------------------");
+                for i in 0..data.alphas.len() {
+                    let alpha = data.alphas[i];
+                    let delta = data.deltas[i];
+
+                    println!(
+                        "{:5.2}% |       {:5.2}%      |     {:5.2}%    | {:5.2}%",
+                        alpha * 100.,
+                        delta * 100.,
+                        (1. - alpha) * 100.,
+                        (delta - (1. - alpha)).abs() * 100.
+                    );
+                }
+            }
+
             (
                 i,
                 Metrics {
-                    q2: *scores.get(&GpMetric::Q2).unwrap(),
-                    pva: *scores.get(&GpMetric::Pva).unwrap(),
-                    iae_alpha: *scores.get(&GpMetric::IAEAlpha).unwrap(),
+                    q2: scores.get(&GpMetric::Q2).unwrap().value,
+                    pva: scores.get(&GpMetric::Pva).unwrap().value,
+                    iae_alpha: scores.get(&GpMetric::IAEAlphaWithPlot).unwrap().value,
                 },
             )
         })

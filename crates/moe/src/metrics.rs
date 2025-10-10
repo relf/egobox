@@ -6,6 +6,12 @@ use statrs::distribution::{ContinuousCDF, Normal};
 
 use crate::GpSurrogate;
 
+#[derive(Clone, Debug, Default)]
+pub struct IaeAlphaPlotData {
+    pub alphas: Vec<f64>,
+    pub deltas: Vec<f64>,
+}
+
 /// A trait for cross validation score
 pub trait GpMetrics<ER, P, O>
 where
@@ -70,7 +76,7 @@ where
     }
 
     // Compute integrated absolute error on alpha
-    fn iae_alpha_k_score(&self, kfold: usize) -> f64 {
+    fn iae_alpha_k_score(&self, kfold: usize, plot_data: Option<&mut IaeAlphaPlotData>) -> f64 {
         let (xt, yt) = self.training_data();
         let dataset = Dataset::new(xt.to_owned(), yt.to_owned());
 
@@ -97,30 +103,39 @@ where
             .fold(Array1::<f64>::zeros(n_alpha), |acc, infos| acc + infos.1)
             / n_iaes;
 
-        println!("Alpha | Empirical coverage | Target coverage | Delta");
-        println!("---------------------------------------------------");
-        let mut score2 = 0.;
-        for i in 0..n_alpha {
-            let alpha = alphas[i];
-            let delta = deltas[i];
-            score2 += (delta - (1. - alpha)).abs();
-            println!(
-                "{:5.2}% |       {:5.2}%      |     {:5.2}%    | {:5.2}%",
-                alpha * 100.,
-                delta * 100.,
-                (1. - alpha) * 100.,
-                (delta - (1. - alpha)).abs() * 100.
-            );
+        // println!("Alpha | Empirical coverage | Target coverage | Delta");
+        // println!("---------------------------------------------------");
+        // let mut score2 = 0.;
+        // for i in 0..n_alpha {
+        //     let alpha = alphas[i];
+        //     let delta = deltas[i];
+        //     score2 += (delta - (1. - alpha)).abs();
+        //     println!(
+        //         "{:5.2}% |       {:5.2}%      |     {:5.2}%    | {:5.2}%",
+        //         alpha * 100.,
+        //         delta * 100.,
+        //         (1. - alpha) * 100.,
+        //         (delta - (1. - alpha)).abs() * 100.
+        //     );
+        // }
+
+        // let _score2 = score2 * 100. / n_alpha as f64;
+        //println!("IAE (computed) = {:.2}%", score2);
+
+        // return data for plotting if requested
+        if let Some(data) = plot_data {
+            *data = IaeAlphaPlotData {
+                alphas: alphas.to_vec(),
+                deltas: deltas.to_vec(),
+            };
         }
 
-        let _score2 = score2 * 100. / n_alpha as f64;
-        //println!("IAE (computed) = {:.2}%", score2);
         score
     }
 
     /// Integrated absolute error on alpha with Leave-One-Out Cross-Validation
-    fn iae_alpha_score(&self) -> f64 {
-        self.iae_alpha_k_score(self.training_data().0.nrows())
+    fn iae_alpha_score(&self, plot_data: Option<&mut IaeAlphaPlotData>) -> f64 {
+        self.iae_alpha_k_score(self.training_data().0.nrows(), plot_data)
     }
 }
 
@@ -298,7 +313,7 @@ mod test {
             .fit(&Dataset::new(xt, yt))
             .expect("GP fit error");
 
-        let iae = moe.iae_alpha_score();
+        let iae = moe.iae_alpha_score(None);
         println!("IAE = {:.6}", iae);
         assert_abs_diff_eq!(iae, 0.3, epsilon = 1e-1);
     }

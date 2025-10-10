@@ -3,7 +3,7 @@ use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::parameters::{GpMixtureParams, GpMixtureValidParams};
-use crate::{GpMetrics, types::*};
+use crate::{GpMetrics, IaeAlphaPlotData, types::*};
 use crate::{GpType, expertise_macros::*};
 use crate::{NbClusters, surrogates::*};
 
@@ -573,10 +573,13 @@ impl GpQualityAssurance for GpMixture {
     }
 
     fn iae_alpha_k(&self, kfold: usize) -> f64 {
-        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold)
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold, None)
+    }
+    fn iae_alpha_k_score_with_plot(&self, kfold: usize, plot_data: &mut IaeAlphaPlotData) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold, Some(plot_data))
     }
     fn iae_alpha(&self) -> f64 {
-        (self as &dyn GpMetrics<_, _, _>).iae_alpha_score()
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_score(None)
     }
 }
 

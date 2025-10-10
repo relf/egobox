@@ -1,5 +1,5 @@
 use crate::gaussian_mixture::GaussianMixture;
-use crate::{FullGpSurrogate, GpSurrogate, GpSurrogateExt};
+use crate::{FullGpSurrogate, GpSurrogate, GpSurrogateExt, IaeAlphaPlotData};
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
@@ -131,16 +131,48 @@ pub enum GpMetric {
     Pva,
     /// Integrated Absolute Error on alpha
     IAEAlpha,
+    /// Integrated Absolute Error on alpha with plot data
+    IAEAlphaWithPlot,
 }
+
+/// Result of a GP quality assessment metric
+#[derive(Clone, Debug)]
+pub struct GpMetricResult {
+    pub metric: GpMetric,
+    pub value: f64,
+    pub plot_data: Option<IaeAlphaPlotData>,
+}
+
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpqa"))]
 pub trait GpQualityAssurance {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>);
 
-    fn score(&self, metric: GpMetric, kfold: usize) -> f64 {
+    fn score(&self, metric: GpMetric, kfold: usize) -> GpMetricResult {
         match metric {
-            GpMetric::Q2 => self.q2_k(kfold),
-            GpMetric::Pva => self.pva_k(kfold),
-            GpMetric::IAEAlpha => self.iae_alpha_k(kfold),
+            GpMetric::Q2 => GpMetricResult {
+                metric: GpMetric::Q2,
+                value: self.q2_k(kfold),
+                plot_data: None,
+            },
+            GpMetric::Pva => GpMetricResult {
+                metric: GpMetric::Pva,
+                value: self.pva_k(kfold),
+                plot_data: None,
+            },
+            GpMetric::IAEAlpha => GpMetricResult {
+                metric: GpMetric::IAEAlpha,
+                value: self.iae_alpha_k(kfold),
+                plot_data: None,
+            },
+            GpMetric::IAEAlphaWithPlot => {
+                let mut plot_data = IaeAlphaPlotData::default();
+                let value = self.iae_alpha_k_score_with_plot(kfold, &mut plot_data);
+                GpMetricResult {
+                    metric: GpMetric::IAEAlphaWithPlot,
+                    value,
+                    plot_data: Some(plot_data),
+                }
+            }
         }
     }
 
@@ -151,6 +183,7 @@ pub trait GpQualityAssurance {
     fn pva(&self) -> f64;
 
     fn iae_alpha_k(&self, kfold: usize) -> f64;
+    fn iae_alpha_k_score_with_plot(&self, kfold: usize, plot_data: &mut IaeAlphaPlotData) -> f64;
     fn iae_alpha(&self) -> f64;
 }
 
