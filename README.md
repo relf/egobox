@@ -237,9 +237,13 @@ Appriou, T., Rullière, D. & Gaudrie, D,
 [Combination of optimization-free kriging models for high-dimensional problems](https://doi.org/10.1007/s00180-023-01424-7),
 Comput Stat 39, 3049–3071 (2024).
 
-S Ament, S Daulton, D Eriksson, M Balandat, E Bakshy,
+S. Ament, S. Daulton, D. Eriksson, M. Balandat, E. Bakshy,
 [Unexpected improvements to expected improvement for bayesian optimization](https://arxiv.org/pdf/2310.20708),
 Advances in Neural Information Processing Systems, 2023
+
+Marrel, A., & Iooss, B. (2024). 
+[Probabilistic surrogate modeling by Gaussian process: A review on recent insights in estimation and validation.](https://www.sciencedirect.com/science/article/pii/S0951832024001686?casa_token=l-YuUssKYfsAAAAA:WpEZkMh7bf0Ago2rDi0I_E5BydKDTmjluPOP0KfAratwka89IRqu09U1J6OnpG1gc_8FIafRzA)
+Reliability Engineering & System Safety, 247, 110094.
 
 smtorg. (2018). [Surrogate modeling toolbox](https://github.com/SMTOrg/smt). GitHub.
 
