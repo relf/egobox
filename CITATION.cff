@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: Please cite the following works when using this software.
+type: software
+authors:
+  - family-names: Lafage
+    given-names: Rémi
+    orcid: https://orcid.org/0000-0001-5479-2961
+doi: 10.21105/joss.04737
+identifiers:
+  - type: doi
+    value: 10.21105/joss.04737
+  - type: url
+    value: http://dx.doi.org/10.21105/joss.04737
+  - type: other
+    value: urn:issn:2475-9066
+title: |-
+  egobox, a Rust toolbox for efficient global
+  optimization
+url: http://dx.doi.org/10.21105/joss.04737
