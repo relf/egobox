@@ -76,8 +76,8 @@ See the [tutorial notebooks](https://github.com/relf/egobox/tree/master/doc/READ
 
 `egobox` Rust libraries consists of the following sub-packages.
 
-| Name                                                  | Version                                                                                         | Documentation                                                               | Description                                                                               |
-| :---------------------------------------------------- | :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------- |
+| Name                                                         | Version                                                                                         | Documentation                                                               | Description                                                                               |
+| :----------------------------------------------------------- | :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------- |
 | [doe](https://github.com/relf/egobox/tree/master/crates/doe) | [![crates.io](https://img.shields.io/crates/v/egobox-doe)](https://crates.io/crates/egobox-doe) | [![docs](https://docs.rs/egobox-doe/badge.svg)](https://docs.rs/egobox-doe) | sampling methods; contains LHS, FullFactorial, Random methods                             |
 | [gp](https://github.com/relf/egobox/tree/master/crates/gp)   | [![crates.io](https://img.shields.io/crates/v/egobox-gp)](https://crates.io/crates/egobox-gp)   | [![docs](https://docs.rs/egobox-gp/badge.svg)](https://docs.rs/egobox-gp)   | gaussian process regression; contains Kriging, PLS dimension reduction and sparse methods |
 | [moe](https://github.com/relf/egobox/tree/master/crates/moe) | [![crates.io](https://img.shields.io/crates/v/egobox-moe)](https://crates.io/crates/egobox-moe) | [![docs](https://docs.rs/egobox-moe/badge.svg)](https://docs.rs/egobox-moe) | mixture of experts using GP models                                                        |
@@ -89,10 +89,10 @@ Depending on the sub-packages you want to use, you have to add following declara
 
 ```text
 [dependencies]
-egobox-doe = { version = "0.32" }
-egobox-gp  = { version = "0.32" }
-egobox-moe = { version = "0.32" }
-egobox-ego = { version = "0.32" }
+egobox-doe = { version = "0.33" }
+egobox-gp  = { version = "0.33" }
+egobox-moe = { version = "0.33" }
+egobox-ego = { version = "0.33" }
 ```
 
 ### Features
@@ -156,7 +156,7 @@ Thus, for instance, to use `gp` with the Intel MKL BLAS/LAPACK backend, you coul
 
 ```text
 [dependencies]
-egobox-gp = { version = "0.32", features = ["blas", "linfa/intel-mkl-static"] }
+egobox-gp = { version = "0.33", features = ["blas", "linfa/intel-mkl-static"] }
 ```
 
 or you could run the `gp` example as follows:
