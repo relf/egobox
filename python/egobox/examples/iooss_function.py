@@ -16,7 +16,7 @@ def iooss_function(x):
 
 
 # Gp model
-xt = egx.lhs([[-1.0, 1.0], [-1.0, 1.0]], 100)
+xt = egx.lhs([[-1.0, 1.0], [-1.0, 1.0]], 30)
 yt = iooss_function(xt)
 
 gpx = egx.Gpx.builder().fit(xt, yt)

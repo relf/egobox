@@ -1,5 +1,5 @@
 use crate::gaussian_mixture::GaussianMixture;
-use crate::{FullGpSurrogate, GpSurrogate, GpSurrogateExt};
+use crate::{FullGpSurrogate, GpSurrogate, GpSurrogateExt, IaeAlphaPlotData};
 use bitflags::bitflags;
 #[allow(unused_imports)]
 use egobox_gp::correlation_models::{
@@ -122,19 +122,75 @@ impl Clustering {
     }
 }
 
-#[typetag::serde(tag = "type_gpqa")]
+/// Enum of available metrics for Gaussian Process quality assessment
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum GpMetric {
+    /// Coefficient of determination
+    Q2,
+    /// Predictive Variance Adequacy
+    Pva,
+    /// Integrated Absolute Error on alpha
+    IAEAlpha,
+    /// Integrated Absolute Error on alpha with plot data
+    IAEAlphaWithPlot,
+}
+
+/// Result of a GP quality assessment metric
+#[derive(Clone, Debug)]
+pub struct GpMetricResult {
+    pub metric: GpMetric,
+    pub value: f64,
+    pub plot_data: Option<IaeAlphaPlotData>,
+}
+
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpqa"))]
 pub trait GpQualityAssurance {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>);
-    fn q2(&self, kfold: usize) -> f64;
-    fn looq2(&self) -> f64;
-    fn pva(&self, kfold: usize) -> f64;
-    fn loopva(&self) -> f64;
+
+    fn score(&self, metric: GpMetric, kfold: usize) -> GpMetricResult {
+        match metric {
+            GpMetric::Q2 => GpMetricResult {
+                metric: GpMetric::Q2,
+                value: self.q2_k(kfold),
+                plot_data: None,
+            },
+            GpMetric::Pva => GpMetricResult {
+                metric: GpMetric::Pva,
+                value: self.pva_k(kfold),
+                plot_data: None,
+            },
+            GpMetric::IAEAlpha => GpMetricResult {
+                metric: GpMetric::IAEAlpha,
+                value: self.iae_alpha_k(kfold),
+                plot_data: None,
+            },
+            GpMetric::IAEAlphaWithPlot => {
+                let mut plot_data = IaeAlphaPlotData::default();
+                let value = self.iae_alpha_k_score_with_plot(kfold, &mut plot_data);
+                GpMetricResult {
+                    metric: GpMetric::IAEAlphaWithPlot,
+                    value,
+                    plot_data: Some(plot_data),
+                }
+            }
+        }
+    }
+
+    fn q2_k(&self, kfold: usize) -> f64;
+    fn q2(&self) -> f64;
+
+    fn pva_k(&self, kfold: usize) -> f64;
+    fn pva(&self) -> f64;
+
+    fn iae_alpha_k(&self, kfold: usize) -> f64;
+    fn iae_alpha_k_score_with_plot(&self, kfold: usize, plot_data: &mut IaeAlphaPlotData) -> f64;
+    fn iae_alpha(&self) -> f64;
 }
 
 /// A trait for Mixture of GP surrogates with derivatives using clustering
-#[typetag::serde(tag = "type_mixture")]
+#[cfg_attr(feature = "serializable", typetag::serde(tag = "type_mixture"))]
 pub trait MixtureGpSurrogate:
-    Clustered + GpSurrogate + GpSurrogateExt + GpQualityAssurance
+    Clustered + GpSurrogate + GpSurrogateExt + GpQualityAssurance + Display
 {
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>>;
 }

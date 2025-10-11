@@ -3,7 +3,7 @@ use crate::clustering::{find_best_number_of_clusters, sort_by_cluster};
 use crate::errors::MoeError;
 use crate::errors::Result;
 use crate::parameters::{GpMixtureParams, GpMixtureValidParams};
-use crate::{GpScore, types::*};
+use crate::{GpMetrics, IaeAlphaPlotData, types::*};
 use crate::{GpType, expertise_macros::*};
 use crate::{NbClusters, surrogates::*};
 
@@ -477,7 +477,7 @@ impl Clustered for GpMixture {
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serializable", typetag::serde)]
 impl GpSurrogate for GpMixture {
     fn dims(&self) -> (usize, usize) {
         self.experts[0].dims()
@@ -515,7 +515,7 @@ impl GpSurrogate for GpMixture {
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serializable", typetag::serde)]
 impl GpSurrogateExt for GpMixture {
     fn predict_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
         match self.recombination {
@@ -542,7 +542,7 @@ impl GpSurrogateExt for GpMixture {
     }
 }
 
-impl GpScore<MoeError, GpMixtureParams<f64>, Self> for GpMixture {
+impl GpMetrics<MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
         &self.training_data
     }
@@ -552,28 +552,38 @@ impl GpScore<MoeError, GpMixtureParams<f64>, Self> for GpMixture {
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serializable", typetag::serde)]
 impl GpQualityAssurance for GpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
-        (self as &dyn GpScore<_, _, _>).training_data()
+        (self as &dyn GpMetrics<_, _, _>).training_data()
     }
 
-    fn q2(&self, kfold: usize) -> f64 {
-        (self as &dyn GpScore<_, _, _>).q2_score(kfold)
+    fn q2_k(&self, kfold: usize) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).q2_k_score(kfold)
     }
-    fn looq2(&self) -> f64 {
-        (self as &dyn GpScore<_, _, _>).looq2_score()
+    fn q2(&self) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).q2_score()
     }
 
-    fn pva(&self, kfold: usize) -> f64 {
-        (self as &dyn GpScore<_, _, _>).pva_score(kfold)
+    fn pva_k(&self, kfold: usize) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).pva_k_score(kfold)
     }
-    fn loopva(&self) -> f64 {
-        (self as &dyn GpScore<_, _, _>).loopva_score()
+    fn pva(&self) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).pva_score()
+    }
+
+    fn iae_alpha_k(&self, kfold: usize) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold, None)
+    }
+    fn iae_alpha_k_score_with_plot(&self, kfold: usize, plot_data: &mut IaeAlphaPlotData) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold, Some(plot_data))
+    }
+    fn iae_alpha(&self) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_score(None)
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serializable", typetag::serde)]
 impl MixtureGpSurrogate for GpMixture {
     /// Selected experts in the mixture
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>> {
@@ -1042,7 +1052,7 @@ mod tests {
             moe.predict(&array![[0.82]]).unwrap()[0],
             epsilon = 1e-4
         );
-        println!("LOOQ2 = {}", moe.looq2_score());
+        println!("LOOQ2 = {}", moe.q2_score());
     }
 
     #[test]

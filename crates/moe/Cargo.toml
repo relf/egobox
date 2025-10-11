@@ -44,6 +44,8 @@ ndarray-stats.workspace = true
 ndarray-rand.workspace = true
 ndarray-npy.workspace = true
 rand_xoshiro.workspace = true
+statrs.workspace = true
+
 paste = "1.0"
 bitflags = { version = "2.4.1", features = ["serde"] }
 log.workspace = true

@@ -8,9 +8,9 @@ use crate::types::{SurrogateBuilder, XType};
 use egobox_doe::{FullFactorial, Lhs, LhsKind, Random};
 use egobox_gp::ThetaTuning;
 use egobox_moe::{
-    Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMixture, GpMixtureParams,
-    GpQualityAssurance, GpScore, GpSurrogate, GpSurrogateExt, MixtureGpSurrogate, NbClusters,
-    Recombination, RegressionSpec,
+    Clustered, Clustering, CorrelationSpec, FullGpSurrogate, GpMetrics, GpMixture, GpMixtureParams,
+    GpQualityAssurance, GpSurrogate, GpSurrogateExt, IaeAlphaPlotData, MixtureGpSurrogate,
+    NbClusters, Recombination, RegressionSpec,
 };
 use linfa::traits::{Fit, PredictInplace};
 use linfa::{DatasetBase, Float, ParamGuard};
@@ -671,7 +671,7 @@ impl GpSurrogateExt for MixintGpMixture {
     }
 }
 
-impl GpScore<EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
+impl GpMetrics<EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
     fn params(&self) -> MixintGpMixtureParams {
         self.params.clone().into()
     }
@@ -684,23 +684,31 @@ impl GpScore<EgoError, MixintGpMixtureParams, Self> for MixintGpMixture {
 #[typetag::serde]
 impl GpQualityAssurance for MixintGpMixture {
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>) {
-        (self as &dyn GpScore<_, _, _>).training_data()
+        (self as &dyn GpMetrics<_, _, _>).training_data()
     }
 
-    fn q2(&self, kfold: usize) -> f64 {
-        (self as &dyn GpScore<_, _, _>).q2_score(kfold)
+    fn q2_k(&self, kfold: usize) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).q2_k_score(kfold)
+    }
+    fn q2(&self) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).q2_score()
     }
 
-    fn looq2(&self) -> f64 {
-        (self as &dyn GpScore<_, _, _>).looq2_score()
+    fn pva_k(&self, kfold: usize) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).pva_k_score(kfold)
+    }
+    fn pva(&self) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).pva_score()
     }
 
-    fn pva(&self, kfold: usize) -> f64 {
-        (self as &dyn GpScore<_, _, _>).pva_score(kfold)
+    fn iae_alpha_k(&self, kfold: usize) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold, None)
     }
-
-    fn loopva(&self) -> f64 {
-        (self as &dyn GpScore<_, _, _>).loopva_score()
+    fn iae_alpha_k_score_with_plot(&self, kfold: usize, plot_data: &mut IaeAlphaPlotData) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_k_score(kfold, Some(plot_data))
+    }
+    fn iae_alpha(&self) -> f64 {
+        (self as &dyn GpMetrics<_, _, _>).iae_alpha_score(None)
     }
 }
 
