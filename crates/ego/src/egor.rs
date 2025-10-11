@@ -391,6 +391,7 @@ impl Observe<EgorState<f64>> for OptimizationObserver {
     }
 }
 
+/// Type alias for Egor optimizer with default constraint function type [Cstr]
 pub type EgorBuilder<O> = EgorFactory<O, Cstr>;
 
 #[cfg(test)]

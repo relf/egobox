@@ -148,7 +148,7 @@ pub struct EgorSolver<SB: SurrogateBuilder, C: CstrFn = Cstr> {
     /// functions, otherwise [mixture of expert](egobox_moe) is used
     /// Note: if specified takes precedence over individual settings
     pub(crate) surrogate_builder: SB,
-
+    /// Phantom data for constraint function type
     pub phantom: PhantomData<C>,
 }
 

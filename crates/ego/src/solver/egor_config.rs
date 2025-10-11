@@ -11,7 +11,9 @@ use ndarray::Array2;
 
 use serde::{Deserialize, Serialize};
 
+/// Default number of starts for multistart approach used for optimization
 pub const EGO_GP_OPTIM_N_START: usize = 10;
+/// Default number of likelihood evaluation during one internal optimization
 pub const EGO_GP_OPTIM_MAX_EVAL: usize = 50;
 
 /// GP configuration
@@ -97,6 +99,7 @@ impl GpConfig {
         self
     }
 
+    /// Sets the parameter tuning hint of the autocorrelation model
     pub fn theta_tuning(mut self, theta_tuning: ThetaTuning<f64>) -> Self {
         self.theta_tuning = theta_tuning;
         self
@@ -258,6 +261,7 @@ impl Default for EgorConfig {
 }
 
 impl EgorConfig {
+    /// Sets the infill criterion
     pub fn infill_criterion(mut self, infill_criterion: Box<dyn InfillCriterion>) -> Self {
         self.infill_criterion = infill_criterion;
         self

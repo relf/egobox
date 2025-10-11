@@ -72,6 +72,8 @@ impl<C: CstrFn> EgorServiceFactory<C> {
         }
     }
 
+    /// Configure the Egor optimizer with a closure
+    /// taking and returning an EgorConfig structure.
     pub fn configure<F: FnOnce(EgorConfig) -> EgorConfig>(mut self, init: F) -> Self {
         self.config = init(self.config);
         self
