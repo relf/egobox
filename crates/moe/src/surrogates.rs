@@ -77,9 +77,13 @@ pub trait GpSurrogateExt {
 /// A trait for a GP surrogate.
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpparam"))]
 pub trait GpParameterized {
+    /// Get hyperparameters
     fn theta(&self) -> &Array1<f64>;
+    /// Get process variance
     fn variance(&self) -> f64;
+    /// Get noise variance (0 for full GP)
     fn noise_variance(&self) -> f64;
+    /// Get log-likelihood
     fn likelihood(&self) -> f64;
 }
 

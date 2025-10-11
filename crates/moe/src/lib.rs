@@ -85,6 +85,8 @@
 //! experts based on EM joint estimation](https://hal.archives-ouvertes.fr/hal-01852300/document)
 //! Structural and multidisciplinary optimization 43.2 (2011): 243-259.
 //!
+#![warn(missing_docs)]
+#![warn(rustdoc::broken_intra_doc_links)]
 mod clustering;
 mod errors;
 mod expertise_macros;

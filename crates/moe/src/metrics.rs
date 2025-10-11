@@ -6,9 +6,12 @@ use statrs::distribution::{ContinuousCDF, Normal};
 
 use crate::GpSurrogate;
 
+/// Data structure to hold data for IAE alpha plot
 #[derive(Clone, Debug, Default)]
 pub struct IaeAlphaPlotData {
+    /// Alpha values (e.g. 0.02, 0.05, ..., 0.98)
     pub alphas: Vec<f64>,
+    /// Empirical coverage for each alpha
     pub deltas: Vec<f64>,
 }
 
@@ -19,8 +22,10 @@ where
     P: Fit<Array2<f64>, Array1<f64>, ER, Object = O> + ParamGuard,
     O: GpSurrogate,
 {
+    /// Return the training data (xt, yt)
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>);
 
+    /// Return the model parameters
     fn params(&self) -> P;
 
     /// Compute quality metric Q2 with kfold cross validation
@@ -75,7 +80,7 @@ where
         self.pva_k_score(self.training_data().0.nrows())
     }
 
-    // Compute integrated absolute error on alpha
+    /// Compute integrated absolute error on alpha
     fn iae_alpha_k_score(&self, kfold: usize, plot_data: Option<&mut IaeAlphaPlotData>) -> f64 {
         let (xt, yt) = self.training_data();
         let dataset = Dataset::new(xt.to_owned(), yt.to_owned());
