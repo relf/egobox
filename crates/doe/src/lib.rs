@@ -31,6 +31,8 @@ This library contains three kinds of sampling methods:
 * [Random Sampling](crate::random::Random)
 
 */
+#![warn(missing_docs)]
+#![warn(rustdoc::broken_intra_doc_links)]
 mod full_factorial;
 mod lhs;
 mod random;
