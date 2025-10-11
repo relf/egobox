@@ -1,3 +1,9 @@
+//! A module for metrics to evaluate Gaussian Process models performances
+//! It implements metrics from the following paper:
+//! Marrel, Amandine, and Bertrand Iooss.
+//! "Probabilistic surrogate modeling by Gaussian process: A review on recent insights in estimation and validation."
+//! Reliability Engineering & System Safety 247 (2024): 110094.
+
 use linfa::dataset::Dataset;
 use linfa::{
     Float, ParamGuard,
@@ -18,8 +24,10 @@ where
     P: Fit<Array2<F>, Array1<F>, ER, Object = O> + ParamGuard,
     O: PredictInplace<Array2<F>, Array1<F>>,
 {
+    /// Return the training data (xt, yt)
     fn training_data(&self) -> &(Array2<F>, Array1<F>);
 
+    /// Return the model parameters
     fn params(&self) -> P;
 
     /// Compute quality metric Q2 with kfold cross validation

@@ -29,8 +29,11 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::Instant;
 
+/// Default number of multistart for hyperparameters optimization
 pub const GP_OPTIM_N_START: usize = 10;
+/// Minimum of function evaluations for COBYLA optimizer
 pub const GP_COBYLA_MIN_EVAL: usize = 25;
+/// Maximum of function evaluations for COBYLA optimizer
 pub const GP_COBYLA_MAX_EVAL: usize = 1000;
 
 /// Internal parameters computed Gp during training
@@ -197,6 +200,7 @@ pub(crate) enum GpSamplingMethod {
 pub type Kriging<F> = GpParams<F, ConstantMean, SquaredExponentialCorr>;
 
 impl<F: Float> Kriging<F> {
+    /// Kriging parameters constructor
     pub fn params() -> GpParams<F, ConstantMean, SquaredExponentialCorr> {
         GpParams::new(ConstantMean(), SquaredExponentialCorr())
     }

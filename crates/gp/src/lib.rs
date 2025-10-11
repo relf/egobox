@@ -10,6 +10,8 @@
 //! GP methods are implemented by [GaussianProcess] parameterized by [GpParams].
 //!
 //! SGP methods are implemented by [SparseGaussianProcess] parameterized by [SgpParams].
+#![warn(missing_docs)]
+#![warn(rustdoc::broken_intra_doc_links)]
 mod algorithm;
 pub mod correlation_models;
 mod errors;

@@ -16,13 +16,18 @@ pub enum ThetaTuning<F: Float> {
     Fixed(Array1<F>),
     /// Parameter is optimized between given bounds (lower, upper) starting from the inital guess
     Full {
+        /// Initial guess for the parameter
         init: Array1<F>,
+        /// Bounds for the parameter array(lower, upper)
         bounds: Array1<(F, F)>,
     },
     /// Parameter is partially optimized on specified active components
     Partial {
+        /// Initial guess for the parameter
         init: Array1<F>,
+        /// Bounds for the parameter array(lower, upper)
         bounds: Array1<(F, F)>,
+        /// Active components for the parameter optimization
         active: Vec<usize>,
     },
 }
@@ -40,9 +45,12 @@ impl<F: Float> Default for ThetaTuning<F> {
 }
 
 impl<F: Float> ThetaTuning<F> {
+    /// Default initial theta value
     pub const DEFAULT_INIT: f64 = 1e-1;
+    /// Default bounds for theta values
     pub const DEFAULT_BOUNDS: (f64, f64) = (1e-2, 1e1);
 
+    /// Get initial theta value
     pub fn init(&self) -> &Array1<F> {
         match self {
             ThetaTuning::Full { init, bounds: _ } => init,
@@ -55,6 +63,7 @@ impl<F: Float> ThetaTuning<F> {
         }
     }
 
+    /// Get bounds for theta value
     pub fn bounds(&self) -> Option<&Array1<(F, F)>> {
         match self {
             ThetaTuning::Full { init: _, bounds } => Some(bounds),
@@ -165,6 +174,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GpParams<F, 
         })
     }
 
+    /// A constructor for GP parameters from validated parameters
     pub fn new_from_valid(params: &GpValidParams<F, Mean, Corr>) -> Self {
         Self(params.clone())
     }
