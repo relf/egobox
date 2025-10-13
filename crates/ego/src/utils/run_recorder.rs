@@ -1,7 +1,7 @@
-use std::path::Path;
+use std::{fs::File, io::BufReader, path::Path};
 
 use crate::Result;
-use ndarray::{Array2, Zip, s};
+use ndarray::{Array2, Zip};
 use serde::{Deserialize, Serialize};
 
 use crate::{EgorConfig, EgorState};
@@ -21,7 +21,8 @@ pub struct AlgorithmParameters {
     pub acquisition_function: String,
     pub kernel: String,
     pub initial_samples: usize,
-    pub BO_iterations: usize,
+    #[serde(rename = "BO_iterations")]
+    pub bo_iterations: u64,
     pub total_samples: usize,
     pub batch_size: usize,
     pub other_params: serde_json::Value,
@@ -70,7 +71,7 @@ pub struct EgorRunData {
     pub search_iterations: Vec<SearchIteration>,
 }
 
-pub(crate) fn get_run_info(
+pub(crate) fn init_run_info(
     xlimits: Array2<f64>,
     config: EgorConfig,
     state: &EgorState<f64>,
@@ -78,9 +79,20 @@ pub(crate) fn get_run_info(
     let data = state.data.clone().unwrap();
     let version = env!("CARGO_PKG_VERSION");
     let name = env!("CARGO_PKG_NAME");
-    let doe_size = state.doe_size;
 
-    let run_data = EgorRunData {
+    let (xdata, ydata, _) = data;
+    let mut sampled_locations: Vec<Sample> = vec![];
+    Zip::indexed(xdata.rows())
+        .and(ydata.rows())
+        .for_each(|i, x, y| {
+            sampled_locations.push(Sample {
+                iterations: i,
+                locations: x.to_vec(),
+                evaluations: y[0],
+            })
+        });
+
+    EgorRunData {
         problem_metadata: ProblemMetadata {
             dimensionality: xlimits.nrows(),
             lower_bounds: xlimits.column(0).to_vec(),
@@ -97,11 +109,15 @@ pub(crate) fn get_run_info(
                 _ => "Mixed".to_string(),
             },
             initial_samples: state.doe_size,
-            BO_iterations: config.max_iters,
-            total_samples: data.0.nrows(),
+            bo_iterations: config.max_iters as u64,
+            total_samples: xdata.nrows(),
             batch_size: config.q_points,
             seed: config.seed.map_or(-1, |v| v as i32),
             ..Default::default()
+        },
+        initial_samples: InitialSamples {
+            batch_size: 1,
+            sampled_locations,
         },
         extra_info: ExtraInfo {
             team_notes: format!("Native configuration info: {:?}", config),
@@ -109,14 +125,15 @@ pub(crate) fn get_run_info(
             ..ExtraInfo::default()
         },
         ..EgorRunData::default()
-    };
+    }
+}
 
-    let (xdata, ydata, _) = data;
-    let xdata = xdata.slice(s![doe_size.., ..]);
-    let ydata = ydata.slice(s![doe_size.., ..]);
-
-    let mut search_iters = run_data.search_iterations.clone();
-
+pub(crate) fn update_run_info(
+    run_data: &mut EgorRunData,
+    n_iter: u64,
+    xdata: &Array2<f64>,
+    ydata: &Array2<f64>,
+) {
     let mut sampled_locations: Vec<SampleNoIter> = vec![];
     Zip::from(xdata.rows()).and(ydata.rows()).for_each(|x, y| {
         sampled_locations.push(SampleNoIter {
@@ -125,22 +142,30 @@ pub(crate) fn get_run_info(
         })
     });
 
-    let iter = search_iters.push(SearchIteration {
-        iterations: state.iter,
+    run_data.search_iterations.push(SearchIteration {
+        iterations: run_data.search_iterations.len() as u64 + 1,
         batch_size: xdata.nrows(),
         sampled_locations,
     });
 
-    EgorRunData {
-        search_iterations: search_iters,
-        ..run_data
-    }
+    run_data.algorithm_parameters.bo_iterations = n_iter;
 }
 
-/// Save models in a bincode file
 pub(crate) fn save_run<P: AsRef<Path>>(path: P, run_data: &EgorRunData) -> Result<()> {
     let out_json = serde_json::to_string_pretty(run_data)?;
     std::fs::write(path, out_json)?;
 
     Ok(())
+}
+
+pub(crate) fn load_run<P: AsRef<Path>>(path: P) -> Result<EgorRunData> {
+    // Open the file in read-only mode with buffer.
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    // Read the JSON contents of the file as an instance of `User`.
+    let run_data = serde_json::from_reader(reader)?;
+
+    // Return the `User`.
+    Ok(run_data)
 }

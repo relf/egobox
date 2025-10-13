@@ -303,6 +303,25 @@ where
             EGOR_USE_GP_VAR_PORTFOLIO,
             std::env::var(EGOR_USE_GP_VAR_PORTFOLIO).is_ok()
         );
+
+        #[cfg(feature = "persistent")]
+        if std::env::var(crate::utils::EGOR_USE_RUN_RECORDER).is_ok() {
+            use crate::utils::{
+                EGOR_RUN_FILENAME,
+                run_recorder::{self, init_run_info},
+            };
+
+            let default_dir = String::from("./");
+            let outdir = self.config.outdir.as_ref().unwrap_or(&default_dir);
+            let filename = EGOR_RUN_FILENAME;
+            let filepath = std::path::Path::new(outdir).join(filename);
+            let run_data = init_run_info(self.xlimits.clone(), self.config.clone(), &initial_state);
+            match run_recorder::save_run(&filepath, &run_data) {
+                Ok(_) => log::info!("GP models saved to {:?}", filepath),
+                Err(err) => log::info!("Cannot save GP models: {:?}", err),
+            };
+        }
+
         Ok((initial_state, None))
     }
 
@@ -353,6 +372,30 @@ where
             y_data.row(res.0.best_index.unwrap()),
             x_data.row(res.0.best_index.unwrap())
         );
+
+        #[cfg(feature = "persistent")]
+        if std::env::var(crate::utils::EGOR_USE_RUN_RECORDER).is_ok() {
+            use crate::utils::{EGOR_RUN_FILENAME, run_recorder};
+
+            let default_dir = String::from("./");
+            let outdir = self.config.outdir.as_ref().unwrap_or(&default_dir);
+            let filename = EGOR_RUN_FILENAME;
+            let filepath = std::path::Path::new(outdir).join(filename);
+
+            let mut run_data = run_recorder::load_run(&filepath).unwrap();
+            let data = res.0.data.as_ref().unwrap();
+            let n_points = data.0.nrows();
+            let n_added = res.0.added - res.0.prev_added;
+            let xdata = data.0.slice(s![n_points - n_added.., ..]).to_owned();
+            info!("{} {}", res.0.added, xdata.nrows());
+            let ydata = data.1.slice(s![n_points - n_added.., ..]).to_owned();
+            run_recorder::update_run_info(&mut run_data, res.0.get_iter() + 1, &xdata, &ydata);
+            match run_recorder::save_run(&filepath, &run_data) {
+                Ok(_) => log::info!("GP models saved to {:?}", filepath),
+                Err(err) => log::info!("Cannot save GP models: {:?}", err),
+            };
+        }
+
         Ok(res)
     }
 
