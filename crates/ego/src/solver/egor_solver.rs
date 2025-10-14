@@ -303,6 +303,17 @@ where
             EGOR_USE_GP_VAR_PORTFOLIO,
             std::env::var(EGOR_USE_GP_VAR_PORTFOLIO).is_ok()
         );
+
+        #[cfg(feature = "persistent")]
+        if std::env::var(crate::utils::EGOR_USE_RUN_RECORDER).is_ok() {
+            let run_data = crate::utils::run_recorder::init_run_info(
+                self.xlimits.clone(),
+                self.config.clone(),
+                &initial_state,
+            );
+            initial_state.run_data = Some(run_data);
+        }
+
         Ok((initial_state, None))
     }
 
@@ -328,7 +339,7 @@ where
         let (x_data, y_data, _c_data) = res.0.data.clone().unwrap();
 
         // Update Coop activity
-        let res = if self.config.coego.activated {
+        let mut res = if self.config.coego.activated {
             let mut rng = res.0.take_rng().unwrap();
             let activity = self.get_random_activity(&mut rng);
             debug!("Component activity = {activity:?}");
@@ -353,6 +364,26 @@ where
             y_data.row(res.0.best_index.unwrap()),
             x_data.row(res.0.best_index.unwrap())
         );
+
+        #[cfg(feature = "persistent")]
+        if std::env::var(crate::utils::EGOR_USE_RUN_RECORDER).is_ok() {
+            use crate::utils::run_recorder;
+
+            let mut run_data = res.0.take_run_data().unwrap();
+
+            let data = res.0.data.as_ref().unwrap();
+            let n_points = data.0.nrows();
+            let n_added = res.0.added - res.0.prev_added;
+            let xdata = data.0.slice(s![n_points - n_added.., ..]).to_owned();
+            info!("{} {}", res.0.added, xdata.nrows());
+            let ydata = data.1.slice(s![n_points - n_added.., ..]).to_owned();
+
+            run_recorder::update_run_info(&mut run_data, res.0.get_iter() + 1, &xdata, &ydata);
+
+            let state = res.0.clone().run_data(run_data);
+            res = (state, res.1);
+        }
+
         Ok(res)
     }
 

@@ -6,6 +6,7 @@ mod hot_start;
 mod logei_helper;
 mod misc;
 mod portfolio;
+pub(crate) mod run_recorder;
 mod sort_axis;
 mod start_points;
 
@@ -35,3 +36,9 @@ pub const EGOR_INITIAL_GP_FILENAME: &str = "egor_initial_gp.bin";
 
 /// Gaussian process filename to save GPs built at the last iteration
 pub const EGOR_GP_FILENAME: &str = "egor_gp.bin";
+
+/// Env variable to trigger run recording
+pub const EGOR_USE_RUN_RECORDER: &str = "EGOR_USE_RUN_RECORDER";
+
+/// BO run filename
+pub const EGOR_RUN_FILENAME: &str = "egor_run.json";

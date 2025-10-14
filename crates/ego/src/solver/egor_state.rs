@@ -1,5 +1,8 @@
 /// Implementation of `argmin::IterState` for Egor optimizer
-use crate::{InfillObjData, utils::find_best_result_index};
+use crate::{
+    InfillObjData,
+    utils::{find_best_result_index, run_recorder::EgorRunData},
+};
 use egobox_moe::Clustering;
 
 use argmin::core::{ArgminFloat, Problem, State, TerminationReason, TerminationStatus};
@@ -93,6 +96,9 @@ pub struct EgorState<F: Float> {
     pub prev_step_ego: bool,
     /// Coego state
     pub activity: Option<Array2<usize>>,
+    /// Run data
+    #[cfg(feature = "persistent")]
+    pub run_data: Option<EgorRunData>,
 
     /// Random number generator for reproducibility
     pub rng: Option<Xoshiro256Plus>,
@@ -246,6 +252,19 @@ where
         self.activity.take()
     }
 
+    /// Set the run data
+    #[cfg(feature = "persistent")]
+    pub fn run_data(mut self, run_data: crate::utils::run_recorder::EgorRunData) -> Self {
+        self.run_data = Some(run_data);
+        self
+    }
+
+    /// Moves the current rundata out and replaces it internally with `None`.
+    #[cfg(feature = "persistent")]
+    pub fn take_run_data(&mut self) -> Option<EgorRunData> {
+        self.run_data.take()
+    }
+
     /// Set the random number generator used to draw random points
     pub fn rng(mut self, rng: Xoshiro256Plus) -> Self {
         self.rng = Some(rng);
@@ -391,6 +410,8 @@ where
             sigma: F::cast(1e-1),
             activity: None,
             prev_step_ego: false,
+            #[cfg(feature = "persistent")]
+            run_data: None,
             rng: Some(Xoshiro256Plus::from_entropy()),
         }
     }

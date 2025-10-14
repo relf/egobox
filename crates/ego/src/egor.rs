@@ -125,6 +125,12 @@ pub const CONFIG_FILE: &str = "egor_config.json";
 /// Numpy filename for optimization history
 pub const HISTORY_FILE: &str = "egor_history.npy";
 
+#[derive(Clone, Default)]
+pub struct RunInfo {
+    pub fname: String,
+    pub num: usize,
+}
+
 /// EGO optimizer builder allowing to specify function to be minimized
 /// subject to constraints intended to be negative.
 ///
@@ -132,6 +138,7 @@ pub struct EgorFactory<O: GroupFunc, C: CstrFn = Cstr> {
     fobj: O,
     fcstrs: Vec<C>,
     config: EgorConfig,
+    run_info: Option<RunInfo>,
 }
 
 impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
@@ -145,6 +152,7 @@ impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
             fobj,
             fcstrs: vec![],
             config: EgorConfig::default(),
+            run_info: None,
         }
     }
 
@@ -159,6 +167,12 @@ impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
     /// arguments.
     pub fn subject_to(mut self, fcstrs: Vec<C>) -> Self {
         self.fcstrs = fcstrs;
+        self
+    }
+
+    /// Set execution metadata used to qualify optimization run
+    pub fn run_info(mut self, info: RunInfo) -> Self {
+        self.run_info = Some(info);
         self
     }
 
@@ -177,6 +191,7 @@ impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
         Egor {
             fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
             solver: EgorSolver::new(config),
+            run_info: self.run_info,
         }
     }
 
@@ -191,6 +206,7 @@ impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
         Egor {
             fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
             solver: EgorSolver::new(config),
+            run_info: self.run_info,
         }
     }
 }
@@ -205,6 +221,7 @@ pub struct Egor<
 > {
     fobj: ObjFunc<O, C>,
     solver: EgorSolver<SB, C>,
+    run_info: Option<RunInfo>,
 }
 
 impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C, SB> {
@@ -276,9 +293,37 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
                 state: result.state,
             }
         };
+
+        #[cfg(feature = "persistent")]
+        if std::env::var(crate::utils::EGOR_USE_RUN_RECORDER).is_ok() {
+            use crate::utils::{EGOR_RUN_FILENAME, run_recorder};
+
+            let default_dir = String::from("./");
+            let outdir = self.solver.config.outdir.as_ref().unwrap_or(&default_dir);
+            let filename = EGOR_RUN_FILENAME;
+            let filepath = std::path::Path::new(outdir).join(filename);
+
+            let mut run_data = res.state.run_data.as_ref().unwrap().clone();
+            let default = RunInfo::default();
+            let meta = self.run_info.as_ref().unwrap_or(&default);
+            run_data.problem_metadata.test_function = meta.fname.clone();
+            run_data.problem_metadata.replication_number = meta.num;
+
+            match run_recorder::save_run(&filepath, &run_data) {
+                Ok(_) => log::info!("Run data saved to {:?}", filepath),
+                Err(err) => log::info!("Cannot save run data: {:?}", err),
+            };
+        }
+
         info!("Optim Result: min f(x)={} at x={}", res.y_opt, res.x_opt);
 
         Ok(res)
+    }
+
+    /// Set execution metadata used to qualify optimization run
+    pub fn run_info(mut self, info: RunInfo) -> Self {
+        self.run_info = Some(info);
+        self
     }
 }
 
