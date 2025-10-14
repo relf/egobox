@@ -16,6 +16,20 @@ pub struct ProblemMetadata {
     pub replication_number: usize,
 }
 
+#[derive(Deserialize, Debug, Clone, Default)]
+pub struct OtherParams;
+
+impl Serialize for OtherParams {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Always serialize as an empty object
+        let empty = serde_json::Map::new();
+        empty.serialize(serializer)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AlgorithmParameters {
     pub acquisition_function: String,
@@ -25,7 +39,7 @@ pub struct AlgorithmParameters {
     pub bo_iterations: u64,
     pub total_samples: usize,
     pub batch_size: usize,
-    pub other_params: serde_json::Value,
+    pub other_params: OtherParams,
     pub seed: i32,
 }
 
@@ -86,7 +100,7 @@ pub(crate) fn init_run_info(
         .and(ydata.rows())
         .for_each(|i, x, y| {
             sampled_locations.push(Sample {
-                iterations: i,
+                iterations: i + 1,
                 locations: x.to_vec(),
                 evaluations: y[0],
             })
@@ -158,6 +172,7 @@ pub(crate) fn save_run<P: AsRef<Path>>(path: P, run_data: &EgorRunData) -> Resul
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) fn load_run<P: AsRef<Path>>(path: P) -> Result<EgorRunData> {
     // Open the file in read-only mode with buffer.
     let file = File::open(path)?;
