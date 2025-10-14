@@ -1,4 +1,4 @@
-use egobox_ego::EgorBuilder;
+use egobox_ego::{EgorBuilder, RunInfo};
 use ndarray::{Array2, ArrayView2, Zip, array};
 
 /// Rosenbrock test function: min f(x)=0 at x=(1, 1)
@@ -17,6 +17,10 @@ fn main() {
     let res = EgorBuilder::optimize(rosenbrock)
         .configure(|config| config.max_iters(100).target(1e-2))
         .min_within(&xlimits)
+        .run_info(RunInfo {
+            fname: "rosenbrock".to_string(),
+            num: 1,
+        })
         .run()
         .expect("Minimize failure");
     println!("Rosenbrock minimum y = {} at x = {}", res.y_opt, res.x_opt);

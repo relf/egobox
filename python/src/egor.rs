@@ -260,13 +260,14 @@ impl Egor {
     ///         x_opt (array[1, nx]): x value where fun is at its minimum subject to constraints
     ///         y_opt (array[1, nx]): fun(x_opt)
     ///
-    #[pyo3(signature = (fun, fcstrs=vec![], max_iters = 20))]
+    #[pyo3(signature = (fun, fcstrs=vec![], max_iters = 20, run_info = None))]
     fn minimize(
         &self,
         py: Python,
         fun: Py<PyAny>,
         fcstrs: Vec<Py<PyAny>>,
         max_iters: usize,
+        run_info: Option<Py<PyAny>>,
     ) -> PyResult<OptimResult> {
         let obj = |x: &ArrayView2<f64>| -> Array2<f64> {
             Python::attach(|py| {
@@ -304,6 +305,16 @@ impl Egor {
                 self.apply_config(config, Some(max_iters), n_fcstr, self.doe.as_ref())
             })
             .min_within_mixint_space(&xtypes);
+
+        let mixintegor = if let Some(ri) = run_info {
+            let ri: RunInfo = ri.extract(py).unwrap();
+            mixintegor.run_info(egobox_ego::RunInfo {
+                fname: ri.fname,
+                num: ri.num,
+            })
+        } else {
+            mixintegor
+        };
 
         let res = py.detach(|| {
             mixintegor

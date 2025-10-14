@@ -394,21 +394,6 @@ where
         debug!("Best index {:?}", state.best_index);
         debug!("Data {:?}", state.data.as_ref().unwrap());
 
-        #[cfg(feature = "persistent")]
-        if std::env::var(crate::utils::EGOR_USE_RUN_RECORDER).is_ok() {
-            use crate::utils::{EGOR_RUN_FILENAME, run_recorder};
-
-            let default_dir = String::from("./");
-            let outdir = self.config.outdir.as_ref().unwrap_or(&default_dir);
-            let filename = EGOR_RUN_FILENAME;
-            let filepath = std::path::Path::new(outdir).join(filename);
-
-            match run_recorder::save_run(&filepath, state.run_data.as_ref().unwrap()) {
-                Ok(_) => log::info!("Run data saved to {:?}", filepath),
-                Err(err) => log::info!("Cannot save run data: {:?}", err),
-            };
-        }
-
         TerminationStatus::NotTerminated
     }
 }

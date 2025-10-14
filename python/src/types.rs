@@ -159,6 +159,26 @@ pub(crate) enum SparseMethod {
 
 #[gen_stub_pyclass]
 #[pyclass]
+#[derive(Debug, FromPyObject)]
+pub(crate) struct RunInfo {
+    #[pyo3(get, set)]
+    pub(crate) fname: String,
+    #[pyo3(get, set)]
+    pub(crate) num: usize,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl RunInfo {
+    #[new]
+    #[pyo3(signature = (fname, num = 0))]
+    pub fn new(fname: String, num: usize) -> Self {
+        RunInfo { fname, num }
+    }
+}
+
+#[gen_stub_pyclass]
+#[pyclass]
 pub(crate) struct OptimResult {
     #[pyo3(get)]
     pub(crate) x_opt: Py<PyArray1<f64>>,
