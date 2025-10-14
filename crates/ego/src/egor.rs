@@ -125,9 +125,12 @@ pub const CONFIG_FILE: &str = "egor_config.json";
 /// Numpy filename for optimization history
 pub const HISTORY_FILE: &str = "egor_history.npy";
 
+/// Egor run metadata
 #[derive(Clone, Default)]
 pub struct RunInfo {
+    /// The objective function name
     pub fname: String,
+    /// A number of replication
     pub num: usize,
 }
 
