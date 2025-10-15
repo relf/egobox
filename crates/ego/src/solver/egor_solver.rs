@@ -375,7 +375,6 @@ where
             let n_points = data.0.nrows();
             let n_added = res.0.added - res.0.prev_added;
             let xdata = data.0.slice(s![n_points - n_added.., ..]).to_owned();
-            info!("{} {}", res.0.added, xdata.nrows());
             let ydata = data.1.slice(s![n_points - n_added.., ..]).to_owned();
 
             run_recorder::update_run_info(&mut run_data, res.0.get_iter() + 1, &xdata, &ydata);
