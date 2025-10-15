@@ -122,7 +122,7 @@ pub(crate) fn init_run_info(
                 CorrelationSpec::MATERN52 => "Matern 5/2".to_string(),
                 _ => "Mixed".to_string(),
             },
-            initial_samples: state.doe_size,
+            initial_samples: sampled_locations.len(),
             bo_iterations: config.max_iters as u64,
             total_samples: xdata.nrows(),
             batch_size: config.q_points,
@@ -130,7 +130,7 @@ pub(crate) fn init_run_info(
             ..Default::default()
         },
         initial_samples: InitialSamples {
-            batch_size: 1,
+            batch_size: sampled_locations.len(),
             sampled_locations,
         },
         extra_info: ExtraInfo {
