@@ -239,7 +239,7 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
             std::fs::write(filepath, json).expect("Unable to write file");
         }
 
-        let exec = Executor::new(self.fobj.clone(), self.solver.clone());
+        let exec = Executor::new(self.fobj.clone(), self.solver.clone()).timer(true);
 
         let exec = if self.solver.config.hot_start != HotStartMode::Disabled {
             let chkpt_dir = if let Some(outdir) = self.solver.config.outdir.as_ref() {
