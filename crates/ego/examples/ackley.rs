@@ -1,4 +1,6 @@
-use egobox_ego::{EgorBuilder, InfillOptimizer, InfillStrategy};
+use clap::Parser;
+
+use egobox_ego::{EgorBuilder, InfillOptimizer, InfillStrategy, QEiStrategy, RunInfo};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{Array, Array2, ArrayView2, Zip, array};
 
@@ -11,24 +13,47 @@ fn ackley(x: &ArrayView2<f64>) -> Array2<f64> {
     y
 }
 
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = 10)]
+    dim: usize,
+    #[arg(short, long, default_value = "./history")]
+    outdir: String,
+}
+
 fn main() {
-    let ndim = 16;
-    let data = [-32.768, 32.768].repeat(16);
+    let args = Args::parse();
+
+    let ndim = args.dim;
+    let outdir = args.outdir;
+
+    let data = [-32.768, 32.768].repeat(ndim);
     let xlimits = Array::from_shape_vec((ndim, 2), data).unwrap();
 
     let res = EgorBuilder::optimize(ackley)
         .configure(|config| {
             config
+                .n_doe(200)
                 .configure_gp(|gp| {
                     gp.regression_spec(RegressionSpec::CONSTANT)
-                        .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
+                        .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
                 })
-                .infill_strategy(InfillStrategy::WB2S)
+                .infill_strategy(InfillStrategy::EI)
                 .infill_optimizer(InfillOptimizer::Slsqp)
+                .coego(egobox_ego::CoegoStatus::Enabled(5))
+                .q_points(10)
+                .q_optmod(2)
+                .qei_strategy(QEiStrategy::KrigingBeliever)
                 .n_start(50)
-                .max_iters(300)
+                .outdir(outdir)
+                .max_iters(30)
         })
         .min_within(&xlimits)
+        .run_info(RunInfo {
+            fname: "ackley".to_string(),
+            num: 1,
+        })
         .run()
         .expect("Minimize failure");
     println!("Ackley minimum y = {} at x = {}", res.y_opt, res.x_opt);

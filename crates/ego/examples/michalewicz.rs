@@ -1,16 +1,30 @@
 use clap::Parser;
 
 use egobox_ego::{EgorBuilder, InfillOptimizer, InfillStrategy, OptimResult, Result, RunInfo};
-use egobox_moe::{CorrelationSpec, RegressionSpec};
-use ndarray::{Array, Array2, ArrayView2, Zip, array};
+use egobox_moe::{CorrelationSpec, NbClusters, Recombination, RegressionSpec};
+use ndarray::{Array, Array2, ArrayView2, Zip};
 
-/// Rosenbrock test function: min f(x)=0 at x=(1, 1)
-fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
-    let mut y: Array2<f64> = Array2::zeros((x.nrows(), 1));
+/// Michalewicz test function: min D=10 f(x)=-9.66015 at x=[2.20, 1.57, 1.28, 2.31, 1.38, 1.87, 1.32, 1.75, 1.46, 1.55]
+fn michalewicz(x: &ArrayView2<f64>) -> Array2<f64> {
+    let m = 10.0;
+    let n_points = x.nrows();
+
+    let mut y = Array2::zeros((n_points, 1));
+
     Zip::from(y.rows_mut())
         .and(x.rows())
-        .par_for_each(|mut yi, xi| {
-            yi.assign(&array![argmin_testfunctions::rosenbrock(&xi.to_vec())])
+        .for_each(|mut result_row, point| {
+            let sum: f64 = point
+                .iter()
+                .enumerate()
+                .map(|(j, &x_j)| {
+                    let j_f = (j + 1) as f64;
+                    let term = (j_f * x_j * x_j / std::f64::consts::PI).sin().powf(2.0 * m);
+                    x_j.sin() * term
+                })
+                .sum();
+
+            result_row[0] = -sum;
         });
     y
 }
@@ -18,24 +32,24 @@ fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = 6)]
+    #[arg(short, long, default_value_t = 10)]
     dim: usize,
-    #[arg(short, long, default_value = "./rosenbrock")]
+    #[arg(short, long, default_value = "./michalewicz")]
     outdir: String,
     #[arg(short, long, default_value_t = 1)]
     rep: usize,
 }
 
-const BUDGET: usize = 100;
+const BUDGET: usize = 300;
 
 fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>> {
     let n_doe = dim + 1;
     let max_iters = BUDGET - n_doe;
 
-    let data = [-2., 2.].repeat(dim);
+    let data = [0., std::f64::consts::PI].repeat(dim);
     let xlimits = Array::from_shape_vec((dim, 2), data).unwrap();
 
-    EgorBuilder::optimize(rosenbrock)
+    EgorBuilder::optimize(michalewicz)
         .configure(|config| {
             config
                 .n_doe(n_doe)
@@ -46,13 +60,14 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 .infill_strategy(InfillStrategy::WB2)
                 .infill_optimizer(InfillOptimizer::Slsqp)
                 .trego(true)
+                .coego(egobox_ego::CoegoStatus::Enabled(2))
                 .max_iters(max_iters)
-                .n_start(300)
+                .n_start(400)
                 .outdir(outdir)
         })
         .min_within(&xlimits)
         .run_info(RunInfo {
-            fname: "rosenbrock".to_string(),
+            fname: "michalewicz".to_string(),
             num,
         })
         .run()
@@ -70,7 +85,7 @@ fn main() -> Result<()> {
         let outdir = format!("{}/run{:0>2}", outdir, num);
         let res = run_egor(dim, &outdir, num)?;
 
-        println!("Rosenbrock minimum y = {} at x = {}", res.y_opt, res.x_opt);
+        println!("Michalewicz minimum y = {} at x = {}", res.y_opt, res.x_opt);
     }
 
     Ok(())
