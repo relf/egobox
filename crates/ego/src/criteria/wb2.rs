@@ -6,6 +6,7 @@ use ndarray_stats::QuantileExt;
 
 use serde::{Deserialize, Serialize};
 
+/// A structure for WB2 infill criterion specification
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WB2Criterion(pub Option<f64>);
 

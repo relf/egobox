@@ -51,15 +51,7 @@ pub struct ExtraInfo {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct Sample {
-    pub iterations: usize,
-    pub locations: Vec<f64>,
-    pub evaluations: f64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct InitialSamples {
-    pub batch_size: usize,
     pub sampled_locations: Vec<Sample>,
 }
 
@@ -67,11 +59,11 @@ pub struct InitialSamples {
 pub struct SearchIteration {
     pub iterations: u64,
     pub batch_size: usize,
-    pub sampled_locations: Vec<SampleNoIter>,
+    pub sampled_locations: Vec<Sample>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct SampleNoIter {
+pub struct Sample {
     pub locations: Vec<f64>,
     pub evaluations: f64,
 }
@@ -96,15 +88,12 @@ pub(crate) fn init_run_info(
 
     let (xdata, ydata, _) = data;
     let mut sampled_locations: Vec<Sample> = vec![];
-    Zip::indexed(xdata.rows())
-        .and(ydata.rows())
-        .for_each(|i, x, y| {
-            sampled_locations.push(Sample {
-                iterations: i + 1,
-                locations: x.to_vec(),
-                evaluations: y[0],
-            })
-        });
+    Zip::from(xdata.rows()).and(ydata.rows()).for_each(|x, y| {
+        sampled_locations.push(Sample {
+            locations: x.to_vec(),
+            evaluations: y[0],
+        })
+    });
 
     EgorRunData {
         problem_metadata: ProblemMetadata {
@@ -122,17 +111,14 @@ pub(crate) fn init_run_info(
                 CorrelationSpec::MATERN52 => "Matern 5/2".to_string(),
                 _ => "Mixed".to_string(),
             },
-            initial_samples: state.doe_size,
+            initial_samples: sampled_locations.len(),
             bo_iterations: config.max_iters as u64,
             total_samples: xdata.nrows(),
             batch_size: config.q_points,
             seed: config.seed.map_or(-1, |v| v as i32),
             ..Default::default()
         },
-        initial_samples: InitialSamples {
-            batch_size: 1,
-            sampled_locations,
-        },
+        initial_samples: InitialSamples { sampled_locations },
         extra_info: ExtraInfo {
             team_notes: format!("Native configuration info: {:?}", config),
             code_reference: format!("{name} {version}"),
@@ -148,9 +134,9 @@ pub(crate) fn update_run_info(
     xdata: &Array2<f64>,
     ydata: &Array2<f64>,
 ) {
-    let mut sampled_locations: Vec<SampleNoIter> = vec![];
+    let mut sampled_locations: Vec<Sample> = vec![];
     Zip::from(xdata.rows()).and(ydata.rows()).for_each(|x, y| {
-        sampled_locations.push(SampleNoIter {
+        sampled_locations.push(Sample {
             locations: x.to_vec(),
             evaluations: y[0],
         })

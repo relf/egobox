@@ -167,6 +167,7 @@ where
         (scale_infill_obj, scale_cstr, scale_fcstr, scale_ic)
     }
 
+    /// Mean prediction of a constraint surrogate model scaled by scale_cstr
     pub fn mean_cstr(
         cstr_model: &dyn MixtureGpSurrogate,
         x: &[f64],
@@ -193,6 +194,8 @@ where
         cstr_model.predict(&x.view()).unwrap()[0] / scale_cstr
     }
 
+    /// Upper trust bound prediction of a constraint surrogate model scaled by scale_cstr
+    /// with a doubt factor CSTR_DOUBT
     pub fn upper_trust_bound_cstr(
         cstr_model: &dyn MixtureGpSurrogate,
         x: &[f64],
@@ -337,6 +340,8 @@ where
         obj / scale
     }
 
+    /// Compute gradient of infill criterion objective expected to be minimized
+    /// meaning infill criterion objective is negative infill criterion
     pub fn eval_grad_infill_obj(
         &self,
         x: &[f64],
@@ -354,6 +359,8 @@ where
         (grad / scale).to_vec()
     }
 
+    /// Compute infill criterion objective with constraints handling
+    /// expected to be minimized meaning infill criterion objective is negative infill criterion
     #[allow(clippy::too_many_arguments)]
     pub fn eval_infill_obj_with_cstrs(
         &self,
@@ -381,6 +388,7 @@ where
         }
     }
 
+    /// Compute gradient of infill criterion objective with constraints handling
     #[allow(clippy::too_many_arguments)]
     pub fn eval_grad_infill_obj_with_cstrs(
         &self,
@@ -433,6 +441,7 @@ where
         }
     }
 
+    /// Evaluate the objective function at given x points
     pub fn eval_obj<O: CostFunction<Param = Array2<f64>, Output = Array2<f64>>>(
         &self,
         pb: &mut Problem<O>,
@@ -450,6 +459,7 @@ where
             .expect("Objective evaluation")
     }
 
+    /// Evaluate the constraints given as function at given x points
     pub fn eval_fcstrs(
         &self,
         fcstrs: &[impl CstrFn],
@@ -485,6 +495,8 @@ where
         res
     }
 
+    /// Evaluate the constraints given as function at given x points
+    /// within the problem structure so that the function is taken from there
     pub fn eval_problem_fcstrs<O: DomainConstraints<C>>(
         &self,
         pb: &mut Problem<O>,

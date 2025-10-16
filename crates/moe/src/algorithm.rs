@@ -68,6 +68,7 @@ impl<D: Data<Elem = f64>> Fit<ArrayBase<D, Ix2>, ArrayBase<D, Ix1>, MoeError>
 }
 
 impl GpMixtureValidParams<f64> {
+    /// Train a Mixture of Experts model on the given training data (xt, yt)
     pub fn train(
         &self,
         xt: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -622,6 +623,7 @@ impl GpMixture {
         self
     }
 
+    /// Set the gaussian mixture to use given weights, means and covariances
     pub fn set_gmx(
         mut self,
         weights: Array1<f64>,
@@ -632,6 +634,7 @@ impl GpMixture {
         self
     }
 
+    /// Set the model experts to use in the mixture
     pub fn set_experts(mut self, experts: Vec<Box<dyn FullGpSurrogate>>) -> Self {
         self.experts = experts;
         self
@@ -847,6 +850,9 @@ impl GpMixture {
         Ok(vardrv)
     }
 
+    /// Sample `n_traj` trajectories at a set of points `x` specified as (n, nx) matrix.
+    /// using the expert `ith` of the mixture.
+    /// Returns the samples as a (n, n_traj) matrix where the ith row
     pub fn sample_expert(
         &self,
         ith: usize,
@@ -856,14 +862,17 @@ impl GpMixture {
         self.experts[ith].sample(&x.view(), n_traj)
     }
 
+    /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
     pub fn predict(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array1<f64>> {
         <GpMixture as GpSurrogate>::predict(self, &x.view())
     }
 
+    /// Predict variances at a set of points `x` specified as (n, nx) matrix.
     pub fn predict_var(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array1<f64>> {
         <GpMixture as GpSurrogate>::predict_var(self, &x.view())
     }
 
+    /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.
     pub fn predict_gradients(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -871,6 +880,7 @@ impl GpMixture {
         <GpMixture as GpSurrogateExt>::predict_gradients(self, &x.view())
     }
 
+    /// Predict derivatives of the variance at a set of points `x` specified as (n, nx) matrix.
     pub fn predict_var_gradients(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -878,6 +888,9 @@ impl GpMixture {
         <GpMixture as GpSurrogateExt>::predict_var_gradients(self, &x.view())
     }
 
+    /// Sample `n_traj` trajectories at a set of points `x` specified as (n, nx) matrix.
+    /// Returns the samples as a (n, n_traj) matrix where the ith row
+    /// contain the samples of the output at the ith point.
     pub fn sample(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,

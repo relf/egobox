@@ -90,6 +90,7 @@ pub struct ObjFunc<O: GroupFunc, C: CstrFn> {
 }
 
 impl<O: GroupFunc, C: CstrFn> ObjFunc<O, C> {
+    /// Constructor given the objective function
     pub fn new(fobj: O) -> Self {
         ObjFunc {
             fobj,
@@ -97,6 +98,7 @@ impl<O: GroupFunc, C: CstrFn> ObjFunc<O, C> {
         }
     }
 
+    /// Add constraints functions
     pub fn subject_to(mut self, fcstrs: Vec<C>) -> Self {
         self.fcstrs = fcstrs;
         self

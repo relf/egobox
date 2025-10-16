@@ -172,6 +172,7 @@ pub struct SparseGaussianProcess<F: Float, Corr: CorrelationModel<F>> {
 pub type SparseKriging<F> = SgpParams<F, SquaredExponentialCorr>;
 
 impl<F: Float> SparseKriging<F> {
+    /// A constructor for SparseKriging parameters    
     pub fn params(inducings: Inducings<F>) -> SgpParams<F, SquaredExponentialCorr> {
         SgpParams::new(SquaredExponentialCorr(), inducings)
     }
@@ -294,6 +295,8 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
         (self.training_data.0.ncols(), self.training_data.1.len())
     }
 
+    /// Predict gradients of the mean function at n given `x` points of nx components specified as a (n, nx) matrix.
+    /// Returns n gradient vectors as a (n, nx) matrix.
     pub fn predict_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.training_data.0.ncols()));
         let f = |x: &Array1<f64>| -> std::result::Result<f64, anyhow::Error> {
@@ -311,6 +314,9 @@ impl<F: Float, Corr: CorrelationModel<F>> SparseGaussianProcess<F, Corr> {
             });
         drv
     }
+
+    /// Predict gradients of the variance function at n given `x` points of nx components specified as a (n, nx) matrix.
+    /// Returns n gradient vectors as a (n, nx) matrix.
     pub fn predict_var_gradients(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
         let mut drv = Array2::<F>::zeros((x.nrows(), self.training_data.0.ncols()));
         let f = |x: &Array1<f64>| -> std::result::Result<f64, anyhow::Error> {

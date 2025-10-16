@@ -125,9 +125,12 @@ pub const CONFIG_FILE: &str = "egor_config.json";
 /// Numpy filename for optimization history
 pub const HISTORY_FILE: &str = "egor_history.npy";
 
+/// Egor run metadata
 #[derive(Clone, Default)]
 pub struct RunInfo {
+    /// The objective function name
     pub fname: String,
+    /// A number of replication
     pub num: usize,
 }
 
@@ -236,7 +239,7 @@ impl<O: GroupFunc, C: CstrFn, SB: SurrogateBuilder + DeserializeOwned> Egor<O, C
             std::fs::write(filepath, json).expect("Unable to write file");
         }
 
-        let exec = Executor::new(self.fobj.clone(), self.solver.clone());
+        let exec = Executor::new(self.fobj.clone(), self.solver.clone()).timer(true);
 
         let exec = if self.solver.config.hot_start != HotStartMode::Disabled {
             let chkpt_dir = if let Some(outdir) = self.solver.config.outdir.as_ref() {
@@ -391,6 +394,7 @@ impl Observe<EgorState<f64>> for OptimizationObserver {
     }
 }
 
+/// Type alias for Egor optimizer with default constraint function type [Cstr]
 pub type EgorBuilder<O> = EgorFactory<O, Cstr>;
 
 #[cfg(test)]

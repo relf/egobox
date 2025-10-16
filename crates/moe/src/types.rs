@@ -93,9 +93,11 @@ bitflags! {
 
 /// A trait to represent clustered structure
 pub trait Clustered {
+    /// Number of clusters
     fn n_clusters(&self) -> usize;
+    /// Recombination mode between the clusters
     fn recombination(&self) -> Recombination<f64>;
-
+    /// Get clustering structure
     fn to_clustering(&self) -> Clustering;
 }
 
@@ -110,13 +112,17 @@ pub struct Clustering {
 }
 
 impl Clustering {
+    /// Constructor
     pub fn new(gmx: GaussianMixture<f64>, recombination: Recombination<f64>) -> Self {
         Clustering { gmx, recombination }
     }
 
+    /// Recombination mode between the clusters
     pub fn recombination(&self) -> Recombination<f64> {
         self.recombination
     }
+
+    /// Get clustering Gaussian Mixture structure
     pub fn gmx(&self) -> &GaussianMixture<f64> {
         &self.gmx
     }
@@ -138,15 +144,21 @@ pub enum GpMetric {
 /// Result of a GP quality assessment metric
 #[derive(Clone, Debug)]
 pub struct GpMetricResult {
+    /// Metric used
     pub metric: GpMetric,
+    /// Metric value
     pub value: f64,
+    /// Optional plot data for IAEAlphaWithPlot
     pub plot_data: Option<IaeAlphaPlotData>,
 }
 
+/// A trait for GP surrogate quality assessment
 #[cfg_attr(feature = "serializable", typetag::serde(tag = "type_gpqa"))]
 pub trait GpQualityAssurance {
+    /// Return the training data (xt, yt)
     fn training_data(&self) -> &(Array2<f64>, Array1<f64>);
 
+    /// Evaluate a given metric with k-fold cross validation
     fn score(&self, metric: GpMetric, kfold: usize) -> GpMetricResult {
         match metric {
             GpMetric::Q2 => GpMetricResult {
@@ -176,14 +188,21 @@ pub trait GpQualityAssurance {
         }
     }
 
+    /// Evaluate Q2 metric with k-fold cross validation
     fn q2_k(&self, kfold: usize) -> f64;
+    /// Evaluate Q2 metric with Leave-One-Out cross validation
     fn q2(&self) -> f64;
 
+    /// Evaluate PVA metric with k-fold cross validation    
     fn pva_k(&self, kfold: usize) -> f64;
+    /// Evaluate PVA metric with Leave-One-Out cross validation
     fn pva(&self) -> f64;
 
+    /// Evaluate IAEAlpha metric with k-fold cross validation
     fn iae_alpha_k(&self, kfold: usize) -> f64;
+    /// Evaluate IAEAlpha metric with Leave-One-Out cross validation
     fn iae_alpha_k_score_with_plot(&self, kfold: usize, plot_data: &mut IaeAlphaPlotData) -> f64;
+    /// Evaluate IAEAlpha metric with Leave-One-Out cross validation
     fn iae_alpha(&self) -> f64;
 }
 
@@ -192,6 +211,7 @@ pub trait GpQualityAssurance {
 pub trait MixtureGpSurrogate:
     Clustered + GpSurrogate + GpSurrogateExt + GpQualityAssurance + Display
 {
+    /// Get model experts
     fn experts(&self) -> &Vec<Box<dyn FullGpSurrogate>>;
 }
 

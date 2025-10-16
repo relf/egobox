@@ -15,7 +15,12 @@ pub enum ParamTuning<F: Float> {
     /// Constant parameter (ie given not estimated)
     Fixed(F),
     /// Parameter is optimized between given bounds (lower, upper) starting from the inital guess
-    Optimized { init: F, bounds: (F, F) },
+    Optimized {
+        /// Initial guess parameter value
+        init: F,
+        /// Bounds of the optimized parameter (lower, upper)
+        bounds: (F, F),
+    },
 }
 impl<F: Float> Default for ParamTuning<F> {
     fn default() -> ParamTuning<F> {
@@ -164,6 +169,7 @@ impl<F: Float, Corr: CorrelationModel<F>> SgpParams<F, Corr> {
         })
     }
 
+    /// A constructor for SGP parameters from validated parameters
     pub fn new_from_valid(params: &SgpValidParams<F, Corr>) -> Self {
         Self(params.clone())
     }

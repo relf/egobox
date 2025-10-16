@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 const SQRT_2PI: f64 = 2.5066282746310007;
 
+/// A structure for Expected Improvement implementation
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ExpectedImprovement;
 
@@ -97,6 +98,7 @@ impl InfillCriterion for ExpectedImprovement {
 /// Expected Improvement infill criterion
 pub const EI: ExpectedImprovement = ExpectedImprovement {};
 
+/// A structure for Log of Expected Improvement implementation
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LogExpectedImprovement;
 

@@ -10,6 +10,7 @@ pub enum MoeError {
     #[cfg(feature = "blas")]
     #[error("Linalg BLAS error: {0}")]
     LinalgBlasError(#[from] ndarray_linalg::error::LinalgError),
+    /// When linear algebra computation fails
     #[error(transparent)]
     LinalgError(#[from] linfa_linalg::LinalgError),
     /// When clustering fails

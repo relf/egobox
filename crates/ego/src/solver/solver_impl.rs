@@ -106,6 +106,7 @@ where
     SB: SurrogateBuilder + DeserializeOwned,
     C: CstrFn,
 {
+    /// Whether we have to recluster the data
     pub fn have_to_recluster(&self, added: usize, prev_added: usize) -> bool {
         self.config.gp.n_clusters.is_auto()
             && (added != 0 && added.is_multiple_of(10) && added - prev_added > 0)

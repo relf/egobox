@@ -59,6 +59,8 @@ impl<F: Float> Clone for GaussianMixture<F> {
 }
 
 impl<F: Float> GaussianMixture<F> {
+    /// Create a new GaussianMixture from the weights, means and covariances of the multivariate
+    /// normal distributions.
     pub fn new(
         weights: Array1<F>,
         means: Array2<F>,
@@ -84,14 +86,17 @@ impl<F: Float> GaussianMixture<F> {
         self.means.nrows()
     }
 
+    /// Return the weights of each cluster
     pub fn weights(&self) -> &Array1<F> {
         &self.weights
     }
 
+    /// Return the means of each cluster (i.e. the means of each multivariate normal distribution)
     pub fn means(&self) -> &Array2<F> {
         &self.means
     }
 
+    /// Return the covariances of each cluster (i.e. the covariances of each multivariate normal distribution)
     pub fn covariances(&self) -> &Array3<F> {
         &self.covariances
     }

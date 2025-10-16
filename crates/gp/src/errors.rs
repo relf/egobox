@@ -14,6 +14,7 @@ pub enum GpError {
     #[error("Linalg BLAS error: {0}")]
     LinalgBlasError(#[from] ndarray_linalg::error::LinalgError),
     #[error(transparent)]
+    /// When linear algebra computation fails   
     LinalgError(#[from] linfa_linalg::LinalgError),
     /// When clustering fails
     #[error("Empty cluster: {0}")]

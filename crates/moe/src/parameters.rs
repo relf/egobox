@@ -20,14 +20,21 @@ use serde::{Deserialize, Serialize};
 
 pub use egobox_gp::{Inducings, SparseMethod, ThetaTuning};
 
+/// Number of clusters specification
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum NbClusters {
     /// Use a fixed number of clusters
-    Fixed { nb: usize },
+    Fixed {
+        /// Number of clusters
+        nb: usize,
+    },
     /// Find best number of clusters automatically optionally limited to max
     /// otherwize max is determined from number of samples
-    Auto { max: Option<usize> },
+    Auto {
+        /// Optional max number of clusters
+        max: Option<usize>,
+    },
 }
 
 impl Default for NbClusters {
@@ -38,27 +45,34 @@ impl Default for NbClusters {
 }
 
 impl NbClusters {
+    /// Return the number of clusters or 1 if auto
     pub fn n_or_else_one(&self) -> usize {
         match self {
             Self::Fixed { nb } => *nb,
             Self::Auto { max: _ } => 1,
         }
     }
+    /// Constructor for fixed number of clusters
     pub fn fixed(nb: usize) -> Self {
         Self::Fixed { nb }
     }
+    /// Constructor for automatic number of clusters
     pub fn auto() -> Self {
         Self::Auto { max: None }
     }
+    /// Constructor for automatic number of clusters with a max
     pub fn automax(max: usize) -> Self {
         Self::Auto { max: Some(max) }
     }
+    /// Is the number of clusters fixed
     pub fn is_fixed(&self) -> bool {
         matches!(self, Self::Fixed { nb: _ })
     }
+    /// Is the number of clusters automatic
     pub fn is_auto(&self) -> bool {
         matches!(self, Self::Auto { max: _ })
     }
+    /// Is the number of clusters mono (i.e. fixed to 1)
     pub fn is_mono(&self) -> bool {
         if let Self::Fixed { nb } = self
             && *nb == 1
@@ -67,6 +81,7 @@ impl NbClusters {
         }
         false
     }
+    /// Is the number of clusters multi (i.e. fixed to >1 or automatic)
     pub fn is_multi(&self) -> bool {
         if let Self::Fixed { nb } = self
             && *nb > 1
@@ -77,10 +92,13 @@ impl NbClusters {
     }
 }
 
+/// Type of Gaussian Process
 #[derive(Clone)]
 #[cfg_attr(feature = "serializable", derive(Serialize, Deserialize))]
 pub enum GpType<F: Float> {
+    /// Full Gaussian Process
     FullGp,
+    /// Sparse Gaussian Process used with large datasets (not iterpolating anymore)
     SparseGp {
         /// Used sparse method
         sparse_method: SparseMethod,

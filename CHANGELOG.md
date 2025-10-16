@@ -1,6 +1,13 @@
 # Changes
 
-## Version 0.33.0 - unreleased
+## Version 0.34.0 - unreleased
+
+## Version 0.33.0 - 11/10/2025
+
+This release implements Gaussian process models quality assessment with metrics computations (Q2, PVA, IAE alpha).
+See Marrel, A., & Iooss, B. (2024).
+[Probabilistic surrogate modeling by Gaussian process: A review on recent insights in estimation and validation.](https://www.sciencedirect.com/science/article/pii/S0951832024001686?casa_token=l-YuUssKYfsAAAAA:WpEZkMh7bf0Ago2rDi0I_E5BydKDTmjluPOP0KfAratwka89IRqu09U1J6OnpG1gc_8FIafRzA)
+Reliability Engineering & System Safety, 247, 110094.
 
 ## Version 0.32.0 - 22/08/2025
 
