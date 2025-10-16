@@ -19,3 +19,5 @@ install-updater = true
 install-path = "CARGO_HOME"
 # Which actions to run on pull requests
 pr-run-mode = "plan"
+# A prefix git tags must include for dist to care about them
+tag-namespace = "gpqa"
