@@ -86,6 +86,7 @@ impl GpMixtureValidParams<f64> {
             NbClusters::Auto { max } => {
                 // automatic mode
                 let max_nb_clusters = max.unwrap_or(xt.nrows() / 10 + 1);
+                info!("Find best number of clusters up to {max_nb_clusters}");
                 find_best_number_of_clusters(
                     xt,
                     yt,
@@ -99,7 +100,7 @@ impl GpMixtureValidParams<f64> {
             NbClusters::Fixed { nb: nb_clusters } => (nb_clusters, self.recombination()),
         };
         if let NbClusters::Auto { max: _ } = self.n_clusters() {
-            debug!("Automatic settings {n_clusters} {recomb:?}");
+            info!("Automatic settings {n_clusters} {recomb:?}");
         }
 
         let training = if recomb == Recombination::Smooth(None) && self.n_clusters().is_multi() {
