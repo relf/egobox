@@ -1,7 +1,7 @@
 use clap::Parser;
 
 use egobox_ego::{EgorBuilder, InfillOptimizer, InfillStrategy, OptimResult, Result, RunInfo};
-use egobox_moe::{CorrelationSpec, NbClusters, Recombination, RegressionSpec};
+use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{Array, Array2, ArrayView2, Zip};
 
 /// Michalewicz test function: min D=10 f(x)=-9.66015 at x=[2.20, 1.57, 1.28, 2.31, 1.38, 1.87, 1.32, 1.75, 1.46, 1.55]
