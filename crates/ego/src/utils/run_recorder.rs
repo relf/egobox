@@ -51,8 +51,15 @@ pub struct ExtraInfo {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct OrdSample {
+    pub iterations: u64,
+    pub locations: Vec<f64>,
+    pub evaluations: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct InitialSamples {
-    pub sampled_locations: Vec<Sample>,
+    pub sampled_locations: Vec<OrdSample>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -87,13 +94,16 @@ pub(crate) fn init_run_info(
     let name = env!("CARGO_PKG_NAME");
 
     let (xdata, ydata, _) = data;
-    let mut sampled_locations: Vec<Sample> = vec![];
-    Zip::from(xdata.rows()).and(ydata.rows()).for_each(|x, y| {
-        sampled_locations.push(Sample {
-            locations: x.to_vec(),
-            evaluations: y[0],
-        })
-    });
+    let mut sampled_locations = vec![];
+    Zip::indexed(xdata.rows())
+        .and(ydata.rows())
+        .for_each(|i, x, y| {
+            sampled_locations.push(OrdSample {
+                iterations: i as u64 + 1,
+                locations: x.to_vec(),
+                evaluations: y[0],
+            })
+        });
 
     EgorRunData {
         problem_metadata: ProblemMetadata {
@@ -149,6 +159,7 @@ pub(crate) fn update_run_info(
     });
 
     run_data.algorithm_parameters.bo_iterations = n_iter;
+    run_data.algorithm_parameters.total_samples += xdata.nrows();
 }
 
 pub(crate) fn save_run<P: AsRef<Path>>(path: P, run_data: &EgorRunData) -> Result<()> {
