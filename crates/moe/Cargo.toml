@@ -63,7 +63,7 @@ criterion.workspace = true
 approx.workspace = true
 ndarray-npy.workspace = true
 ndarray-csv = "0.5"
-csv = "1.1"
+csv = "1.4"
 argmin_testfunctions.workspace = true
 
 [[bench]]
