@@ -38,7 +38,7 @@ ndarray-rand.workspace = true
 ndarray-npy.workspace = true
 rayon.workspace = true
 
-cobyla = { version = "0.7" }
+cobyla = { version = "0.8" }
 slsqp = { version = "0.1" }
 nlopt = { version = "0.8", optional = true }
 
