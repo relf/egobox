@@ -16,7 +16,7 @@ pub struct ProblemMetadata {
     pub replication_number: usize,
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct OtherParams;
 
 impl Serialize for OtherParams {
@@ -27,6 +27,17 @@ impl Serialize for OtherParams {
         // Always serialize as an empty object
         let empty = serde_json::Map::new();
         empty.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for OtherParams {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize into a serde_json::Value and ignore the content
+        let _ = serde_json::Value::deserialize(deserializer)?;
+        Ok(OtherParams)
     }
 }
 

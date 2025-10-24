@@ -246,7 +246,7 @@ impl Default for EgorConfig {
             gp: GpConfig::default(),
             infill_criterion: Box::new(WB2),
             infill_optimizer: InfillOptimizer::Slsqp,
-            target: f64::NEG_INFINITY,
+            target: f64::MIN,
             outdir: None,
             warm_start: false,
             hot_start: HotStartMode::Disabled,
