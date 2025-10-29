@@ -16,7 +16,9 @@ fn criterion_lhs(c: &mut Criterion) {
         for size in sizes {
             group.bench_function(format!("lhs-{dim}-dim-{size}-size"), |b| {
                 let xlimits = arr1.broadcast((dim, 2)).unwrap();
-                b.iter(|| std::hint::black_box(Lhs::new(&xlimits).with_rng(rng.clone()).sample(size)));
+                b.iter(|| {
+                    std::hint::black_box(Lhs::new(&xlimits).with_rng(rng.clone()).sample(size))
+                });
             });
         }
     }
