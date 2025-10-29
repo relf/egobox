@@ -165,9 +165,9 @@ dependencies = [
 
 [[package]]
 name = "argmin_testfunctions"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "866912833daca43599e91a630fd277afb92f77d5f7c641f0a5448b5c1b3efa00"
+checksum = "46892fd7d2399772be1f66c2b26ca6f88d69d0fae0b0882b06bdb7613192fcc2"
 dependencies = [
  "num",
 ]
