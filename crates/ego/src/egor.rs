@@ -646,6 +646,20 @@ mod tests {
         let expected = array![18.9];
         assert_abs_diff_eq!(expected, res.x_opt, epsilon = 1e-1);
         assert_eq!(n_iter as u64 + ext_iters, res.state.get_iter());
+
+        // with hot start we continue... again
+        let ext_iters = 3;
+        let res = EgorBuilder::optimize(xsinx)
+            .configure(|config| {
+                config
+                    .seed(42)
+                    .hot_start(HotStartMode::ExtendedIters(ext_iters))
+                    .outdir(outdir)
+            })
+            .min_within(&array![[0.0, 25.0]])
+            .run()
+            .expect("Egor should minimize");
+        assert_eq!(n_iter as u64 + ext_iters + ext_iters, res.state.get_iter());
         let _ = std::fs::remove_file(&checkpoint_file);
     }
 
