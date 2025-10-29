@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use egobox_doe::{Lhs, SamplingMethod};
 use egobox_gp::GaussianProcess;
 use egobox_gp::correlation_models::SquaredExponentialCorr;
@@ -51,7 +51,7 @@ fn criterion_gp(c: &mut Criterion) {
 
         group.bench_function(format!("gp {}", dims[i]), |b| {
             b.iter(|| {
-                black_box(
+                std::hint::black_box(
                     GaussianProcess::<f64, ConstantMean, SquaredExponentialCorr>::params(
                         ConstantMean::default(),
                         SquaredExponentialCorr::default(),

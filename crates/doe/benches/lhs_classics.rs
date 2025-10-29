@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use ndarray::aview1;
 use ndarray_rand::rand::SeedableRng;
@@ -19,7 +19,7 @@ fn criterion_lhs_classics(c: &mut Criterion) {
                 group.bench_function(format!("lhs-{kind:?}-{dim}-dim-{size}-size"), |b| {
                     let xlimits = arr1.broadcast((dim, 2)).unwrap();
                     b.iter(|| {
-                        black_box(
+                        std::hint::black_box(
                             Lhs::new(&xlimits)
                                 .kind(kind)
                                 .with_rng(rng.clone())

@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use egobox_doe::{Lhs, SamplingMethod};
 use ndarray::aview1;
 use ndarray_rand::rand::SeedableRng;
@@ -16,7 +16,7 @@ fn criterion_lhs(c: &mut Criterion) {
         for size in sizes {
             group.bench_function(format!("lhs-{dim}-dim-{size}-size"), |b| {
                 let xlimits = arr1.broadcast((dim, 2)).unwrap();
-                b.iter(|| black_box(Lhs::new(&xlimits).with_rng(rng.clone()).sample(size)));
+                b.iter(|| std::hint::black_box(Lhs::new(&xlimits).with_rng(rng.clone()).sample(size)));
             });
         }
     }

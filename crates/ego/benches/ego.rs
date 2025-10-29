@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use egobox_ego::{EgorBuilder, InfillStrategy};
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{Array2, ArrayView2, Zip, array};
@@ -17,7 +17,7 @@ fn criterion_ego(c: &mut Criterion) {
     let mut group = c.benchmark_group("ego");
     group.bench_function("ego ackley", |b| {
         b.iter(|| {
-            black_box(
+            std::hint::black_box(
                 EgorBuilder::optimize(ackley)
                     .configure(|config| {
                         config
