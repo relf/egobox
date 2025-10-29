@@ -252,7 +252,7 @@ where
         };
 
         let mut initial_state = state
-            .data((x_data, y_data.clone(), c_data.clone()))
+            .data((x_data.clone(), y_data.clone(), c_data.clone()))
             .clusterings(clusterings)
             .theta_inits(theta_inits)
             .rng(rng);
@@ -313,6 +313,13 @@ where
             );
             initial_state.run_data = Some(run_data);
         }
+
+        info!(
+            "********* Initialization: Best fun(x[{}])={} at x={}",
+            best_index,
+            y_data.row(best_index),
+            x_data.row(best_index)
+        );
 
         Ok((initial_state, None))
     }
