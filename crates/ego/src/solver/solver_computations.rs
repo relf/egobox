@@ -2,7 +2,9 @@ use crate::errors::Result;
 use crate::gpmix::mixint::to_discrete_space;
 use crate::{types::*, utils};
 
-use crate::utils::{compute_cstr_scales, logpofs, logpofs_grad, pofs, pofs_grad};
+use crate::utils::{
+    EGOR_USE_MIDDLEPICKER_MULTISTARTER, compute_cstr_scales, logpofs, logpofs_grad, pofs, pofs_grad,
+};
 use crate::{EgorSolver, solver::coego};
 
 use argmin::core::{CostFunction, Problem};
@@ -11,7 +13,9 @@ use egobox_doe::{Lhs, LhsKind, SamplingMethod};
 use egobox_moe::MixtureGpSurrogate;
 
 use log::{debug, info, warn};
-use ndarray::{Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip, s, stack};
+use ndarray::{
+    Array, Array1, Array2, ArrayBase, ArrayView2, Axis, Data, Ix1, Ix2, Zip, concatenate, s, stack,
+};
 use ndarray_rand::rand::seq::SliceRandom;
 
 use ndarray_rand::rand::Rng;
@@ -59,8 +63,10 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
 {
     fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64> {
         let xlimits = coego::get_active_x(Axis(0), self.xlimits, active);
-        let n = (n_start - 2) / 2;
-        if self.xtrain.nrows() > n_start {
+
+        if std::env::var(EGOR_USE_MIDDLEPICKER_MULTISTARTER).is_ok() {
+            let n = (n_start - 2) / 2;
+
             let xt = self.xtrain;
             let mut indices: Vec<usize> = (0..xt.nrows()).collect();
             indices.shuffle(&mut self.rng);
@@ -73,11 +79,24 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
             let xt = stack(Axis(0), &vxt).unwrap();
 
             let xt = coego::get_active_x(Axis(1), &xt, active);
-            utils::start_points(
+            let midpoints = utils::start_points(
                 &xt,
                 &xlimits.column(0).to_owned(),
                 &xlimits.column(1).to_owned(),
-            )
+            );
+            let missing_points: i32 = n_start as i32 - midpoints.nrows() as i32;
+            if missing_points <= 0 {
+                info!("MiddlePickerMultiStarter: return first {n_start} points");
+                midpoints
+            } else {
+                info!("MiddlePickerMultiStarter: need to add {missing_points} points");
+                // complete with LHS
+                let sampling = Lhs::new(&xlimits)
+                    .with_rng(&mut self.rng)
+                    .kind(LhsKind::Maximin);
+                let missings = sampling.sample((missing_points as usize).max(3)); // sampling with at least 3 points
+                concatenate(Axis(0), &[midpoints.view(), missings.view()]).unwrap()
+            }
         } else {
             // fallback on LHS
             let sampling = Lhs::new(&xlimits)

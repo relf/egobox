@@ -105,8 +105,8 @@
 //! ```
 //!
 use crate::utils::{
-    EGOBOX_LOG, EGOR_USE_GP_VAR_PORTFOLIO, EGOR_USE_MAX_PROBA_OF_FEASIBILITY,
-    find_best_result_index, is_feasible,
+    EGOBOX_LOG, EGOR_USE_GP_RECORDER, EGOR_USE_GP_VAR_PORTFOLIO, EGOR_USE_MAX_PROBA_OF_FEASIBILITY,
+    EGOR_USE_MIDDLEPICKER_MULTISTARTER, EGOR_USE_RUN_RECORDER, find_best_result_index, is_feasible,
 };
 use crate::{EgoError, EgorConfig, EgorState, MAX_POINT_ADDITION_RETRY};
 
@@ -292,16 +292,35 @@ where
 
         initial_state.activity = activity;
         debug!("Initial State = {initial_state:?}");
-        info!("{} set: {}", EGOBOX_LOG, std::env::var(EGOBOX_LOG).is_ok());
         info!(
-            "{} set: {}",
+            "{} setting: {}",
+            EGOBOX_LOG,
+            std::env::var(EGOBOX_LOG).is_ok()
+        );
+        info!(
+            "{} setting: {}",
             EGOR_USE_MAX_PROBA_OF_FEASIBILITY,
             std::env::var(EGOR_USE_MAX_PROBA_OF_FEASIBILITY).is_ok()
         );
         info!(
-            "{} set: {}",
+            "{} setting: {}",
             EGOR_USE_GP_VAR_PORTFOLIO,
             std::env::var(EGOR_USE_GP_VAR_PORTFOLIO).is_ok()
+        );
+        info!(
+            "{} setting: {}",
+            EGOR_USE_MIDDLEPICKER_MULTISTARTER,
+            std::env::var(EGOR_USE_MIDDLEPICKER_MULTISTARTER).is_ok()
+        );
+        info!(
+            "{} setting: {}",
+            EGOR_USE_GP_RECORDER,
+            std::env::var(EGOR_USE_GP_RECORDER).is_ok()
+        );
+        info!(
+            "{} setting: {}",
+            EGOR_USE_RUN_RECORDER,
+            std::env::var(EGOR_USE_RUN_RECORDER).is_ok()
         );
 
         #[cfg(feature = "persistent")]

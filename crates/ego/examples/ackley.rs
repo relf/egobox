@@ -1,7 +1,8 @@
 use clap::Parser;
 
 use egobox_ego::{
-    EgorBuilder, InfillOptimizer, InfillStrategy, OptimResult, QEiStrategy, Result, RunInfo,
+    EgorBuilder, HotStartMode, InfillOptimizer, InfillStrategy, OptimResult, QEiStrategy, Result,
+    RunInfo,
 };
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{Array, Array2, ArrayView2, Zip, array};
@@ -26,11 +27,9 @@ struct Args {
     rep: usize,
 }
 
-const BUDGET: usize = 500;
-
 fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>> {
     let n_doe = dim + 1;
-    let max_iters = BUDGET - n_doe;
+    let max_iters = 40;
 
     let data = [-32.768, 32.768].repeat(dim);
     let xlimits = Array::from_shape_vec((dim, 2), data).unwrap();
@@ -46,13 +45,13 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 .infill_strategy(InfillStrategy::EI)
                 .infill_optimizer(InfillOptimizer::Cobyla)
                 .coego(egobox_ego::CoegoStatus::Enabled(5))
-                .trego(true)
                 .q_points(10)
                 .q_optmod(2)
                 .qei_strategy(QEiStrategy::KrigingBeliever)
-                .n_start(150)
+                .n_start(3000)
                 .outdir(outdir)
                 .max_iters(max_iters)
+                .hot_start(HotStartMode::ExtendedIters(10))
         })
         .min_within(&xlimits)
         .run_info(RunInfo {
