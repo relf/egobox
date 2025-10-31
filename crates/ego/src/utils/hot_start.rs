@@ -1,5 +1,6 @@
 use argmin::core::Error;
 pub use argmin::core::checkpointing::{Checkpoint, CheckpointingFrequency};
+use log::info;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::io::Write;
 use std::path::PathBuf;
@@ -7,7 +8,7 @@ use std::path::PathBuf;
 use crate::EgorState;
 
 /// Checkpoint file using argmin checkpointing
-pub const CHECKPOINT_FILE: &str = "egor_checkpoint.arg";
+pub const CHECKPOINT_FILE: &str = "egor_checkpoint.json";
 
 /// An enum to specify hot start mode
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, Serialize, Deserialize)]
@@ -93,7 +94,10 @@ where
         }
         let fname = self.directory.join(&self.filename);
         let mut file = std::fs::File::create(fname).unwrap();
-        let bytes = bincode::serde::encode_to_vec((solver, state), bincode::config::standard())?;
+
+        // let bytes = bincode::serde::encode_to_vec((solver, state), bincode::config::standard())?;
+        let bytes = serde_json::to_vec(&(solver, state))?;
+
         file.write_all(&bytes)?;
         Ok(())
     }
@@ -106,14 +110,23 @@ where
     fn load(&self) -> Result<Option<(S, EgorState<f64>)>, Error> {
         let path = &self.directory.join(&self.filename);
         if !path.exists() {
+            info!("No checkpoint found at {:?}", path);
             return Ok(None);
         }
+        info!("Checkpoint found at {:?}, loading...", path);
         let data = std::fs::read(path)?;
-        let (solver, mut state): (_, EgorState<_>) =
-            bincode::serde::decode_from_slice(&data, bincode::config::standard())
-                .map(|(res, _)| res)
-                .unwrap();
+
+        // let (solver, mut state): (S, EgorState<f64>) =
+        //     bincode::serde::borrow_decode_from_slice(&data, bincode::config::standard())
+        //         .map(|(res, _)| res)?;
+
+        let (solver, mut state): (S, EgorState<f64>) = serde_json::from_slice(&data)?;
+
         if let HotStartMode::ExtendedIters(n_iters) = self.mode {
+            info!(
+                "Extending max iters by {} from {}",
+                n_iters, state.max_iters
+            );
             state.extend_max_iters(n_iters);
         }
         Ok(Some((solver, state)))

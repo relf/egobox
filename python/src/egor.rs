@@ -172,7 +172,7 @@ impl Egor {
         trego = false,
         coego_n_coop = 0,
         q_optmod = 1,
-        target = f64::NEG_INFINITY,
+        target = f64::MIN,
         outdir = None,
         warm_start = false,
         hot_start = None,

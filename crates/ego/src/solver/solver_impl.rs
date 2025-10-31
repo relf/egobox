@@ -113,8 +113,8 @@ where
     }
 
     /// Build surrogate given training data and surrogate builder
-    /// Reclustering is triggered when recluster boolean is true otherwise
-    /// previous clu=stering is used. theta_init allows to reuse
+    /// Reclustering is triggered when make_clustering boolean is true otherwise
+    /// previous clustering is used. theta_init allows to reuse
     /// previous theta without fully retraining the surrogates
     /// (faster execution at the cost of surrogate quality)
     #[allow(clippy::too_many_arguments)]
@@ -164,7 +164,9 @@ where
                 /* init || recluster */
                 match self.config.gp.n_clusters {
                     NbClusters::Auto { max: _ } => {
-                        log::warn!("Automated clustering not available with CoEGO")
+                        if self.config.coego.activated {
+                            log::warn!("Automated clustering not available with CoEGO")
+                        }
                     }
                     NbClusters::Fixed { nb: _ } => {
                         let theta_tunings = best_theta_inits
@@ -423,6 +425,10 @@ where
 
         let (try_add_count, rejected_count, _) = loop {
             let recluster = self.have_to_recluster(new_state.added, new_state.prev_added);
+            if recluster {
+                info!("Reclustering surrogates...");
+            }
+
             let init = new_state.get_iter() == 0;
             let pb = problem.take_problem().unwrap();
             let fcstrs = pb.fn_constraints();
