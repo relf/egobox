@@ -48,7 +48,7 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                     gp.regression_spec(RegressionSpec::CONSTANT)
                         .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
                 })
-                .infill_strategy(InfillStrategy::EI)
+                .infill_strategy(InfillStrategy::LogEI)
                 .infill_optimizer(InfillOptimizer::Cobyla)
                 .trego(true)
                 // for high dimensions
@@ -58,6 +58,7 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 // .qei_strategy(QEiStrategy::KrigingBeliever)
                 .n_start(3000)
                 .outdir(outdir)
+                .target(1e-2)
                 .max_iters(max_iters)
             //.hot_start(HotStartMode::ExtendedIters(10))
         })

@@ -26,7 +26,7 @@ struct Args {
     rep: usize,
 }
 
-const BUDGET: usize = 100;
+const BUDGET: usize = 50;
 
 fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>> {
     let n_doe = dim + 1;
@@ -48,6 +48,7 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 .trego(true)
                 .max_iters(max_iters)
                 .n_start(300)
+                .target(1e-2)
                 .outdir(outdir)
         })
         .min_within(&xlimits)
