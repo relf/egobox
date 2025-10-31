@@ -4,7 +4,10 @@ use egobox_ego::{EgorBuilder, InfillOptimizer, InfillStrategy, OptimResult, Resu
 use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{Array, Array2, ArrayView2, Zip};
 
-/// Michalewicz test function: min D=10 f(x)=-9.66015 at x=[2.20, 1.57, 1.28, 2.31, 1.38, 1.87, 1.32, 1.75, 1.46, 1.55]
+/// Michalewicz test function:
+/// min D=2 f(x)=-1.8013 at x=[2.20, 1.57]
+/// min D=5 f(x)=-4.687658 at x=[2.20, 1.57, 1.28, 2.31, 1.38]
+/// min D=10 f(x)=-9.66015 at x=[2.20, 1.57, 1.28, 2.31, 1.38, 1.87, 1.32, 1.75, 1.46, 1.55]
 fn michalewicz(x: &ArrayView2<f64>) -> Array2<f64> {
     let m = 10.0;
     let n_points = x.nrows();
@@ -32,7 +35,7 @@ fn michalewicz(x: &ArrayView2<f64>) -> Array2<f64> {
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = 10)]
+    #[arg(short, long, default_value_t = 2)]
     dim: usize,
     #[arg(short, long, default_value = "./michalewicz")]
     outdir: String,
@@ -40,7 +43,7 @@ struct Args {
     rep: usize,
 }
 
-const BUDGET: usize = 300;
+const BUDGET: usize = 30; // to be increased for higher dimensions
 
 fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>> {
     let n_doe = dim + 1;
@@ -60,7 +63,8 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 .infill_strategy(InfillStrategy::WB2)
                 .infill_optimizer(InfillOptimizer::Slsqp)
                 .trego(true)
-                .coego(egobox_ego::CoegoStatus::Enabled(2))
+                // for dim=10
+                //.coego(egobox_ego::CoegoStatus::Enabled(2))
                 .max_iters(max_iters)
                 .n_start(400)
                 .outdir(outdir)
@@ -81,7 +85,7 @@ fn main() -> Result<()> {
     let rep = args.rep;
 
     for num in 1..=rep {
-        println!(">>>> Run {} of 30", num);
+        println!(">>>> Run {} of {}", num, rep);
         let outdir = format!("{}/run{:0>2}", outdir, num);
         let res = run_egor(dim, &outdir, num)?;
 

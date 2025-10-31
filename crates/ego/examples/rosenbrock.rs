@@ -18,7 +18,7 @@ fn rosenbrock(x: &ArrayView2<f64>) -> Array2<f64> {
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = 6)]
+    #[arg(short, long, default_value_t = 2)]
     dim: usize,
     #[arg(short, long, default_value = "./rosenbrock")]
     outdir: String,
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
     let rep = args.rep;
 
     for num in 1..=rep {
-        println!(">>>> Run {} of 30", num);
+        println!(">>>> Run {} of {}", num, rep);
         let outdir = format!("{}/run{:0>2}", outdir, num);
         let res = run_egor(dim, &outdir, num)?;
 

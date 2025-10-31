@@ -1,7 +1,13 @@
 use clap::Parser;
 
 use egobox_ego::{
-    EgorBuilder, HotStartMode, InfillOptimizer, InfillStrategy, OptimResult, QEiStrategy, Result,
+    EgorBuilder,
+    // HotStartMode,
+    InfillOptimizer,
+    InfillStrategy,
+    OptimResult,
+    // QEiStrategy,
+    Result,
     RunInfo,
 };
 use egobox_moe::{CorrelationSpec, RegressionSpec};
@@ -19,7 +25,7 @@ fn ackley(x: &ArrayView2<f64>) -> Array2<f64> {
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = 100)]
+    #[arg(short, long, default_value_t = 3)]
     dim: usize,
     #[arg(short, long, default_value = "./ackley")]
     outdir: String,
@@ -29,7 +35,7 @@ struct Args {
 
 fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>> {
     let n_doe = dim + 1;
-    let max_iters = 40;
+    let max_iters = 200;
 
     let data = [-32.768, 32.768].repeat(dim);
     let xlimits = Array::from_shape_vec((dim, 2), data).unwrap();
@@ -40,18 +46,20 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 .n_doe(n_doe)
                 .configure_gp(|gp| {
                     gp.regression_spec(RegressionSpec::CONSTANT)
-                        .correlation_spec(CorrelationSpec::SQUAREDEXPONENTIAL)
+                        .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
                 })
                 .infill_strategy(InfillStrategy::EI)
                 .infill_optimizer(InfillOptimizer::Cobyla)
-                .coego(egobox_ego::CoegoStatus::Enabled(5))
-                .q_points(10)
-                .q_optmod(2)
-                .qei_strategy(QEiStrategy::KrigingBeliever)
+                .trego(true)
+                // for high dimensions
+                // .coego(egobox_ego::CoegoStatus::Enabled(5))
+                // .q_points(10)
+                // .q_optmod(2)
+                // .qei_strategy(QEiStrategy::KrigingBeliever)
                 .n_start(3000)
                 .outdir(outdir)
                 .max_iters(max_iters)
-                .hot_start(HotStartMode::ExtendedIters(10))
+            //.hot_start(HotStartMode::ExtendedIters(10))
         })
         .min_within(&xlimits)
         .run_info(RunInfo {
@@ -69,7 +77,7 @@ fn main() -> Result<()> {
     let rep = args.rep;
 
     for num in 1..=rep {
-        println!(">>>> Run {} of 30", num);
+        println!(">>>> Run {} of {}", num, rep);
         let outdir = format!("{}/run{:0>2}", outdir, num);
         let res = run_egor(dim, &outdir, num)?;
 
