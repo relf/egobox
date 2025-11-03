@@ -1,5 +1,5 @@
 use linfa::Float;
-use ndarray::{Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, s};
+use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, s};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
