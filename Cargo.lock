@@ -654,6 +654,7 @@ dependencies = [
  "ndarray-stats",
  "num-traits",
  "rand_xoshiro 0.6.0",
+ "rayon",
  "serde",
  "serde_json",
 ]

@@ -1,26 +1,34 @@
 use linfa::Float;
-use ndarray::{Array1, Array2, ArrayBase, Data, Ix2};
+use ndarray::{Array1, Array2, ArrayBase, Data, Ix2, Zip};
 use ndarray_stats::DeviationExt;
+use rayon::prelude::*;
 
-pub fn pdist<F: Float>(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array1<F> {
+pub fn pdist<F: Float>(x: &ArrayBase<impl Data<Elem = F> + Sync, Ix2>) -> Array1<F> {
     let nrows = x.nrows();
     let size: usize = (nrows - 1) * nrows / 2;
     let mut res: Array1<F> = Array1::zeros(size);
-    let mut k = 0;
-    for i in 0..nrows {
-        for j in (i + 1)..nrows {
+    
+    // Parallelize the outer loop for better performance
+    let pairs: Vec<_> = (0..nrows)
+        .flat_map(|i| ((i + 1)..nrows).map(move |j| (i, j)))
+        .collect();
+    
+    let distances: Vec<_> = pairs
+        .par_iter()
+        .map(|&(i, j)| {
             let a = x.row(i);
             let b = x.row(j);
-            res[k] = F::cast(a.l2_dist(&b).unwrap());
-            k += 1;
-        }
-    }
+            F::cast(a.l2_dist(&b).unwrap())
+        })
+        .collect();
+    
+    res.iter_mut().zip(distances.iter()).for_each(|(r, &d)| *r = d);
     res
 }
 
 pub fn cdist<F: Float>(
-    xa: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    xb: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    xa: &ArrayBase<impl Data<Elem = F> + Sync, Ix2>,
+    xb: &ArrayBase<impl Data<Elem = F> + Sync, Ix2>,
 ) -> Array2<F> {
     let ma = xa.nrows();
     let mb = xb.nrows();
@@ -29,14 +37,16 @@ pub fn cdist<F: Float>(
     if na != nb {
         panic!("cdist: operands should have same nb of columns. Found {na} and {nb}");
     }
+    
+    // Use parallel iteration for better performance
     let mut res = Array2::zeros((ma, mb));
-    for i in 0..ma {
-        for j in 0..mb {
-            let a = xa.row(i);
-            let b = xb.row(j);
-            res[[i, j]] = F::cast(a.l2_dist(&b).unwrap());
-        }
-    }
+    Zip::from(res.rows_mut())
+        .and(xa.rows())
+        .par_for_each(|mut row_res, row_a| {
+            for (j, row_b) in xb.rows().into_iter().enumerate() {
+                row_res[j] = F::cast(row_a.l2_dist(&row_b).unwrap());
+            }
+        });
 
     res
 }
