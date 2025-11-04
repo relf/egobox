@@ -231,18 +231,27 @@ impl Matern32Corr {
     ) -> (Array1<F>, Array1<F>) {
         let sqrt3 = F::cast(3.).sqrt();
         let theta_w = theta * weights.mapv(|v| v.abs());
-
+        
+        // Precompute absolute distances
+        let abs_d = d.mapv(|v| v.abs());
+        
+        // Compute d_theta_w once and reuse
+        let d_theta_w = abs_d.dot(&theta_w);
+        
+        // Compute a more efficiently by avoiding repeated abs() calls
         let mut a = Array1::ones(d.nrows());
-        Zip::from(&mut a).and(d.rows()).for_each(|a_i, d_i| {
-            Zip::from(&d_i)
-                .and(theta_w.rows())
-                .for_each(|d_ij, theta_w_j| {
-                    *a_i *= theta_w_j
-                        .mapv(|v| F::one() + sqrt3 * v * d_ij.abs())
-                        .product();
-                });
-        });
-        let d_theta_w = d.mapv(|v| v.abs()).dot(&theta_w);
+        Zip::from(&mut a)
+            .and(abs_d.rows())
+            .for_each(|a_i, abs_d_i| {
+                Zip::from(abs_d_i)
+                    .and(theta_w.rows())
+                    .for_each(|abs_d_ij, theta_w_j| {
+                        *a_i *= theta_w_j
+                            .mapv(|v| F::one() + sqrt3 * v * *abs_d_ij)
+                            .product();
+                    });
+            });
+        
         let b = d_theta_w.sum_axis(Axis(1)).mapv(|v| F::exp(-sqrt3 * v));
         (a, b)
     }
@@ -274,12 +283,13 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
         let d = differences(x, xtrain);
         let (a, b) = self.compute_r_factors(&d, theta, weights);
 
-        let theta_w = weights.mapv(|v| v.abs()).dot(theta);
-        let sign_d = d.mapv(|v| v.signum());
-
-        let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
+        // Precompute common terms
         let abs_d = d.mapv(|v| v.abs());
-
+        let sign_d = d.mapv(|v| v.signum());
+        let theta_w_sum = weights.mapv(|v| v.abs()).dot(theta);
+        
+        // Compute db efficiently
+        let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         Zip::from(db.rows_mut())
             .and(&a)
             .and(&b)
@@ -287,7 +297,7 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
             .for_each(|mut db_i, ai, bi, si| {
                 Zip::from(&mut db_i)
                     .and(&si)
-                    .and(&theta_w)
+                    .and(&theta_w_sum)
                     .for_each(|db_ij, sij, theta_wj| {
                         *db_ij = -sqrt3 * *theta_wj * *sij * *bi * *ai;
                     });
@@ -375,21 +385,31 @@ impl Matern52Corr {
         let sqrt5 = F::cast(5).sqrt();
         let div5_3 = F::cast(5. / 3.);
         let theta_w = theta * weights.mapv(|v| v.abs());
+        
+        // Precompute absolute distances and squared distances
+        let abs_d = d.mapv(|v| v.abs());
+        let d_squared = d.mapv(|v| v * v);
+        
+        // Compute d_theta_w once and reuse
+        let d_theta_w = abs_d.dot(&theta_w);
 
         let mut a = Array1::ones(d.nrows());
-        Zip::from(&mut a).and(d.rows()).for_each(|a_i, d_i| {
-            Zip::from(&d_i)
-                .and(theta_w.rows())
-                .for_each(|d_ij, theta_w_j| {
-                    *a_i *= theta_w_j
-                        .mapv(|v| {
-                            F::one() + sqrt5 * v * d_ij.abs() + div5_3 * (v * v * *d_ij * *d_ij)
-                        })
-                        .product();
-                });
-        });
+        Zip::from(&mut a)
+            .and(abs_d.rows())
+            .and(d_squared.rows())
+            .for_each(|a_i, abs_d_i, d_sq_i| {
+                Zip::from(abs_d_i)
+                    .and(d_sq_i)
+                    .and(theta_w.rows())
+                    .for_each(|abs_d_ij, d_sq_ij, theta_w_j| {
+                        *a_i *= theta_w_j
+                            .mapv(|v| {
+                                F::one() + sqrt5 * v * *abs_d_ij + div5_3 * v * v * *d_sq_ij
+                            })
+                            .product();
+                    });
+            });
 
-        let d_theta_w = d.mapv(|v| v.abs()).dot(&theta_w);
         let b = d_theta_w.sum_axis(Axis(1)).mapv(|v| F::exp(-sqrt5 * v));
         (a, b)
     }
@@ -423,12 +443,13 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
         let d = differences(x, xtrain);
         let (a, b) = self.compute_r_factors(&d, theta, weights);
 
-        let theta_w = weights.mapv(|v| v.abs()).dot(theta);
-        let sign_d = d.mapv(|v| v.signum());
-
-        let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
+        // Precompute common terms
         let abs_d = d.mapv(|v| v.abs());
+        let sign_d = d.mapv(|v| v.signum());
+        let theta_w_sum = weights.mapv(|v| v.abs()).dot(theta);
 
+        // Compute db efficiently
+        let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         Zip::from(db.rows_mut())
             .and(&a)
             .and(&b)
@@ -436,7 +457,7 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
             .for_each(|mut db_i, ai, bi, si| {
                 Zip::from(&mut db_i)
                     .and(&si)
-                    .and(&theta_w)
+                    .and(&theta_w_sum)
                     .for_each(|db_ij, sij, theta_wj| {
                         *db_ij = -sqrt5 * *theta_wj * *sij * *bi * *ai;
                     });
