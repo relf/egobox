@@ -8,9 +8,9 @@
 
 # EGObox - Efficient Global Optimization toolbox
 
-[![tests](https://github.com/relf/egobox/workflows/tests/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Atests)
-[![pytests](https://github.com/relf/egobox/workflows/pytest/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Apytest)
-[![linting](https://github.com/relf/egobox/workflows/lint/badge.svg)](https://github.com/relf/egobox/actions?query=workflow%3Alint)
+![tests](https://github.com/relf/egobox/actions/workflows/test.yml/badge.svg)
+![pytests](https://github.com/relf/egobox/actions/workflows/pytest.yml/badge.svg)
+![linting](https://github.com/relf/egobox/actions/workflows/lint.yml/badge.svg)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.04737/status.svg)](https://doi.org/10.21105/joss.04737)
 
 Rust toolbox for Efficient Global Optimization method (arguably the most well-known bayesian optimization algorithm)
