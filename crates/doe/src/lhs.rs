@@ -208,15 +208,12 @@ impl<F: Float, R: Rng> Lhs<F, R> {
         let mut dist1 = cdist(&x.slice(s![i1..i1 + 1, ..]), &x_rest);
         let mut dist2 = cdist(&x.slice(s![i2..i2 + 1, ..]), &x_rest);
 
-        // Avoid to_owned() by computing directly
-        let x_i1_k = x[[i1, k]];
-        let x_i2_k = x[[i2, k]];
         let m1 = x_rest.column(k).mapv(|v| {
-            let diff = v - x_i1_k;
+            let diff = v - x[[i1, k]];
             diff * diff
         });
         let m2 = x_rest.column(k).mapv(|v| {
-            let diff = v - x_i2_k;
+            let diff = v - x[[i2, k]];
             diff * diff
         });
 
