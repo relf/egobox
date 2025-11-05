@@ -1,18 +1,19 @@
 use linfa::Float;
-use ndarray::{Array1, Array2, ArrayBase, Data, Ix2, Zip};
+use ndarray::{Array, Array1, Array2, ArrayBase, Data, Ix2, Zip};
 use ndarray_stats::DeviationExt;
 use rayon::prelude::*;
 
+/// Computes the pairwise distances between rows of a 2D-array using parallel processing
+/// Warning : The result is expected to b=e used in a context where order does not matter
+/// (e.g., get min distance) as the order of distances depends on the order of parallel execution
 pub fn pdist<F: Float>(x: &ArrayBase<impl Data<Elem = F> + Sync, Ix2>) -> Array1<F> {
     let nrows = x.nrows();
-    let size: usize = (nrows - 1) * nrows / 2;
-    let mut res: Array1<F> = Array1::zeros(size);
-    
+
     // Parallelize the outer loop for better performance
     let pairs: Vec<_> = (0..nrows)
         .flat_map(|i| ((i + 1)..nrows).map(move |j| (i, j)))
         .collect();
-    
+
     let distances: Vec<_> = pairs
         .par_iter()
         .map(|&(i, j)| {
@@ -21,11 +22,12 @@ pub fn pdist<F: Float>(x: &ArrayBase<impl Data<Elem = F> + Sync, Ix2>) -> Array1
             F::cast(a.l2_dist(&b).unwrap())
         })
         .collect();
-    
-    res.iter_mut().zip(distances.iter()).for_each(|(r, &d)| *r = d);
-    res
+
+    Array::from_vec(distances)
 }
 
+/// Computes the pairwise distances between rows of two 2D arrays using parallel processing
+/// The resulting array has shape (ma, mb) where ma is the number of rows in xa and mb is the number of rows in xb
 pub fn cdist<F: Float>(
     xa: &ArrayBase<impl Data<Elem = F> + Sync, Ix2>,
     xb: &ArrayBase<impl Data<Elem = F> + Sync, Ix2>,
@@ -37,8 +39,7 @@ pub fn cdist<F: Float>(
     if na != nb {
         panic!("cdist: operands should have same nb of columns. Found {na} and {nb}");
     }
-    
-    // Use parallel iteration for better performance
+
     let mut res = Array2::zeros((ma, mb));
     Zip::from(res.rows_mut())
         .and(xa.rows())
