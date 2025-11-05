@@ -1,5 +1,5 @@
 use linfa::Float;
-use ndarray::{Array, Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, s};
+use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, s};
 #[cfg(feature = "serializable")]
 use serde::{Deserialize, Serialize};
 
@@ -111,13 +111,22 @@ pub fn pairwise_differences<F: Float>(
     y: &ArrayBase<impl Data<Elem = F>, Ix2>,
 ) -> Array2<F> {
     assert!(x.ncols() == y.ncols());
-    let x3 = x.to_owned().insert_axis(Axis(1));
-    let y3 = y.to_owned().insert_axis(Axis(0));
-    let d = x3 - y3;
-    let n = d.len();
-    let res = Array::from_iter(d.iter().cloned());
-    res.into_shape_with_order((n / x.ncols(), x.ncols()))
-        .unwrap()
+
+    let nx = x.nrows();
+    let ny = y.nrows();
+    let ncols = x.ncols();
+    let mut result = Array2::zeros((nx * ny, ncols));
+
+    for (i, x_row) in x.rows().into_iter().enumerate() {
+        for (j, y_row) in y.rows().into_iter().enumerate() {
+            let idx = i * ny + j;
+            for k in 0..ncols {
+                result[[idx, k]] = x_row[k] - y_row[k];
+            }
+        }
+    }
+
+    result
 }
 
 /// Computes differences between x and each element of y

@@ -184,7 +184,7 @@ impl<F: Float, R: Rng> Lhs<F, R> {
         lhs_best
     }
 
-    fn _phip(&self, lhs: &ArrayBase<impl Data<Elem = F>, Ix2>, p: F) -> F {
+    fn _phip(&self, lhs: &ArrayBase<impl Data<Elem = F> + Sync, Ix2>, p: F) -> F {
         F::powf(pdist(lhs).mapv(|v| F::powf(v, -p)).sum(), F::one() / p)
     }
 
@@ -208,8 +208,14 @@ impl<F: Float, R: Rng> Lhs<F, R> {
         let mut dist1 = cdist(&x.slice(s![i1..i1 + 1, ..]), &x_rest);
         let mut dist2 = cdist(&x.slice(s![i2..i2 + 1, ..]), &x_rest);
 
-        let m1 = (x_rest.column(k).to_owned() - x[[i1, k]]).map(|v| *v * *v);
-        let m2 = (x_rest.column(k).to_owned() - x[[i2, k]]).map(|v| *v * *v);
+        let m1 = x_rest.column(k).mapv(|v| {
+            let diff = v - x[[i1, k]];
+            diff * diff
+        });
+        let m2 = x_rest.column(k).mapv(|v| {
+            let diff = v - x[[i2, k]];
+            diff * diff
+        });
 
         let two = F::cast(2.);
         let mut d1 = dist1.mapv(|v| v * v) - &m1 + &m2;
