@@ -111,13 +111,12 @@ pub fn pairwise_differences<F: Float>(
     y: &ArrayBase<impl Data<Elem = F>, Ix2>,
 ) -> Array2<F> {
     assert!(x.ncols() == y.ncols());
-    
-    // Avoid unnecessary clones and use view operations
+
     let nx = x.nrows();
     let ny = y.nrows();
     let ncols = x.ncols();
     let mut result = Array2::zeros((nx * ny, ncols));
-    
+
     for (i, x_row) in x.rows().into_iter().enumerate() {
         for (j, y_row) in y.rows().into_iter().enumerate() {
             let idx = i * ny + j;
@@ -126,7 +125,7 @@ pub fn pairwise_differences<F: Float>(
             }
         }
     }
-    
+
     result
 }
 
