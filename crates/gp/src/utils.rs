@@ -71,8 +71,8 @@ impl<F: Float> DiffMatrix<F> {
         let n_obs = x.nrows();
 
         DiffMatrix {
-            d: d.to_owned(),
-            d_indices: d_indices.to_owned(),
+            d,
+            d_indices,
             n_obs,
         }
     }
@@ -86,20 +86,16 @@ impl<F: Float> DiffMatrix<F> {
         let mut idx = 0;
         for k in 0..(n_obs - 1) {
             let idx0 = idx;
-            idx = idx0 + n_obs - k - 1;
-            indices
-                .slice_mut(s![idx0..idx, 0..1])
-                .assign(&Array2::<usize>::from_elem((n_obs - k - 1, 1), k));
-            let init_values = ((k + 1)..n_obs).collect();
-            indices
-                .slice_mut(s![idx0..idx, 1..2])
-                .assign(&Array2::from_shape_vec((n_obs - k - 1, 1), init_values).unwrap());
+            let offset = n_obs - k - 1;
+            idx = idx0 + offset;
 
-            let diff = &x
-                .slice(s![k..(k + 1), ..])
-                .broadcast((n_obs - k - 1, nx))
-                .unwrap()
-                - &x.slice(s![k + 1..n_obs, ..]);
+            for i in (k + 1)..n_obs {
+                let r = idx0 + i - k - 1;
+                indices[[r, 0]] = k;
+                indices[[r, 1]] = i;
+            }
+
+            let diff = &x.slice(s![k, ..]) - &x.slice(s![k + 1..n_obs, ..]);
             d.slice_mut(s![idx0..idx, ..]).assign(&diff);
         }
         d = d.mapv(|v| v.abs());
@@ -212,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cross_distance_matrix() {
+    fn test_diff_matrix() {
         let xt = array![[0.5], [1.2], [2.0], [3.0], [4.0]];
         let expected = (
             array![
