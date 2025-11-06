@@ -2,7 +2,7 @@ use crate::errors::{GpError, Result};
 use crate::mean_models::*;
 use crate::optimization::{CobylaParams, optimize_params, prepare_multistart};
 use crate::parameters::{GpParams, GpValidParams};
-use crate::utils::{DistanceMatrix, NormalizedData, pairwise_differences};
+use crate::utils::{DiffMatrix, NormalizedData, pairwise_differences};
 use crate::{ThetaTuning, correlation_models::*};
 
 use linfa::dataset::{WithLapack, WithoutLapack};
@@ -806,7 +806,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
                 |v| Ok(v.rotations().0.to_owned()),
             )?;
         };
-        let x_distances = DistanceMatrix::new(&xtrain.data);
+        let x_distances = DiffMatrix::new(&xtrain.data);
         let sums = x_distances
             .d
             .mapv(|v| num_traits::float::Float::abs(v))
@@ -942,7 +942,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>, D: Data<Elem
 fn reduced_likelihood<F: Float>(
     fx: &ArrayBase<impl Data<Elem = F>, Ix2>,
     rxx: ArrayBase<impl Data<Elem = F>, Ix2>,
-    x_distances: &DistanceMatrix<F>,
+    x_distances: &DiffMatrix<F>,
     ytrain: &NormalizedData<F>,
     nugget: F,
 ) -> Result<(F, GpInnerParams<F>)> {
@@ -1013,7 +1013,7 @@ fn reduced_likelihood<F: Float>(
 fn reduced_likelihood<F: Float>(
     fx: &ArrayBase<impl Data<Elem = F>, Ix2>,
     rxx: ArrayBase<impl Data<Elem = F>, Ix2>,
-    x_distances: &DistanceMatrix<F>,
+    x_distances: &DiffMatrix<F>,
     ytrain: &NormalizedData<F>,
     nugget: F,
 ) -> Result<(F, GpInnerParams<F>)> {

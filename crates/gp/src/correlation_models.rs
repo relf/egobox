@@ -232,17 +232,22 @@ impl Matern32Corr {
         let sqrt3 = F::cast(3.).sqrt();
         let theta_w = theta * weights.mapv(|v| v.abs());
 
+        let abs_d = d.mapv(|v| v.abs());
+        let d_theta_w = abs_d.dot(&theta_w);
+
         let mut a = Array1::ones(d.nrows());
-        Zip::from(&mut a).and(d.rows()).for_each(|a_i, d_i| {
-            Zip::from(&d_i)
-                .and(theta_w.rows())
-                .for_each(|d_ij, theta_w_j| {
-                    *a_i *= theta_w_j
-                        .mapv(|v| F::one() + sqrt3 * v * d_ij.abs())
-                        .product();
-                });
-        });
-        let d_theta_w = d.mapv(|v| v.abs()).dot(&theta_w);
+        Zip::from(&mut a)
+            .and(abs_d.rows())
+            .for_each(|a_i, abs_d_i| {
+                Zip::from(abs_d_i)
+                    .and(theta_w.rows())
+                    .for_each(|abs_d_ij, theta_w_j| {
+                        *a_i *= theta_w_j
+                            .mapv(|v| F::one() + sqrt3 * v * *abs_d_ij)
+                            .product();
+                    });
+            });
+
         let b = d_theta_w.sum_axis(Axis(1)).mapv(|v| F::exp(-sqrt3 * v));
         (a, b)
     }
@@ -490,7 +495,7 @@ impl fmt::Display for Matern52Corr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{DistanceMatrix, NormalizedData};
+    use crate::utils::{DiffMatrix, NormalizedData};
     use approx::assert_abs_diff_eq;
     use ndarray::{arr1, array};
     use paste::paste;
@@ -498,7 +503,7 @@ mod tests {
     #[test]
     fn test_squared_exponential() {
         let xt = array![[4.5], [1.2], [2.0], [3.0], [4.0]];
-        let dm = DistanceMatrix::new(&xt);
+        let dm = DiffMatrix::new(&xt);
         let res =
             SquaredExponentialCorr::default().value(&dm.d, &arr1(&[f64::sqrt(0.2)]), &array![[1.]]);
         let expected = array![
@@ -519,7 +524,7 @@ mod tests {
     #[test]
     fn test_squared_exponential_2d() {
         let xt = array![[0., 1.], [2., 3.], [4., 5.]];
-        let dm = DistanceMatrix::new(&xt);
+        let dm = DiffMatrix::new(&xt);
         dbg!(&dm);
         let res = SquaredExponentialCorr::default().value(
             &dm.d,
@@ -533,7 +538,7 @@ mod tests {
     #[test]
     fn test_matern32_2d() {
         let xt = array![[0., 1.], [2., 3.], [4., 5.]];
-        let dm = DistanceMatrix::new(&xt);
+        let dm = DiffMatrix::new(&xt);
         dbg!(&dm);
         let res =
             Matern32Corr::default().value(&dm.d, &arr1(&[1., 2.]), &array![[1., 0.], [0., 1.]]);
@@ -619,7 +624,7 @@ mod tests {
     #[test]
     fn test_matern52_2d() {
         let xt = array![[0., 1.], [2., 3.], [4., 5.]];
-        let dm = DistanceMatrix::new(&xt);
+        let dm = DiffMatrix::new(&xt);
         let res =
             Matern52Corr::default().value(&dm.d, &arr1(&[1., 2.]), &array![[1., 0.], [0., 1.]]);
         let expected = array![[6.62391590e-04], [1.02117882e-08], [6.62391590e-04]];

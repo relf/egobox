@@ -61,3 +61,7 @@ argmin_testfunctions.workspace = true
 [[bench]]
 name = "gp"
 harness = false
+
+[[bench]]
+name = "corr"
+harness = false

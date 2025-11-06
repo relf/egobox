@@ -53,49 +53,54 @@ pub fn normalize<F: Float>(
     (xnorm, x_mean, x_std)
 }
 
+/// A structure to retain absolute differences computation used to compute covariance matrix
 #[derive(Debug)]
-pub struct DistanceMatrix<F: Float> {
+pub struct DiffMatrix<F: Float> {
+    /// Differences as (n_obs * (n_obs-1))/2, nx) array
     pub d: Array2<F>,
+    /// Indices of the differences in the original data array
     pub d_indices: Array2<usize>,
+    /// Number of observations
     pub n_obs: usize,
 }
 
-impl<F: Float> DistanceMatrix<F> {
-    pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> DistanceMatrix<F> {
-        let (d, d_indices) = Self::_cross_distances(x);
+impl<F: Float> DiffMatrix<F> {
+    /// Compute differences given points given as an array (n_obs, nx)
+    pub fn new(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> DiffMatrix<F> {
+        let (d, d_indices) = Self::_cross_diff(x);
         let n_obs = x.nrows();
 
-        DistanceMatrix {
+        DiffMatrix {
             d: d.to_owned(),
             d_indices: d_indices.to_owned(),
             n_obs,
         }
     }
 
-    fn _cross_distances(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> (Array2<F>, Array2<usize>) {
+    fn _cross_diff(x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> (Array2<F>, Array2<usize>) {
         let n_obs = x.nrows();
-        let n_features = x.ncols();
+        let nx = x.ncols();
         let n_non_zero_cross_dist = n_obs * (n_obs - 1) / 2;
         let mut indices = Array2::<usize>::zeros((n_non_zero_cross_dist, 2));
-        let mut d = Array2::zeros((n_non_zero_cross_dist, n_features));
-        let mut ll_1 = 0;
+        let mut d = Array2::zeros((n_non_zero_cross_dist, nx));
+        let mut idx = 0;
         for k in 0..(n_obs - 1) {
-            let ll_0 = ll_1;
-            ll_1 = ll_0 + n_obs - k - 1;
+            let idx0 = idx;
+            idx = idx0 + n_obs - k - 1;
             indices
-                .slice_mut(s![ll_0..ll_1, 0..1])
+                .slice_mut(s![idx0..idx, 0..1])
                 .assign(&Array2::<usize>::from_elem((n_obs - k - 1, 1), k));
             let init_values = ((k + 1)..n_obs).collect();
             indices
-                .slice_mut(s![ll_0..ll_1, 1..2])
+                .slice_mut(s![idx0..idx, 1..2])
                 .assign(&Array2::from_shape_vec((n_obs - k - 1, 1), init_values).unwrap());
 
             let diff = &x
                 .slice(s![k..(k + 1), ..])
-                .broadcast((n_obs - k - 1, n_features))
+                .broadcast((n_obs - k - 1, nx))
                 .unwrap()
                 - &x.slice(s![k + 1..n_obs, ..]);
-            d.slice_mut(s![ll_0..ll_1, ..]).assign(&diff);
+            d.slice_mut(s![idx0..idx, ..]).assign(&diff);
         }
         d = d.mapv(|v| v.abs());
 
@@ -235,7 +240,7 @@ mod tests {
                 [3, 4]
             ],
         );
-        let dm = DistanceMatrix::new(&xt);
+        let dm = DiffMatrix::new(&xt);
         assert_eq!(expected.0, dm.d);
         assert_eq!(expected.1, dm.d_indices);
     }
