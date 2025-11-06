@@ -606,6 +606,19 @@ impl GpSurrogate for MixintGpMixture {
         self.moe.predict_var(&xcast)
     }
 
+    fn predict_valvar(
+        &self,
+        x: &ArrayView2<f64>,
+    ) -> egobox_moe::Result<(Array1<f64>, Array1<f64>)> {
+        let mut xcast = if self.work_in_folded_space {
+            unfold_with_enum_mask(&self.xtypes, x)
+        } else {
+            x.to_owned()
+        };
+        cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
+        self.moe.predict_valvar(&xcast)
+    }
+
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str, format: GpFileFormat) -> egobox_moe::Result<()> {

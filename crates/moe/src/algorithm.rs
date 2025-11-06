@@ -499,6 +499,13 @@ impl GpSurrogate for GpMixture {
         }
     }
 
+    fn predict_valvar(&self, x: &ArrayView2<f64>) -> Result<(Array1<f64>, Array1<f64>)> {
+        match self.recombination {
+            Recombination::Hard => self.predict_valvar_hard(x),
+            Recombination::Smooth(_) => self.predict_valvar_smooth(x),
+        }
+    }
+
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
@@ -666,7 +673,7 @@ impl GpMixture {
                 let p = probas.column(i);
                 gp.predict_var(&x.view()).unwrap() * p * p
             })
-            .fold(Array1::zeros(x.nrows()), |acc, pred| acc + pred);
+            .fold(Array1::zeros(x.nrows()), |acc, var| acc + var);
         Ok(preds)
     }
 
@@ -768,6 +775,28 @@ impl GpMixture {
         Ok(drv)
     }
 
+    pub fn predict_valvar_smooth(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array1<f64>, Array1<f64>)> {
+        let probas = self.gmx.predict_probas(x);
+        let valvar: (Array1<f64>, Array1<f64>) = self
+            .experts
+            .iter()
+            .enumerate()
+            .map(|(i, gp)| {
+                let p = probas.column(i);
+                let (pred, var) = gp.predict_valvar(&x.view()).unwrap();
+                (pred * p, var * p * p)
+            })
+            .fold(
+                (Array1::zeros((x.nrows(),)), Array1::zeros((x.nrows(),))),
+                |acc, (pred, var)| (acc.0 + pred, acc.1 + var),
+            );
+
+        Ok(valvar)
+    }
+
     /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// Then the expert of the cluster is used to predict the output value.
@@ -803,6 +832,28 @@ impl GpMixture {
                     .unwrap()[0];
             });
         Ok(variances)
+    }
+
+    pub fn predict_valvar_hard(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array1<f64>, Array1<f64>)> {
+        let clustering = self.gmx.predict(x);
+        trace!("Clustering {clustering:?}");
+        let mut preds = Array1::zeros((x.nrows(),));
+        let mut variances = Array1::zeros(x.nrows());
+        Zip::from(&mut preds)
+            .and(&mut variances)
+            .and(x.rows())
+            .and(&clustering)
+            .for_each(|y, v, x, &c| {
+                let (pred, var) = self.experts[c]
+                    .predict_valvar(&x.insert_axis(Axis(0)))
+                    .unwrap();
+                *y = pred[0];
+                *v = var[0];
+            });
+        Ok((preds, variances))
     }
 
     /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.
@@ -871,6 +922,13 @@ impl GpMixture {
     /// Predict variances at a set of points `x` specified as (n, nx) matrix.
     pub fn predict_var(&self, x: &ArrayBase<impl Data<Elem = f64>, Ix2>) -> Result<Array1<f64>> {
         <GpMixture as GpSurrogate>::predict_var(self, &x.view())
+    }
+
+    pub fn predict_valvar(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array1<f64>, Array1<f64>)> {
+        <GpMixture as GpSurrogate>::predict_valvar(self, &x.view())
     }
 
     /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.

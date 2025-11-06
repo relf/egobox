@@ -265,7 +265,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// Predict variance values at n given `x` points of nx components specified as a (n, nx) matrix.
     /// Returns n variance values as (n,) column vector.
     pub fn predict_var(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Result<Array1<F>> {
-        let (rt, u, _) = self._compute_rt_u(x);
+        let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
+        let corr = self._compute_correlation(&xnorm);
+        let (rt, u) = self._compute_rt_u(&xnorm, &corr);
 
         let mut mse = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
             + u.mapv(|v: F| v * v).sum_axis(Axis(0));
@@ -276,9 +278,39 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         Ok(mse.mapv(|v| if v < F::zero() { F::zero() } else { F::cast(v) }))
     }
 
+    /// Predict both output values and variance at n given `x` points of nx components
+    pub fn predict_valvar(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Result<(Array1<F>, Array1<F>)> {
+        let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
+        // Compute the mean term at x
+        let f = self.params.mean.value(&xnorm);
+        // Compute the correlation term at x
+        let corr = self._compute_correlation(&xnorm);
+        // Scaled predictor
+        let y_ = &f.dot(&self.inner_params.beta) + &corr.dot(&self.inner_params.gamma);
+        // Predictor
+        let yp = (&y_ * &self.yt_norm.std + &self.yt_norm.mean).remove_axis(Axis(1));
+
+        let (rt, u) = self._compute_rt_u(&xnorm, &corr);
+
+        let mut mse = Array::ones(rt.ncols()) - rt.mapv(|v| v * v).sum_axis(Axis(0))
+            + u.mapv(|v: F| v * v).sum_axis(Axis(0));
+        mse.mapv_inplace(|v| self.inner_params.sigma2 * v);
+
+        // Mean Squared Error might be slightly negative depending on
+        // machine precision: set to zero in that case
+        let vmse = mse.mapv(|v| if v < F::zero() { F::zero() } else { F::cast(v) });
+
+        Ok((yp, vmse))
+    }
+
     /// Compute covariance matrix given x points specified as a (n, nx) matrix
     fn _compute_covariance(&self, x: &ArrayBase<impl Data<Elem = F>, Ix2>) -> Array2<F> {
-        let (rt, u, xnorm) = self._compute_rt_u(x);
+        let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
+        let corr = self._compute_correlation(&xnorm);
+        let (rt, u) = self._compute_rt_u(&xnorm, &corr);
 
         let cross_dx = pairwise_differences(&xnorm, &xnorm);
         let k = self.params.corr.value(&cross_dx, &self.theta, &self.w_star);
@@ -297,10 +329,9 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     /// This method factorizes computations done to get variances and covariance matrix
     fn _compute_rt_u(
         &self,
-        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> (Array2<F>, Array2<F>, Array2<F>) {
-        let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
-        let corr = self._compute_correlation(&xnorm);
+        xnorm: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        corr: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array2<F>, Array2<F>) {
         let inners = &self.inner_params;
 
         let corr_t = corr.t().to_owned();
@@ -318,7 +349,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .solve_triangular(&corr_t, UPLO::Lower)
             .unwrap();
 
-        let rhs = inners.ft.t().dot(&rt) - self.params.mean.value(&xnorm).t();
+        let rhs = inners.ft.t().dot(&rt) - self.params.mean.value(xnorm).t();
         #[cfg(feature = "blas")]
         let u = inners
             .ft_qr_r
@@ -334,7 +365,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .t()
             .solve_triangular(&rhs, UPLO::Lower)
             .unwrap();
-        (rt, u, xnorm)
+        (rt, u)
     }
 
     /// Compute correlation matrix given x points specified as a (n, nx) matrix
@@ -489,7 +520,7 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
 
     /// Predict gradient at a given x point
     /// Note: output is one dimensional, named jacobian as result is given as a one-column matrix  
-    pub fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix1>) -> Array2<F> {
+    fn predict_jacobian(&self, x: &ArrayBase<impl Data<Elem = F>, Ix1>) -> Array2<F> {
         let xx = x.to_owned().insert_axis(Axis(0));
         let mut jac = Array2::zeros((xx.ncols(), 1));
 
@@ -677,6 +708,17 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
             .for_each(|mut der, x| der.assign(&self.predict_var_gradients_single(&x)));
         derivs
     }
+
+    // pub fn predict_val_and_var_gradients(
+    //     &self,
+    //     x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    // ) -> (Array2<F>, Array2<F>) {
+    //     let mut derivs = Array::zeros((x.nrows(), x.ncols()));
+    //     Zip::from(derivs.rows_mut())
+    //         .and(x.rows())
+    //         .for_each(|mut der, x| der.assign(&self.predict_var_gradients_single(&x)));
+    //     todo!();
+    // }
 }
 
 impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array1<F>>

@@ -40,6 +40,25 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display + Sy
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F>;
 
+    // fn value_and_jacobian(
+    //     &self,
+    //     x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    //     xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    //     theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    //     weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    // ) -> (Array2<F>, Array2<F>) {
+    //     let d = differences(x, xtrain);
+    //     let r = self.value(&d, theta, weights);
+
+    //     let theta_w = (theta * weights)
+    //         .mapv(|v| v.powf(F::cast(2)))
+    //         .sum_axis(Axis(1))
+    //         .mapv(|v| F::cast(-v));
+
+    //     let jr = d * &theta_w * &r;
+    //     (r, jr)
+    // }
+
     /// Returns the theta influence factors for the correlation model.
     /// See <https://hal.science/hal-03812073v2/document>
     fn theta_influence_factors(&self) -> (F, F) {
@@ -110,6 +129,25 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
 
         d * &dtheta_w * &r
     }
+
+    // fn value_and_jacobian(
+    //     &self,
+    //     x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    //     xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    //     theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+    //     weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    // ) -> (Array2<F>, Array2<F>) {
+    //     let d = differences(x, xtrain);
+    //     let r = self.value(&d, theta, weights);
+
+    //     let dtheta_w = (theta * weights)
+    //         .mapv(|v| v.powf(F::cast(2)))
+    //         .sum_axis(Axis(1))
+    //         .mapv(|v| F::cast(-v));
+
+    //     let jr = d * &dtheta_w * &r;
+    //     (r, jr)
+    // }
 
     fn theta_influence_factors(&self) -> (F, F) {
         (F::cast(0.29), F::cast(1.96))
