@@ -223,8 +223,10 @@ where
         active: &[usize],
     ) -> f64 {
         let x = Array::from_shape_vec((1, x.len()), x.to_vec()).unwrap();
-        let sigma = cstr_model.predict_var(&x.view()).unwrap()[0].sqrt();
-        let cstr_val = cstr_model.predict(&x.view()).unwrap()[0];
+
+        let (pred, var) = cstr_model.predict_valvar(&x.view()).unwrap();
+        let sigma = var[0].sqrt();
+        let cstr_val = pred[0];
 
         if let Some(grad) = gradient {
             let sigma_prime = if sigma < f64::EPSILON {

@@ -775,6 +775,10 @@ impl GpMixture {
         Ok(drv)
     }
 
+    /// Predict outputs and variances at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
+    /// or another (ie responsabilities).
+    /// The smooth recombination of each cluster expert responsabilty is used to get the result.
     pub fn predict_valvar_smooth(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -834,6 +838,9 @@ impl GpMixture {
         Ok(variances)
     }
 
+    /// Predict outputs and variances at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
+    /// The expert of the cluster is used to predict variance value.
     pub fn predict_valvar_hard(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
@@ -924,6 +931,7 @@ impl GpMixture {
         <GpMixture as GpSurrogate>::predict_var(self, &x.view())
     }
 
+    /// Predict outputs and variances at a set of points `x` specified as (n, nx) matrix.
     pub fn predict_valvar(
         &self,
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,

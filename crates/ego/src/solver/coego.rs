@@ -198,14 +198,17 @@ where
     ) -> Result<Array1<f64>> {
         let mut res: Vec<f64> = vec![];
         let x = &x.view().insert_axis(Axis(0));
-        let sigma = obj_model.predict_var(&x.view()).unwrap()[0].sqrt();
+
+        let (pred, var) = obj_model.predict_valvar(x)?;
+        let sigma = var[0].sqrt();
         // Use lower trust bound for a minimization
-        let pred = obj_model.predict(x)?[0] - CSTR_DOUBT * sigma;
+        let pred = pred[0] - CSTR_DOUBT * sigma;
         res.push(pred);
         for cstr_model in cstr_models {
-            let sigma = cstr_model.predict_var(&x.view()).unwrap()[0].sqrt();
+            let (pred, var) = cstr_model.predict_valvar(x)?;
+            let sigma = var[0].sqrt();
             // Use upper trust bound
-            res.push(cstr_model.predict(x)?[0] + CSTR_DOUBT * sigma);
+            res.push(pred[0] + CSTR_DOUBT * sigma);
         }
         Ok(Array1::from_vec(res))
     }
