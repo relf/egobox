@@ -229,14 +229,13 @@ where
         let cstr_val = pred[0];
 
         if let Some(grad) = gradient {
+            let (pred_grad, var_grad) = cstr_model.predict_valvar_gradients(&x.view()).unwrap();
             let sigma_prime = if sigma < f64::EPSILON {
                 0.
             } else {
-                cstr_model.predict_var_gradients(&x.view()).unwrap()[[0, 0]] / (2. * sigma)
+                var_grad[[0, 0]] / (2. * sigma)
             };
-            let grd = cstr_model
-                .predict_gradients(&x.view())
-                .unwrap()
+            let grd = pred_grad
                 .row(0)
                 .mapv(|v| (v + CSTR_DOUBT * sigma_prime) / scale_cstr)
                 .to_vec();

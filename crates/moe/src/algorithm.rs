@@ -540,6 +540,13 @@ impl GpSurrogateExt for GpMixture {
         }
     }
 
+    fn predict_valvar_gradients(&self, x: &ArrayView2<f64>) -> Result<(Array2<f64>, Array2<f64>)> {
+        match self.recombination {
+            Recombination::Hard => self.predict_valvar_gradients_hard(x),
+            Recombination::Smooth(_) => self.predict_valvar_gradients_smooth(x),
+        }
+    }
+
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
         if self.n_clusters() != 1 {
             return Err(MoeError::SampleError(format!(
@@ -801,6 +808,70 @@ impl GpMixture {
         Ok(valvar)
     }
 
+    fn predict_valvar_gradients_smooth(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array2<f64>, Array2<f64>)> {
+        let probas = self.gmx.predict_probas(x);
+        let probas_drv = self.gmx.predict_probas_derivatives(x);
+
+        let mut val_drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let mut var_drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+
+        Zip::from(val_drv.rows_mut())
+            .and(var_drv.rows_mut())
+            .and(x.rows())
+            .and(probas.rows())
+            .and(probas_drv.outer_iter())
+            .for_each(|mut val_y, mut var_y, xi, p, pprime| {
+                let xii = xi.insert_axis(Axis(0));
+                let (preds, vars): (Vec<f64>, Vec<f64>) = self
+                    .experts
+                    .iter()
+                    .map(|gp| {
+                        let (pred, var) = gp.predict_valvar(&xii).unwrap();
+                        (pred[0], var[0])
+                    })
+                    .unzip();
+                let preds: Array2<f64> = Array1::from(preds).insert_axis(Axis(1));
+                let vars: Array2<f64> = Array1::from(vars).insert_axis(Axis(1));
+                let (drvs, var_drvs): (Vec<Array1<f64>>, Vec<Array1<f64>>) = self
+                    .experts
+                    .iter()
+                    .map(|gp| {
+                        let (predg, varg) = gp.predict_valvar_gradients(&xii).unwrap();
+                        (predg.row(0).to_owned(), varg.row(0).to_owned())
+                    })
+                    .unzip();
+
+                let mut preds_drv = Array2::zeros((self.experts.len(), xi.len()));
+                let mut vars_drv = Array2::zeros((self.experts.len(), xi.len()));
+                Zip::indexed(preds_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&drvs[i]));
+                Zip::indexed(vars_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&var_drvs[i]));
+
+                let mut val_term1 = Array2::zeros((self.experts.len(), xi.len()));
+                Zip::from(val_term1.rows_mut())
+                    .and(&p)
+                    .and(preds_drv.rows())
+                    .for_each(|mut t, p, der| t.assign(&(der.to_owned().mapv(|v| v * p))));
+                let val_term1 = val_term1.sum_axis(Axis(0));
+                let val_term2 = pprime.to_owned() * preds;
+                let val_term2 = val_term2.sum_axis(Axis(0));
+                val_y.assign(&(val_term1 + val_term2));
+
+                let mut var_term1 = Array2::zeros((self.experts.len(), xi.len()));
+                Zip::from(var_term1.rows_mut())
+                    .and(&p)
+                    .and(vars_drv.rows())
+                    .for_each(|mut t, p, der| t.assign(&(der.to_owned().mapv(|v| v * p * p))));
+                let var_term1 = var_term1.sum_axis(Axis(0));
+                let var_term2 = (p.to_owned() * pprime * vars).mapv(|v| 2. * v);
+                let var_term2 = var_term2.sum_axis(Axis(0));
+                var_y.assign(&(var_term1 + var_term2));
+            });
+        Ok((val_drv, var_drv))
+    }
+
     /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// Then the expert of the cluster is used to predict the output value.
@@ -909,6 +980,30 @@ impl GpMixture {
         Ok(vardrv)
     }
 
+    /// Predict derivatives of the outputs and variances at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
+    /// The expert of the cluster is used to predict variance value.
+    pub fn predict_valvar_gradients_hard(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array2<f64>, Array2<f64>)> {
+        let mut val_drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let mut var_drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let clustering = self.gmx.predict(x);
+        Zip::from(val_drv.rows_mut())
+            .and(var_drv.rows_mut())
+            .and(x.rows())
+            .and(&clustering)
+            .for_each(|mut val_y, mut var_y, xi, &c| {
+                let x = xi.to_owned().insert_axis(Axis(0));
+                let (x_val_drv, x_var_drv) =
+                    self.experts[c].predict_valvar_gradients(&x.view()).unwrap();
+                val_y.assign(&x_val_drv.row(0));
+                var_y.assign(&x_var_drv.row(0));
+            });
+        Ok((val_drv, var_drv))
+    }
+
     /// Sample `n_traj` trajectories at a set of points `x` specified as (n, nx) matrix.
     /// using the expert `ith` of the mixture.
     /// Returns the samples as a (n, n_traj) matrix where the ith row
@@ -953,6 +1048,14 @@ impl GpMixture {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         <GpMixture as GpSurrogateExt>::predict_var_gradients(self, &x.view())
+    }
+
+    /// Predict derivatives of the outputs and variances at a set of points `x` specified as (n, nx) matrix.
+    pub fn predict_valvar_gradients(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array2<f64>, Array2<f64>)> {
+        <GpMixture as GpSurrogateExt>::predict_valvar_gradients(self, &x.view())
     }
 
     /// Sample `n_traj` trajectories at a set of points `x` specified as (n, nx) matrix.

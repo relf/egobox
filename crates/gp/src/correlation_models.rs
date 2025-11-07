@@ -40,24 +40,15 @@ pub trait CorrelationModel<F: Float>: Clone + Copy + Default + fmt::Display + Sy
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F>;
 
-    // fn value_and_jacobian(
-    //     &self,
-    //     x: &ArrayBase<impl Data<Elem = F>, Ix1>,
-    //     xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    //     theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
-    //     weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    // ) -> (Array2<F>, Array2<F>) {
-    //     let d = differences(x, xtrain);
-    //     let r = self.value(&d, theta, weights);
-
-    //     let theta_w = (theta * weights)
-    //         .mapv(|v| v.powf(F::cast(2)))
-    //         .sum_axis(Axis(1))
-    //         .mapv(|v| F::cast(-v));
-
-    //     let jr = d * &theta_w * &r;
-    //     (r, jr)
-    // }
+    /// Compute both the correlation function matrix `r(x, x')` and its jacobian at given `x`
+    /// given a set of `xtrain` training samples, `theta` parameters, and
+    fn valjac(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array2<F>, Array2<F>);
 
     /// Returns the theta influence factors for the correlation model.
     /// See <https://hal.science/hal-03812073v2/document>
@@ -130,24 +121,24 @@ impl<F: Float> CorrelationModel<F> for SquaredExponentialCorr {
         d * &dtheta_w * &r
     }
 
-    // fn value_and_jacobian(
-    //     &self,
-    //     x: &ArrayBase<impl Data<Elem = F>, Ix1>,
-    //     xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    //     theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
-    //     weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    // ) -> (Array2<F>, Array2<F>) {
-    //     let d = differences(x, xtrain);
-    //     let r = self.value(&d, theta, weights);
+    fn valjac(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array2<F>, Array2<F>) {
+        let d = differences(x, xtrain);
+        let r = self.value(&d, theta, weights);
 
-    //     let dtheta_w = (theta * weights)
-    //         .mapv(|v| v.powf(F::cast(2)))
-    //         .sum_axis(Axis(1))
-    //         .mapv(|v| F::cast(-v));
+        let dtheta_w = (theta * weights)
+            .mapv(|v| v.powf(F::cast(2)))
+            .sum_axis(Axis(1))
+            .mapv(|v| F::cast(-v));
 
-    //     let jr = d * &dtheta_w * &r;
-    //     (r, jr)
-    // }
+        let jr = d * &dtheta_w * &r;
+        (r, jr)
+    }
 
     fn theta_influence_factors(&self) -> (F, F) {
         (F::cast(0.29), F::cast(1.96))
@@ -222,6 +213,25 @@ impl<F: Float> CorrelationModel<F> for AbsoluteExponentialCorr {
         &dtheta_w * &r
     }
 
+    fn valjac(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array2<F>, Array2<F>) {
+        let d = differences(x, xtrain);
+        let r = self.value(&d, theta, weights);
+        let sign_d = d.mapv(|v| v.signum());
+
+        let dtheta_w = sign_d
+            * (theta * weights.mapv(|v| v.abs()))
+                .sum_axis(Axis(1))
+                .mapv(|v| F::cast(-1.) * v);
+        let jr = &dtheta_w * &r;
+        (r, jr)
+    }
+
     fn theta_influence_factors(&self) -> (F, F) {
         (F::cast(0.15), F::cast(3.76))
     }
@@ -260,8 +270,60 @@ impl TryFrom<String> for Matern32Corr {
     }
 }
 
+impl<F: Float> CorrelationModel<F> for Matern32Corr {
+    ///   d    h         
+    /// prod prod (1 + sqrt(3) * theta_l * |d_j . weight_j|) exp( - sqrt(3) * theta_l * |d_j . weight_j| )
+    ///  j=1  l=1
+    fn value(
+        &self,
+        d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        let (a, b) = self._compute_r_factors(d, theta, weights);
+        let r = a * b;
+        r.into_shape_with_order((d.nrows(), 1)).unwrap()
+    }
+
+    fn jacobian(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        let d = differences(x, xtrain);
+        let (a, b) = self._compute_r_factors(&d, theta, weights);
+        self._jac_helper(&d, &a, &b, xtrain, theta, weights)
+    }
+
+    fn valjac(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array2<F>, Array2<F>) {
+        let d = differences(x, xtrain);
+        let (a, b) = self._compute_r_factors(&d, theta, weights);
+        let r = &a * &b;
+        let jr = self._jac_helper(&d, &a, &b, xtrain, theta, weights);
+        (r.into_shape_with_order((d.nrows(), 1)).unwrap(), jr)
+    }
+
+    fn theta_influence_factors(&self) -> (F, F) {
+        (F::cast(0.21), F::cast(2.74))
+    }
+}
+
+impl fmt::Display for Matern32Corr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Matern32")
+    }
+}
+
 impl Matern32Corr {
-    fn compute_r_factors<F: Float>(
+    fn _compute_r_factors<F: Float>(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
@@ -289,43 +351,24 @@ impl Matern32Corr {
         let b = d_theta_w.sum_axis(Axis(1)).mapv(|v| F::exp(-sqrt3 * v));
         (a, b)
     }
-}
 
-impl<F: Float> CorrelationModel<F> for Matern32Corr {
-    ///   d    h         
-    /// prod prod (1 + sqrt(3) * theta_l * |d_j . weight_j|) exp( - sqrt(3) * theta_l * |d_j . weight_j| )
-    ///  j=1  l=1
-    fn value(
+    fn _jac_helper<F: Float>(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
-        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
-        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> Array2<F> {
-        let (a, b) = self.compute_r_factors(d, theta, weights);
-        let r = a * b;
-        r.into_shape_with_order((d.nrows(), 1)).unwrap()
-    }
-
-    fn jacobian(
-        &self,
-        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        a: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        b: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
     ) -> Array2<F> {
         let sqrt3 = F::cast(3.).sqrt();
-        let d = differences(x, xtrain);
-        let (a, b) = self.compute_r_factors(&d, theta, weights);
-
         let theta_w = weights.mapv(|v| v.abs()).dot(theta);
         let sign_d = d.mapv(|v| v.signum());
-
         let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         let abs_d = d.mapv(|v| v.abs());
-
         Zip::from(db.rows_mut())
-            .and(&a)
-            .and(&b)
+            .and(a)
+            .and(b)
             .and(sign_d.rows())
             .for_each(|mut db_i, ai, bi, si| {
                 Zip::from(&mut db_i)
@@ -335,7 +378,6 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
                         *db_ij = -sqrt3 * *theta_wj * *sij * *bi * *ai;
                     });
             });
-
         let theta_w = theta * weights.mapv(|v| v.abs());
         let mut da = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         Zip::from(da.rows_mut())
@@ -362,22 +404,11 @@ impl<F: Float> CorrelationModel<F> for Matern32Corr {
                         });
                     });
             });
-
-        let da = einsum("i,ij->ij", &[&b, &da])
+        let da = einsum("i,ij->ij", &[b, &da])
             .unwrap()
             .into_shape_with_order((xtrain.nrows(), xtrain.ncols()))
             .unwrap();
         db + da
-    }
-
-    fn theta_influence_factors(&self) -> (F, F) {
-        (F::cast(0.21), F::cast(2.74))
-    }
-}
-
-impl fmt::Display for Matern32Corr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Matern32")
     }
 }
 
@@ -405,6 +436,60 @@ impl TryFrom<String> for Matern52Corr {
         } else {
             Err("Bad string value for Matern52Corr, should be \'Matern52\'")
         }
+    }
+}
+
+impl<F: Float> CorrelationModel<F> for Matern52Corr {
+    ///   d    h         
+    /// prod prod (1 + sqrt(5) * theta_l * |d_j . weight_j| + (5./3.) * theta_l^2 * |d_j . weight_j|^2) exp( - sqrt(5) * theta_l * |d_j . weight_j| )
+    ///  j=1  l=1
+    fn value(
+        &self,
+        d: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        let (a, b) = self.compute_r_factors(d, theta, weights);
+        let r = a * b;
+        r.into_shape_with_order((d.nrows(), 1)).unwrap()
+    }
+
+    fn jacobian(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> Array2<F> {
+        let d = differences(x, xtrain);
+        let (a, b) = self.compute_r_factors(&d, theta, weights);
+
+        self._jac_helper(&d, &a, &b, xtrain, theta, weights)
+    }
+
+    fn valjac(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
+        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array2<F>, Array2<F>) {
+        let d = differences(x, xtrain);
+        let (a, b) = self.compute_r_factors(&d, theta, weights);
+        let r = &a * &b;
+        let jr = self._jac_helper(&d, &a, &b, xtrain, theta, weights);
+
+        (r.into_shape_with_order((d.nrows(), 1)).unwrap(), jr)
+    }
+
+    fn theta_influence_factors(&self) -> (F, F) {
+        (F::cast(0.23), F::cast(2.44))
+    }
+}
+
+impl fmt::Display for Matern52Corr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Matern52")
     }
 }
 
@@ -436,26 +521,12 @@ impl Matern52Corr {
         let b = d_theta_w.sum_axis(Axis(1)).mapv(|v| F::exp(-sqrt5 * v));
         (a, b)
     }
-}
 
-impl<F: Float> CorrelationModel<F> for Matern52Corr {
-    ///   d    h         
-    /// prod prod (1 + sqrt(5) * theta_l * |d_j . weight_j| + (5./3.) * theta_l^2 * |d_j . weight_j|^2) exp( - sqrt(5) * theta_l * |d_j . weight_j| )
-    ///  j=1  l=1
-    fn value(
+    fn _jac_helper<F: Float>(
         &self,
         d: &ArrayBase<impl Data<Elem = F>, Ix2>,
-        theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
-        weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    ) -> Array2<F> {
-        let (a, b) = self.compute_r_factors(d, theta, weights);
-        let r = a * b;
-        r.into_shape_with_order((d.nrows(), 1)).unwrap()
-    }
-
-    fn jacobian(
-        &self,
-        x: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        a: &ArrayBase<impl Data<Elem = F>, Ix1>,
+        b: &ArrayBase<impl Data<Elem = F>, Ix1>,
         xtrain: &ArrayBase<impl Data<Elem = F>, Ix2>,
         theta: &ArrayBase<impl Data<Elem = F>, Ix1>,
         weights: &ArrayBase<impl Data<Elem = F>, Ix2>,
@@ -463,18 +534,14 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
         let sqrt5 = F::cast(5).sqrt();
         let div5_3 = F::cast(5. / 3.);
         let div10_3 = F::cast(2.) * div5_3;
-        let d = differences(x, xtrain);
-        let (a, b) = self.compute_r_factors(&d, theta, weights);
 
         let theta_w = weights.mapv(|v| v.abs()).dot(theta);
         let sign_d = d.mapv(|v| v.signum());
-
         let mut db = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         let abs_d = d.mapv(|v| v.abs());
-
         Zip::from(db.rows_mut())
-            .and(&a)
-            .and(&b)
+            .and(a)
+            .and(b)
             .and(sign_d.rows())
             .for_each(|mut db_i, ai, bi, si| {
                 Zip::from(&mut db_i)
@@ -484,7 +551,6 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
                         *db_ij = -sqrt5 * *theta_wj * *sij * *bi * *ai;
                     });
             });
-
         let theta_w = theta * weights.mapv(|v| v.abs());
         let mut da = Array2::<F>::zeros((xtrain.nrows(), xtrain.ncols()));
         Zip::from(da.rows_mut())
@@ -512,21 +578,11 @@ impl<F: Float> CorrelationModel<F> for Matern52Corr {
                     },
                 );
             });
-        let da = einsum("i,ij->ij", &[&b, &da])
+        let da = einsum("i,ij->ij", &[b, &da])
             .unwrap()
             .into_shape_with_order((xtrain.nrows(), xtrain.ncols()))
             .unwrap();
         db + da
-    }
-
-    fn theta_influence_factors(&self) -> (F, F) {
-        (F::cast(0.23), F::cast(2.44))
-    }
-}
-
-impl fmt::Display for Matern52Corr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Matern52")
     }
 }
 

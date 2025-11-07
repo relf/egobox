@@ -558,15 +558,13 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
     ) -> Array1<F> {
         let x = &(x.to_owned().insert_axis(Axis(0)));
         let xnorm = (x - &self.xt_norm.mean) / &self.xt_norm.std;
-        let dx = pairwise_differences(&xnorm, &self.xt_norm.data);
         let sigma2 = self.inner_params.sigma2;
         let r_chol = &self.inner_params.r_chol;
 
-        let r = self.params.corr.value(&dx, &self.theta, &self.w_star);
-        let dr =
+        let (r, dr) =
             self.params
                 .corr
-                .jacobian(&xnorm.row(0), &self.xt_norm.data, &self.theta, &self.w_star);
+                .valjac(&xnorm.row(0), &self.xt_norm.data, &self.theta, &self.w_star);
 
         // rho1 = Rc^-1 . r(x, X)
         let rho1 = r_chol.solve_triangular(&r, UPLO::Lower).unwrap();
@@ -709,16 +707,23 @@ impl<F: Float, Mean: RegressionModel<F>, Corr: CorrelationModel<F>> GaussianProc
         derivs
     }
 
-    // pub fn predict_val_and_var_gradients(
-    //     &self,
-    //     x: &ArrayBase<impl Data<Elem = F>, Ix2>,
-    // ) -> (Array2<F>, Array2<F>) {
-    //     let mut derivs = Array::zeros((x.nrows(), x.ncols()));
-    //     Zip::from(derivs.rows_mut())
-    //         .and(x.rows())
-    //         .for_each(|mut der, x| der.assign(&self.predict_var_gradients_single(&x)));
-    //     todo!();
-    // }
+    /// Predict both value and variance gradients at a set of points `x` specified as a (n, nx) matrix
+    /// where x has nx components.
+    pub fn predict_valvar_gradients(
+        &self,
+        x: &ArrayBase<impl Data<Elem = F>, Ix2>,
+    ) -> (Array2<F>, Array2<F>) {
+        let mut val_derivs = Array::zeros((x.nrows(), x.ncols()));
+        let mut var_derivs = Array::zeros((x.nrows(), x.ncols()));
+        Zip::from(val_derivs.rows_mut())
+            .and(var_derivs.rows_mut())
+            .and(x.rows())
+            .for_each(|mut val_der, mut var_der, x| {
+                val_der.assign(&self.predict_jacobian(&x).column(0));
+                var_der.assign(&self.predict_var_gradients_single(&x));
+            });
+        (val_derivs, var_derivs)
+    }
 }
 
 impl<F, D, Mean, Corr> PredictInplace<ArrayBase<D, Ix2>, Array1<F>>

@@ -673,6 +673,19 @@ impl GpSurrogateExt for MixintGpMixture {
         self.moe.predict_var_gradients(&xcast)
     }
 
+    fn predict_valvar_gradients(
+        &self,
+        x: &ArrayView2<f64>,
+    ) -> egobox_moe::Result<(Array2<f64>, Array2<f64>)> {
+        let mut xcast = if self.work_in_folded_space {
+            unfold_with_enum_mask(&self.xtypes, x)
+        } else {
+            x.to_owned()
+        };
+        cast_to_discrete_values_mut(&self.xtypes, &mut xcast);
+        self.moe.predict_valvar_gradients(&xcast)
+    }
+
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> egobox_moe::Result<Array2<f64>> {
         let mut xcast = if self.work_in_folded_space {
             unfold_with_enum_mask(&self.xtypes, x)

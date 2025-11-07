@@ -67,11 +67,10 @@ impl InfillCriterion for ExpectedImprovement {
                     let k = sigma_weight.unwrap_or(1.0);
                     let sigma = s[0].sqrt();
                     let arg = (fmin - pred) / (k * sigma);
-                    let y_prime = obj_model.predict_gradients(&pt).unwrap();
-                    let y_prime = y_prime.row(0);
-                    let sig_2_prime = obj_model.predict_var_gradients(&pt).unwrap();
 
-                    let sig_2_prime = sig_2_prime.row(0);
+                    let (y_prime, var_prime) = obj_model.predict_valvar_gradients(&pt).unwrap();
+                    let y_prime = y_prime.row(0);
+                    let sig_2_prime = var_prime.row(0);
                     let sig_prime = sig_2_prime.mapv(|v| k * v / (2. * sigma));
                     let arg_prime = y_prime.mapv(|v| v / (-k * sigma))
                         - diff_y.to_owned() * sig_prime.mapv(|v| v / (k * sigma * k * sigma));
