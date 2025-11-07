@@ -499,6 +499,13 @@ impl GpSurrogate for GpMixture {
         }
     }
 
+    fn predict_valvar(&self, x: &ArrayView2<f64>) -> Result<(Array1<f64>, Array1<f64>)> {
+        match self.recombination {
+            Recombination::Hard => self.predict_valvar_hard(x),
+            Recombination::Smooth(_) => self.predict_valvar_smooth(x),
+        }
+    }
+
     /// Save Moe model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
@@ -530,6 +537,13 @@ impl GpSurrogateExt for GpMixture {
         match self.recombination {
             Recombination::Hard => self.predict_var_gradients_hard(x),
             Recombination::Smooth(_) => self.predict_var_gradients_smooth(x),
+        }
+    }
+
+    fn predict_valvar_gradients(&self, x: &ArrayView2<f64>) -> Result<(Array2<f64>, Array2<f64>)> {
+        match self.recombination {
+            Recombination::Hard => self.predict_valvar_gradients_hard(x),
+            Recombination::Smooth(_) => self.predict_valvar_gradients_smooth(x),
         }
     }
 
@@ -666,7 +680,7 @@ impl GpMixture {
                 let p = probas.column(i);
                 gp.predict_var(&x.view()).unwrap() * p * p
             })
-            .fold(Array1::zeros(x.nrows()), |acc, pred| acc + pred);
+            .fold(Array1::zeros(x.nrows()), |acc, var| acc + var);
         Ok(preds)
     }
 
@@ -768,6 +782,96 @@ impl GpMixture {
         Ok(drv)
     }
 
+    /// Predict outputs and variances at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the probability of the point to belongs to one cluster
+    /// or another (ie responsabilities).
+    /// The smooth recombination of each cluster expert responsabilty is used to get the result.
+    pub fn predict_valvar_smooth(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array1<f64>, Array1<f64>)> {
+        let probas = self.gmx.predict_probas(x);
+        let valvar: (Array1<f64>, Array1<f64>) = self
+            .experts
+            .iter()
+            .enumerate()
+            .map(|(i, gp)| {
+                let p = probas.column(i);
+                let (pred, var) = gp.predict_valvar(&x.view()).unwrap();
+                (pred * p, var * p * p)
+            })
+            .fold(
+                (Array1::zeros((x.nrows(),)), Array1::zeros((x.nrows(),))),
+                |acc, (pred, var)| (acc.0 + pred, acc.1 + var),
+            );
+
+        Ok(valvar)
+    }
+
+    fn predict_valvar_gradients_smooth(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array2<f64>, Array2<f64>)> {
+        let probas = self.gmx.predict_probas(x);
+        let probas_drv = self.gmx.predict_probas_derivatives(x);
+
+        let mut val_drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let mut var_drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+
+        Zip::from(val_drv.rows_mut())
+            .and(var_drv.rows_mut())
+            .and(x.rows())
+            .and(probas.rows())
+            .and(probas_drv.outer_iter())
+            .for_each(|mut val_y, mut var_y, xi, p, pprime| {
+                let xii = xi.insert_axis(Axis(0));
+                let (preds, vars): (Vec<f64>, Vec<f64>) = self
+                    .experts
+                    .iter()
+                    .map(|gp| {
+                        let (pred, var) = gp.predict_valvar(&xii).unwrap();
+                        (pred[0], var[0])
+                    })
+                    .unzip();
+                let preds: Array2<f64> = Array1::from(preds).insert_axis(Axis(1));
+                let vars: Array2<f64> = Array1::from(vars).insert_axis(Axis(1));
+                let (drvs, var_drvs): (Vec<Array1<f64>>, Vec<Array1<f64>>) = self
+                    .experts
+                    .iter()
+                    .map(|gp| {
+                        let (predg, varg) = gp.predict_valvar_gradients(&xii).unwrap();
+                        (predg.row(0).to_owned(), varg.row(0).to_owned())
+                    })
+                    .unzip();
+
+                let mut preds_drv = Array2::zeros((self.experts.len(), xi.len()));
+                let mut vars_drv = Array2::zeros((self.experts.len(), xi.len()));
+                Zip::indexed(preds_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&drvs[i]));
+                Zip::indexed(vars_drv.rows_mut()).for_each(|i, mut jc| jc.assign(&var_drvs[i]));
+
+                let mut val_term1 = Array2::zeros((self.experts.len(), xi.len()));
+                Zip::from(val_term1.rows_mut())
+                    .and(&p)
+                    .and(preds_drv.rows())
+                    .for_each(|mut t, p, der| t.assign(&(der.to_owned().mapv(|v| v * p))));
+                let val_term1 = val_term1.sum_axis(Axis(0));
+                let val_term2 = pprime.to_owned() * preds;
+                let val_term2 = val_term2.sum_axis(Axis(0));
+                val_y.assign(&(val_term1 + val_term2));
+
+                let mut var_term1 = Array2::zeros((self.experts.len(), xi.len()));
+                Zip::from(var_term1.rows_mut())
+                    .and(&p)
+                    .and(vars_drv.rows())
+                    .for_each(|mut t, p, der| t.assign(&(der.to_owned().mapv(|v| v * p * p))));
+                let var_term1 = var_term1.sum_axis(Axis(0));
+                let var_term2 = (p.to_owned() * pprime * vars).mapv(|v| 2. * v);
+                let var_term2 = var_term2.sum_axis(Axis(0));
+                var_y.assign(&(var_term1 + var_term2));
+            });
+        Ok((val_drv, var_drv))
+    }
+
     /// Predict outputs at a set of points `x` specified as (n, nx) matrix.
     /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
     /// Then the expert of the cluster is used to predict the output value.
@@ -803,6 +907,31 @@ impl GpMixture {
                     .unwrap()[0];
             });
         Ok(variances)
+    }
+
+    /// Predict outputs and variances at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
+    /// The expert of the cluster is used to predict variance value.
+    pub fn predict_valvar_hard(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array1<f64>, Array1<f64>)> {
+        let clustering = self.gmx.predict(x);
+        trace!("Clustering {clustering:?}");
+        let mut preds = Array1::zeros((x.nrows(),));
+        let mut variances = Array1::zeros(x.nrows());
+        Zip::from(&mut preds)
+            .and(&mut variances)
+            .and(x.rows())
+            .and(&clustering)
+            .for_each(|y, v, x, &c| {
+                let (pred, var) = self.experts[c]
+                    .predict_valvar(&x.insert_axis(Axis(0)))
+                    .unwrap();
+                *y = pred[0];
+                *v = var[0];
+            });
+        Ok((preds, variances))
     }
 
     /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.
@@ -851,6 +980,30 @@ impl GpMixture {
         Ok(vardrv)
     }
 
+    /// Predict derivatives of the outputs and variances at a set of points `x` specified as (n, nx) matrix.
+    /// Gaussian Mixture is used to get the cluster where the point belongs (highest responsability)
+    /// The expert of the cluster is used to predict variance value.
+    pub fn predict_valvar_gradients_hard(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array2<f64>, Array2<f64>)> {
+        let mut val_drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let mut var_drv = Array2::<f64>::zeros((x.nrows(), x.ncols()));
+        let clustering = self.gmx.predict(x);
+        Zip::from(val_drv.rows_mut())
+            .and(var_drv.rows_mut())
+            .and(x.rows())
+            .and(&clustering)
+            .for_each(|mut val_y, mut var_y, xi, &c| {
+                let x = xi.to_owned().insert_axis(Axis(0));
+                let (x_val_drv, x_var_drv) =
+                    self.experts[c].predict_valvar_gradients(&x.view()).unwrap();
+                val_y.assign(&x_val_drv.row(0));
+                var_y.assign(&x_var_drv.row(0));
+            });
+        Ok((val_drv, var_drv))
+    }
+
     /// Sample `n_traj` trajectories at a set of points `x` specified as (n, nx) matrix.
     /// using the expert `ith` of the mixture.
     /// Returns the samples as a (n, n_traj) matrix where the ith row
@@ -873,6 +1026,14 @@ impl GpMixture {
         <GpMixture as GpSurrogate>::predict_var(self, &x.view())
     }
 
+    /// Predict outputs and variances at a set of points `x` specified as (n, nx) matrix.
+    pub fn predict_valvar(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array1<f64>, Array1<f64>)> {
+        <GpMixture as GpSurrogate>::predict_valvar(self, &x.view())
+    }
+
     /// Predict derivatives of the output at a set of points `x` specified as (n, nx) matrix.
     pub fn predict_gradients(
         &self,
@@ -887,6 +1048,14 @@ impl GpMixture {
         x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
     ) -> Result<Array2<f64>> {
         <GpMixture as GpSurrogateExt>::predict_var_gradients(self, &x.view())
+    }
+
+    /// Predict derivatives of the outputs and variances at a set of points `x` specified as (n, nx) matrix.
+    pub fn predict_valvar_gradients(
+        &self,
+        x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    ) -> Result<(Array2<f64>, Array2<f64>)> {
+        <GpMixture as GpSurrogateExt>::predict_valvar_gradients(self, &x.view())
     }
 
     /// Sample `n_traj` trajectories at a set of points `x` specified as (n, nx) matrix.
@@ -1330,6 +1499,66 @@ mod tests {
 
             assert_rel_or_abs_error(y_deriv[[0, 0]], diff_g);
             assert_rel_or_abs_error(y_deriv[[0, 1]], diff_d);
+        }
+    }
+
+    /// Test prediction valvar derivatives against derivatives and variance derivatives
+    #[test]
+    fn test_valvar_predictions() {
+        let rng = Xoshiro256Plus::seed_from_u64(0);
+        let xt = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]).sample(100);
+        let yt = rosenb(&xt).remove_axis(Axis(1));
+
+        for corr in [
+            CorrelationSpec::SQUAREDEXPONENTIAL,
+            CorrelationSpec::MATERN32,
+            CorrelationSpec::MATERN52,
+        ] {
+            println!("Test valvar derivatives with correlation {corr:?}");
+            for recomb in [
+                Recombination::Hard,
+                Recombination::Smooth(Some(0.5)),
+                Recombination::Smooth(None),
+            ] {
+                println!("Testing valvar derivatives with recomb={recomb:?}");
+
+                let moe = GpMixture::params()
+                    .n_clusters(NbClusters::fixed(2))
+                    .regression_spec(RegressionSpec::CONSTANT)
+                    .correlation_spec(corr)
+                    .recombination(recomb)
+                    .with_rng(rng.clone())
+                    .fit(&Dataset::new(xt.to_owned(), yt.to_owned()))
+                    .expect("MOE fitted");
+
+                for _ in 0..10 {
+                    let mut rng = Xoshiro256Plus::seed_from_u64(42);
+                    let x = Array::random_using((2,), Uniform::new(0., 1.), &mut rng);
+                    let xa: f64 = x[0];
+                    let xb: f64 = x[1];
+                    let e = 1e-4;
+
+                    let x = array![
+                        [xa, xb],
+                        [xa + e, xb],
+                        [xa - e, xb],
+                        [xa, xb + e],
+                        [xa, xb - e]
+                    ];
+                    let (y_pred, v_pred) = moe.predict_valvar(&x).unwrap();
+                    let (y_deriv, v_deriv) = moe.predict_valvar_gradients(&x).unwrap();
+
+                    let pred = moe.predict(&x).unwrap();
+                    let var = moe.predict_var(&x).unwrap();
+                    assert_abs_diff_eq!(y_pred, pred, epsilon = 1e-12);
+                    assert_abs_diff_eq!(v_pred, var, epsilon = 1e-12);
+
+                    let deriv = moe.predict_gradients(&x).unwrap();
+                    let vardrv = moe.predict_var_gradients(&x).unwrap();
+                    assert_abs_diff_eq!(y_deriv, deriv, epsilon = 1e-12);
+                    assert_abs_diff_eq!(v_deriv, vardrv, epsilon = 1e-12);
+                }
+            }
         }
     }
 

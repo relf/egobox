@@ -67,8 +67,7 @@ where
             let model: O = params
                 .fit(&train)
                 .expect("cross-validation: sub model fitted");
-            let pred = model.predict(&valid.records().view()).unwrap();
-            let var = model.predict_var(&valid.records().view()).unwrap();
+            let (pred, var) = model.predict_valvar(&valid.records().view()).unwrap();
             varss += ((valid.targets() - &pred).mapv(|v| v * v) / var).sum();
             n += valid.nsamples();
         }
@@ -152,8 +151,8 @@ fn iae_alpha(
     let x = valid.records();
     let y = valid.targets();
 
-    let pred = model.predict(&x.view()).unwrap();
-    let sigma = model.predict_var(&x.view()).unwrap().sqrt();
+    let (pred, var) = model.predict_valvar(&x.view()).unwrap();
+    let sigma = var.sqrt();
 
     let n_test = x.nrows();
     let n_alpha = alphas.len();

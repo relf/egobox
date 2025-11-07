@@ -28,23 +28,20 @@ impl InfillCriterion for ExpectedImprovement {
         _scale: Option<f64>,
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-        match obj_model.predict(&pt) {
-            Ok(p) => match obj_model.predict_var(&pt) {
-                Ok(s) => {
-                    if s[0] < f64::EPSILON {
-                        0.0
-                    } else {
-                        let pred = p[0];
-                        let k = sigma_weight.unwrap_or(1.0);
-                        let sigma = k * s[0].sqrt();
-                        let args0 = (fmin - pred) / sigma;
-                        let args1 = args0 * norm_cdf(args0);
-                        let args2 = norm_pdf(args0);
-                        sigma * (args1 + args2)
-                    }
+        match obj_model.predict_valvar(&pt) {
+            Ok((p, s)) => {
+                if s[0] < f64::EPSILON {
+                    0.0
+                } else {
+                    let pred = p[0];
+                    let k = sigma_weight.unwrap_or(1.0);
+                    let sigma = k * s[0].sqrt();
+                    let args0 = (fmin - pred) / sigma;
+                    let args1 = args0 * norm_cdf(args0);
+                    let args2 = norm_pdf(args0);
+                    sigma * (args1 + args2)
                 }
-                _ => 0.0,
-            },
+            }
             _ => 0.0,
         }
     }
@@ -60,36 +57,32 @@ impl InfillCriterion for ExpectedImprovement {
         _scale: Option<f64>,
     ) -> Array1<f64> {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
-        match obj_model.predict(&pt) {
-            Ok(p) => match obj_model.predict_var(&pt) {
-                Ok(s) => {
-                    if s[0] < f64::EPSILON {
-                        Array1::zeros(pt.len())
-                    } else {
-                        let pred = p[0];
-                        let diff_y = fmin - pred;
-                        let k = sigma_weight.unwrap_or(1.0);
-                        let sigma = s[0].sqrt();
-                        let arg = (fmin - pred) / (k * sigma);
-                        let y_prime = obj_model.predict_gradients(&pt).unwrap();
-                        let y_prime = y_prime.row(0);
-                        let sig_2_prime = obj_model.predict_var_gradients(&pt).unwrap();
+        match obj_model.predict_valvar(&pt) {
+            Ok((p, s)) => {
+                if s[0] < f64::EPSILON {
+                    Array1::zeros(pt.len())
+                } else {
+                    let pred = p[0];
+                    let diff_y = fmin - pred;
+                    let k = sigma_weight.unwrap_or(1.0);
+                    let sigma = s[0].sqrt();
+                    let arg = (fmin - pred) / (k * sigma);
 
-                        let sig_2_prime = sig_2_prime.row(0);
-                        let sig_prime = sig_2_prime.mapv(|v| k * v / (2. * sigma));
-                        let arg_prime = y_prime.mapv(|v| v / (-k * sigma))
-                            - diff_y.to_owned() * sig_prime.mapv(|v| v / (k * sigma * k * sigma));
-                        let factor = k * sigma * (-arg / SQRT_2PI) * (-(arg * arg) / 2.).exp();
+                    let (y_prime, var_prime) = obj_model.predict_valvar_gradients(&pt).unwrap();
+                    let y_prime = y_prime.row(0);
+                    let sig_2_prime = var_prime.row(0);
+                    let sig_prime = sig_2_prime.mapv(|v| k * v / (2. * sigma));
+                    let arg_prime = y_prime.mapv(|v| v / (-k * sigma))
+                        - diff_y.to_owned() * sig_prime.mapv(|v| v / (k * sigma * k * sigma));
+                    let factor = k * sigma * (-arg / SQRT_2PI) * (-(arg * arg) / 2.).exp();
 
-                        let arg1 = y_prime.mapv(|v| v * (-norm_cdf(arg)));
-                        let arg2 = diff_y * norm_pdf(arg) * arg_prime.to_owned();
-                        let arg3 = sig_prime.to_owned() * norm_pdf(arg);
-                        let arg4 = factor * arg_prime;
-                        arg1 + arg2 + arg3 + arg4
-                    }
+                    let arg1 = y_prime.mapv(|v| v * (-norm_cdf(arg)));
+                    let arg2 = diff_y * norm_pdf(arg) * arg_prime.to_owned();
+                    let arg3 = sig_prime.to_owned() * norm_pdf(arg);
+                    let arg4 = factor * arg_prime;
+                    arg1 + arg2 + arg3 + arg4
                 }
-                _ => Array1::zeros(pt.len()),
-            },
+            }
             _ => Array1::zeros(pt.len()),
         }
     }
@@ -120,20 +113,17 @@ impl InfillCriterion for LogExpectedImprovement {
     ) -> f64 {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
 
-        match obj_model.predict(&pt) {
-            Ok(p) => match obj_model.predict_var(&pt) {
-                Ok(s) => {
-                    if s[0] < f64::EPSILON {
-                        f64::MIN
-                    } else {
-                        let pred = p[0];
-                        let sigma = s[0].sqrt();
-                        let u = (fmin - pred) / sigma;
-                        log_ei_helper(u) + sigma.ln()
-                    }
+        match obj_model.predict_valvar(&pt) {
+            Ok((p, s)) => {
+                if s[0] < f64::EPSILON {
+                    f64::MIN
+                } else {
+                    let pred = p[0];
+                    let sigma = s[0].sqrt();
+                    let u = (fmin - pred) / sigma;
+                    log_ei_helper(u) + sigma.ln()
                 }
-                _ => f64::MIN,
-            },
+            }
             _ => f64::MIN,
         }
     }
@@ -150,35 +140,31 @@ impl InfillCriterion for LogExpectedImprovement {
     ) -> Array1<f64> {
         let pt = ArrayView::from_shape((1, x.len()), x).unwrap();
 
-        match obj_model.predict(&pt) {
-            Ok(p) => match obj_model.predict_var(&pt) {
-                Ok(s) => {
-                    if s[0] < f64::EPSILON {
-                        Array1::from_elem(pt.len(), f64::MIN)
-                    } else {
-                        let pred = p[0];
-                        let diff_y = fmin - pred;
-                        let sigma = s[0].sqrt();
-                        let arg = diff_y / sigma;
+        match obj_model.predict_valvar(&pt) {
+            Ok((p, s)) => {
+                if s[0] < f64::EPSILON {
+                    Array1::from_elem(pt.len(), f64::MIN)
+                } else {
+                    let pred = p[0];
+                    let diff_y = fmin - pred;
+                    let sigma = s[0].sqrt();
+                    let arg = diff_y / sigma;
 
-                        let y_prime = obj_model.predict_gradients(&pt).unwrap();
-                        let y_prime = y_prime.row(0);
-                        let sig_2_prime = obj_model.predict_var_gradients(&pt).unwrap();
-                        let sig_2_prime = sig_2_prime.row(0);
-                        let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));
+                    let (y_prime, var_prime) = obj_model.predict_valvar_gradients(&pt).unwrap();
+                    let y_prime = y_prime.row(0);
+                    let sig_2_prime = var_prime.row(0);
+                    let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));
 
-                        let arg_prime = y_prime.mapv(|v| v / (-sigma))
-                            - diff_y.to_owned() * sig_prime.mapv(|v| v / (sigma * sigma));
+                    let arg_prime = y_prime.mapv(|v| v / (-sigma))
+                        - diff_y.to_owned() * sig_prime.mapv(|v| v / (sigma * sigma));
 
-                        let dhelper = d_log_ei_helper(arg);
-                        let arg1 = arg_prime.mapv(|v| dhelper * v);
+                    let dhelper = d_log_ei_helper(arg);
+                    let arg1 = arg_prime.mapv(|v| dhelper * v);
 
-                        let arg2 = sig_prime / sigma;
-                        arg1 + arg2
-                    }
+                    let arg2 = sig_prime / sigma;
+                    arg1 + arg2
                 }
-                _ => Array1::from_elem(pt.len(), f64::MIN),
-            },
+            }
             _ => Array1::from_elem(pt.len(), f64::MIN),
         }
     }

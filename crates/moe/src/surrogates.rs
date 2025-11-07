@@ -56,6 +56,8 @@ pub trait GpSurrogate: std::fmt::Display + Sync + Send {
     fn predict(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>>;
     /// Predict variance values at n points given as (n, xdim) matrix.
     fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>>;
+    /// Predict both output values and variance at n given `x` points of nx components
+    fn predict_valvar(&self, x: &ArrayView2<f64>) -> Result<(Array1<f64>, Array1<f64>)>;
     /// Save model in given file.
     #[cfg(feature = "persistent")]
     fn save(&self, path: &str, format: GpFileFormat) -> Result<()>;
@@ -70,6 +72,10 @@ pub trait GpSurrogateExt {
     /// Predict derivatives of the variance at n points and return (n, xdim) matrix
     /// where each column is the partial derivatives wrt the ith component
     fn predict_var_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>>;
+    /// Predict both output values and derivatives of the variance at n points
+    /// return ((n, ), (n, xdim)) where first array is the predicted values
+    /// and second array is the derivatives of the variance wrt each input dimension
+    fn predict_valvar_gradients(&self, x: &ArrayView2<f64>) -> Result<(Array2<f64>, Array2<f64>)>;
     /// Sample trajectories
     fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>>;
 }
@@ -167,6 +173,9 @@ macro_rules! declare_surrogate {
                 fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
                     Ok(self.0.predict_var(x)?)
                 }
+                fn predict_valvar(&self, x: &ArrayView2<f64>) -> Result<(Array1<f64>, Array1<f64>)> {
+                    Ok(self.0.predict_valvar(x)?)
+                }
 
                 #[cfg(feature = "persistent")]
                 fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
@@ -192,6 +201,9 @@ macro_rules! declare_surrogate {
                 }
                 fn predict_var_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_var_gradients(x))
+                }
+                fn predict_valvar_gradients(&self, x: &ArrayView2<f64>) -> Result<(Array2<f64>, Array2<f64>)> {
+                    Ok(self.0.predict_valvar_gradients(x))
                 }
                 fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
                     Ok(self.0.sample(x, n_traj))
@@ -329,6 +341,9 @@ macro_rules! declare_sgp_surrogate {
                 fn predict_var(&self, x: &ArrayView2<f64>) -> Result<Array1<f64>> {
                     Ok(self.0.predict_var(x)?)
                 }
+                fn predict_valvar(&self, x: &ArrayView2<f64>) -> Result<(Array1<f64>, Array1<f64>)> {
+                    Ok((self.0.predict(x)?, self.0.predict_var(x)?))
+                }
 
                 #[cfg(feature = "persistent")]
                 fn save(&self, path: &str, format: GpFileFormat) -> Result<()> {
@@ -352,6 +367,9 @@ macro_rules! declare_sgp_surrogate {
                 }
                 fn predict_var_gradients(&self, x: &ArrayView2<f64>) -> Result<Array2<f64>> {
                     Ok(self.0.predict_var_gradients(x))
+                }
+                fn predict_valvar_gradients(&self, x: &ArrayView2<f64>) -> Result<(Array2<f64>, Array2<f64>)> {
+                    Ok((self.0.predict_gradients(x), self.0.predict_var_gradients(x)))
                 }
                 fn sample(&self, x: &ArrayView2<f64>, n_traj: usize) -> Result<Array2<f64>> {
                     Ok(self.0.sample(x, n_traj))
