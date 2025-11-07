@@ -1502,6 +1502,66 @@ mod tests {
         }
     }
 
+    /// Test prediction valvar derivatives against derivatives and variance derivatives
+    #[test]
+    fn test_valvar_predictions() {
+        let rng = Xoshiro256Plus::seed_from_u64(0);
+        let xt = egobox_doe::FullFactorial::new(&array![[-1., 1.], [-1., 1.]]).sample(100);
+        let yt = rosenb(&xt).remove_axis(Axis(1));
+
+        for corr in [
+            CorrelationSpec::SQUAREDEXPONENTIAL,
+            CorrelationSpec::MATERN32,
+            CorrelationSpec::MATERN52,
+        ] {
+            println!("Test valvar derivatives with correlation {corr:?}");
+            for recomb in [
+                Recombination::Hard,
+                Recombination::Smooth(Some(0.5)),
+                Recombination::Smooth(None),
+            ] {
+                println!("Testing valvar derivatives with recomb={recomb:?}");
+
+                let moe = GpMixture::params()
+                    .n_clusters(NbClusters::fixed(2))
+                    .regression_spec(RegressionSpec::CONSTANT)
+                    .correlation_spec(corr)
+                    .recombination(recomb)
+                    .with_rng(rng.clone())
+                    .fit(&Dataset::new(xt.to_owned(), yt.to_owned()))
+                    .expect("MOE fitted");
+
+                for _ in 0..10 {
+                    let mut rng = Xoshiro256Plus::seed_from_u64(42);
+                    let x = Array::random_using((2,), Uniform::new(0., 1.), &mut rng);
+                    let xa: f64 = x[0];
+                    let xb: f64 = x[1];
+                    let e = 1e-4;
+
+                    let x = array![
+                        [xa, xb],
+                        [xa + e, xb],
+                        [xa - e, xb],
+                        [xa, xb + e],
+                        [xa, xb - e]
+                    ];
+                    let (y_pred, v_pred) = moe.predict_valvar(&x).unwrap();
+                    let (y_deriv, v_deriv) = moe.predict_valvar_gradients(&x).unwrap();
+
+                    let pred = moe.predict(&x).unwrap();
+                    let var = moe.predict_var(&x).unwrap();
+                    assert_abs_diff_eq!(y_pred, pred, epsilon = 1e-12);
+                    assert_abs_diff_eq!(v_pred, var, epsilon = 1e-12);
+
+                    let deriv = moe.predict_gradients(&x).unwrap();
+                    let vardrv = moe.predict_var_gradients(&x).unwrap();
+                    assert_abs_diff_eq!(y_deriv, deriv, epsilon = 1e-12);
+                    assert_abs_diff_eq!(v_deriv, vardrv, epsilon = 1e-12);
+                }
+            }
+        }
+    }
+
     fn assert_rel_or_abs_error(y_deriv: f64, fdiff: f64) {
         println!("analytic deriv = {y_deriv}, fdiff = {fdiff}");
         if fdiff.abs() < 1e-2 {
