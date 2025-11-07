@@ -150,10 +150,9 @@ impl InfillCriterion for LogExpectedImprovement {
                     let sigma = s[0].sqrt();
                     let arg = diff_y / sigma;
 
-                    let y_prime = obj_model.predict_gradients(&pt).unwrap();
+                    let (y_prime, var_prime) = obj_model.predict_valvar_gradients(&pt).unwrap();
                     let y_prime = y_prime.row(0);
-                    let sig_2_prime = obj_model.predict_var_gradients(&pt).unwrap();
-                    let sig_2_prime = sig_2_prime.row(0);
+                    let sig_2_prime = var_prime.row(0);
                     let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));
 
                     let arg_prime = y_prime.mapv(|v| v / (-sigma))

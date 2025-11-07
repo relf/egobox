@@ -35,10 +35,9 @@ fn pof_grad(x: &[f64], cstr_model: &dyn MixtureGpSurrogate, cstr_tol: f64) -> Ar
                 let pred = p[0];
                 let sigma = s[0].sqrt();
                 let arg = (cstr_tol - pred) / sigma;
-                let y_prime = cstr_model.predict_gradients(&pt).unwrap();
+                let (y_prime, var_prime) = cstr_model.predict_valvar_gradients(&pt).unwrap();
                 let y_prime = y_prime.row(0);
-                let sig_2_prime = cstr_model.predict_var_gradients(&pt).unwrap();
-                let sig_2_prime = sig_2_prime.row(0);
+                let sig_2_prime = var_prime.row(0);
                 let sig_prime = sig_2_prime.mapv(|v| v / (2. * sigma));
                 let arg_prime =
                     y_prime.mapv(|v| v / (-sigma)) + sig_prime.mapv(|v| v * pred / (sigma * sigma));
