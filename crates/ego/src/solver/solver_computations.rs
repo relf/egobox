@@ -65,37 +65,42 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
         let xlimits = coego::get_active_x(Axis(0), self.xlimits, active);
 
         if std::env::var(EGOR_USE_MIDDLEPICKER_MULTISTARTER).is_ok() {
-            let n = (n_start - 2) / 2;
+            let nt = self.xtrain.nrows();
+            // Compute the maximum number of points to consider to generate n_start midpoints
+            // to avoid too much computation when large training set
+            // limit is the solution of n_start = (limit*(limit-1))/2
+            let limit = ((1. + (1. + 8. * n_start as f64).sqrt()) / 2.) as usize;
+            let n = limit.min(nt);
 
             let xt = self.xtrain;
             let mut indices: Vec<usize> = (0..xt.nrows()).collect();
             indices.shuffle(&mut self.rng);
-            let selected: Vec<_> = indices
+            let selected = indices
                 .iter()
                 .take(n)
-                .map(|&i| xt.slice(s![i, ..]).to_owned())
-                .collect();
-            let vxt = selected.iter().map(|p| p.view()).collect::<Vec<_>>();
-            let xt = stack(Axis(0), &vxt).unwrap();
+                .map(|&i| xt.slice(s![i, ..]))
+                .collect::<Vec<_>>();
+            let xt = stack(Axis(0), &selected).unwrap();
 
             let xt = coego::get_active_x(Axis(1), &xt, active);
-            let midpoints = utils::start_points(
-                &xt,
-                &xlimits.column(0).to_owned(),
-                &xlimits.column(1).to_owned(),
-            );
-            let missing_points: i32 = n_start as i32 - midpoints.nrows() as i32;
+            let midpoints =
+                utils::start_points(&xt, &xlimits.column(0), &xlimits.column(1), Some(n_start));
+            let n_midpoints = midpoints.nrows();
+            let missing_points: i32 = n_start as i32 - n_midpoints as i32;
             if missing_points <= 0 {
-                info!("MiddlePickerMultiStarter: return first {n_start} points");
+                info!("MiddlePickerMultiStarter: pick {n_midpoints} pts");
                 midpoints
             } else {
-                info!("MiddlePickerMultiStarter: need to add {missing_points} points");
+                info!(
+                    "MiddlePickerMultiStarter: pick {n_midpoints} pts, add {missing_points} LHS pts"
+                );
                 // complete with LHS
                 let sampling = Lhs::new(&xlimits)
                     .with_rng(&mut self.rng)
                     .kind(LhsKind::Maximin);
                 let missings = sampling.sample((missing_points as usize).max(3)); // sampling with at least 3 points
-                concatenate(Axis(0), &[midpoints.view(), missings.view()]).unwrap()
+                let missings = missings.slice(s![0..(missing_points as usize), ..]);
+                concatenate(Axis(0), &[midpoints.view(), missings]).unwrap()
             }
         } else {
             // fallback on LHS

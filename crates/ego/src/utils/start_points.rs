@@ -1,7 +1,15 @@
-use ndarray::{Array1, Array2, Axis, stack};
+use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix1, Ix2, stack};
 use std::cmp::Ordering;
 
-pub fn start_points(x: &Array2<f64>, xl: &Array1<f64>, xu: &Array1<f64>) -> Array2<f64> {
+/// Determine starting points as midpoints between training points that are
+/// far enough from other training points.
+///
+pub fn start_points(
+    x: &ArrayBase<impl Data<Elem = f64>, Ix2>,
+    xl: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+    xu: &ArrayBase<impl Data<Elem = f64>, Ix1>,
+    n_max: Option<usize>,
+) -> Array2<f64> {
     let n = x.nrows();
     let d = x.ncols();
     let xrange = xu - xl;
@@ -65,6 +73,11 @@ pub fn start_points(x: &Array2<f64>, xl: &Array1<f64>, xu: &Array1<f64>) -> Arra
         if good {
             xstart.push(xij);
         }
+        if let Some(max) = n_max
+            && xstart.len() >= max
+        {
+            break;
+        }
     }
 
     if xstart.is_empty() {
@@ -88,7 +101,7 @@ mod tests {
         let xl = array![0.0, 0.0];
         let xu = array![1.0, 1.0];
 
-        let result = start_points(&x, &xl, &xu);
+        let result = start_points(&x, &xl, &xu, None);
         assert_eq!(result.nrows(), 1);
         assert_eq!(result.shape(), &[1, 2]);
 
@@ -102,7 +115,7 @@ mod tests {
         let xl = array![0.0, 0.0];
         let xu = array![1.0, 1.0];
 
-        let result = start_points(&x, &xl, &xu);
+        let result = start_points(&x, &xl, &xu, None);
         println!("result={result}");
         assert!(result.nrows() >= 1);
     }
@@ -115,8 +128,21 @@ mod tests {
             let xl = array![0.0, 0.0];
             let xu = array![1.0, 1.0];
 
-            let result = start_points(&xt, &xl, &xu);
+            let result = start_points(&xt, &xl, &xu, None);
             println!("n={} n_start={}", n, result.len());
         }
+    }
+
+    #[test]
+    fn test_n_start_with_max() {
+        let x = array![[0.1, 0.2], [0.9, 0.2], [0.5, 0.8]];
+        let xl = array![0.0, 0.0];
+        let xu = array![1.0, 1.0];
+
+        let result = start_points(&x, &xl, &xu, Some(1));
+        assert_eq!(result.nrows(), 1);
+
+        let result = start_points(&x, &xl, &xu, Some(2));
+        assert_eq!(result.nrows(), 2);
     }
 }
