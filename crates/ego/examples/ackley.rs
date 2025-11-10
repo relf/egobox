@@ -10,7 +10,7 @@ use egobox_ego::{
     Result,
     RunInfo,
 };
-use egobox_moe::{CorrelationSpec, RegressionSpec};
+use egobox_moe::{CorrelationSpec, NbClusters, RegressionSpec};
 use ndarray::{Array, Array2, ArrayView2, Zip, array};
 
 /// Ackley test function: min f(x)=0 at x=(0, 0, ..., 0)
@@ -34,8 +34,8 @@ struct Args {
 }
 
 fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>> {
-    let n_doe = dim + 1;
-    let max_iters = 200;
+    let n_doe = 20;
+    let max_iters = 480;
 
     let data = [-32.768, 32.768].repeat(dim);
     let xlimits = Array::from_shape_vec((dim, 2), data).unwrap();
@@ -46,17 +46,18 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 .n_doe(n_doe)
                 .configure_gp(|gp| {
                     gp.regression_spec(RegressionSpec::CONSTANT)
-                        .correlation_spec(CorrelationSpec::ABSOLUTEEXPONENTIAL)
+                        .correlation_spec(CorrelationSpec::MATERN52)
+                        .kpls(20)
                 })
                 .infill_strategy(InfillStrategy::LogEI)
-                .infill_optimizer(InfillOptimizer::Cobyla)
-                .trego(true)
+                .infill_optimizer(InfillOptimizer::Slsqp)
+                //.trego(true)
                 // for high dimensions
-                // .coego(egobox_ego::CoegoStatus::Enabled(5))
+                //.coego(egobox_ego::CoegoStatus::Enabled(5))
                 // .q_points(10)
                 // .q_optmod(2)
                 // .qei_strategy(QEiStrategy::KrigingBeliever)
-                .n_start(3000)
+                .n_start(90)
                 .outdir(outdir)
                 .target(1e-2)
                 .max_iters(max_iters)
