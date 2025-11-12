@@ -3,7 +3,8 @@ use crate::gpmix::mixint::to_discrete_space;
 use crate::{types::*, utils};
 
 use crate::utils::{
-    EGOR_USE_MIDDLEPICKER_MULTISTARTER, compute_cstr_scales, logpofs, logpofs_grad, pofs, pofs_grad,
+    EGOR_DO_NOT_USE_MIDDLEPICKER_MULTISTARTER, compute_cstr_scales, logpofs, logpofs_grad, pofs,
+    pofs_grad,
 };
 use crate::{EgorSolver, solver::coego};
 
@@ -64,12 +65,11 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
     fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64> {
         let xlimits = coego::get_active_x(Axis(0), self.xlimits, active);
 
-        if std::env::var(EGOR_USE_MIDDLEPICKER_MULTISTARTER).is_ok() {
+        if std::env::var(EGOR_DO_NOT_USE_MIDDLEPICKER_MULTISTARTER).is_err() {
             let nt = self.xtrain.nrows();
-            // Compute the maximum number of points to consider to generate n_start midpoints
+            // Compute the maximum number of points to consider to generate midpoints
             // to avoid too much computation when large training set
-            let limit = (nt / 10).max(1);
-            let n = limit.min(nt);
+            let n = (nt / 10).max(2).min(nt);
 
             let xt = self.xtrain;
             let mut indices: Vec<usize> = (0..xt.nrows()).collect();
@@ -91,7 +91,7 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
                 midpoints
             } else {
                 info!(
-                    "MiddlePickerMultiStarter: pick {n_midpoints} pts, add {missing_points} LHS pts"
+                    "MiddlePickerMultiStarter: pick {n_midpoints} pt(s), add {missing_points} LHS pt(s)"
                 );
                 // complete with LHS
                 let sampling = Lhs::new(&xlimits)

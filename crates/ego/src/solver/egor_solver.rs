@@ -106,7 +106,7 @@
 //!
 use crate::utils::{
     EGOBOX_LOG, EGOR_USE_GP_RECORDER, EGOR_USE_GP_VAR_PORTFOLIO, EGOR_USE_MAX_PROBA_OF_FEASIBILITY,
-    EGOR_USE_MIDDLEPICKER_MULTISTARTER, EGOR_USE_RUN_RECORDER, find_best_result_index, is_feasible,
+    EGOR_DO_NOT_USE_MIDDLEPICKER_MULTISTARTER, EGOR_USE_RUN_RECORDER, find_best_result_index, is_feasible,
 };
 use crate::{EgoError, EgorConfig, EgorState, MAX_POINT_ADDITION_RETRY};
 
@@ -309,8 +309,8 @@ where
         );
         info!(
             "{} setting: {}",
-            EGOR_USE_MIDDLEPICKER_MULTISTARTER,
-            std::env::var(EGOR_USE_MIDDLEPICKER_MULTISTARTER).is_ok()
+            EGOR_DO_NOT_USE_MIDDLEPICKER_MULTISTARTER,
+            std::env::var(EGOR_DO_NOT_USE_MIDDLEPICKER_MULTISTARTER).is_ok()
         );
         info!(
             "{} setting: {}",
