@@ -26,7 +26,7 @@ struct Args {
     rep: usize,
 }
 
-const BUDGET: usize = 50;
+const BUDGET: usize = 100;
 
 fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>> {
     let n_doe = dim + 1;

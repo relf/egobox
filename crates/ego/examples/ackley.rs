@@ -10,7 +10,7 @@ use egobox_ego::{
     Result,
     RunInfo,
 };
-use egobox_moe::{CorrelationSpec, NbClusters, RegressionSpec};
+use egobox_moe::{CorrelationSpec, RegressionSpec};
 use ndarray::{Array, Array2, ArrayView2, Zip, array};
 
 /// Ackley test function: min f(x)=0 at x=(0, 0, ..., 0)

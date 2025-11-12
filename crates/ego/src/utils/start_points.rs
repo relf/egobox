@@ -58,7 +58,7 @@ pub fn start_points(
             }
         }
 
-        // Discard xij if there is already
+        // Discard xij if there is already a starting point xk closer than xi and xj from it
         for xk in &xstart {
             let d_k = ((xk.to_owned() - &xij) / &xrange)
                 .mapv(|v| v.powi(2))
@@ -71,11 +71,13 @@ pub fn start_points(
         }
 
         if good {
+            // ok picked
             xstart.push(xij);
         }
         if let Some(max) = n_max
             && xstart.len() >= max
         {
+            // Reached maximum number of starting points
             break;
         }
     }

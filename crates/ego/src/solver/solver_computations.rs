@@ -68,8 +68,7 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
             let nt = self.xtrain.nrows();
             // Compute the maximum number of points to consider to generate n_start midpoints
             // to avoid too much computation when large training set
-            // limit is the solution of n_start = (limit*(limit-1))/2
-            let limit = ((1. + (1. + 8. * n_start as f64).sqrt()) / 2.) as usize;
+            let limit = (nt / 10).max(1);
             let n = limit.min(nt);
 
             let xt = self.xtrain;
