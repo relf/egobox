@@ -59,7 +59,7 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 // .qei_strategy(QEiStrategy::KrigingBeliever)
                 .n_start(90)
                 .outdir(outdir)
-                .target(1e-2)
+                // .target(1e-2)
                 .max_iters(max_iters)
             //.hot_start(HotStartMode::ExtendedIters(10))
         })
