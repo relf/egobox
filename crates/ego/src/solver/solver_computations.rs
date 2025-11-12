@@ -69,7 +69,9 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
             let nt = self.xtrain.nrows();
             // Compute the maximum number of points to consider to generate midpoints
             // to avoid too much computation when large training set
-            let n = (nt / 10).max(2).min(nt);
+            // Consider one tenth of training points as midpoints nb will grow as (n * (n-1) / 2)
+            // and we want to privilege exploration with LHS
+            let n = (nt / 10).max(2);
 
             let xt = self.xtrain;
             let mut indices: Vec<usize> = (0..xt.nrows()).collect();
