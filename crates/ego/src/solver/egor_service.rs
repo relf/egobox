@@ -24,7 +24,8 @@
 //!                .infill_strategy(InfillStrategy::EI)
 //!                .seed(42)
 //!             })
-//!             .min_within(&array![[0., 25.]]);
+//!             .min_within(&array![[0., 25.]])
+//!             .expect("optimizer configured");
 //!
 //! let mut doe = array![[0.], [7.], [20.], [25.]];
 //! let mut y_doe = xsinx(&doe.view());

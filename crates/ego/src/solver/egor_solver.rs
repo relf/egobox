@@ -26,7 +26,11 @@
 //! }
 //! let xtypes = to_xtypes(&array![[-2., 2.], [-2., 2.]]);
 //! let fobj = ObjFunc::new(rosenb);
-//! let config = EgorConfig::default().xtypes(&xtypes).seed(42);
+//! let config = EgorConfig::default()
+//!                .xtypes(&xtypes)
+//!                .seed(42)
+//!                .check()
+//!                .expect("optimizer configuration validated");
 //! let solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config);
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(20))
@@ -92,7 +96,9 @@
 //!     .infill_optimizer(InfillOptimizer::Cobyla)
 //!     .doe(&doe)
 //!     .seed(42)
-//!     .target(-5.5080);
+//!     .target(-5.5080)
+//!     .check()
+//!     .expect("configuration validated");
 //!
 //! let solver: EgorSolver<GpMixtureParams<f64>> =
 //!   EgorSolver::new(config);

@@ -4,7 +4,7 @@
 //! * Mixture of Gaussian processes
 //! * Mixed-integer variables handling through continuous relaxation
 //! * Trust-region EGO optional activation
-//! * Infill criteria: EI, WB2, WB2S
+//! * Infill criteria: EI, LogEI, WB2, WB2S, CEI
 //! * Multi-point infill strategy (aka qEI)
 //! * Warm/hot start
 //!
@@ -36,6 +36,7 @@
 //!             .target(1e-1)
 //!             .max_iters(30))
 //!     .min_within(&xlimits)
+//!     .expect("optimizer configured")
 //!     .run()
 //!     .expect("Rosenbrock minimization");
 //! println!("Rosenbrock min result = {:?}", res);
@@ -94,7 +95,7 @@
 //!                 .max_iters(40)
 //!                 .target(-5.5080))
 //!            .min_within(&xlimits)
-//!            .expect("Egor configured")
+//!            .expect("optimizer configured")
 //!            .run()
 //!            .expect("g24 minimized");
 //! println!("G24 min result = {:?}", res);

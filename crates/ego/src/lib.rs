@@ -32,6 +32,7 @@
 //! let res = EgorBuilder::optimize(xsinx)
 //!             .configure(|config| config.max_iters(10))
 //!             .min_within(&array![[0.0, 25.0]])
+//!             .expect("optimizer configured")
 //!             .run()
 //!             .expect("xsinx minimized");
 //! println!("Minimum found f(x) = {:?} at x = {:?}", res.x_opt, res.y_opt);
@@ -79,6 +80,7 @@
 //!               .infill_strategy(InfillStrategy::EI)
 //!               .seed(42))     
 //!     .min_within_mixint_space(&xtypes)  // We build a mixed-integer optimizer
+//!     .expect("optimizer configured")
 //!     .run()
 //!     .expect("Egor minimization");
 //! println!("min f(x)={} at x={}", res.y_opt, res.x_opt);
