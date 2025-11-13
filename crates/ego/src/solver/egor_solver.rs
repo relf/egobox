@@ -109,7 +109,7 @@ use crate::utils::{
     EGOR_USE_GP_VAR_PORTFOLIO, EGOR_USE_MAX_PROBA_OF_FEASIBILITY, EGOR_USE_RUN_RECORDER,
     find_best_result_index, is_feasible,
 };
-use crate::{EgoError, EgorConfig, EgorState, MAX_POINT_ADDITION_RETRY};
+use crate::{EgoError, EgorState, MAX_POINT_ADDITION_RETRY, ValidEgorConfig};
 
 use crate::types::*;
 
@@ -141,7 +141,7 @@ pub const DEFAULT_CSTR_TOL: f64 = 1e-4;
 /// from observers and checkpointing features.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EgorSolver<SB: SurrogateBuilder, C: CstrFn = Cstr> {
-    pub(crate) config: EgorConfig,
+    pub(crate) config: ValidEgorConfig,
     /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
     /// Note: used for continuous variables handling, the optimizer base.
     pub(crate) xlimits: Array2<f64>,

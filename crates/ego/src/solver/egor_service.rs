@@ -43,8 +43,7 @@
 //!
 use std::marker::PhantomData;
 
-use crate::gpmix::mixint::*;
-use crate::{EgorConfig, EgorSolver, to_xtypes, types::*};
+use crate::{EgorConfig, EgorSolver, errors::Result, gpmix::mixint::*, to_xtypes, types::*};
 
 use egobox_moe::GpMixtureParams;
 use ndarray::{Array2, ArrayBase, Data, Ix2};
@@ -86,14 +85,11 @@ impl<C: CstrFn> EgorServiceFactory<C> {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> EgorServiceApi<GpMixtureParams<f64>, C> {
-        let config = EgorConfig {
-            xtypes: to_xtypes(xlimits),
-            ..self.config.clone()
-        };
-        EgorServiceApi {
-            solver: EgorSolver::new(config),
-        }
+    ) -> Result<EgorServiceApi<GpMixtureParams<f64>, C>> {
+        let config = self.config.xtypes(&to_xtypes(xlimits));
+        Ok(EgorServiceApi {
+            solver: EgorSolver::new(config.check()?),
+        })
     }
 
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
@@ -102,14 +98,11 @@ impl<C: CstrFn> EgorServiceFactory<C> {
     pub fn min_within_mixint_space(
         self,
         xtypes: &[XType],
-    ) -> EgorServiceApi<MixintGpMixtureParams, C> {
-        let config = EgorConfig {
-            xtypes: xtypes.to_vec(),
-            ..self.config.clone()
-        };
-        EgorServiceApi {
-            solver: EgorSolver::new(config),
-        }
+    ) -> Result<EgorServiceApi<MixintGpMixtureParams, C>> {
+        let config = self.config.xtypes(xtypes);
+        Ok(EgorServiceApi {
+            solver: EgorSolver::new(config.check()?),
+        })
     }
 }
 
@@ -163,7 +156,8 @@ mod tests {
                 .infill_strategy(InfillStrategy::EI)
                 .seed(42)
             })
-            .min_within(&array![[0., 25.]]);
+            .min_within(&array![[0., 25.]])
+            .expect("Egor configured");
 
         let mut doe = array![[0.], [7.], [20.], [25.]];
         let mut y_doe = xsinx(&doe.view());

@@ -1,7 +1,5 @@
 //! Egor optimizer configuration.
-use crate::HotStartMode;
-use crate::criteria::*;
-use crate::types::*;
+use crate::{HotStartMode, criteria::*, errors::Result, types::*};
 use egobox_gp::ThetaTuning;
 use egobox_moe::NbClusters;
 use egobox_moe::Recombination;
@@ -174,9 +172,9 @@ pub const EGO_DEFAULT_MAX_ITERS: usize = 20;
 /// Number of restart for optimization of the infill criterion (aka multistart)
 pub const EGO_DEFAULT_N_START: usize = 20;
 
-/// Egor optimizer configuration
+/// Valid Egor optimizer configuration
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct EgorConfig {
+pub struct ValidEgorConfig {
     /// Max number of function iterations allocated to find the optimum (aka iteration budget)
     /// Note 1 : The number of cost function evaluations is deduced using the following formula (n_doe + max_iters)
     /// Note 2 : When q_points > 1, the number of cost function evaluations is (n_doe + max_iters * q_points)
@@ -231,9 +229,9 @@ pub struct EgorConfig {
     pub(crate) cstr_strategy: ConstraintStrategy,
 }
 
-impl Default for EgorConfig {
+impl Default for ValidEgorConfig {
     fn default() -> Self {
-        EgorConfig {
+        ValidEgorConfig {
             max_iters: EGO_DEFAULT_MAX_ITERS,
             n_start: EGO_DEFAULT_N_START,
             n_doe: 0,
@@ -260,22 +258,33 @@ impl Default for EgorConfig {
     }
 }
 
+impl ValidEgorConfig {
+    /// Check whether we are in a discrete optimization context
+    pub fn discrete(&self) -> bool {
+        crate::utils::discrete(&self.xtypes)
+    }
+}
+
+/// Egor optimizer configuration builder
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct EgorConfig(ValidEgorConfig);
+
 impl EgorConfig {
     /// Sets the infill criterion
     pub fn infill_criterion(mut self, infill_criterion: Box<dyn InfillCriterion>) -> Self {
-        self.infill_criterion = infill_criterion;
+        self.0.infill_criterion = infill_criterion;
         self
     }
 
     /// Sets max number of iterations to optimize the objective function
     pub fn max_iters(mut self, max_iters: usize) -> Self {
-        self.max_iters = max_iters;
+        self.0.max_iters = max_iters;
         self
     }
 
     /// Sets the number of runs of infill strategy optimizations (best result taken)
     pub fn n_start(mut self, n_start: usize) -> Self {
-        self.n_start = n_start;
+        self.0.n_start = n_start;
         self
     }
 
@@ -284,19 +293,19 @@ impl EgorConfig {
     /// When 0 a number of points is computed automatically regarding the number of input variables
     /// of the function under optimization.
     pub fn n_doe(mut self, n_doe: usize) -> Self {
-        self.n_doe = n_doe;
+        self.0.n_doe = n_doe;
         self
     }
 
     /// Sets the number of constraint functions
     pub fn n_cstr(mut self, n_cstr: usize) -> Self {
-        self.n_cstr = n_cstr;
+        self.0.n_cstr = n_cstr;
         self
     }
 
     /// Sets the tolerance on constraints violation (`cstr < tol`)
     pub fn cstr_tol(mut self, tol: Array1<f64>) -> Self {
-        self.cstr_tol = Some(tol);
+        self.0.cstr_tol = Some(tol);
         self
     }
 
@@ -305,13 +314,13 @@ impl EgorConfig {
     /// Either `nt` = `nx` then only `x` input values are specified and `ns` evals are done to get y ouput doe values,
     /// or `nt = nx + ny` then `x = doe\[:, :nx\]` and `y = doe\[:, nx:\]` are specified
     pub fn doe(mut self, doe: &Array2<f64>) -> Self {
-        self.doe = Some(doe.to_owned());
+        self.0.doe = Some(doe.to_owned());
         self
     }
 
     /// Removes any previously specified initial doe to get the default doe usage
     pub fn default_doe(mut self) -> Self {
-        self.doe = None;
+        self.0.doe = None;
         self
     }
 
@@ -320,25 +329,25 @@ impl EgorConfig {
     /// Parallel infill criterion to get virtual next promising points in order to allow
     /// n parallel evaluations of the function under optimization.
     pub fn qei_strategy(mut self, q_ei: QEiStrategy) -> Self {
-        self.q_ei = q_ei;
+        self.0.q_ei = q_ei;
         self
     }
 
     /// Sets the number of iteration interval between two hyperparameter optimization
     /// when computing q points to be evaluated in parallel
     pub fn q_optmod(mut self, q_optmod: usize) -> Self {
-        self.q_optmod = q_optmod;
+        self.0.q_optmod = q_optmod;
         self
     }
 
     /// Sets Number of parallel evaluations of the function under optimization
     pub fn q_points(mut self, q_points: usize) -> Self {
-        self.q_points = q_points;
+        self.0.q_points = q_points;
         self
     }
     /// Sets the infill strategy
     pub fn infill_strategy(mut self, infill: InfillStrategy) -> Self {
-        self.infill_criterion = match infill {
+        self.0.infill_criterion = match infill {
             InfillStrategy::EI => Box::new(EI),
             InfillStrategy::LogEI => Box::new(LOG_EI),
             InfillStrategy::WB2 => Box::new(WB2),
@@ -349,71 +358,71 @@ impl EgorConfig {
 
     /// Sets the infill optimizer
     pub fn infill_optimizer(mut self, optimizer: InfillOptimizer) -> Self {
-        self.infill_optimizer = optimizer;
+        self.0.infill_optimizer = optimizer;
         self
     }
 
     /// Sets the configuration of the GPs
     pub fn configure_gp<F: FnOnce(GpConfig) -> GpConfig>(mut self, init: F) -> Self {
-        self.gp = init(self.gp);
+        self.0.gp = init(self.0.gp);
         self
     }
 
     /// Sets a known target minimum to be used as a stopping criterion.
     pub fn target(mut self, target: f64) -> Self {
-        self.target = target;
+        self.0.target = target;
         self
     }
 
     /// Sets a directory to write optimization history and used as search path for warm start doe
     pub fn outdir(mut self, outdir: impl Into<String>) -> Self {
-        self.outdir = Some(outdir.into());
+        self.0.outdir = Some(outdir.into());
         self
     }
     /// Do not write optimization history
     pub fn no_outdir(mut self) -> Self {
-        self.outdir = None;
+        self.0.outdir = None;
         self
     }
 
     /// Whether we start by loading last DOE saved in `outdir` as initial DOE
     pub fn warm_start(mut self, warm_start: bool) -> Self {
-        self.warm_start = warm_start;
+        self.0.warm_start = warm_start;
         self
     }
 
     /// Whether checkpointing is enabled allowing hot start from previous checkpointed iteration if any
     pub fn hot_start(mut self, hot_start: HotStartMode) -> Self {
-        self.hot_start = hot_start;
+        self.0.hot_start = hot_start;
         self
     }
 
     /// Allow to specify a seed for random number generator to allow
     /// reproducible runs.
     pub fn seed(mut self, seed: u64) -> Self {
-        self.seed = Some(seed);
+        self.0.seed = Some(seed);
         self
     }
 
     /// Define design space with given x types
     pub fn xtypes(mut self, xtypes: &[XType]) -> Self {
-        self.xtypes = xtypes.into();
+        self.0.xtypes = xtypes.into();
         self
     }
 
     /// Activate TREGO method
     pub fn trego(mut self, activated: bool) -> Self {
-        self.trego.activated = activated;
+        self.0.trego.activated = activated;
         self
     }
 
     /// Activate CoEGO method
     pub fn coego(mut self, status: CoegoStatus) -> Self {
         match status {
-            CoegoStatus::Disabled => self.coego.activated = false,
+            CoegoStatus::Disabled => self.0.coego.activated = false,
             CoegoStatus::Enabled(n) => {
-                self.coego.activated = true;
-                self.coego.n_coop = n;
+                self.0.coego.activated = true;
+                self.0.coego.n_coop = n;
             }
         }
         self
@@ -421,18 +430,38 @@ impl EgorConfig {
 
     /// Activate constrained infill criterion
     pub fn cstr_infill(mut self, activated: bool) -> Self {
-        self.cstr_infill = activated;
+        self.0.cstr_infill = activated;
         self
     }
 
     /// Sets the infill strategy
     pub fn cstr_strategy(mut self, cstr_strategy: ConstraintStrategy) -> Self {
-        self.cstr_strategy = cstr_strategy;
+        self.0.cstr_strategy = cstr_strategy;
         self
     }
 
-    /// Check whether we are in a discrete optimization context
-    pub fn discrete(&self) -> bool {
-        crate::utils::discrete(&self.xtypes)
+    /// Checks and wraps an EgorConfig
+    pub fn check(self) -> Result<ValidEgorConfig> {
+        let config = self.0;
+        // Check cstr_tol length if any
+        if config.n_cstr > 0
+            && config.cstr_tol.is_some()
+            && config.cstr_tol.as_ref().unwrap().len() != config.n_cstr
+        {
+            return Err(crate::EgoError::InvalidConfigError(format!(
+                "EgorConfig invalid: cstr_tol length ({}) does not match n_cstr ({})",
+                config.cstr_tol.as_ref().unwrap().len(),
+                config.n_cstr
+            )));
+        }
+
+        // Check exclusicve use of coego and gp_config kpls
+        if config.coego.activated && config.gp.kpls_dim.is_some() {
+            return Err(crate::EgoError::InvalidConfigError(
+                "EgorConfig invalid: CoEGO and KPLS cannot be used together".to_string(),
+            ));
+        }
+
+        Ok(config)
     }
 }

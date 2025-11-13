@@ -94,6 +94,7 @@
 //!                 .max_iters(40)
 //!                 .target(-5.5080))
 //!            .min_within(&xlimits)
+//!            .expect("Egor configured")
 //!            .run()
 //!            .expect("g24 minimized");
 //! println!("G24 min result = {:?}", res);
@@ -186,31 +187,28 @@ impl<O: GroupFunc, C: CstrFn> EgorFactory<O, C> {
     pub fn min_within(
         self,
         xlimits: &ArrayBase<impl Data<Elem = f64>, Ix2>,
-    ) -> Egor<O, C, GpMixtureParams<f64>> {
-        let config = EgorConfig {
-            xtypes: to_xtypes(xlimits),
-            ..self.config.clone()
-        };
-        Egor {
+    ) -> Result<Egor<O, C, GpMixtureParams<f64>>> {
+        let config = self.config.xtypes(&to_xtypes(xlimits));
+        Ok(Egor {
             fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
-            solver: EgorSolver::new(config),
+            solver: EgorSolver::new(config.check()?),
             run_info: self.run_info,
-        }
+        })
     }
 
     /// Build an Egor optimizer to minimize the function R^n -> R^p taking
     /// inputs specified with given xtypes where some of components may be
     /// discrete variables (mixed-integer optimization).
-    pub fn min_within_mixint_space(self, xtypes: &[XType]) -> Egor<O, C, MixintGpMixtureParams> {
-        let config = EgorConfig {
-            xtypes: xtypes.into(),
-            ..self.config.clone()
-        };
-        Egor {
+    pub fn min_within_mixint_space(
+        self,
+        xtypes: &[XType],
+    ) -> Result<Egor<O, C, MixintGpMixtureParams>> {
+        let config = self.config.xtypes(xtypes);
+        Ok(Egor {
             fobj: ObjFunc::new(self.fobj).subject_to(self.fcstrs),
-            solver: EgorSolver::new(config),
+            solver: EgorSolver::new(config.check()?),
             run_info: self.run_info,
-        }
+        })
     }
 }
 
@@ -444,6 +442,7 @@ mod tests {
                     .outdir(outdir)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor should be configured")
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.1];
@@ -472,7 +471,8 @@ mod tests {
                     .max_iters(1)
                     .doe(&initial_doe)
             })
-            .min_within(&array![[0.0, 25.0]]);
+            .min_within(&array![[0.0, 25.0]])
+            .expect("Egor should be configured");
         let res = egor.run().expect("Egor should minimize xsinx");
         // Inspect internal state: theta init should be equal to
         // lower bound of theta interval as with a smaller bound
@@ -504,6 +504,7 @@ mod tests {
                     .seed(42)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor should be configured")
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.125];
@@ -523,6 +524,7 @@ mod tests {
                     .seed(42)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor should be configured")
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![-15.125];
@@ -551,6 +553,7 @@ mod tests {
                     .doe(&initial_doe)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor should be configured")
             .run()
             .expect("Egor should minimize xsinx");
         let expected = array![17.0];
@@ -578,6 +581,7 @@ mod tests {
                     .seed(1)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor should be configured")
             .run()
             .expect("Egor should minimize");
         let expected = array![18.9];
@@ -590,6 +594,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| config.max_iters(20).q_optmod(3))
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor configured")
             .run()
             .expect("Egor should minimize");
         let expected = array![18.9];
@@ -612,6 +617,7 @@ mod tests {
                     .outdir(outdir)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor configured")
             .run()
             .expect("Egor should minimize");
         let expected = array![19.1];
@@ -626,6 +632,7 @@ mod tests {
                     .hot_start(HotStartMode::Disabled)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor configured")
             .run()
             .expect("Egor should minimize");
         let expected = array![19.1];
@@ -641,6 +648,7 @@ mod tests {
                     .outdir(outdir)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor configured")
             .run()
             .expect("Egor should minimize");
         let expected = array![18.9];
@@ -657,6 +665,7 @@ mod tests {
                     .outdir(outdir)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor configured")
             .run()
             .expect("Egor should minimize");
         assert_eq!(n_iter as u64 + ext_iters + ext_iters, res.state.get_iter());
@@ -673,6 +682,7 @@ mod tests {
                     .max_iters(20)
             })
             .min_within(&array![[0.0, 25.0]])
+            .expect("Egor configured")
             .run()
             .expect("Egor with auto clustering should minimize xsinx");
         let expected = array![18.9];
@@ -690,6 +700,7 @@ mod tests {
         let _ = EgorBuilder::optimize(xsinx)
             .configure(|config| config.max_iters(2).doe(&doe).outdir(outdir).seed(42))
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure");
 
@@ -700,6 +711,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| config.max_iters(3).outdir(outdir).warm_start(true).seed(42))
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Egor should minimize xsinx");
         let doe2: Array2<f64> = read_npy(&filepath).expect("file read");
@@ -741,6 +753,7 @@ mod tests {
                     .seed(42)
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure");
         println!("Rosenbrock optim result = {res:?}");
@@ -771,6 +784,7 @@ mod tests {
                     .trego(true)
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure");
         let filepath = std::path::Path::new(&outdir).join(DOE_FILE);
@@ -809,6 +823,7 @@ mod tests {
                     .coego(CoegoStatus::Enabled(5))
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure");
 
@@ -871,6 +886,7 @@ mod tests {
                     .seed(42)
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure");
         println!("G24 optim result = {res:?}");
@@ -894,6 +910,7 @@ mod tests {
                     .seed(42)
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure");
         println!("G24 optim result = {res:?}");
@@ -921,6 +938,7 @@ mod tests {
                     .seed(42)
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure");
         let expected = array![2.3295, 3.1785];
@@ -956,6 +974,7 @@ mod tests {
                     .seed(42)
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure");
         println!("G24 optim result = {res:?}");
@@ -988,6 +1007,7 @@ mod tests {
                     .seed(42)
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Egor minimization");
         assert_eq!(res.x_doe.nrows(), doe.nrows() + q * res.state.iter as usize);
@@ -1023,8 +1043,9 @@ mod tests {
                     .seed(42)
             })
             .min_within_mixint_space(&xtypes)
+            .expect("Egor configured")
             .run()
-            .unwrap();
+            .expect("Optimization successful");
         assert_abs_diff_eq!(array![18.], res.x_opt, epsilon = 2.);
     }
 
@@ -1045,6 +1066,7 @@ mod tests {
                     .seed(42)
             })
             .min_within_mixint_space(&xtypes)
+            .expect("Egor configured")
             .run()
             .unwrap();
         assert_abs_diff_eq!(array![18.], res.x_opt, epsilon = 2.);
@@ -1067,6 +1089,7 @@ mod tests {
                     .seed(42)
             })
             .min_within_mixint_space(&xtypes)
+            .expect("Egor configured")
             .run()
             .unwrap();
         assert_abs_diff_eq!(&array![18.], &res.x_opt, epsilon = 3.);
@@ -1120,6 +1143,7 @@ mod tests {
                     .seed(42)
             })
             .min_within_mixint_space(&xtypes)
+            .expect("Egor configured")
             .run()
             .unwrap();
         println!("res={res:?}");
@@ -1150,6 +1174,7 @@ mod tests {
         EgorBuilder::optimize(mixobj)
             .configure(|config| config.outdir(outdir).max_iters(1).seed(42))
             .min_within_mixint_space(&xtypes)
+            .expect("Egor configured")
             .run()
             .unwrap();
 
@@ -1162,6 +1187,7 @@ mod tests {
         EgorBuilder::optimize(|_x| panic!("Should not call objective function!"))
             .configure(|config| config.outdir(outdir).warm_start(true).max_iters(0).seed(42))
             .min_within_mixint_space(&xtypes)
+            .expect("Egor configured")
             .run()
             .unwrap();
     }

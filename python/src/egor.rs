@@ -304,7 +304,8 @@ impl Egor {
             .configure(|config| {
                 self.apply_config(config, Some(max_iters), n_fcstr, self.doe.as_ref())
             })
-            .min_within_mixint_space(&xtypes);
+            .min_within_mixint_space(&xtypes)
+            .expect("Egor configured");
 
         let mixintegor = if let Some(ri) = run_info {
             let ri: RunInfo = ri.extract(py).unwrap();
@@ -358,7 +359,8 @@ impl Egor {
 
         let mixintegor = egobox_ego::EgorServiceBuilder::optimize()
             .configure(|config| self.apply_config(config, Some(1), 0, Some(&doe)))
-            .min_within_mixint_space(&xtypes);
+            .min_within_mixint_space(&xtypes)
+            .expect("Egor configured");
 
         let x_suggested = py.detach(|| mixintegor.suggest(&x_doe, &y_doe));
         x_suggested.to_pyarray(py).into()

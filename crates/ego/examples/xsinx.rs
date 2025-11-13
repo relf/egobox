@@ -9,6 +9,7 @@ fn main() {
     let res = EgorBuilder::optimize(xsinx)
         .configure(|config| config.max_iters(20))
         .min_within(&array![[0., 25.]])
+        .expect("Egor configured")
         .run()
         .expect("Minimization of xsinx");
     println!("Minimum xsinx(x) = {} at x = {}", res.y_opt, res.x_opt);
