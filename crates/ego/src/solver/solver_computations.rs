@@ -330,10 +330,17 @@ where
         }
 
         if inf_count > 0 || nan_count > 0 {
-            warn!(
-                "Criterion scale computation warning: ({nan_count} NaN + {inf_count} Inf) / {} points",
-                x.nrows()
-            );
+            if (inf_count + nan_count) as f64 > 0.8 * x.nrows() as f64 {
+                warn!(
+                    "Criterion scale computation: high number of invalid values ({nan_count} NaN + {inf_count} Inf) / {} points",
+                    x.nrows()
+                );
+            } else {
+                debug!(
+                    "Criterion scale computation warning: ({nan_count} NaN + {inf_count} Inf) / {} points",
+                    x.nrows()
+                );
+            }
         }
         let scale = *crit_vals.mapv(|v| v.abs()).max().unwrap_or(&1.0);
         if scale < 100.0 * f64::EPSILON {
