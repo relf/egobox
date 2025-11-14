@@ -43,7 +43,7 @@ struct Args {
     rep: usize,
 }
 
-const BUDGET: usize = 50; // to be increased for higher dimensions
+const BUDGET: usize = 300;
 
 fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>> {
     let n_doe = dim + 1;
@@ -70,6 +70,7 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 .outdir(outdir)
         })
         .min_within(&xlimits)
+        .expect("Egor configured")
         .run_info(RunInfo {
             fname: "michalewicz".to_string(),
             num,

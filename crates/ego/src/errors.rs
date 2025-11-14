@@ -8,6 +8,9 @@ pub type Result<T> = std::result::Result<T, EgoError>;
 /// An error for efficient global optimization algorithm
 #[derive(Error, Debug)]
 pub enum EgoError {
+    /// When configuration is invalid
+    #[error("Invalid configuration: {0}")]
+    InvalidConfigError(String),
     /// When LikelihoodComputation computation fails
     #[error("GP error")]
     GpError(#[from] egobox_gp::GpError),

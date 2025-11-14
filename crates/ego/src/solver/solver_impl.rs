@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::errors::{EgoError, Result};
+use crate::find_best_result_index;
 use crate::gpmix::mixint::{as_continuous_limits, to_discrete_space};
 use crate::solver::solver_computations::MiddlePickerMultiStarter;
 use crate::solver::solver_infill_optim::InfillOptProblem;
@@ -8,8 +9,7 @@ use crate::utils::{
     EGOBOX_LOG, EGOR_USE_GP_VAR_PORTFOLIO, find_best_result_index_from, is_feasible,
     select_from_portfolio, update_data,
 };
-use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY};
-use crate::{EgorConfig, find_best_result_index};
+use crate::{DEFAULT_CSTR_TOL, EgorSolver, MAX_POINT_ADDITION_RETRY, ValidEgorConfig};
 use crate::{EgorState, types::*};
 
 use argmin::argmin_error_closure;
@@ -35,7 +35,7 @@ impl<SB: SurrogateBuilder + DeserializeOwned, C: CstrFn> EgorSolver<SB, C> {
     ///
     /// The function `f` should return an objective but also constraint values if any.
     /// Design space is specified by a list of types for input variables `x` of `f` (see [`XType`]).
-    pub fn new(config: EgorConfig) -> Self {
+    pub fn new(config: ValidEgorConfig) -> Self {
         let env = Env::new().filter_or(EGOBOX_LOG, "info");
         let mut builder = Builder::from_env(env);
         let builder = builder.target(env_logger::Target::Stdout);
@@ -688,8 +688,9 @@ where
 
                 let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
                 let sampling = Lhs::new(&self.xlimits)
-                    .with_rng(sub_rng)
-                    .kind(LhsKind::Maximin);
+                    .kind(LhsKind::Maximin)
+                    .with_rng(sub_rng);
+
                 let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) = self.compute_scaling(
                     &sampling,
                     obj_model.as_ref(),

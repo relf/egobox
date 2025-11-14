@@ -64,6 +64,7 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
             //.hot_start(HotStartMode::ExtendedIters(10))
         })
         .min_within(&xlimits)
+        .expect("Egor configured")
         .run_info(RunInfo {
             fname: "ackley".to_string(),
             num,

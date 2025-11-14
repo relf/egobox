@@ -35,7 +35,8 @@ fn main() {
     // We use Egor optimizer as a service
     let egor = EgorServiceFactory::<Cstr>::optimize()
         .configure(|config| config.n_cstr(2).seed(42))
-        .min_within(&xlimits);
+        .min_within(&xlimits)
+        .expect("Egor configured");
 
     let mut y_doe = f_g24(&doe.view());
     for _i in 0..10 {

@@ -42,6 +42,7 @@ fn main() {
                 .seed(42)
         })
         .min_within(&xlimits)
+        .expect("Egor configured")
         .run()
         .expect("Minimize failure");
     println!("G24 optim result = {}", res.y_opt);

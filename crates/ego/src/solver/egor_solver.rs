@@ -26,7 +26,11 @@
 //! }
 //! let xtypes = to_xtypes(&array![[-2., 2.], [-2., 2.]]);
 //! let fobj = ObjFunc::new(rosenb);
-//! let config = EgorConfig::default().xtypes(&xtypes).seed(42);
+//! let config = EgorConfig::default()
+//!                .xtypes(&xtypes)
+//!                .seed(42)
+//!                .check()
+//!                .expect("optimizer configuration validated");
 //! let solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config);
 //! let res = Executor::new(fobj, solver)
 //!             .configure(|state| state.max_iters(20))
@@ -92,7 +96,9 @@
 //!     .infill_optimizer(InfillOptimizer::Cobyla)
 //!     .doe(&doe)
 //!     .seed(42)
-//!     .target(-5.5080);
+//!     .target(-5.5080)
+//!     .check()
+//!     .expect("configuration validated");
 //!
 //! let solver: EgorSolver<GpMixtureParams<f64>> =
 //!   EgorSolver::new(config);
@@ -109,11 +115,11 @@ use crate::utils::{
     EGOR_USE_GP_VAR_PORTFOLIO, EGOR_USE_MAX_PROBA_OF_FEASIBILITY, EGOR_USE_RUN_RECORDER,
     find_best_result_index, is_feasible,
 };
-use crate::{EgoError, EgorConfig, EgorState, MAX_POINT_ADDITION_RETRY};
+use crate::{EgoError, EgorState, MAX_POINT_ADDITION_RETRY, ValidEgorConfig};
 
 use crate::types::*;
 
-use egobox_doe::{Lhs, LhsKind, SamplingMethod};
+use egobox_doe::{Lhs, SamplingMethod};
 use log::{debug, info};
 use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip, concatenate, s};
 use ndarray_npy::{read_npy, write_npy};
@@ -141,7 +147,7 @@ pub const DEFAULT_CSTR_TOL: f64 = 1e-4;
 /// from observers and checkpointing features.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EgorSolver<SB: SurrogateBuilder, C: CstrFn = Cstr> {
-    pub(crate) config: EgorConfig,
+    pub(crate) config: ValidEgorConfig,
     /// Matrix (nx, 2) of [lower bound, upper bound] of the nx components of x
     /// Note: used for continuous variables handling, the optimizer base.
     pub(crate) xlimits: Array2<f64>,
@@ -223,9 +229,7 @@ where
                 self.config.n_doe
             };
             info!("Compute initial LHS with {n_doe} points");
-            let sampling = Lhs::new(&self.xlimits)
-                .with_rng(rng.clone())
-                .kind(LhsKind::Maximin);
+            let sampling = Lhs::new(&self.xlimits).with_rng(rng.clone());
             let x = sampling.sample(n_doe);
             (self.eval_obj(problem, &x), x)
         };

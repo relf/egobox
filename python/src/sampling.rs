@@ -21,7 +21,9 @@ pub enum Sampling {
 /// Samples generation using given method
 ///
 /// # Parameters
-///     method: LHS, FULL_FACTORIAL or RANDOM
+///     method: LHS, FULL_FACTORIAL, RANDOM,
+///             LHS_CLASSIC, LHS_CENTERED,
+///             LHS_MAXIMIN, LHS_CENTERED_MAXIMIN
 ///     xspecs: list of XSpec
 ///     n_samples: number of samples
 ///     seed: random seed

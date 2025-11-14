@@ -38,8 +38,9 @@ fn criterion_ego(c: &mut Criterion) {
                             .seed(42)
                     })
                     .min_within(&xlimits)
+                    .expect("Egor configured")
                     .run()
-                    .expect("Minimize failure"),
+                    .expect("Minimization"),
             )
         });
     });

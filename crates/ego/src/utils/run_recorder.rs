@@ -1,11 +1,10 @@
-use std::{fs::File, io::BufReader, path::Path};
-
-use crate::Result;
 use ndarray::{Array2, Zip};
 use serde::{Deserialize, Serialize};
+use std::{fs::File, io::BufReader, path::Path};
 
-use crate::{EgorConfig, EgorState};
 use egobox_moe::CorrelationSpec;
+
+use crate::{EgorState, Result, ValidEgorConfig};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ProblemMetadata {
@@ -97,7 +96,7 @@ pub struct EgorRunData {
 
 pub(crate) fn init_run_info(
     xlimits: Array2<f64>,
-    config: EgorConfig,
+    config: ValidEgorConfig,
     state: &EgorState<f64>,
 ) -> EgorRunData {
     let data = state.data.clone().unwrap();

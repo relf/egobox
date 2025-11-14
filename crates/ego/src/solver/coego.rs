@@ -230,7 +230,7 @@ mod tests {
         let config = EgorConfig::default()
             .coego(crate::CoegoStatus::Enabled(ng))
             .xtypes(&xtypes);
-        let mut solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config);
+        let mut solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config.check().unwrap());
         let mut rng = Xoshiro256Plus::from_entropy();
         let activity = solver.get_random_activity(&mut rng);
         assert_eq!(activity.nrows(), ng);
@@ -247,7 +247,7 @@ mod tests {
         let config = EgorConfig::default()
             .coego(crate::CoegoStatus::Enabled(ng))
             .xtypes(&xtypes);
-        let mut solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config);
+        let mut solver: EgorSolver<GpMixtureParams<f64>> = EgorSolver::new(config.check().unwrap());
         let mut rng = Xoshiro256Plus::from_entropy();
         let activity = solver.get_random_activity(&mut rng);
         assert_eq!(activity.nrows(), ng);

@@ -52,6 +52,7 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                 .outdir(outdir)
         })
         .min_within(&xlimits)
+        .expect("Egor configured")
         .run_info(RunInfo {
             fname: "rosenbrock".to_string(),
             num,

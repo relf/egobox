@@ -288,6 +288,7 @@ fn main() -> anyhow::Result<()> {
                     .hot_start(HotStartMode::Enabled)
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure")
     } else {
@@ -316,6 +317,7 @@ fn main() -> anyhow::Result<()> {
                     .hot_start(HotStartMode::Enabled)
             })
             .min_within(&xlimits)
+            .expect("Egor configured")
             .run()
             .expect("Minimize failure")
     };
