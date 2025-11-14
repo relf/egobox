@@ -688,8 +688,9 @@ where
 
                 let sub_rng = Xoshiro256Plus::seed_from_u64(rng.r#gen());
                 let sampling = Lhs::new(&self.xlimits)
-                    .with_rng(sub_rng)
-                    .kind(LhsKind::Maximin);
+                    .kind(LhsKind::Maximin)
+                    .with_rng(sub_rng);
+
                 let (scale_infill_obj, scale_cstr, scale_fcstr, scale_wb2) = self.compute_scaling(
                     &sampling,
                     obj_model.as_ref(),

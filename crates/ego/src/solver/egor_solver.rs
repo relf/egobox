@@ -119,7 +119,7 @@ use crate::{EgoError, EgorState, MAX_POINT_ADDITION_RETRY, ValidEgorConfig};
 
 use crate::types::*;
 
-use egobox_doe::{Lhs, LhsKind, SamplingMethod};
+use egobox_doe::{Lhs, SamplingMethod};
 use log::{debug, info};
 use ndarray::{Array1, Array2, ArrayBase, Axis, Data, Ix2, Zip, concatenate, s};
 use ndarray_npy::{read_npy, write_npy};
@@ -229,9 +229,7 @@ where
                 self.config.n_doe
             };
             info!("Compute initial LHS with {n_doe} points");
-            let sampling = Lhs::new(&self.xlimits)
-                .with_rng(rng.clone())
-                .kind(LhsKind::Maximin);
+            let sampling = Lhs::new(&self.xlimits).with_rng(rng.clone());
             let x = sampling.sample(n_doe);
             (self.eval_obj(problem, &x), x)
         };

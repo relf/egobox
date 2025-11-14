@@ -37,8 +37,8 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter for LhsMultiStarte
     fn multistart(&mut self, n_start: usize, active: &[usize]) -> Array2<f64> {
         let xlimits = coego::get_active_x(Axis(0), self.xlimits, active);
         let sampling = Lhs::new(&xlimits)
-            .with_rng(&mut self.rng)
-            .kind(LhsKind::Maximin);
+            .kind(LhsKind::Maximin)
+            .with_rng(&mut self.rng);
         sampling.sample(n_start)
     }
 }
@@ -97,8 +97,8 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
                 );
                 // complete with LHS
                 let sampling = Lhs::new(&xlimits)
-                    .with_rng(&mut self.rng)
-                    .kind(LhsKind::Maximin);
+                    .kind(LhsKind::Maximin)
+                    .with_rng(&mut self.rng);
                 let missings = sampling.sample((missing_points as usize).max(3)); // sampling with at least 3 points
                 let missings = missings.slice(s![0..(missing_points as usize), ..]);
                 concatenate(Axis(0), &[midpoints.view(), missings]).unwrap()
@@ -106,8 +106,8 @@ impl<R: Rng + Clone> super::solver_infill_optim::MultiStarter
         } else {
             // fallback on LHS
             let sampling = Lhs::new(&xlimits)
-                .with_rng(&mut self.rng)
-                .kind(LhsKind::Maximin);
+                .kind(LhsKind::Maximin)
+                .with_rng(&mut self.rng);
             sampling.sample(n_start)
         }
     }
