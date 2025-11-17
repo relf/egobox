@@ -145,7 +145,8 @@ class TestEgor(unittest.TestCase):
             os.remove("./test_dir/egor_doe.npy")
         xlimits = [[0.0, 25.0]]
         doe = egx.lhs(xlimits, 10)
-        egor = egx.Egor(xlimits, doe=doe, seed=42, outdir="./test_dir")
+        egor = egx.Egor(xlimits, doe=doe, infill_strategy=egx.InfillStrategy.WB2, 
+                        seed=42, outdir="./test_dir")
         res = egor.minimize(xsinx, max_iters=15)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
@@ -155,7 +156,7 @@ class TestEgor(unittest.TestCase):
         res = egor.minimize(xsinx, max_iters=5)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-2)
-        self.assertAlmostEqual(18.93, res.x_opt[0], delta=1e-1)
+        self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-2)
 
         self.assertTrue(os.path.exists("./test_dir/egor_initial_doe.npy"))
         os.remove("./test_dir/egor_initial_doe.npy")
@@ -242,7 +243,7 @@ class TestEgor(unittest.TestCase):
 
     def test_egor_service(self):
         xlimits = [[0.0, 25.0]]
-        egor = egx.Egor(xlimits, seed=42)
+        egor = egx.Egor(xlimits, infill_strategy=egx.InfillStrategy.WB2, seed=42)
         x_doe = egx.lhs(xlimits, 3, seed=42)
         y_doe = xsinx(x_doe)
         for _ in range(10):
@@ -251,13 +252,13 @@ class TestEgor(unittest.TestCase):
             y_doe = np.concatenate((y_doe, xsinx(x)))
         res = egor.get_result(x_doe, y_doe)
         self.assertAlmostEqual(-15.125, res.y_opt[0], delta=1e-3)
-        self.assertAlmostEqual(18.924, res.x_opt[0], delta=1e-3)
+        self.assertAlmostEqual(18.935, res.x_opt[0], delta=1e-3)
 
     # Constraint function which prevent from reaching the
     # the unconstrained minimum located in x=18.9
     def test_egor_with_fcstrs(self):
         fcstrs = [cstr_xsinx]
-        egor = egx.Egor([[0.0, 25.0]], n_doe=3, seed=42)
+        egor = egx.Egor([[0.0, 25.0]], infill_strategy=egx.InfillStrategy.WB2, n_doe=5, seed=42)
         res = egor.minimize(xsinx, max_iters=20, fcstrs=fcstrs)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
         self.assertAlmostEqual(18, res.x_opt[0], delta=2e-3)
