@@ -55,7 +55,7 @@ class TestMixintEgx(unittest.TestCase):
             egx.XSpec(egx.XType.ENUM, xlimits=[2]),
             egx.XSpec(egx.XType.ORD, [0, 2, 3]),
         ]
-        egor = egx.Egor(xtypes, seed=42)
+        egor = egx.Egor(xtypes, infill_strategy=egx.InfillStrategy.WB2, seed=42)
         res = egor.minimize(mixobj, max_iters=10)
         self.assertAlmostEqual(-14.25, res.y_opt[0])
         self.assertAlmostEqual(-5, res.x_opt[0])

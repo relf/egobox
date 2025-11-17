@@ -612,6 +612,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .max_iters(n_iter)
                     .seed(42)
                     .hot_start(HotStartMode::Enabled)
@@ -628,6 +629,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .max_iters(n_iter)
                     .seed(42)
                     .hot_start(HotStartMode::Disabled)
@@ -644,6 +646,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .seed(42)
                     .hot_start(HotStartMode::ExtendedIters(ext_iters))
                     .outdir(outdir)
@@ -661,6 +664,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .seed(42)
                     .hot_start(HotStartMode::ExtendedIters(ext_iters))
                     .outdir(outdir)
@@ -699,7 +703,14 @@ mod tests {
         let xlimits = array![[0.0, 25.0]];
         let doe = array![[0.], [7.], [23.]];
         let _ = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(2).doe(&doe).outdir(outdir).seed(42))
+            .configure(|config| {
+                config
+                    .infill_strategy(InfillStrategy::WB2)
+                    .max_iters(2)
+                    .doe(&doe)
+                    .outdir(outdir)
+                    .seed(42)
+            })
             .min_within(&xlimits)
             .expect("Egor configured")
             .run()
@@ -709,15 +720,23 @@ mod tests {
         assert!(filepath.exists());
         let doe: Array2<f64> = read_npy(&filepath).expect("file read");
 
+        let n_iters = 3;
         let res = EgorBuilder::optimize(xsinx)
-            .configure(|config| config.max_iters(3).outdir(outdir).warm_start(true).seed(42))
+            .configure(|config| {
+                config
+                    .infill_strategy(InfillStrategy::WB2)
+                    .max_iters(n_iters)
+                    .outdir(outdir)
+                    .warm_start(true)
+                    .seed(42)
+            })
             .min_within(&xlimits)
             .expect("Egor configured")
             .run()
             .expect("Egor should minimize xsinx");
         let doe2: Array2<f64> = read_npy(&filepath).expect("file read");
 
-        assert!(doe2.nrows() >= doe.nrows() + 3);
+        assert!(doe2.nrows() >= doe.nrows() + n_iters);
 
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_INITIAL_FILE}"));
         let _ = std::fs::remove_file(format!("{outdir}/{DOE_FILE}"));
@@ -778,6 +797,7 @@ mod tests {
         let res = EgorBuilder::optimize(rosenb)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .doe(&init_doe)
                     .max_iters(max_iters)
                     .outdir(outdir)
@@ -879,6 +899,7 @@ mod tests {
         let res = EgorBuilder::optimize(f_g24)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .n_cstr(2)
                     .doe(&doe)
                     .max_iters(20)

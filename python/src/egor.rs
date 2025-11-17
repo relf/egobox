@@ -62,7 +62,7 @@ use std::cmp::Ordering;
 ///
 ///     infill_strategy (InfillStrategy enum):
 ///         Infill criteria to decide best next promising point.
-///         Can be either InfillStrategy.EI, InfillStrategy.WB2, InfillStrategy.WB2S orInfillStrategy.LOG_EI
+///         Can be either InfillStrategy.LOG_EI, InfillStrategy.EI, InfillStrategy.WB2, InfillStrategy.WB2S
 ///
 ///     infill_optimizer (InfillOptimizer enum):
 ///         Internal optimizer used to optimize infill criteria.
@@ -163,7 +163,7 @@ impl Egor {
         n_start = 20,
         n_doe = 0,
         doe = None,
-        infill_strategy = InfillStrategy::Wb2,
+        infill_strategy = InfillStrategy::LogEi,
         cstr_infill = false,
         cstr_strategy = ConstraintStrategy::Mc,
         q_points = 1,
