@@ -631,7 +631,7 @@ dependencies = [
  "env_logger",
  "linfa",
  "log",
- "ndarray 0.16.1",
+ "ndarray 0.17.1",
  "ndarray-rand",
  "numpy",
  "pyo3",
@@ -649,7 +649,7 @@ dependencies = [
  "approx",
  "criterion",
  "linfa",
- "ndarray 0.16.1",
+ "ndarray 0.17.1",
  "ndarray-rand",
  "ndarray-stats",
  "num-traits",
@@ -683,7 +683,7 @@ dependencies = [
  "linfa-linalg",
  "linfa-pls",
  "log",
- "ndarray 0.16.1",
+ "ndarray 0.17.1",
  "ndarray-linalg",
  "ndarray-npy",
  "ndarray-rand",
@@ -717,7 +717,7 @@ dependencies = [
  "linfa-linalg",
  "linfa-pls",
  "log",
- "ndarray 0.16.1",
+ "ndarray 0.17.1",
  "ndarray-einsum",
  "ndarray-linalg",
  "ndarray-npy",
@@ -752,7 +752,7 @@ dependencies = [
  "linfa-linalg",
  "linfa-pls",
  "log",
- "ndarray 0.16.1",
+ "ndarray 0.17.1",
  "ndarray-csv",
  "ndarray-linalg",
  "ndarray-npy",
@@ -1462,6 +1462,9 @@ version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c7c9125e8f6f10c9da3aad044cc918cf8784fa34de857b1aa68038eb05a50a9"
 dependencies = [
+ "approx",
+ "cblas-sys",
+ "libc",
  "matrixmultiply",
  "num-complex",
  "num-integer",
@@ -1469,6 +1472,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "rawpointer",
+ "rayon",
 ]
 
 [[package]]
