@@ -60,7 +60,7 @@ fn run_egor(dim: usize, outdir: &String, num: usize) -> Result<OptimResult<f64>>
                     gp.regression_spec(RegressionSpec::CONSTANT)
                         .correlation_spec(CorrelationSpec::ALL)
                 })
-                .infill_strategy(InfillStrategy::WB2)
+                .infill_strategy(InfillStrategy::LogEI)
                 .infill_optimizer(InfillOptimizer::Slsqp)
                 .trego(true)
                 // for dim=10
