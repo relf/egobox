@@ -145,7 +145,7 @@ class TestEgor(unittest.TestCase):
             os.remove("./test_dir/egor_doe.npy")
         xlimits = [[0.0, 25.0]]
         doe = egx.lhs(xlimits, 10)
-        egor = egx.Egor(xlimits, doe=doe, infill_strategy=egx.InfillStrategy.WB2, 
+        egor = egx.Egor(xlimits, doe=doe, infill_strategy=egx.InfillStrategy.WB2,
                         seed=42, outdir="./test_dir")
         res = egor.minimize(xsinx, max_iters=15)
         print(f"Optimization f={res.y_opt} at {res.x_opt}")
