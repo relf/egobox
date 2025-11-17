@@ -194,7 +194,7 @@ class TestEgor(unittest.TestCase):
     def test_g24_kpls(self):
         egor = egx.Egor(
             [[0.0, 3.0], [0.0, 4.0]],
-            infill_criterion=egx.InfillCriterion.WB2,
+            infill_strategy=egx.InfillStrategy.WB2,
             n_cstr=2,
             cstr_tol=np.array([5e-3, 5e-3]),
             gp_config=egx.GpConfig(
