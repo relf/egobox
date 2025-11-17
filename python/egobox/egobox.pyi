@@ -57,7 +57,7 @@ class Egor:
     
     infill_strategy (InfillStrategy enum):
         Infill criteria to decide best next promising point.
-        Can be either InfillStrategy.EI, InfillStrategy.WB2, InfillStrategy.WB2S orInfillStrategy.LOG_EI
+        Can be either InfillStrategy.LOG_EI, InfillStrategy.EI, InfillStrategy.WB2, InfillStrategy.WB2S
     
     infill_optimizer (InfillOptimizer enum):
         Internal optimizer used to optimize infill criteria.
@@ -120,7 +120,7 @@ class Egor:
     seed (int >= 0):
         Random generator seed to allow computation reproducibility.
     """
-    def __new__(cls, xspecs: typing.Any, gp_config: GpConfig = ..., n_cstr: builtins.int = 0, cstr_tol: typing.Optional[typing.Sequence[builtins.float]] = None, n_start: builtins.int = 20, n_doe: builtins.int = 0, doe: typing.Optional[numpy.typing.NDArray[numpy.float64]] = None, infill_strategy: InfillStrategy = InfillStrategy.WB2, cstr_infill: builtins.bool = False, cstr_strategy: ConstraintStrategy = ConstraintStrategy.MC, q_points: builtins.int = 1, q_infill_strategy: QInfillStrategy = QInfillStrategy.KB, infill_optimizer: InfillOptimizer = InfillOptimizer.COBYLA, trego: builtins.bool = False, coego_n_coop: builtins.int = 0, q_optmod: builtins.int = 1, target: builtins.float = -inf, outdir: typing.Optional[builtins.str] = None, warm_start: builtins.bool = False, hot_start: typing.Optional[builtins.int] = None, seed: typing.Optional[builtins.int] = None) -> Egor: ...
+    def __new__(cls, xspecs: typing.Any, gp_config: GpConfig = ..., n_cstr: builtins.int = 0, cstr_tol: typing.Optional[typing.Sequence[builtins.float]] = None, n_start: builtins.int = 20, n_doe: builtins.int = 0, doe: typing.Optional[numpy.typing.NDArray[numpy.float64]] = None, infill_strategy: InfillStrategy = InfillStrategy.LOG_EI, cstr_infill: builtins.bool = False, cstr_strategy: ConstraintStrategy = ConstraintStrategy.MC, q_points: builtins.int = 1, q_infill_strategy: QInfillStrategy = QInfillStrategy.KB, infill_optimizer: InfillOptimizer = InfillOptimizer.COBYLA, trego: builtins.bool = False, coego_n_coop: builtins.int = 0, q_optmod: builtins.int = 1, target: builtins.float = -1.7976931348623157e+308, outdir: typing.Optional[builtins.str] = None, warm_start: builtins.bool = False, hot_start: typing.Optional[builtins.int] = None, seed: typing.Optional[builtins.int] = None) -> Egor: ...
     def minimize(self, fun: typing.Any, fcstrs: typing.Sequence[typing.Any] = [], max_iters: builtins.int = 20, run_info: typing.Optional[typing.Any] = None) -> OptimResult:
         r"""
         ```ignore
@@ -854,7 +854,9 @@ def sampling(method: Sampling, xspecs: typing.Any, n_samples: builtins.int, seed
     Samples generation using given method
     
     # Parameters
-        method: LHS, FULL_FACTORIAL or RANDOM
+        method: LHS, FULL_FACTORIAL, RANDOM,
+                LHS_CLASSIC, LHS_CENTERED,
+                LHS_MAXIMIN, LHS_CENTERED_MAXIMIN
         xspecs: list of XSpec
         n_samples: number of samples
         seed: random seed
@@ -862,3 +864,4 @@ def sampling(method: Sampling, xspecs: typing.Any, n_samples: builtins.int, seed
     # Returns
        ndarray of shape (n_samples, n_variables)
     """
+

@@ -612,6 +612,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .max_iters(n_iter)
                     .seed(42)
                     .hot_start(HotStartMode::Enabled)
@@ -628,6 +629,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .max_iters(n_iter)
                     .seed(42)
                     .hot_start(HotStartMode::Disabled)
@@ -644,6 +646,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .seed(42)
                     .hot_start(HotStartMode::ExtendedIters(ext_iters))
                     .outdir(outdir)
@@ -661,6 +664,7 @@ mod tests {
         let res = EgorBuilder::optimize(xsinx)
             .configure(|config| {
                 config
+                    .infill_strategy(InfillStrategy::WB2)
                     .seed(42)
                     .hot_start(HotStartMode::ExtendedIters(ext_iters))
                     .outdir(outdir)

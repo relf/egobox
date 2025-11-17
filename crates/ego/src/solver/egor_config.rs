@@ -242,7 +242,7 @@ impl Default for ValidEgorConfig {
             q_optmod: 1,
             q_points: 1,
             gp: GpConfig::default(),
-            infill_criterion: Box::new(WB2),
+            infill_criterion: Box::new(LOG_EI),
             infill_optimizer: InfillOptimizer::Slsqp,
             target: f64::MIN,
             outdir: None,
