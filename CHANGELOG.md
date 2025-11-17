@@ -1,6 +1,16 @@
 # Changes
 
-## Version 0.34.0 - unreleased
+## Version 0.35.0 - unreleased
+
+## Version 0.34.0 - 17/11/2025
+
+* **Breaking changes**: 
+  * Add Egor configuration validation by @relf in https://github.com/relf/egobox/pull/335
+  * Use Logarithm of Expected Improvement (LogEI) as the default infill strategy by @relf in <https://github.com/relf/egobox/pull/336>
+  * Enable middle points picker heuristic by @relf in https://github.com/relf/egobox/pull/334
+* Add Egor examples on rosenbrock, michalewicz and ackley test functions by @relf in https://github.com/relf/egobox/pull/325
+* Parallelize distance calculations and eliminate allocations in hot paths by @Copilot in https://github.com/relf/egobox/pull/328
+* Optimize GP predictions for Egor optimizer usage by @relf in https://github.com/relf/egobox/pull/332
 
 ## Version 0.33.0 - 11/10/2025
 
