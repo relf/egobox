@@ -65,3 +65,4 @@ argmin_testfunctions = "0.3"
 [profile.dist]
 inherits = "release"
 lto = "thin"
+allow-dirty = true
