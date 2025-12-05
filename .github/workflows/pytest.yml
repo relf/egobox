@@ -28,7 +28,7 @@ jobs:
       RUST_BACKTRACE: 1
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up uv
         if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
