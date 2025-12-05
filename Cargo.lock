@@ -1473,13 +1473,13 @@ dependencies = [
 
 [[package]]
 name = "ndarray-csv"
-version = "0.5.3"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bd1058903ccb9851c3210bb235fa40cc90a4739141486719d89c306d6557366"
+checksum = "886598c6242b8742871beab67185dcd482a207132dc51f1911cefddcfc97b561"
 dependencies = [
  "csv",
  "either",
- "ndarray 0.16.1",
+ "ndarray 0.17.1",
  "serde",
 ]
 
